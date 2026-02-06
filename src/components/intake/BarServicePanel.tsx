@@ -1,30 +1,48 @@
 import { useEffect, useMemo, useState } from "react";
-import { FIELD_IDS, type BarServiceDetails } from "../../services/airtable/events";
 import { asSingleSelectName, asString } from "../../services/airtable/selectors";
 import { useEventStore } from "../../state/eventStore";
 
-const BAR_SERVICE_OPTIONS = [
-  "None",
-  "Full Bar Package",
-  "Foodwerx bartender only",
-  "Foodwerx Mixers Only",
-];
-
-const INFUSED_WATER_OPTIONS = ["YES", "NO"];
+type BarServiceDetails = {
+  barServiceNeeded: string;
+  numberOfBars: string;
+  barLocations: string;
+  customBarNotes: string;
+  signatureDrink: string;
+  signatureDrinkName: string;
+  signatureDrinkRecipe: string;
+  whoSupplyingSignatureDrink: string;
+  signatureDrinkMixers: string;
+  signatureDrinkGarnishes: string;
+};
 
 const emptyDetails: BarServiceDetails = {
   barServiceNeeded: "",
-  infusedWater: "",
-  infusionIngredients: "",
-  dispenserCount: "",
+  numberOfBars: "",
+  barLocations: "",
+  customBarNotes: "",
+  signatureDrink: "",
+  signatureDrinkName: "",
+  signatureDrinkRecipe: "",
+  whoSupplyingSignatureDrink: "",
+  signatureDrinkMixers: "",
+  signatureDrinkGarnishes: "",
 };
 
+const FULL_BAR_PACKAGE_ITEMS = `Sodas: Diet Coke, Coke, Sprite, Ginger Ale
+Juices: Cranberry juice, Pineapple juice, Orange juice
+Mixers: Club Soda, Tonic, Cranberry, Sour mix, Rose's Lime, Grenadine, Simple syrup
+Garnishes: Olives, Cherries, Lemons, Limes, Oranges`;
+
+const MIXERS_ONLY_ITEMS = `Mixers: Club Soda, Tonic, Cranberry, Sour mix, Rose's Lime, Grenadine, Simple syrup
+Garnishes: Olives, Cherries, Lemons, Limes, Oranges`;
+
 export const BarServicePanel = () => {
-  const { selectedEventId, selectedEventData, setFields } = useEventStore();
+  const { selectedEventId, selectedEventData, setFields, saveError } = useEventStore();
   const [details, setDetails] = useState<BarServiceDetails>(emptyDetails);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [isOpen, setIsOpen] = useState(true);
+  const [saveSuccess, setSaveSuccess] = useState(false);
+  const [isOpen, setIsOpen] = useState(false);
 
   useEffect(() => {
     if (!selectedEventId || !selectedEventData) {
@@ -34,21 +52,39 @@ export const BarServicePanel = () => {
     setIsLoading(false);
     setError(null);
     setDetails({
-      barServiceNeeded: asSingleSelectName(selectedEventData[FIELD_IDS.BAR_SERVICE_NEEDED]),
-      infusedWater: asSingleSelectName(selectedEventData[FIELD_IDS.INFUSED_WATER]),
-      infusionIngredients: asString(selectedEventData[FIELD_IDS.INFUSION_INGREDIENTS]),
-      dispenserCount:
-        selectedEventData[FIELD_IDS.DISPENSER_COUNT] !== undefined
-          ? String(selectedEventData[FIELD_IDS.DISPENSER_COUNT])
-          : "",
+      barServiceNeeded: asSingleSelectName(selectedEventData["fldXm91QjyvVKbiyO"]),
+      numberOfBars: selectedEventData["fldWNzyvWhcXimh7N"] !== undefined ? String(selectedEventData["fldWNzyvWhcXimh7N"]) : "",
+      barLocations: asString(selectedEventData["fldAYvAJ59FScw4LG"]),
+      customBarNotes: asString(selectedEventData["fldDWl6ZzZqdaI7pN"]),
+      signatureDrink: asSingleSelectName(selectedEventData["fldcry8vpUBY3fkHk"]),
+      signatureDrinkName: asString(selectedEventData["fldZSIBTkzcEmG7bt"]),
+      signatureDrinkRecipe: asString(selectedEventData["fld1sg6vQi7lziPDz"]),
+      whoSupplyingSignatureDrink: asSingleSelectName(selectedEventData["fldoek1mpdi2ESyzu"]),
+      signatureDrinkMixers: asString(selectedEventData["fldXL37gOon7wyQss"]),
+      signatureDrinkGarnishes: asString(selectedEventData["flduv4RtRR0lLm4vY"]),
     });
   }, [selectedEventId, selectedEventData]);
 
+  useEffect(() => {
+    if (saveError) {
+      setError(saveError);
+      setSaveSuccess(false);
+    } else if (selectedEventId) {
+      setError(null);
+    }
+  }, [saveError, selectedEventId]);
+
   const canEdit = useMemo(() => Boolean(selectedEventId) && !isLoading, [selectedEventId, isLoading]);
 
-  const saveField = async (fieldId: string, value: unknown) => {
+  const saveField = async (fieldName: string, value: unknown) => {
     if (!selectedEventId) return;
-    await setFields(selectedEventId, { [fieldId]: value });
+    setError(null);
+    setSaveSuccess(false);
+    await setFields(selectedEventId, { [fieldName]: value });
+    if (!saveError) {
+      setSaveSuccess(true);
+      setTimeout(() => setSaveSuccess(false), 2000);
+    }
   };
 
   const handleChange = <K extends keyof BarServiceDetails>(key: K, value: BarServiceDetails[K]) => {
@@ -59,82 +95,215 @@ export const BarServicePanel = () => {
   };
 
   return (
-    <section className="bg-gray-900 border border-gray-800 rounded-lg p-6 mb-6">
+    <section className="border-2 border-cyan-500 rounded-xl p-5 mb-3 transition-all backdrop-blur-sm" style={{ background: 'linear-gradient(135deg, rgba(10, 20, 30, 0.8), rgba(10, 15, 25, 0.6))', boxShadow: '0 15px 35px rgba(0, 0, 0, 0.4), 0 0 20px rgba(0, 188, 212, 0.25), inset -2px -2px 8px rgba(0, 0, 0, 0.2), inset 2px 2px 8px rgba(255, 255, 255, 0.05)' }}>
       <div className="flex items-center justify-between mb-4">
-        <button type="button" onClick={() => setIsOpen((prev) => !prev)} className="text-left">
-          <h2 className="text-lg font-bold text-red-500">Bar Service</h2>
+        <button type="button" onClick={() => setIsOpen((prev) => !prev)} className="text-left flex-1 hover:text-red-400 transition flex items-center gap-3">
+          <h2 className="text-lg font-black text-cyan-400 tracking-wider uppercase">▶ Bar Service</h2>
         </button>
         {isLoading ? <span className="text-xs text-gray-400">Loading...</span> : null}
       </div>
       {isOpen ? (
         <>
-          {error ? <div className="text-sm text-red-400 mb-4">{error}</div> : null}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div>
-          <label className="text-xs uppercase tracking-widest text-gray-400">Bar Service Needed</label>
-          <select
-            value={details.barServiceNeeded}
-            disabled={!canEdit}
-            onChange={(event) => {
-              handleChange("barServiceNeeded", event.target.value);
-              saveField(FIELD_IDS.BAR_SERVICE_NEEDED, event.target.value || null);
-            }}
-            className="mt-2 w-full rounded-md bg-black border border-gray-700 text-gray-100 px-3 py-2"
-          >
-            <option value="">Select option</option>
-            {BAR_SERVICE_OPTIONS.map((option) => (
-              <option key={option} value={option}>
-                {option}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label className="text-xs uppercase tracking-widest text-gray-400">Infused Water?</label>
-          <select
-            value={details.infusedWater}
-            disabled={!canEdit}
-            onChange={(event) => {
-              handleChange("infusedWater", event.target.value);
-              saveField(FIELD_IDS.INFUSED_WATER, event.target.value || null);
-            }}
-            className="mt-2 w-full rounded-md bg-black border border-gray-700 text-gray-100 px-3 py-2"
-          >
-            <option value="">Select</option>
-            {INFUSED_WATER_OPTIONS.map((option) => (
-              <option key={option} value={option}>
-                {option}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label className="text-xs uppercase tracking-widest text-gray-400">Infusion Ingredients</label>
-          <input
-            type="text"
-            value={details.infusionIngredients}
-            disabled={!canEdit}
-            onChange={(event) => {
-              handleChange("infusionIngredients", event.target.value);
-              saveField(FIELD_IDS.INFUSION_INGREDIENTS, event.target.value);
-            }}
-            className="mt-2 w-full rounded-md bg-black border border-gray-700 text-gray-100 px-3 py-2"
-          />
-        </div>
-        <div>
-          <label className="text-xs uppercase tracking-widest text-gray-400">Dispenser Count</label>
-          <input
-            type="number"
-            value={details.dispenserCount}
-            disabled={!canEdit}
-            onChange={(event) => {
-              handleChange("dispenserCount", event.target.value);
-              const numeric = event.target.value === "" ? null : Number(event.target.value);
-              saveField(FIELD_IDS.DISPENSER_COUNT, Number.isNaN(numeric) ? null : numeric);
-            }}
-            className="mt-2 w-full rounded-md bg-black border border-gray-700 text-gray-100 px-3 py-2"
-          />
-        </div>
+          {error || saveError ? (
+            <div className="text-sm text-red-400 mb-4">
+              {error || saveError}
+            </div>
+          ) : null}
+          {saveSuccess && !error && !saveError ? (
+            <div className="text-sm text-green-400 mb-4">✓ Saved to Airtable</div>
+          ) : null}
+          <div className="space-y-4">
+            {/* Bar Service Needed */}
+            <div>
+              <label className="text-xs uppercase tracking-widest text-gray-400">Bar Service Needed</label>
+              <select
+                value={details.barServiceNeeded}
+                disabled={!canEdit}
+                onChange={(event) => {
+                  handleChange("barServiceNeeded", event.target.value);
+                  saveField("fldXm91QjyvVKbiyO", event.target.value || null);
+                }}
+                className="mt-2 w-full rounded-md bg-gray-950 border border-gray-700 text-gray-300 px-3 py-2"
+              >
+                <option value="">Select option</option>
+                <option value="None">None</option>
+                <option value="Full Bar Package">Full Bar Package</option>
+                <option value="Foodwerx bartender only">Foodwerx bartender only</option>
+                <option value="Foodwerx Mixers Only">Foodwerx Mixers Only</option>
+              </select>
+            </div>
+
+            {/* Show Full Bar Package items */}
+            {details.barServiceNeeded === "Full Bar Package" && (
+              <div className="bg-gray-800 border border-red-600 rounded-md p-4">
+                <p className="text-xs uppercase tracking-widest text-red-500 font-bold mb-2">Full Bar Package Includes:</p>
+                <pre className="text-sm text-gray-300 whitespace-pre-wrap font-mono">
+                  {FULL_BAR_PACKAGE_ITEMS}
+                </pre>
+              </div>
+            )}
+
+            {/* Show Mixers Only items */}
+            {details.barServiceNeeded === "Foodwerx Mixers Only" && (
+              <div className="bg-gray-800 border border-red-600 rounded-md p-4">
+                <p className="text-xs uppercase tracking-widest text-red-500 font-bold mb-2">Mixers Only Package Includes:</p>
+                <pre className="text-sm text-gray-300 whitespace-pre-wrap font-mono">
+                  {MIXERS_ONLY_ITEMS}
+                </pre>
+              </div>
+            )}
+
+            {/* Show bar details if not None */}
+            {details.barServiceNeeded && details.barServiceNeeded !== "None" && (
+              <>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-xs uppercase tracking-widest text-gray-400">Number of Bars</label>
+                    <input
+                      type="number"
+                      value={details.numberOfBars}
+                      disabled={!canEdit}
+                      onChange={(event) => {
+                        handleChange("numberOfBars", event.target.value);
+                        const numeric = event.target.value === "" ? null : Number(event.target.value);
+                        saveField("fldWNzyvWhcXimh7N", Number.isNaN(numeric) ? null : numeric);
+                      }}
+                      className="mt-2 w-full rounded-md bg-gray-950 border border-gray-700 text-gray-300 px-3 py-2"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs uppercase tracking-widest text-gray-400">Bar Locations</label>
+                    <input
+                      type="text"
+                      value={details.barLocations}
+                      disabled={!canEdit}
+                      onChange={(event) => {
+                        handleChange("barLocations", event.target.value);
+                        saveField("fldAYvAJ59FScw4LG", event.target.value);
+                      }}
+                      className="mt-2 w-full rounded-md bg-gray-950 border border-gray-700 text-gray-300 px-3 py-2"
+                    />
+                  </div>
+                </div>
+                
+                <div>
+                  <label className="text-xs uppercase tracking-widest text-gray-400">Custom Bar Notes</label>
+                  <textarea
+                    rows={3}
+                    value={details.customBarNotes}
+                    disabled={!canEdit}
+                    onChange={(event) => {
+                      handleChange("customBarNotes", event.target.value);
+                      saveField("fldDWl6ZzZqdaI7pN", event.target.value);
+                    }}
+                    className="mt-2 w-full rounded-md bg-gray-950 border border-gray-700 text-gray-300 px-3 py-2"
+                  />
+                </div>
+              </>
+            )}
+
+            {/* Signature Drink section */}
+            <div className="border-t border-gray-700 pt-4 mt-4">
+              <label className="text-xs uppercase tracking-widest text-gray-400">Signature Drink?</label>
+              <select
+                value={details.signatureDrink}
+                disabled={!canEdit}
+                onChange={(event) => {
+                  handleChange("signatureDrink", event.target.value);
+                  saveField("fldcry8vpUBY3fkHk", event.target.value || null);
+                }}
+                className="mt-2 w-full rounded-md bg-gray-950 border border-gray-700 text-gray-300 px-3 py-2"
+              >
+                <option value="">Select option</option>
+                <option value="Yes">Yes</option>
+                <option value="No">No</option>
+              </select>
+            </div>
+
+            {/* Show signature drink fields if Yes */}
+            {details.signatureDrink === "Yes" && (
+              <>
+                <div>
+                  <label className="text-xs uppercase tracking-widest text-gray-400">Signature Drink Name</label>
+                  <input
+                    type="text"
+                    value={details.signatureDrinkName}
+                    disabled={!canEdit}
+                    onChange={(event) => {
+                      handleChange("signatureDrinkName", event.target.value);
+                      saveField("fldZSIBTkzcEmG7bt", event.target.value);
+                    }}
+                    className="mt-2 w-full rounded-md bg-gray-950 border border-gray-700 text-gray-300 px-3 py-2"
+                  />
+                </div>
+                
+                <div>
+                  <label className="text-xs uppercase tracking-widest text-gray-400">Signature Drink Recipe & Ingredients</label>
+                  <textarea
+                    rows={3}
+                    value={details.signatureDrinkRecipe}
+                    disabled={!canEdit}
+                    onChange={(event) => {
+                      handleChange("signatureDrinkRecipe", event.target.value);
+                      saveField("fld1sg6vQi7lziPDz", event.target.value);
+                    }}
+                    className="mt-2 w-full rounded-md bg-gray-950 border border-gray-700 text-gray-300 px-3 py-2"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs uppercase tracking-widest text-gray-400">Who's Supplying Signature Drink Mixers & Garnishes?</label>
+                  <select
+                    value={details.whoSupplyingSignatureDrink}
+                    disabled={!canEdit}
+                    onChange={(event) => {
+                      handleChange("whoSupplyingSignatureDrink", event.target.value);
+                      saveField("fldoek1mpdi2ESyzu", event.target.value || null);
+                    }}
+                    className="mt-2 w-full rounded-md bg-gray-950 border border-gray-700 text-gray-300 px-3 py-2"
+                  >
+                    <option value="">Select option</option>
+                    <option value="Foodwerx">Foodwerx</option>
+                    <option value="Client">Client</option>
+                  </select>
+                </div>
+
+                {/* Show mixers/garnishes fields if Foodwerx is supplying */}
+                {details.whoSupplyingSignatureDrink === "Foodwerx" && (
+                  <>
+                    <div>
+                      <label className="text-xs uppercase tracking-widest text-gray-400">Signature Drink Mixers</label>
+                      <input
+                        type="text"
+                        value={details.signatureDrinkMixers}
+                        disabled={!canEdit}
+                        onChange={(event) => {
+                          handleChange("signatureDrinkMixers", event.target.value);
+                          saveField("fldXL37gOon7wyQss", event.target.value);
+                        }}
+                        className="mt-2 w-full rounded-md bg-gray-950 border border-gray-700 text-gray-300 px-3 py-2"
+                        placeholder="Enter mixers needed..."
+                      />
+                    </div>
+                    
+                    <div>
+                      <label className="text-xs uppercase tracking-widest text-gray-400">Signature Drink Garnishes</label>
+                      <input
+                        type="text"
+                        value={details.signatureDrinkGarnishes}
+                        disabled={!canEdit}
+                        onChange={(event) => {
+                          handleChange("signatureDrinkGarnishes", event.target.value);
+                          saveField("flduv4RtRR0lLm4vY", event.target.value);
+                        }}
+                        className="mt-2 w-full rounded-md bg-gray-950 border border-gray-700 text-gray-300 px-3 py-2"
+                        placeholder="Enter garnishes needed..."
+                      />
+                    </div>
+                  </>
+                )}
+              </>
+            )}
           </div>
         </>
       ) : null}

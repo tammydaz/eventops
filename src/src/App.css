@@ -1,0 +1,183 @@
+/* ================================
+   FOODWERX EVENTOPS — TACTICAL LUXE WAR ROOM
+   FINAL UPGRADED VERSION — TAMMY EDITION
+   No images. Fully animated. Fully tactical.
+=================================== */
+
+body {
+  margin: 0;
+  background: #0c0c0e;
+  color: white;
+  font-family: "Inter", sans-serif;
+  overflow-x: hidden;
+}
+
+.warroom-container {
+  min-height: 100vh;
+  position: relative;
+  padding-bottom: 80px;
+  background: radial-gradient(circle at 50% 30%, #16171b, #0a0a0c 70%);
+  overflow: hidden;
+}
+
+/* ================================
+   Animated Tactical Grid
+=================================== */
+
+.warroom-container::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(#ffffff08 1px, transparent 1px),
+    linear-gradient(90deg, #ffffff08 1px, transparent 1px);
+  background-size: 60px 60px;
+  opacity: 0.15;
+  animation: gridMove 18s linear infinite;
+}
+
+@keyframes gridMove {
+  0% { transform: translateY(0px); }
+  100% { transform: translateY(-120px); }
+}
+
+/* ================================
+   Hologram Drift Layer
+=================================== */
+
+.warroom-container::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(45deg, #ff003388 0%, #0066ff33 100%);
+  opacity: 0.12;
+  animation: drift 22s ease-in-out infinite alternate;
+}
+
+@keyframes drift {
+  0% { transform: translateX(-20px) translateY(0px) scale(1); }
+  100% { transform: translateX(20px) translateY(-20px) scale(1.05); }
+}
+
+/* ================================
+   Perimeter Pulse Glow
+=================================== */
+
+.warroom-container {
+  box-shadow: inset 0 0 60px #ff003322, inset 0 0 120px #0066ff22;
+  animation: perimeterPulse 8s ease-in-out infinite;
+}
+
+@keyframes perimeterPulse {
+  0% { box-shadow: inset 0 0 30px #ff003311, inset 0 0 80px #0066ff11; }
+  50% { box-shadow: inset 0 0 60px #ff003355, inset 0 0 120px #0066ff33; }
+  100% { box-shadow: inset 0 0 30px #ff003311, inset 0 0 80px #0066ff11; }
+}
+
+/* ================================
+   Soft Upward Floating Particles
+=================================== */
+
+@keyframes particleRise {
+  from { transform: translateY(0); opacity: 0.25; }
+  to { transform: translateY(-80px); opacity: 0; }
+}
+
+.warroom-container .particle {
+  position: absolute;
+  bottom: -20px;
+  width: 3px;
+  height: 3px;
+  background: #ffffff22;
+  border-radius: 50%;
+  animation: particleRise 6s linear infinite;
+  filter: blur(1px);
+}
+
+/* Random particle positions */
+.particle:nth-child(1) { left: 10%; animation-duration: 7s; }
+.particle:nth-child(2) { left: 23%; animation-duration: 5s; }
+.particle:nth-child(3) { left: 37%; animation-duration: 8s; }
+.particle:nth-child(4) { left: 52%; animation-duration: 9s; }
+.particle:nth-child(5) { left: 68%; animation-duration: 6s; }
+.particle:nth-child(6) { left: 82%; animation-duration: 5s; }
+
+/* ================================
+   HERO TEXT — Metallic Red Title
+=================================== */
+
+.hero-overlay {
+  text-align: center;
+  padding-top: 90px;
+  margin-bottom: 70px;
+}
+
+.hero-title {
+  font-size: 4rem;
+  font-weight: 900;
+  letter-spacing: 3px;
+  background: linear-gradient(180deg, #ff2f4f, #b30024);
+  -webkit-background-clip: text;
+  color: transparent;
+  text-shadow: 
+    0 0 25px #ff2f4f55,
+    0 0 50px #b3002444,
+    0 0 90px #ff003322;
+  animation: titleGlow 6s ease-in-out infinite;
+}
+
+@keyframes titleGlow {
+  0% { text-shadow: 0 0 25px #ff2f4f55; }
+  50% { text-shadow: 0 0 40px #ff003388; }
+  100% { text-shadow: 0 0 25px #ff2f4f55; }
+}
+
+.hero-tagline {
+  font-size: 1.4rem;
+  color: #52d7ff;
+  margin-top: 10px;
+  text-shadow: 0 0 12px #52d7ff55;
+}
+
+/* ================================
+   MODULE GRID + CARDS
+=================================== */
+
+.module-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 28px;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 40px;
+}
+
+.module-card {
+  background: #0d0d11;
+  border: 2px solid white;
+  border-radius: 14px;
+  padding: 30px;
+  text-align: center;
+  font-size: 1.3rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.35s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Dual Glow + Lift */
+.module-card:hover {
+  transform: translateY(-6px) scale(1.03);
+  box-shadow:
+    0 0 18px #ff0033aa,
+    0 0 28px #0066ffaa,
+    inset 0 0 15px #ff003355,
+    inset 0 0 25px #0066ff33;
+  border-color: #ffffff;
+}
+
+.module-label {
+  position: relative;
+  z-index: 3;
+}
