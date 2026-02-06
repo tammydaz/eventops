@@ -37,14 +37,20 @@ const emptyDetails: EventDetails = {
   venueCity: "",
   venueState: "",
   venueFullAddress: "",
+  dispatchTime: "",
+  eventStartTime: "",
+  eventEndTime: "",
+  foodwerxArrival: "",
+  jobNumber: "",
 };
 
 export const EventDetailsPanel = () => {
-  const { selectedEventId, selectedEventData, setFields } = useEventStore();
+  const { selectedEventId, selectedEventData, setFields, saveError } = useEventStore();
   const [details, setDetails] = useState<EventDetails>(emptyDetails);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [isOpen, setIsOpen] = useState(true);
+  const [saveSuccess, setSaveSuccess] = useState(false);
+  const [isOpen, setIsOpen] = useState(false);
 
   useEffect(() => {
     if (!selectedEventId || !selectedEventData) {
@@ -67,14 +73,42 @@ export const EventDetailsPanel = () => {
       venueCity: asString(selectedEventData[FIELD_IDS.VENUE_CITY]),
       venueState: asSingleSelectName(selectedEventData[FIELD_IDS.VENUE_STATE]),
       venueFullAddress: asString(selectedEventData[FIELD_IDS.VENUE_FULL_ADDRESS]),
+      dispatchTime: asString(selectedEventData[FIELD_IDS.DISPATCH_TIME]),
+      eventStartTime: selectedEventData[FIELD_IDS.EVENT_START_TIME] !== undefined
+        ? String(selectedEventData[FIELD_IDS.EVENT_START_TIME])
+        : "",
+      eventEndTime: selectedEventData[FIELD_IDS.EVENT_END_TIME] !== undefined
+        ? String(selectedEventData[FIELD_IDS.EVENT_END_TIME])
+        : "",
+      foodwerxArrival: selectedEventData[FIELD_IDS.FOODWERX_ARRIVAL] !== undefined
+        ? String(selectedEventData[FIELD_IDS.FOODWERX_ARRIVAL])
+        : "",
+      jobNumber: asString(selectedEventData["Job Number"]),
     });
   }, [selectedEventId, selectedEventData]);
+
+  useEffect(() => {
+    if (saveError) {
+      setError(saveError);
+      setSaveSuccess(false);
+    } else if (selectedEventId) {
+      // Clear error when saveError is cleared (successful save)
+      setError(null);
+    }
+  }, [saveError, selectedEventId]);
 
   const canEdit = useMemo(() => Boolean(selectedEventId) && !isLoading, [selectedEventId, isLoading]);
 
   const saveField = async (fieldId: string, value: unknown) => {
     if (!selectedEventId) return;
+    setError(null);
+    setSaveSuccess(false);
     await setFields(selectedEventId, { [fieldId]: value });
+    // Success feedback (saveError will be handled by useEffect)
+    if (!saveError) {
+      setSaveSuccess(true);
+      setTimeout(() => setSaveSuccess(false), 2000);
+    }
   };
 
   const handleChange = <K extends keyof EventDetails>(key: K, value: EventDetails[K]) => {
@@ -85,20 +119,27 @@ export const EventDetailsPanel = () => {
   };
 
   return (
-    <section className="bg-gray-900 border border-gray-800 rounded-lg p-6 mb-6">
+    <section className="border-2 border-cyan-500 rounded-xl p-5 mb-3 transition-all backdrop-blur-sm" style={{ background: 'linear-gradient(135deg, rgba(10, 20, 30, 0.8), rgba(10, 15, 25, 0.6))', boxShadow: '0 15px 35px rgba(0, 0, 0, 0.4), 0 0 20px rgba(0, 188, 212, 0.25), inset -2px -2px 8px rgba(0, 0, 0, 0.2), inset 2px 2px 8px rgba(255, 255, 255, 0.05)' }}>
       <div className="flex items-center justify-between mb-4">
         <button
           type="button"
           onClick={() => setIsOpen((prev) => !prev)}
-          className="text-left"
+          className="text-left flex-1 hover:text-red-400 transition flex items-center gap-3"
         >
-          <h2 className="text-lg font-bold text-red-500">Event Details</h2>
+          <h2 className="text-lg font-black text-cyan-400 tracking-wider uppercase">▶ Event Details</h2>
         </button>
         {isLoading ? <span className="text-xs text-gray-400">Loading...</span> : null}
       </div>
       {isOpen ? (
         <>
-          {error ? <div className="text-sm text-red-400 mb-4">{error}</div> : null}
+          {error || saveError ? (
+            <div className="text-sm text-red-400 mb-4">
+              {error || saveError}
+            </div>
+          ) : null}
+          {saveSuccess && !error && !saveError ? (
+            <div className="text-sm text-green-400 mb-4">✓ Saved to Airtable</div>
+          ) : null}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
           <label className="text-xs uppercase tracking-widest text-gray-400">Event Name</label>
@@ -106,7 +147,7 @@ export const EventDetailsPanel = () => {
             type="text"
             value={details.eventName}
             disabled
-            className="mt-2 w-full rounded-md bg-black border border-gray-700 text-gray-500 px-3 py-2"
+            className="mt-2 w-full rounded-md bg-gray-950 border border-gray-700 text-gray-500 px-3 py-2"
           />
         </div>
         <div>
@@ -119,7 +160,7 @@ export const EventDetailsPanel = () => {
               handleChange("eventDate", event.target.value);
               saveField(FIELD_IDS.EVENT_DATE, event.target.value || null);
             }}
-            className="mt-2 w-full rounded-md bg-black border border-gray-700 text-gray-100 px-3 py-2"
+            className="mt-2 w-full rounded-md bg-gray-950 border border-gray-700 text-gray-300 px-3 py-2"
           />
         </div>
         <div>
@@ -131,7 +172,7 @@ export const EventDetailsPanel = () => {
               handleChange("eventType", event.target.value);
               saveField(FIELD_IDS.EVENT_TYPE, event.target.value || null);
             }}
-            className="mt-2 w-full rounded-md bg-black border border-gray-700 text-gray-100 px-3 py-2"
+            className="mt-2 w-full rounded-md bg-gray-950 border border-gray-700 text-gray-300 px-3 py-2"
           >
             <option value="">Select type</option>
             {EVENT_TYPE_OPTIONS.map((option) => (
@@ -150,7 +191,7 @@ export const EventDetailsPanel = () => {
               handleChange("serviceStyle", event.target.value);
               saveField(FIELD_IDS.SERVICE_STYLE, event.target.value || null);
             }}
-            className="mt-2 w-full rounded-md bg-black border border-gray-700 text-gray-100 px-3 py-2"
+            className="mt-2 w-full rounded-md bg-gray-950 border border-gray-700 text-gray-300 px-3 py-2"
           >
             <option value="">Select style</option>
             {SERVICE_STYLE_OPTIONS.map((option) => (
@@ -171,7 +212,7 @@ export const EventDetailsPanel = () => {
               const numeric = event.target.value === "" ? null : Number(event.target.value);
               saveField(FIELD_IDS.GUEST_COUNT, Number.isNaN(numeric) ? null : numeric);
             }}
-            className="mt-2 w-full rounded-md bg-black border border-gray-700 text-gray-100 px-3 py-2"
+            className="mt-2 w-full rounded-md bg-gray-950 border border-gray-700 text-gray-300 px-3 py-2"
           />
         </div>
         <div>
@@ -184,7 +225,7 @@ export const EventDetailsPanel = () => {
               handleChange("venue", event.target.value);
               saveField(FIELD_IDS.VENUE, event.target.value);
             }}
-            className="mt-2 w-full rounded-md bg-black border border-gray-700 text-gray-100 px-3 py-2"
+            className="mt-2 w-full rounded-md bg-gray-950 border border-gray-700 text-gray-300 px-3 py-2"
           />
         </div>
         <div>
@@ -197,7 +238,7 @@ export const EventDetailsPanel = () => {
               handleChange("venueAddress", event.target.value);
               saveField(FIELD_IDS.VENUE_ADDRESS, event.target.value);
             }}
-            className="mt-2 w-full rounded-md bg-black border border-gray-700 text-gray-100 px-3 py-2"
+            className="mt-2 w-full rounded-md bg-gray-950 border border-gray-700 text-gray-300 px-3 py-2"
           />
         </div>
         <div>
@@ -210,7 +251,7 @@ export const EventDetailsPanel = () => {
               handleChange("venueCity", event.target.value);
               saveField(FIELD_IDS.VENUE_CITY, event.target.value);
             }}
-            className="mt-2 w-full rounded-md bg-black border border-gray-700 text-gray-100 px-3 py-2"
+            className="mt-2 w-full rounded-md bg-gray-950 border border-gray-700 text-gray-300 px-3 py-2"
           />
         </div>
         <div>
@@ -222,7 +263,7 @@ export const EventDetailsPanel = () => {
               handleChange("venueState", event.target.value);
               saveField(FIELD_IDS.VENUE_STATE, event.target.value || null);
             }}
-            className="mt-2 w-full rounded-md bg-black border border-gray-700 text-gray-100 px-3 py-2"
+            className="mt-2 w-full rounded-md bg-gray-950 border border-gray-700 text-gray-300 px-3 py-2"
           >
             <option value="">Select state</option>
             {VENUE_STATE_OPTIONS.map((option) => (
@@ -231,6 +272,71 @@ export const EventDetailsPanel = () => {
               </option>
             ))}
           </select>
+        </div>
+        <div>
+          <label className="text-xs uppercase tracking-widest text-gray-400">Dispatch Time</label>
+          <input
+            type="time"
+            value={details.dispatchTime}
+            disabled={!canEdit}
+            onChange={(event) => {
+              handleChange("dispatchTime", event.target.value);
+              saveField(FIELD_IDS.DISPATCH_TIME, event.target.value || null);
+            }}
+            className="mt-2 w-full rounded-md bg-gray-950 border border-gray-700 text-gray-300 px-3 py-2"
+          />
+        </div>
+        <div>
+          <label className="text-xs uppercase tracking-widest text-gray-400">Event Start Time</label>
+          <input
+            type="time"
+            value={details.eventStartTime}
+            disabled={!canEdit}
+            onChange={(event) => {
+              handleChange("eventStartTime", event.target.value);
+              saveField(FIELD_IDS.EVENT_START_TIME, event.target.value || null);
+            }}
+            className="mt-2 w-full rounded-md bg-gray-950 border border-gray-700 text-gray-300 px-3 py-2"
+          />
+        </div>
+        <div>
+          <label className="text-xs uppercase tracking-widest text-gray-400">Event End Time</label>
+          <input
+            type="time"
+            value={details.eventEndTime}
+            disabled={!canEdit}
+            onChange={(event) => {
+              handleChange("eventEndTime", event.target.value);
+              saveField(FIELD_IDS.EVENT_END_TIME, event.target.value || null);
+            }}
+            className="mt-2 w-full rounded-md bg-gray-950 border border-gray-700 text-gray-300 px-3 py-2"
+          />
+        </div>
+        <div>
+          <label className="text-xs uppercase tracking-widest text-gray-400">Staff Arrival Time</label>
+          <input
+            type="time"
+            value={details.foodwerxArrival}
+            disabled={!canEdit}
+            onChange={(event) => {
+              handleChange("foodwerxArrival", event.target.value);
+              saveField(FIELD_IDS.FOODWERX_ARRIVAL, event.target.value || null);
+            }}
+            className="mt-2 w-full rounded-md bg-gray-950 border border-gray-700 text-gray-300 px-3 py-2"
+          />
+        </div>
+        <div>
+          <label className="text-xs uppercase tracking-widest text-gray-400">Job Number</label>
+          <input
+            type="text"
+            value={details.jobNumber}
+            disabled={!canEdit}
+            onChange={(event) => {
+              handleChange("jobNumber", event.target.value);
+              saveField("Job Number", event.target.value);
+            }}
+            className="mt-2 w-full rounded-md bg-gray-950 border border-gray-700 text-gray-300 px-3 py-2"
+          />
         </div>
           </div>
         </>

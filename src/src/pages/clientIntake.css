@@ -1,0 +1,123 @@
+/* -----------------------------------------------------
+   FOODWERX EVENTOPS – CLIENT INTAKE STYLES
+   Clean, bold, red/black theme
+----------------------------------------------------- */
+
+.intake-container {
+  width: 900px;
+  margin: 30px auto;
+  padding: 20px;
+  font-family: "Inter", sans-serif;
+  color: #222;
+}
+
+.title {
+  font-size: 32px;
+  font-weight: 700;
+  color: #b30000; /* FoodWerx red */
+  margin-bottom: 20px;
+  text-align: center;
+}
+
+.label {
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 6px;
+  display: block;
+}
+
+.dropdown {
+  width: 100%;
+  padding: 10px;
+  font-size: 15px;
+  border-radius: 6px;
+  border: 1px solid #ccc;
+  margin-bottom: 20px;
+}
+
+/* -----------------------------------------------------
+   Collapsible Panels
+----------------------------------------------------- */
+
+.panel {
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  margin-bottom: 18px;
+  background: #fafafa;
+  overflow: hidden;
+}
+
+.panel-header {
+  background: #333;
+  color: white;
+  padding: 12px 14px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  user-select: none;
+}
+
+.panel-header:hover {
+  background: #b30000; /* FoodWerx red */
+}
+
+.panel-body {
+  padding: 15px;
+  background: white;
+  border-top: 1px solid #ddd;
+  animation: slideDown 0.25s ease-out;
+}
+
+@keyframes slideDown {
+  from { opacity: 0; transform: translateY(-5px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* -----------------------------------------------------
+   Buttons
+----------------------------------------------------- */
+
+.button-row {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 25px;
+}
+
+.save-btn,
+.email-btn,
+.ready-btn {
+  flex: 1;
+  padding: 12px 0;
+  margin: 0 6px;
+  border: none;
+  border-radius: 6px;
+  color: white;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.save-btn {
+  background: #444;
+}
+
+.email-btn {
+  background: #0066cc;
+}
+
+.ready-btn {
+  background: #00a82d;
+}
+
+/* BUTTON HOVER EFFECTS */
+.save-btn:hover { background: #222; }
+.email-btn:hover { background: #004c99; }
+.ready-btn:hover { background: #00751f; }
+
+/* -----------------------------------------------------
+   Form Text / Paragraphs
+----------------------------------------------------- */
+.panel-body p {
+  margin: 6px 0;
+  font-size: 15px;
+}
