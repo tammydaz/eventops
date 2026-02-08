@@ -136,11 +136,12 @@
   flex-shrink: 0;
 }
 
-/* View Mode Toggle (in sidebar) */
-.dp-view-section {
-  margin-top: auto;
-  padding-top: 20px;
-  border-top: 1px solid rgba(204,0,0,0.15);
+/* View Mode Bar (inside main content) */
+.dp-view-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 20px;
 }
 
 .dp-view-label {
@@ -148,13 +149,7 @@
   color: #555;
   font-weight: 700;
   letter-spacing: 1.5px;
-  margin-bottom: 10px;
-}
-
-.dp-view-btns {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
+  margin-right: 6px;
 }
 
 .dp-view-btn {
