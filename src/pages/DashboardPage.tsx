@@ -113,30 +113,6 @@ export default function DashboardPage() {
           ))}
         </ul>
 
-        {/* View mode toggles in sidebar */}
-        <div className="dp-view-section">
-          <p className="dp-view-label">VIEW MODE</p>
-          <div className="dp-view-btns">
-            <button
-              onClick={() => setViewMode("owner")}
-              className={`dp-view-btn ${viewMode === "owner" ? "active-gold" : ""}`}
-            >
-              👑 Nick
-            </button>
-            <button
-              onClick={() => setViewMode("foh")}
-              className={`dp-view-btn ${viewMode === "foh" ? "active-cyan" : ""}`}
-            >
-              🎯 FOH
-            </button>
-            <button
-              onClick={() => setViewMode("boh")}
-              className={`dp-view-btn ${viewMode === "boh" ? "active-red" : ""}`}
-            >
-              🔥 BOH
-            </button>
-          </div>
-        </div>
       </aside>
 
       {/* ═══ MAIN AREA ═══ */}
@@ -173,6 +149,29 @@ export default function DashboardPage() {
 
         {/* ── Events Grid ── */}
         <div className="dp-events-area">
+          {/* View mode toggles */}
+          <div className="dp-view-bar">
+            <span className="dp-view-label">VIEW</span>
+            <button
+              onClick={() => setViewMode("owner")}
+              className={`dp-view-btn ${viewMode === "owner" ? "active-gold" : ""}`}
+            >
+              👑 Nick
+            </button>
+            <button
+              onClick={() => setViewMode("foh")}
+              className={`dp-view-btn ${viewMode === "foh" ? "active-cyan" : ""}`}
+            >
+              🎯 FOH
+            </button>
+            <button
+              onClick={() => setViewMode("boh")}
+              className={`dp-view-btn ${viewMode === "boh" ? "active-red" : ""}`}
+            >
+              🔥 BOH
+            </button>
+          </div>
+
           <div className="dp-events-grid">
             {events.map((evt) => (
               <PremiumCard key={evt.id} event={evt} viewMode={viewMode} />
