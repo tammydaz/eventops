@@ -3,6 +3,7 @@ import { PrintTest } from "./pages/PrintTest";
 import { HomeDashboard } from "./pages/HomeDashboard";
 import { QuickIntake } from "./pages/QuickIntake";
 import DashboardPage from "./pages/DashboardPage";
+import FOHLandingPage from "./pages/FOHLandingPage";
 import Watchtower from "./pages/Watchtower";
 import SpecEngine from "./pages/spec-engine";
 import BeoPrint from "./pages/beo-print";
@@ -33,6 +34,10 @@ export const Router = ({ selectedEventId }: { selectedEventId: string | null }) 
 		if (!selectedEventId) return null;
 		return <IntakePage />;
 	}
+
+  if (pathname.startsWith("/foh")) {
+    return <FOHLandingPage />;
+  }
 
   if (pathname.startsWith("/watchtower")) {
     return <Watchtower />;
