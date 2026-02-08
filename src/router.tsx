@@ -2,6 +2,7 @@ import { IntakePage } from "./pages/IntakePage";
 import { PrintTest } from "./pages/PrintTest";
 import { HomeDashboard } from "./pages/HomeDashboard";
 import { QuickIntake } from "./pages/QuickIntake";
+import DashboardPage from "./pages/DashboardPage";
 import Watchtower from "./pages/Watchtower";
 import SpecEngine from "./pages/spec-engine";
 import BeoPrint from "./pages/beo-print";
@@ -21,6 +22,10 @@ export const Router = ({ selectedEventId }: { selectedEventId: string | null }) 
 	}
 
 	if (pathname === "/" || pathname.startsWith("/home")) {
+		return <DashboardPage />;
+	}
+
+	if (pathname.startsWith("/dashboard-old")) {
 		return <HomeDashboard />;
 	}
 
@@ -53,5 +58,5 @@ export const Router = ({ selectedEventId }: { selectedEventId: string | null }) 
     return <Health />;
   }
 
-	return <HomeDashboard />;
+	return <DashboardPage />;
 };
