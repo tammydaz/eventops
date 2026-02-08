@@ -11,6 +11,7 @@ function App() {
   const isQuickIntake = pathname.startsWith("/quick-intake");
   const isWatchtower = pathname.startsWith("/watchtower");
   const isPapaChulo = pathname.startsWith("/papa-chulo");
+  const isFOH = pathname.startsWith("/foh");
   const isDashboardOld = pathname.startsWith("/dashboard-old");
 
   useEffect(() => {
@@ -27,7 +28,7 @@ function App() {
     }
   }, [pathname, selectedEventId, selectEvent]);
 
-  if (isPrintTest || isHome || isQuickIntake || isWatchtower || isPapaChulo || isDashboardOld) {
+  if (isPrintTest || isHome || isQuickIntake || isWatchtower || isPapaChulo || isFOH || isDashboardOld) {
     console.log("APP RENDERED");
     return <Router selectedEventId={selectedEventId} />;
   }
