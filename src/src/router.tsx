@@ -8,6 +8,7 @@ import BeoPrint from "./pages/beo-print";
 import Profit from "./pages/profit";
 import Health from "./pages/health";
 import PapaChulo from "./pages/PapaChulo";
+import OpsChiefDashboard from "./pages/OpsChiefDashboard";
 
 export const Router = ({ selectedEventId }: { selectedEventId: string | null }) => {
 	const pathname = window.location.pathname;
@@ -31,6 +32,10 @@ export const Router = ({ selectedEventId }: { selectedEventId: string | null }) 
 
   if (pathname.startsWith("/watchtower")) {
     return <Watchtower />;
+  }
+
+  if (pathname.startsWith("/ops-chief")) {
+    return <OpsChiefDashboard />;
   }
 
   if (pathname.startsWith("/spec-engine/")) {

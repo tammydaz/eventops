@@ -92,6 +92,12 @@ export const HomeDashboard = () => {
             </a>
           </li>
           <li>
+            <Link to="/ops-chief">
+              <span className="sidebar-icon"></span>
+              Ops Chief Command Post
+            </Link>
+          </li>
+          <li>
             <Link to="/watchtower">
               <span className="sidebar-icon"></span>
               Papa Chulo Watchtower

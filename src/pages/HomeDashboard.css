@@ -631,6 +631,8 @@ body::before {
     justify-content: center;
     z-index: 2;
     animation: chief-pulse 2.5s ease-in-out infinite;
+    cursor: pointer;
+    text-decoration: none;
 }
 
 @keyframes chief-pulse {
@@ -643,7 +645,7 @@ body::before {
 }
 
 .chief-of-ops::after {
-    content: 'Chief of Ops\ACommand Post';
+    content: 'Ops Chief\ACommand Post';
     white-space: pre-wrap;
     transform: rotate(-45deg);
     text-align: center;
@@ -671,6 +673,8 @@ body::before {
     justify-content: center;
     z-index: 2;
     animation: papa-chulo-pulse 2.5s ease-in-out infinite;
+    cursor: pointer;
+    text-decoration: none;
 }
 
 @keyframes papa-chulo-pulse {

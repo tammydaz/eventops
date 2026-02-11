@@ -1,8 +1,6 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { Link } from "react-router-dom";
 import { useEventStore } from "../state/eventStore";
-
-type ViewMode = "owner" | "foh" | "boh";
 
 type EventListItem = {
   id: string;
@@ -13,360 +11,772 @@ type EventListItem = {
   guestCount?: number | string;
 };
 
-const VIEW_CONFIG = {
-  owner: { label: "Owner (Nick)", icon: "👑", color: "#d99b66", glow: "rgba(217,155,102,0.5)" },
-  foh:   { label: "Front of House", icon: "🎯", color: "#4dd0e1", glow: "rgba(0,188,212,0.5)" },
-  boh:   { label: "Back of House", icon: "🔥", color: "#ff6b6b", glow: "rgba(239,68,68,0.5)" },
-} as const;
-
-const ACTION_BUTTONS = [
-  { icon: "📋", label: "Spec Food Items", path: (id: string) => `/spec-engine/${id}` },
-  { icon: "🖨️", label: "Print BEO",       path: (id: string) => `/beo-print/${id}` },
-  { icon: "💰", label: "Profit Margin",    path: (id: string) => `/profit/${id}` },
-  { icon: "🚦", label: "Health Light",     path: (id: string) => `/health/${id}` },
-  { icon: "📝", label: "BEO Intake",       path: (id: string) => `/beo-intake/${id}` },
-];
-
 const Watchtower = () => {
-  const { selectedEventId, setSelectedEventId, eventData, events, eventsLoading } = useEventStore() as {
-    selectedEventId: string | null;
-    setSelectedEventId: React.Dispatch<React.SetStateAction<string | null>>;
-    eventData: Record<string, any>;
+  const { events, eventsLoading, setSelectedEventId } = useEventStore() as {
     events: EventListItem[];
     eventsLoading: boolean;
+    setSelectedEventId: (id: string | null) => void;
   };
-  const [viewMode, setViewMode] = useState<ViewMode>("owner");
-  const activeView = VIEW_CONFIG[viewMode];
 
-  const selectedEvent: EventListItem | null = selectedEventId
-    ? events.find((e) => e.id === selectedEventId) || null
-    : null;
+  const [hoveredEventId, setHoveredEventId] = useState<string | null>(null);
+  const [lockedEventId, setLockedEventId] = useState<string | null>(null);
+  const [showAllEvents, setShowAllEvents] = useState(true);
+  const [hideTimeout, setHideTimeout] = useState<NodeJS.Timeout | null>(null);
+  const [hoverTimeout, setHoverTimeout] = useState<NodeJS.Timeout | null>(null);
+
+  const handleMouseEnter = (eventId: string) => {
+    // Clear any existing hover timeout
+    if (hoverTimeout) {
+      clearTimeout(hoverTimeout);
+    }
+
+    // Clear hide timeout if exists
+    if (hideTimeout) {
+      clearTimeout(hideTimeout);
+      setHideTimeout(null);
+    }
+
+    // Only open panel if user hovers for 700ms (prevents accidental hovers while scrolling)
+    const timeout = setTimeout(() => {
+      if (!lockedEventId) {
+        setHoveredEventId(eventId);
+        setLockedEventId(eventId);
+      }
+    }, 700);
+    setHoverTimeout(timeout);
+  };
+
+  const handleCardMouseLeave = () => {
+    // Cancel pending hover
+    if (hoverTimeout) {
+      clearTimeout(hoverTimeout);
+      setHoverTimeout(null);
+    }
+
+    // DON'T auto-close - let user move to panel
+    // Panel will only close when they leave the panel itself
+  };
+
+  const keepPanelOpen = () => {
+    // Cancel any pending close
+    if (hideTimeout) {
+      clearTimeout(hideTimeout);
+      setHideTimeout(null);
+    }
+  };
+
+  const closePanelDelayed = () => {
+    // Close immediately when leaving the panel
+    setHoveredEventId(null);
+    setLockedEventId(null);
+    if (hideTimeout) {
+      clearTimeout(hideTimeout);
+      setHideTimeout(null);
+    }
+  };
+
+  const closePanel = () => {
+    if (hideTimeout) clearTimeout(hideTimeout);
+    setHoveredEventId(null);
+    setLockedEventId(null);
+  };
+
+  // Use locked event if available, otherwise use hovered
+  const displayEventId = lockedEventId || hoveredEventId;
+
+  // Filter events for current week
+  const currentWeekEvents = useMemo(() => {
+    if (showAllEvents) return events;
+
+    const now = new Date();
+    const startOfWeek = new Date(now);
+    startOfWeek.setDate(now.getDate() - now.getDay());
+    startOfWeek.setHours(0, 0, 0, 0);
+
+    const endOfWeek = new Date(startOfWeek);
+    endOfWeek.setDate(startOfWeek.getDate() + 7);
+
+    return events.filter((evt) => {
+      if (!evt.eventDate) return true; // Show events without dates
+      const eventDate = new Date(evt.eventDate);
+      return eventDate >= startOfWeek && eventDate < endOfWeek;
+    });
+  }, [events, showAllEvents]);
+
+  const handleEmailClient = (evt: EventListItem) => {
+    // TODO: Integrate with email service
+    alert(`Email client for: ${evt.eventName}`);
+  };
 
   return (
-    <div
-      className="min-h-screen relative overflow-hidden"
-      style={{ background: "linear-gradient(135deg, #0a0a0a 0%, #1a0808 40%, #0f0a15 100%)" }}
-    >
-      {/* ── Ambient glows ── */}
-      <div className="fixed inset-0 pointer-events-none" style={{
-        background: "radial-gradient(ellipse at 25% 20%, rgba(204,0,0,0.08) 0%, transparent 60%), radial-gradient(ellipse at 75% 80%, rgba(0,188,212,0.06) 0%, transparent 60%)",
-      }} />
+    <div style={styles.container}>
+      {/* Animated background */}
+      <div style={styles.backgroundOverlay} />
 
-      {/* ── Top bar ── */}
-      <header
-        className="relative z-10 flex items-center justify-between px-8 py-4"
-        style={{
-          background: "linear-gradient(180deg, rgba(15,8,8,0.9), rgba(10,5,10,0.6))",
-          borderBottom: "1px solid rgba(204,0,0,0.2)",
-          backdropFilter: "blur(12px)",
-        }}
-      >
-        <Link
-          to="/"
-          className="flex items-center gap-3 text-gray-400 hover:text-white transition-colors duration-300"
-        >
-          <div
-            className="w-8 h-8 flex items-center justify-center rounded-sm flex-shrink-0"
-            style={{
-              background: "linear-gradient(135deg, #cc0000, #ff3333)",
-              transform: "rotate(45deg)",
-              boxShadow: "0 0 14px rgba(204,0,0,0.4)",
-            }}
-          >
-            <span className="text-white font-bold text-sm" style={{ transform: "rotate(-45deg)" }}>F</span>
+      {/* Header */}
+      <header style={styles.header}>
+        <Link to="/" style={styles.backButton}>
+          <div style={styles.logoSquare}>
+            <span style={styles.logoLetter}>F</span>
           </div>
-          <span className="text-xs font-semibold tracking-widest uppercase">Dashboard</span>
+          <span style={styles.backText}>Back to Dashboard</span>
         </Link>
 
-        {/* View mode toggles */}
-        <div className="flex items-center gap-2">
-          {(["owner", "foh", "boh"] as ViewMode[]).map((mode) => {
-            const cfg = VIEW_CONFIG[mode];
-            const isActive = viewMode === mode;
-            return (
-              <button
-                key={mode}
-                onClick={() => setViewMode(mode)}
-                className="px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wide transition-all duration-300"
-                style={{
-                  background: isActive
-                    ? `linear-gradient(135deg, ${cfg.glow.replace("0.5", "0.2")}, ${cfg.glow.replace("0.5", "0.06")})`
-                    : "rgba(255,255,255,0.03)",
-                  border: isActive ? `1px solid ${cfg.glow}` : "1px solid rgba(255,255,255,0.06)",
-                  color: isActive ? cfg.color : "#555",
-                  boxShadow: isActive ? `0 0 16px ${cfg.glow.replace("0.5", "0.2")}` : "none",
-                }}
-              >
-                {cfg.icon} {mode === "owner" ? "Nick" : mode.toUpperCase()}
-              </button>
-            );
-          })}
+        <div style={styles.headerCenter}>
+          <h1 style={styles.title}>Papa Chulo Watchtower</h1>
+          <p style={styles.subtitle}>
+            {showAllEvents ? "All Events" : "This Week's Events"} • Command Center
+          </p>
         </div>
 
-        {/* Active view badge */}
-        <div className="flex items-center gap-2">
-          <span
-            className="w-2 h-2 rounded-full animate-pulse"
-            style={{ backgroundColor: activeView.color, boxShadow: `0 0 8px ${activeView.glow}` }}
-          />
-          <span className="text-[11px] font-semibold tracking-wider uppercase" style={{ color: activeView.color }}>
-            {activeView.label}
-          </span>
+        <div style={styles.headerRight}>
+          <button
+            style={{
+              ...styles.filterToggle,
+              ...(showAllEvents ? styles.filterToggleActive : {}),
+            }}
+            onClick={() => setShowAllEvents(!showAllEvents)}
+          >
+            <span style={styles.filterIcon}>{showAllEvents ? "📋" : "📅"}</span>
+            <span style={styles.filterText}>
+              {showAllEvents ? `All Events (${currentWeekEvents.length})` : `This Week (${currentWeekEvents.length})`}
+            </span>
+          </button>
         </div>
       </header>
 
-      {/* ── Hero Section ── */}
-      <div className="relative z-10 flex flex-col items-center pt-16 pb-10">
-        {/* Pulsing diamond icon */}
-        <div
-          className="w-20 h-20 flex items-center justify-center mb-6"
-          style={{
-            background: "linear-gradient(135deg, #00bcd4, #4dd0e1)",
-            transform: "rotate(45deg)",
-            boxShadow: "0 0 50px rgba(0,188,212,0.6), 0 0 100px rgba(0,188,212,0.2)",
-            animation: "diamond-pulse 3s ease-in-out infinite",
-          }}
-        >
-          <span className="text-2xl" style={{ transform: "rotate(-45deg)" }}>👁️</span>
-        </div>
+      {/* Main Content */}
+      <main style={styles.main}>
+        {eventsLoading ? (
+          <div style={styles.loading}>
+            <div style={styles.loadingSpinner} />
+            <p style={styles.loadingText}>Loading events...</p>
+          </div>
+        ) : currentWeekEvents.length === 0 ? (
+          <div style={styles.empty}>
+            <div style={styles.emptyIcon}>📭</div>
+            <h3 style={styles.emptyTitle}>
+              {showAllEvents ? "No Events Found" : "No Events This Week"}
+            </h3>
+            <p style={styles.emptyText}>
+              {showAllEvents 
+                ? "Create your first event to get started"
+                : "Try viewing all events or create a new one"}
+            </p>
+            <div style={{ display: "flex", gap: "12px", justifyContent: "center" }}>
+              {!showAllEvents && (
+                <button
+                  onClick={() => setShowAllEvents(true)}
+                  style={styles.emptyButton}
+                >
+                  View All Events
+                </button>
+              )}
+              <Link to="/" style={styles.emptyButton}>
+                Go to Dashboard
+              </Link>
+            </div>
+          </div>
+        ) : (
+          <div style={styles.eventsGrid}>
+            {currentWeekEvents.map((evt) => (
+              <div
+                key={evt.id}
+                style={{
+                  ...styles.eventCard,
+                  ...(displayEventId === evt.id ? styles.eventCardHovered : {}),
+                }}
+                onMouseEnter={() => handleMouseEnter(evt.id)}
+                onMouseLeave={handleCardMouseLeave}
+              >
+                {/* Silk napkin fold corners */}
+                <div style={styles.foldTopLeft} />
+                <div style={styles.foldTopRight} />
 
-        <h1
-          className="text-3xl font-black tracking-wider mb-2"
-          style={{
-            background: "linear-gradient(135deg, #ffffff, #cc0000)",
-            WebkitBackgroundClip: "text",
-            WebkitTextFillColor: "transparent",
-            textShadow: "none",
-          }}
-        >
-          PAPA CHULO
-        </h1>
-        <p
-          className="text-sm font-semibold tracking-[0.3em] uppercase mb-1"
-          style={{ color: "#00bcd4" }}
-        >
-          WATCHTOWER
-        </p>
-        <p className="text-xs text-gray-600 mt-1">Command & Control Center</p>
-      </div>
+                {/* Card Content */}
+                <div style={styles.eventCardHeader}>
+                  <div style={styles.eventInfo}>
+                    <h3 style={styles.eventName}>{evt.eventName}</h3>
+                    <p style={styles.eventTime}>
+                      {evt.eventDate ? new Date(evt.eventDate).toLocaleDateString('en-US', {
+                        weekday: 'long',
+                        month: 'short',
+                        day: 'numeric'
+                      }) : 'Date TBD'}
+                    </p>
+                  </div>
+                </div>
 
-      {/* ── Event Picker ── */}
-      <div className="relative z-10 flex justify-center mb-12">
-        <div
-          className="w-full max-w-lg rounded-xl p-6"
-          style={{
-            background: "linear-gradient(135deg, rgba(25,10,10,0.9), rgba(18,8,14,0.7))",
-            border: "1px solid rgba(0,188,212,0.2)",
-            boxShadow: "0 12px 40px rgba(0,0,0,0.5), 0 0 20px rgba(0,188,212,0.08)",
-            backdropFilter: "blur(10px)",
-          }}
-        >
-          <label className="block text-[10px] font-bold text-gray-500 tracking-[0.2em] uppercase mb-3">
-            SELECT EVENT
-          </label>
-          <select
-            className="w-full rounded-lg px-4 py-3 text-sm font-semibold outline-none transition-all duration-300"
-            style={{
-              background: "linear-gradient(135deg, rgba(40,15,15,0.8), rgba(30,10,18,0.6))",
-              border: "1px solid rgba(204,0,0,0.3)",
-              color: selectedEventId ? "#fff" : "#888",
-              boxShadow: "inset 0 2px 6px rgba(0,0,0,0.3)",
-            }}
-            value={selectedEventId ?? ""}
-            onChange={(e) => {
-              if (e.target.value) setSelectedEventId(e.target.value as any);
-            }}
-            disabled={eventsLoading}
-            onFocus={(e) => {
-              e.currentTarget.style.borderColor = "rgba(0,188,212,0.6)";
-              e.currentTarget.style.boxShadow = "inset 0 2px 6px rgba(0,0,0,0.3), 0 0 12px rgba(0,188,212,0.15)";
-            }}
-            onBlur={(e) => {
-              e.currentTarget.style.borderColor = "rgba(204,0,0,0.3)";
-              e.currentTarget.style.boxShadow = "inset 0 2px 6px rgba(0,0,0,0.3)";
-            }}
-          >
-            <option value="">{eventsLoading ? "Loading events..." : "— Choose an event —"}</option>
-            {events.map((evt) => (
-              <option key={evt.id} value={evt.id}>{evt.eventName}</option>
-            ))}
-          </select>
-        </div>
-      </div>
-
-      {/* ── Selected Event Panel ── */}
-      {selectedEventId && selectedEvent && (
-        <div className="relative z-10 max-w-4xl mx-auto px-6 pb-20">
-          {/* Event info card */}
-          <div
-            className="rounded-xl p-8 mb-8"
-            style={{
-              background: "linear-gradient(135deg, rgba(28,10,10,0.9), rgba(20,8,16,0.7))",
-              border: "1px solid rgba(0,188,212,0.25)",
-              boxShadow: "0 16px 48px rgba(0,0,0,0.5), 0 0 24px rgba(0,188,212,0.1)",
-            }}
-          >
-            {/* Top neon line */}
-            <div
-              className="absolute top-0 left-8 right-8 h-[1px]"
-              style={{ background: "linear-gradient(90deg, transparent, rgba(0,188,212,0.5), transparent)" }}
-            />
-
-            <div className="flex items-start justify-between mb-6">
-              <div>
-                <h2 className="text-2xl font-bold text-white mb-1">{selectedEvent.eventName}</h2>
-                <div className="flex items-center gap-4 text-sm">
-                  {selectedEvent.eventDate && (
-                    <span style={{ color: "#cc0000" }} className="font-semibold">{selectedEvent.eventDate}</span>
+                <div style={styles.eventDetails}>
+                  {evt.eventType && (
+                    <div style={styles.eventDetailItem}>
+                      <span style={styles.eventDetailLabel}>Type:</span>
+                      <span style={styles.eventDetailValue}>{evt.eventType}</span>
+                    </div>
                   )}
-                  {selectedEvent.eventType && (
-                    <span
-                      className="px-3 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider"
-                      style={{
-                        background: "rgba(0,188,212,0.12)",
-                        color: "#4dd0e1",
-                        border: "1px solid rgba(0,188,212,0.3)",
-                      }}
-                    >
-                      {selectedEvent.eventType}
-                    </span>
+                  {evt.serviceStyle && (
+                    <div style={styles.eventDetailItem}>
+                      <span style={styles.eventDetailLabel}>Service:</span>
+                      <span style={styles.eventDetailValue}>{evt.serviceStyle}</span>
+                    </div>
+                  )}
+                  {evt.guestCount && (
+                    <div style={styles.eventDetailItem}>
+                      <span style={styles.eventDetailLabel}>Guests:</span>
+                      <span style={styles.eventDetailValue}>{evt.guestCount}</span>
+                    </div>
                   )}
                 </div>
+
+                {evt.eventType && (
+                  <div style={styles.eventCategory}>{evt.eventType}</div>
+                )}
+
+                <div style={styles.healthLights}>
+                  <div style={{ ...styles.healthLight, ...styles.healthLightGreen }} />
+                  <span style={styles.healthLabel}>Status: Ready</span>
+                </div>
+
+                {/* Hover Side Panel - render outside card as fixed overlay */}
               </div>
-              <button
-                onClick={() => setSelectedEventId(null as any)}
-                className="text-gray-600 hover:text-white transition-colors text-lg px-2"
-              >
-                ✕
-              </button>
-            </div>
-
-            {/* Quick stats row */}
-            <div className="grid grid-cols-3 gap-4 mb-6">
-              <QuickStat label="Service" value={selectedEvent.serviceStyle || "—"} />
-              <QuickStat label="Guests" value={String(selectedEvent.guestCount || "—")} />
-              <QuickStat label="View Mode" value={activeView.label} accent={activeView.color} />
-            </div>
-
-            {/* Separator */}
-            <div
-              className="h-px mb-6"
-              style={{ background: "linear-gradient(90deg, transparent, rgba(204,0,0,0.25), transparent)" }}
-            />
-
-            {/* Action buttons grid */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-              {ACTION_BUTTONS.map((btn) => (
-                <Link
-                  key={btn.label}
-                  to={btn.path(selectedEventId)}
-                  className="group flex items-center gap-3 rounded-lg px-5 py-4 transition-all duration-300"
-                  style={{
-                    background: "linear-gradient(135deg, rgba(40,15,15,0.6), rgba(30,10,18,0.4))",
-                    border: "1px solid rgba(204,0,0,0.2)",
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.borderColor = "rgba(204,0,0,0.5)";
-                    e.currentTarget.style.background = "linear-gradient(135deg, rgba(204,0,0,0.15), rgba(60,15,20,0.5))";
-                    e.currentTarget.style.transform = "translateY(-2px)";
-                    e.currentTarget.style.boxShadow = "0 8px 24px rgba(204,0,0,0.15), 0 0 12px rgba(204,0,0,0.1)";
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.borderColor = "rgba(204,0,0,0.2)";
-                    e.currentTarget.style.background = "linear-gradient(135deg, rgba(40,15,15,0.6), rgba(30,10,18,0.4))";
-                    e.currentTarget.style.transform = "translateY(0)";
-                    e.currentTarget.style.boxShadow = "none";
-                  }}
-                >
-                  <span className="text-xl">{btn.icon}</span>
-                  <span className="text-sm font-semibold text-gray-300 group-hover:text-white transition-colors">
-                    {btn.label}
-                  </span>
-                </Link>
-              ))}
-
-              {/* Airtable link */}
-              <a
-                href={`https://airtable.com/${selectedEventId}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="group flex items-center gap-3 rounded-lg px-5 py-4 transition-all duration-300"
-                style={{
-                  background: "linear-gradient(135deg, rgba(40,15,15,0.6), rgba(30,10,18,0.4))",
-                  border: "1px solid rgba(204,0,0,0.2)",
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.borderColor = "rgba(204,0,0,0.5)";
-                  e.currentTarget.style.background = "linear-gradient(135deg, rgba(204,0,0,0.15), rgba(60,15,20,0.5))";
-                  e.currentTarget.style.transform = "translateY(-2px)";
-                  e.currentTarget.style.boxShadow = "0 8px 24px rgba(204,0,0,0.15), 0 0 12px rgba(204,0,0,0.1)";
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.borderColor = "rgba(204,0,0,0.2)";
-                  e.currentTarget.style.background = "linear-gradient(135deg, rgba(40,15,15,0.6), rgba(30,10,18,0.4))";
-                  e.currentTarget.style.transform = "translateY(0)";
-                  e.currentTarget.style.boxShadow = "none";
-                }}
-              >
-                <span className="text-xl">📁</span>
-                <span className="text-sm font-semibold text-gray-300 group-hover:text-white transition-colors">
-                  Open in Airtable
-                </span>
-              </a>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ── Empty state ── */}
-      {!selectedEventId && (
-        <div className="relative z-10 flex flex-col items-center mt-4">
-          <div className="flex items-center gap-6">
-            {[0, 1, 2].map((i) => (
-              <div
-                key={i}
-                className="w-3 h-3 rounded-full"
-                style={{
-                  background: i === 0 ? "#22c55e" : i === 1 ? "#eab308" : "#ef4444",
-                  boxShadow: `0 0 12px ${i === 0 ? "rgba(34,197,94,0.5)" : i === 1 ? "rgba(234,179,8,0.5)" : "rgba(239,68,68,0.5)"}`,
-                  animation: `pulse-light ${2 + i * 0.3}s ease-in-out infinite`,
-                }}
-              />
             ))}
           </div>
-          <p className="text-xs text-gray-700 mt-4 tracking-wider">Awaiting event selection...</p>
-        </div>
-      )}
+        )}
 
-      {/* ── Keyframe animations ── */}
-      <style>{`
-        @keyframes diamond-pulse {
-          0%, 100% { box-shadow: 0 0 50px rgba(0,188,212,0.6), 0 0 100px rgba(0,188,212,0.2); }
-          50%      { box-shadow: 0 0 70px rgba(0,188,212,0.8), 0 0 120px rgba(0,188,212,0.3); }
-        }
-        @keyframes pulse-light {
-          0%, 100% { opacity: 0.5; transform: scale(1); }
-          50%      { opacity: 1; transform: scale(1.3); }
-        }
-      `}</style>
+        {/* Side Panel - Fixed position overlay */}
+        {displayEventId && currentWeekEvents.find(e => e.id === displayEventId) && (
+          <div 
+            style={styles.sidePanel}
+            onMouseEnter={keepPanelOpen}
+            onMouseLeave={closePanelDelayed}
+          >
+            {(() => {
+              const evt = currentWeekEvents.find(e => e.id === displayEventId)!;
+              return (
+                <>
+                  <div style={styles.sidePanelHeader}>
+                    <h4 style={styles.sidePanelTitle}>Quick Actions</h4>
+                    <button
+                      style={styles.sidePanelClose}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        closePanel();
+                      }}
+                    >
+                      ✕
+                    </button>
+                  </div>
+
+                  <div style={styles.sidePanelEventInfo}>
+                    <h5 style={styles.sidePanelEventName}>{evt.eventName}</h5>
+                    <p style={styles.sidePanelEventDate}>
+                      {evt.eventDate ? new Date(evt.eventDate).toLocaleDateString('en-US', {
+                        weekday: 'long',
+                        month: 'short',
+                        day: 'numeric'
+                      }) : 'Date TBD'}
+                    </p>
+                  </div>
+
+                  <div style={styles.actionsList}>
+                    <button
+                      style={styles.actionItem}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleEmailClient(evt);
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.background = styles.actionItemHover.background as string;
+                        e.currentTarget.style.transform = "translateX(5px)";
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.background = styles.actionItem.background as string;
+                        e.currentTarget.style.transform = "translateX(0)";
+                      }}
+                    >
+                      <span style={styles.actionIcon}>📧</span>
+                      <span style={styles.actionText}>Email Client</span>
+                    </button>
+
+                    <Link
+                      to={`/profit/${evt.id}`}
+                      style={styles.actionItem}
+                      onClick={(e) => e.stopPropagation()}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.background = styles.actionItemHover.background as string;
+                        e.currentTarget.style.transform = "translateX(5px)";
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.background = styles.actionItem.background as string;
+                        e.currentTarget.style.transform = "translateX(0)";
+                      }}
+                    >
+                      <span style={styles.actionIcon}>💰</span>
+                      <span style={styles.actionText}>Check Profit Margins</span>
+                    </Link>
+
+                    <Link
+                      to={`/spec-engine/${evt.id}`}
+                      style={styles.actionItem}
+                      onClick={(e) => e.stopPropagation()}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.background = styles.actionItemHover.background as string;
+                        e.currentTarget.style.transform = "translateX(5px)";
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.background = styles.actionItem.background as string;
+                        e.currentTarget.style.transform = "translateX(0)";
+                      }}
+                    >
+                      <span style={styles.actionIcon}>📋</span>
+                      <span style={styles.actionText}>Review/Spec BEO</span>
+                    </Link>
+
+                    <Link
+                      to={`/beo-intake/${evt.id}`}
+                      style={styles.actionItem}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedEventId(evt.id);
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.background = styles.actionItemHover.background as string;
+                        e.currentTarget.style.transform = "translateX(5px)";
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.background = styles.actionItem.background as string;
+                        e.currentTarget.style.transform = "translateX(0)";
+                      }}
+                    >
+                      <span style={styles.actionIcon}>📂</span>
+                      <span style={styles.actionText}>Open Event</span>
+                    </Link>
+
+                    <Link
+                      to={`/health/${evt.id}`}
+                      style={styles.actionItem}
+                      onClick={(e) => e.stopPropagation()}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.background = styles.actionItemHover.background as string;
+                        e.currentTarget.style.transform = "translateX(5px)";
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.background = styles.actionItem.background as string;
+                        e.currentTarget.style.transform = "translateX(0)";
+                      }}
+                    >
+                      <span style={styles.actionIcon}>🚦</span>
+                      <span style={styles.actionText}>Check Health Light</span>
+                    </Link>
+
+                    <button
+                      style={styles.actionItem}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        alert(`View QuickBooks invoice for: ${evt.eventName}`);
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.background = styles.actionItemHover.background as string;
+                        e.currentTarget.style.transform = "translateX(5px)";
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.background = styles.actionItem.background as string;
+                        e.currentTarget.style.transform = "translateX(0)";
+                      }}
+                    >
+                      <span style={styles.actionIcon}>💳</span>
+                      <span style={styles.actionText}>View Invoice (QuickBooks)</span>
+                    </button>
+                  </div>
+                </>
+              );
+            })()}
+          </div>
+        )}
+      </main>
     </div>
   );
 };
 
-/* ── Quick stat helper ── */
-function QuickStat({ label, value, accent }: { label: string; value: string; accent?: string }) {
-  return (
-    <div
-      className="rounded-lg px-4 py-3"
-      style={{
-        background: "rgba(255,255,255,0.02)",
-        border: "1px solid rgba(255,255,255,0.05)",
-      }}
-    >
-      <p className="text-[10px] text-gray-600 font-bold tracking-[0.15em] uppercase mb-1">{label}</p>
-      <p className="text-sm font-bold" style={{ color: accent || "#ccc" }}>{value}</p>
-    </div>
-  );
-}
+const styles: Record<string, React.CSSProperties> = {
+  container: {
+    minHeight: "100vh",
+    background: "linear-gradient(135deg, #0a0a0a 0%, #1a0a0a 50%, #0f0a15 100%)",
+    color: "#e0e0e0",
+    position: "relative",
+    fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif",
+  },
+  backgroundOverlay: {
+    position: "fixed",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    background: "radial-gradient(circle at 20% 50%, rgba(204, 0, 0, 0.08) 0%, transparent 50%), radial-gradient(circle at 80% 80%, rgba(204, 0, 0, 0.05) 0%, transparent 50%)",
+    pointerEvents: "none",
+    zIndex: 0,
+  },
+  header: {
+    position: "relative",
+    zIndex: 10,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: "20px 40px",
+    background: "linear-gradient(180deg, rgba(20, 10, 10, 0.8), rgba(15, 10, 15, 0.6))",
+    borderBottom: "1px solid rgba(204, 0, 0, 0.15)",
+    backdropFilter: "blur(10px)",
+  },
+  backButton: {
+    display: "flex",
+    alignItems: "center",
+    gap: "12px",
+    textDecoration: "none",
+    color: "#a0a0a0",
+    transition: "all 0.3s ease",
+  },
+  logoSquare: {
+    width: "40px",
+    height: "40px",
+    background: "linear-gradient(135deg, #cc0000, #ff3333)",
+    transform: "rotate(45deg)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: "4px",
+    boxShadow: "0 0 20px rgba(204, 0, 0, 0.4)",
+  },
+  logoLetter: {
+    transform: "rotate(-45deg)",
+    color: "#fff",
+    fontWeight: "900",
+    fontSize: "20px",
+  },
+  backText: {
+    fontSize: "14px",
+    fontWeight: "600",
+  },
+  headerCenter: {
+    textAlign: "center",
+  },
+  title: {
+    fontSize: "28px",
+    fontWeight: "900",
+    color: "#ffffff",
+    marginBottom: "6px",
+    textShadow: "-2px -2px 0 #00bcd4, 2px -2px 0 #00bcd4, -2px 2px 0 #00bcd4, 2px 2px 0 #00bcd4",
+  },
+  subtitle: {
+    fontSize: "12px",
+    color: "#cc0000",
+    fontWeight: "600",
+    letterSpacing: "2px",
+    textTransform: "uppercase",
+  },
+  headerRight: {
+    display: "flex",
+    alignItems: "center",
+  },
+  filterToggle: {
+    display: "flex",
+    alignItems: "center",
+    gap: "8px",
+    padding: "10px 16px",
+    background: "rgba(255, 255, 255, 0.05)",
+    border: "2px solid rgba(255, 255, 255, 0.1)",
+    borderRadius: "8px",
+    cursor: "pointer",
+    transition: "all 0.3s ease",
+    color: "#a0a0a0",
+    fontWeight: "700",
+    fontSize: "13px",
+  },
+  filterToggleActive: {
+    background: "linear-gradient(135deg, rgba(0, 188, 212, 0.2), rgba(0, 188, 212, 0.1))",
+    border: "2px solid rgba(0, 188, 212, 0.4)",
+    boxShadow: "0 0 15px rgba(0, 188, 212, 0.2)",
+    color: "#00bcd4",
+  },
+  filterIcon: {
+    fontSize: "18px",
+  },
+  filterText: {
+    fontSize: "13px",
+    fontWeight: "700",
+  },
+  main: {
+    position: "relative",
+    zIndex: 1,
+    padding: "40px",
+    minHeight: "calc(100vh - 100px)",
+  },
+  loading: {
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: "60vh",
+  },
+  loadingSpinner: {
+    width: "60px",
+    height: "60px",
+    border: "4px solid rgba(204, 0, 0, 0.1)",
+    borderTop: "4px solid #cc0000",
+    borderRadius: "50%",
+    animation: "spin 1s linear infinite",
+  },
+  loadingText: {
+    marginTop: "20px",
+    fontSize: "16px",
+    color: "#888",
+    fontWeight: "600",
+  },
+  empty: {
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: "60vh",
+  },
+  emptyIcon: {
+    fontSize: "80px",
+    marginBottom: "20px",
+    opacity: 0.5,
+  },
+  emptyTitle: {
+    fontSize: "24px",
+    fontWeight: "900",
+    color: "#fff",
+    marginBottom: "10px",
+  },
+  emptyText: {
+    fontSize: "16px",
+    color: "#888",
+    marginBottom: "30px",
+  },
+  emptyButton: {
+    padding: "14px 28px",
+    background: "linear-gradient(135deg, #cc0000, #ff3333)",
+    border: "none",
+    borderRadius: "8px",
+    color: "#fff",
+    fontSize: "14px",
+    fontWeight: "700",
+    textDecoration: "none",
+    boxShadow: "0 4px 15px rgba(204, 0, 0, 0.3)",
+    transition: "all 0.3s ease",
+  },
+  eventsGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))",
+    gap: "30px",
+    position: "relative",
+  },
+  eventCard: {
+    position: "relative",
+    background: "linear-gradient(135deg, rgba(30, 10, 10, 0.8), rgba(25, 10, 15, 0.6))",
+    border: "2px solid #00bcd4",
+    borderRadius: "12px",
+    padding: "24px",
+    transition: "all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1)",
+    overflow: "visible",
+    backdropFilter: "blur(5px)",
+    cursor: "pointer",
+    boxShadow: "0 15px 35px rgba(0, 0, 0, 0.4), 0 0 20px rgba(0, 188, 212, 0.25), inset -2px -2px 8px rgba(0, 0, 0, 0.2), inset 2px 2px 8px rgba(255, 255, 255, 0.05)",
+    zIndex: 1,
+  },
+  eventCardHovered: {
+    transform: "translateY(-12px) perspective(1000px) rotateX(2deg)",
+    boxShadow: "0 25px 50px rgba(0, 188, 212, 0.35), 0 0 35px rgba(0, 188, 212, 0.35), inset -2px -2px 12px rgba(0, 0, 0, 0.3), inset 2px 2px 12px rgba(255, 255, 255, 0.08)",
+    zIndex: 100,
+    borderColor: "#4dd0e1",
+    background: "linear-gradient(135deg, rgba(0, 188, 212, 0.2), rgba(0, 188, 212, 0.1))",
+  },
+  foldTopLeft: {
+    content: "''",
+    position: "absolute",
+    top: "-8px",
+    left: "20px",
+    width: 0,
+    height: 0,
+    borderLeft: "15px solid transparent",
+    borderRight: "0px solid transparent",
+    borderTop: "15px solid rgba(0, 188, 212, 0.4)",
+    opacity: 0,
+    transition: "opacity 0.4s ease",
+    zIndex: 10,
+  },
+  foldTopRight: {
+    content: "''",
+    position: "absolute",
+    top: "-8px",
+    right: "20px",
+    width: 0,
+    height: 0,
+    borderRight: "15px solid transparent",
+    borderLeft: "0px solid transparent",
+    borderTop: "15px solid rgba(0, 188, 212, 0.4)",
+    opacity: 0,
+    transition: "opacity 0.4s ease",
+    zIndex: 10,
+  },
+  eventCardHeader: {
+    display: "flex",
+    gap: "12px",
+    marginBottom: "16px",
+  },
+  eventInfo: {
+    flex: 1,
+  },
+  eventName: {
+    fontSize: "18px",
+    fontWeight: "900",
+    color: "#ffffff",
+    marginBottom: "6px",
+  },
+  eventTime: {
+    fontSize: "12px",
+    color: "#cc0000",
+    fontWeight: "600",
+  },
+  eventDetails: {
+    marginBottom: "16px",
+  },
+  eventDetailItem: {
+    fontSize: "13px",
+    color: "#a0a0a0",
+    marginBottom: "6px",
+  },
+  eventDetailLabel: {
+    color: "#888",
+    fontWeight: "600",
+    marginRight: "6px",
+  },
+  eventDetailValue: {
+    color: "#ffffff",
+    fontWeight: "700",
+  },
+  eventCategory: {
+    display: "inline-block",
+    background: "linear-gradient(135deg, rgba(204, 0, 0, 0.2), rgba(204, 0, 0, 0.1))",
+    color: "#ff9999",
+    padding: "6px 12px",
+    borderRadius: "12px",
+    fontSize: "11px",
+    fontWeight: "600",
+    marginBottom: "16px",
+    border: "1px solid rgba(204, 0, 0, 0.2)",
+  },
+  healthLights: {
+    display: "flex",
+    gap: "10px",
+    alignItems: "center",
+    paddingTop: "14px",
+    borderTop: "1px solid rgba(204, 0, 0, 0.1)",
+  },
+  healthLight: {
+    width: "14px",
+    height: "14px",
+    borderRadius: "50%",
+  },
+  healthLightGreen: {
+    backgroundColor: "#4caf50",
+    boxShadow: "0 0 10px rgba(76, 175, 80, 0.6)",
+  },
+  healthLabel: {
+    fontSize: "11px",
+    color: "#888",
+    fontWeight: "600",
+  },
+  sidePanel: {
+    position: "fixed",
+    top: "50%",
+    right: "20px",
+    transform: "translateY(-50%)",
+    width: "280px",
+    maxHeight: "80vh",
+    overflowY: "auto",
+    background: "linear-gradient(135deg, rgba(20, 8, 8, 0.98), rgba(15, 6, 12, 0.95))",
+    border: "2px solid rgba(0, 188, 212, 0.5)",
+    borderRadius: "16px",
+    padding: "24px",
+    boxShadow: "0 20px 60px rgba(0, 0, 0, 0.8), 0 0 40px rgba(0, 188, 212, 0.4)",
+    backdropFilter: "blur(15px)",
+    zIndex: 1000,
+    animation: "slideInRight 0.3s ease-out",
+  },
+  sidePanelHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: "20px",
+    paddingBottom: "12px",
+    borderBottom: "1px solid rgba(0, 188, 212, 0.2)",
+  },
+  sidePanelTitle: {
+    fontSize: "14px",
+    fontWeight: "900",
+    color: "#00bcd4",
+    textTransform: "uppercase",
+    letterSpacing: "1px",
+  },
+  sidePanelClose: {
+    background: "transparent",
+    border: "none",
+    color: "#666",
+    fontSize: "20px",
+    cursor: "pointer",
+    padding: "4px 8px",
+    transition: "all 0.3s ease",
+    lineHeight: 1,
+  },
+  sidePanelEventInfo: {
+    marginBottom: "20px",
+    paddingBottom: "16px",
+    borderBottom: "1px solid rgba(0, 188, 212, 0.2)",
+  },
+  sidePanelEventName: {
+    fontSize: "16px",
+    fontWeight: "900",
+    color: "#fff",
+    marginBottom: "6px",
+  },
+  sidePanelEventDate: {
+    fontSize: "12px",
+    color: "#00bcd4",
+    fontWeight: "600",
+  },
+  actionsList: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "10px",
+  },
+  actionItem: {
+    display: "flex",
+    alignItems: "center",
+    gap: "12px",
+    padding: "12px 14px",
+    background: "linear-gradient(135deg, rgba(40, 15, 15, 0.6), rgba(30, 10, 18, 0.4))",
+    border: "2px solid rgba(204, 0, 0, 0.2)",
+    borderRadius: "8px",
+    color: "#fff",
+    textDecoration: "none",
+    fontSize: "13px",
+    fontWeight: "600",
+    cursor: "pointer",
+    transition: "all 0.3s ease",
+  },
+  actionItemHover: {
+    background: "linear-gradient(135deg, rgba(0, 188, 212, 0.2), rgba(0, 188, 212, 0.1))",
+  },
+  actionIcon: {
+    fontSize: "20px",
+    flexShrink: 0,
+  },
+  actionText: {
+    flex: 1,
+    textAlign: "left",
+  },
+};
 
 export default Watchtower;

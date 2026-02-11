@@ -9,6 +9,7 @@ import { ServicewareNewSection } from "../components/intake/ServicewareNewSectio
 import { GlasswareSection } from "../components/intake/GlasswareSection";
 import { DecorNotesSection } from "../components/intake/DecorNotesSection";
 import { VenueFacilitiesSection } from "../components/intake/VenueFacilitiesSection";
+import { ExceptionsSection } from "../components/intake/ExceptionsSection";
 import "./IntakePage.css";
 
 export const IntakePage = () => {
@@ -96,13 +97,14 @@ export const IntakePage = () => {
         <div className="max-w-4xl mx-auto px-6 py-6">
           <div data-panel-index="0"><ClientSection /></div>
           <div data-panel-index="1"><EventDetailsSection /></div>
-          <div data-panel-index="2"><MenuSection /></div>
-          <div data-panel-index="3"><BarServiceSection /></div>
-          <div data-panel-index="4"><HotColdBeveragesSection /></div>
-          <div data-panel-index="5"><ServicewareNewSection /></div>
-          <div data-panel-index="6"><GlasswareSection /></div>
-          <div data-panel-index="7"><DecorNotesSection /></div>
-          <div data-panel-index="8"><VenueFacilitiesSection /></div>
+          <div data-panel-index="2"><ExceptionsSection /></div>
+          <div data-panel-index="3"><MenuSection /></div>
+          <div data-panel-index="4"><BarServiceSection /></div>
+          <div data-panel-index="5"><HotColdBeveragesSection /></div>
+          <div data-panel-index="6"><ServicewareNewSection /></div>
+          <div data-panel-index="7"><GlasswareSection /></div>
+          <div data-panel-index="8"><DecorNotesSection /></div>
+          <div data-panel-index="9"><VenueFacilitiesSection /></div>
         </div>
       ) : (
         <div className="max-w-4xl mx-auto px-6 py-12 text-center">

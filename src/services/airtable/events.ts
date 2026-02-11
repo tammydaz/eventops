@@ -84,6 +84,7 @@ export const FIELD_IDS = {
 
   DIETARY_NOTES: "fldhGj51bQQWLJSX0",
   SPECIAL_NOTES: "fldlTlYgvPTIUzzMn",
+  OPS_EXCEPTIONS_SPECIAL_HANDLING: "fldOpsExceptionsSpecialHandling", // This will need to be updated with actual field ID
   THEME_COLOR_SCHEME: "fld5raG6Afilj1wDo",
 
   EVENT_DOCUMENTS: "fld8C7fjOqVtYmnCi",
@@ -698,6 +699,7 @@ export type TimelineDetails = {
   timeline: string;
   parkingAccess: string;
   parkingNotes: string;
+  opsExceptionsSpecialHandling: string;
 };
 
 export const getTimelineDetails = async (
@@ -716,6 +718,7 @@ export const getTimelineDetails = async (
     timeline: asString(fields[FIELD_IDS.TIMELINE]),
     parkingAccess: asString(fields[FIELD_IDS.PARKING_ACCESS]),
     parkingNotes: asString(fields[FIELD_IDS.PARKING_NOTES]),
+    opsExceptionsSpecialHandling: asString(fields[FIELD_IDS.OPS_EXCEPTIONS_SPECIAL_HANDLING]),
   };
 };
 

@@ -70,6 +70,7 @@ const DEPARTMENTS = [
   { id: "logistics", label: "Logistics",      icon: "🚚", cls: "bubble-5" },
   { id: "intake",    label: "Client Intake",  icon: "📝", cls: "bubble-2" },
   { id: "vault",     label: "Ops Vault",      icon: "📁", cls: "bubble-3" },
+  { id: "sister",    label: "Hi Sister",      icon: "👋", cls: "bubble-4" },
 ];
 
 /* ═══════════════════════════════════════════
@@ -157,9 +158,15 @@ export default function DashboardPage() {
 
           {/* ── Department Command Ring ── */}
           <section className="dp-dept-section" id="departments">
-            {/* Diamond: Chief of Ops */}
-            <div className="dp-diamond dp-diamond-left">
-              <span>Chief of Ops<br />Command Post</span>
+            {/* Diamond: Ops Chief */}
+            <div
+              className="dp-diamond dp-diamond-left"
+              role="button"
+              tabIndex={0}
+              onClick={() => (window.location.href = "/ops-chief")}
+              onKeyDown={(e) => { if (e.key === "Enter") window.location.href = "/ops-chief"; }}
+            >
+              <span>Ops Chief<br />Command Post</span>
             </div>
             {/* Diamond: Papa Chulo */}
             <div

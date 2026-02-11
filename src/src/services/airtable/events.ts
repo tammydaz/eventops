@@ -137,6 +137,9 @@ export const FIELD_IDS = {
   HYDRATION_BOTTLED_TEA: "fld91JcDezV20RarF",
   HYDRATION_DIET_TEA: "fldGUB8Thl42pJcx6",
   HYDRATION_MIXTURE: "fldV6XXkMe5S0zyEV",
+
+  // Exceptions / Special Handling
+  EXCEPTIONS_SPECIAL_HANDLING: "flddJ8Q3tlV8FnYue",
 } as const;
 
 export type EventRecordData = {
