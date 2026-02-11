@@ -26,89 +26,176 @@ export const IntakePage = () => {
   const selectedEvent = events.find(e => e.id === selectedEventId);
 
   return (
-    <div className="min-h-screen bg-black relative">
-      {/* Animated background glow */}
-      <div className="fixed inset-0 pointer-events-none z-0">
-        <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-br from-black via-gray-950 to-black"></div>
-        <div className="absolute top-20 left-1/4 w-96 h-96 bg-red-900/10 rounded-full blur-3xl"></div>
-        <div className="absolute top-40 right-1/4 w-96 h-96 bg-cyan-500/10 rounded-full blur-3xl"></div>
-        <div className="absolute bottom-20 left-1/3 w-96 h-96 bg-red-900/10 rounded-full blur-3xl"></div>
-      </div>
+    <div style={{
+      minHeight: "100vh",
+      background: "linear-gradient(135deg, #0a0a0a 0%, #0a1a0a 50%, #0f0a15 100%)",
+      color: "#e0e0e0",
+      position: "relative",
+      fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif",
+    }}>
+      {/* Background overlay */}
+      <div style={{
+        position: "fixed",
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        background: "radial-gradient(circle at 20% 50%, rgba(255, 51, 51, 0.05) 0%, transparent 50%), radial-gradient(circle at 80% 80%, rgba(255, 193, 7, 0.05) 0%, transparent 50%)",
+        pointerEvents: "none",
+        zIndex: 0,
+      }} />
       
-      <div className="relative z-1">
-      {/* Header - Simple and Clean */}
-      <div className="border-b-2 border-red-600 sticky top-0 z-10" style={{ backgroundColor: '#1a1a1a' }}>
-        <div className="max-w-4xl mx-auto px-6 py-4">
-          <div className="flex items-center gap-3">
-            <button
-              type="button"
-              className="px-3 py-2 rounded-md border-2 border-red-600 text-gray-400 hover:bg-red-600 hover:text-gray-200 transition text-sm font-semibold"
-              style={{ backgroundColor: '#2d2d2d' }}
-              onClick={() => {
-                window.location.href = "/";
-              }}
-            >
-              ← Back
-            </button>
-            
-            <div className="flex-1">
-              {isLoading ? (
-                <div className="text-gray-400 py-3 text-center">Loading...</div>
-              ) : (
-                <select
-                  value={selectedEventId || ""}
-                  onChange={(e) => {
-                    if (e.target.value) {
-                      selectEvent(e.target.value);
-                    }
-                  }}
-                  className="w-full px-4 py-3 rounded-md border-2 focus:outline-none transition font-semibold cursor-pointer"
-                  style={{
-                    backgroundColor: '#2d2d2d',
-                    borderColor: '#cc0000',
-                    color: '#fff',
-                    fontSize: '14px',
-                  }}
-                  onFocus={(e) => {
-                    e.currentTarget.style.borderColor = '#ff5555';
-                    e.currentTarget.style.boxShadow = '0 0 0 3px rgba(255, 107, 107, 0.2)';
-                  }}
-                  onBlur={(e) => {
-                    e.currentTarget.style.borderColor = '#cc0000';
-                    e.currentTarget.style.boxShadow = 'none';
-                  }}
-                >
-                  <option value="">Select an event...</option>
-                  {events.map((event) => (
-                    <option key={event.id} value={event.id}>
-                      {event.eventName} {event.eventDate ? `• ${event.eventDate}` : ""}
-                    </option>
-                  ))}
-                </select>
-              )}
+      <div style={{ position: "relative", zIndex: 10 }}>
+        {/* Header */}
+        <div style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          padding: "20px 40px",
+          background: "linear-gradient(180deg, rgba(20, 10, 10, 0.8), rgba(15, 10, 15, 0.6))",
+          borderBottom: "1px solid rgba(255, 51, 51, 0.15)",
+          backdropFilter: "blur(10px)",
+        }}>
+          <button
+            type="button"
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "12px",
+              textDecoration: "none",
+              color: "#a0a0a0",
+              background: "none",
+              border: "none",
+              cursor: "pointer",
+              fontSize: "14px",
+              fontWeight: "600",
+              transition: "all 0.3s ease",
+            }}
+            onClick={() => {
+              window.location.href = "/";
+            }}
+          >
+            <div style={{
+              width: "40px",
+              height: "40px",
+              background: "linear-gradient(135deg, #cc0000, #ff3333)",
+              transform: "rotate(45deg)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              borderRadius: "4px",
+              boxShadow: "0 0 20px rgba(204, 0, 0, 0.4)",
+            }}>
+              <span style={{
+                transform: "rotate(-45deg)",
+                color: "#fff",
+                fontWeight: "900",
+                fontSize: "20px",
+              }}>←</span>
             </div>
+            <span>Back to Dashboard</span>
+          </button>
+          
+          <div style={{ textAlign: "center" }}>
+            <h1 style={{
+              fontSize: "28px",
+              fontWeight: "900",
+              color: "#ffffff",
+              marginBottom: "6px",
+              textShadow: "-2px -2px 0 #ff3333, 2px -2px 0 #ff3333, -2px 2px 0 #ff3333, 2px 2px 0 #ff3333",
+            }}>BEO INTAKE</h1>
+            <p style={{
+              fontSize: "12px",
+              color: "#ffc107",
+              fontWeight: "600",
+              letterSpacing: "2px",
+              textTransform: "uppercase",
+            }}>Event Operations Form</p>
+          </div>
+
+          <div style={{ minWidth: "150px" }}>
+            {isLoading ? (
+              <div style={{ color: "#888", fontSize: "14px" }}>Loading events...</div>
+            ) : (
+              <select
+                value={selectedEventId || ""}
+                onChange={(e) => {
+                  if (e.target.value) {
+                    selectEvent(e.target.value);
+                  }
+                }}
+                style={{
+                  width: "100%",
+                  padding: "12px 16px",
+                  borderRadius: "8px",
+                  border: "2px solid #ff3333",
+                  background: "linear-gradient(135deg, rgba(255, 51, 51, 0.1), rgba(255, 51, 51, 0.05))",
+                  color: "#fff",
+                  fontSize: "14px",
+                  fontWeight: "600",
+                  cursor: "pointer",
+                  backdropFilter: "blur(5px)",
+                  outline: "none",
+                }}
+              >
+                <option value="">Select Event...</option>
+                {events.map((event) => (
+                  <option key={event.id} value={event.id}>
+                    {event.eventName} {event.eventDate ? `• ${event.eventDate}` : ""}
+                  </option>
+                ))}
+              </select>
+            )}
           </div>
         </div>
-      </div>
 
-      {/* Sections */}
-      {selectedEventId ? (
-        <div className="max-w-4xl mx-auto px-6 py-6">
-          <div data-panel-index="0"><ClientSection /></div>
-          <div data-panel-index="1"><EventDetailsSection /></div>
-          <div data-panel-index="2"><MenuSection /></div>
-          <div data-panel-index="3"><BarServiceSection /></div>
-          <div data-panel-index="4"><HotColdBeveragesSection /></div>
-          <div data-panel-index="5"><ServicewareNewSection /></div>
-          <div data-panel-index="6"><GlasswareSection /></div>
-          <div data-panel-index="7"><DecorNotesSection /></div>
-          <div data-panel-index="8"><VenueFacilitiesSection /></div>
+        {/* Main Content */}
+        <div style={{
+          position: "relative",
+          zIndex: 1,
+          padding: "30px 40px",
+          minHeight: "calc(100vh - 100px)",
+        }}>
+          {selectedEventId ? (
+            <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+              <div data-panel-index="0"><ClientSection /></div>
+              <div data-panel-index="1"><EventDetailsSection /></div>
+              <div data-panel-index="2"><MenuSection /></div>
+              <div data-panel-index="3"><BarServiceSection /></div>
+              <div data-panel-index="4"><HotColdBeveragesSection /></div>
+              <div data-panel-index="5"><ServicewareNewSection /></div>
+              <div data-panel-index="6"><GlasswareSection /></div>
+              <div data-panel-index="7"><DecorNotesSection /></div>
+              <div data-panel-index="8"><VenueFacilitiesSection /></div>
+            </div>
+          ) : (
+            <div style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              minHeight: "400px",
+              textAlign: "center",
+            }}>
+              <div>
+                <div style={{
+                  fontSize: "48px",
+                  marginBottom: "20px",
+                }}>📋</div>
+                <h2 style={{
+                  fontSize: "24px",
+                  fontWeight: "900",
+                  color: "#ff3333",
+                  marginBottom: "10px",
+                }}>Select an Event to Begin</h2>
+                <p style={{
+                  fontSize: "16px",
+                  color: "#888",
+                  marginBottom: "20px",
+                }}>Choose an event from the dropdown above to access the BEO intake form</p>
+              </div>
+            </div>
+          )}
         </div>
-      ) : (
-        <div className="max-w-4xl mx-auto px-6 py-12 text-center">
-          <p className="text-gray-500 text-base">Select an event above to begin editing</p>
-        </div>
-      )}
       </div>
     </div>
   );
