@@ -640,9 +640,11 @@ const styles: Record<string, React.CSSProperties> = {
     position: "relative",
     zIndex: 10,
     display: "flex",
+    flexDirection: "column",
     alignItems: "center",
-    justifyContent: "space-between",
-    padding: "20px 40px",
+    justifyContent: "center",
+    gap: "15px",
+    padding: "15px 20px",
     background: "linear-gradient(180deg, rgba(20, 10, 10, 0.8), rgba(15, 10, 15, 0.6))",
     borderBottom: "1px solid rgba(255, 51, 51, 0.15)",
     backdropFilter: "blur(10px)",
@@ -680,18 +682,19 @@ const styles: Record<string, React.CSSProperties> = {
     textAlign: "center",
   },
   title: {
-    fontSize: "28px",
+    fontSize: "clamp(18px, 5vw, 28px)",
     fontWeight: "900",
     color: "#ffffff",
     marginBottom: "6px",
     textShadow: "-2px -2px 0 #ff3333, 2px -2px 0 #ff3333, -2px 2px 0 #ff3333, 2px 2px 0 #ff3333",
   },
   subtitle: {
-    fontSize: "12px",
+    fontSize: "clamp(10px, 2.5vw, 12px)",
     color: "#ffc107",
     fontWeight: "600",
-    letterSpacing: "2px",
+    letterSpacing: "1px",
     textTransform: "uppercase",
+    textAlign: "center",
   },
   main: {
     position: "relative",
@@ -699,7 +702,7 @@ const styles: Record<string, React.CSSProperties> = {
     display: "flex",
     flexDirection: "column",
     gap: "20px",
-    padding: "30px 40px",
+    padding: "20px 15px",
     minHeight: "calc(100vh - 100px)",
   },
   criticalAlertsZone: {
@@ -758,12 +761,12 @@ const styles: Record<string, React.CSSProperties> = {
   },
   alertsGrid: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 300px), 1fr))",
     gap: "15px",
   },
   warningsGrid: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 300px), 1fr))",
     gap: "15px",
   },
   criticalAlert: {
@@ -823,7 +826,7 @@ const styles: Record<string, React.CSSProperties> = {
   },
   eventsChecklist: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(350px, 1fr))",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 320px), 1fr))",
     gap: "20px",
   },
   eventChecklist: {
@@ -913,9 +916,9 @@ const styles: Record<string, React.CSSProperties> = {
     background: "linear-gradient(135deg, #1a1a1a 0%, #2a2a2a 100%)",
     border: "2px solid #333",
     borderRadius: "12px",
-    width: "90%",
+    width: "95%",
     maxWidth: "600px",
-    maxHeight: "80vh",
+    maxHeight: "90vh",
     overflow: "auto",
     boxShadow: "0 20px 40px rgba(0, 0, 0, 0.5)",
   },
@@ -923,8 +926,10 @@ const styles: Record<string, React.CSSProperties> = {
     display: "flex",
     justifyContent: "space-between",
     alignItems: "flex-start",
-    padding: "20px",
+    padding: "15px",
     borderBottom: "1px solid #333",
+    flexWrap: "wrap",
+    gap: "10px",
   },
   panelContext: {
     flex: 1,
@@ -970,7 +975,7 @@ const styles: Record<string, React.CSSProperties> = {
     transition: "all 0.3s ease",
   },
   panelContent: {
-    padding: "20px",
+    padding: "15px",
   },
   panelSection: {
     marginBottom: "24px",
