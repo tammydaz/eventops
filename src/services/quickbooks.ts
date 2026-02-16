@@ -150,14 +150,7 @@ ${invoiceData.deposit ? `Deposit: $${invoiceData.deposit.toLocaleString()}` : ''
  */
 export async function createEventFromQuickBooksInvoice(invoiceData: QuickBooksInvoice) {
   const fields = parseQuickBooksInvoice(invoiceData);
-  
-  // Auto-generate event name from client and date
-  const clientName = invoiceData.billTo.name;
-  const eventDate = new Date(invoiceData.invoiceDate);
-  const eventName = `${clientName} - ${eventDate.toLocaleDateString()}`;
-  
-  fields[FIELD_IDS.EVENT_NAME] = eventName;
-  
+  // Event Name is computed in Airtable (formula) — do not set it
   const result = await createEvent(fields);
   
   return result;

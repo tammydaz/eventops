@@ -527,6 +527,7 @@ const ReturnedEquipmentPage: React.FC = () => {
           Track this monthly. If it exceeds $500/month, implement equipment checkout signatures.
         </div>
       </div>
+      </div>
     </>
   );
 };

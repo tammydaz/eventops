@@ -13,6 +13,9 @@
  */
 
 import dotenv from 'dotenv';
+import fs from 'fs';
+import path from 'path';
+
 dotenv.config();
 
 const AIRTABLE_API_KEY = process.env.VITE_AIRTABLE_API_KEY;
@@ -190,6 +193,54 @@ async function addField(fieldName, fieldType) {
   }
 }
 
+const PLACEHOLDER_CLIENT_BUSINESS_NAME = 'fldPLACEHOLDER_CLIENT_BUSINESS_NAME';
+const EVENTS_TS_PATH = 'src/services/airtable/events.ts';
+
+/**
+ * Ensure "Client Business Name" exists on Events table; create if not. Print or write field ID.
+ */
+async function ensureClientBusinessName() {
+  console.log('\n🔧 Ensuring "Client Business Name" field exists on Events table...\n');
+
+  const data = await airtableMetaRequest(`/bases/${AIRTABLE_BASE_ID}/tables`);
+  const eventsTable = data.tables.find(t => t.id === AIRTABLE_EVENTS_TABLE_ID);
+  if (!eventsTable) {
+    console.error(`❌ Events table (${AIRTABLE_EVENTS_TABLE_ID}) not found`);
+    process.exit(1);
+  }
+
+  const fieldName = 'Client Business Name';
+  let fieldId = eventsTable.fields.find(f => f.name === fieldName)?.id;
+
+  if (fieldId) {
+    console.log(`✅ Field "${fieldName}" already exists.`);
+    console.log(`   ID: ${fieldId}\n`);
+  } else {
+    console.log(`⏳ Creating field "${fieldName}" (singleLineText)...\n`);
+    const response = await airtableMetaRequest(
+      `/bases/${AIRTABLE_BASE_ID}/tables/${AIRTABLE_EVENTS_TABLE_ID}/fields`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ name: fieldName, type: 'singleLineText' }),
+      }
+    );
+    fieldId = response.id;
+    console.log(`✅ Field created. ID: ${fieldId}\n`);
+  }
+
+  const eventsTsPath = path.resolve(process.cwd(), EVENTS_TS_PATH);
+  if (fs.existsSync(eventsTsPath)) {
+    let content = fs.readFileSync(eventsTsPath, 'utf8');
+    if (content.includes(PLACEHOLDER_CLIENT_BUSINESS_NAME)) {
+      content = content.replace(new RegExp(PLACEHOLDER_CLIENT_BUSINESS_NAME, 'g'), fieldId);
+      fs.writeFileSync(eventsTsPath, content);
+      console.log(`📝 Updated ${EVENTS_TS_PATH} with CLIENT_BUSINESS_NAME = ${fieldId}\n`);
+    } else {
+      console.log(`💡 Add to FIELD_IDS in ${EVENTS_TS_PATH}:  CLIENT_BUSINESS_NAME: "${fieldId}"\n`);
+    }
+  }
+}
+
 /**
  * CLI Interface
  */
@@ -201,11 +252,12 @@ async function main() {
     console.log('\n📚 Airtable Schema Manager\n');
     console.log('Usage:');
     console.log('  npm run schema read');
-    console.log('  npm run schema add "Field Name" "fieldType"\n');
+    console.log('  npm run schema add "Field Name" "fieldType"');
+    console.log('  npm run schema ensure-client-business-name\n');
     console.log('Examples:');
     console.log('  npm run schema read');
     console.log('  npm run schema add "Customer Notes" "multilineText"');
-    console.log('  npm run schema add "Event Rating" "number"\n');
+    console.log('  npm run schema ensure-client-business-name\n');
     process.exit(0);
   }
 
@@ -220,9 +272,13 @@ async function main() {
       await addField(fieldName, fieldType);
       break;
 
+    case 'ensure-client-business-name':
+      await ensureClientBusinessName();
+      break;
+
     default:
       console.error(`❌ Unknown command: ${command}`);
-      console.log('\nAvailable commands: read, add\n');
+      console.log('\nAvailable commands: read, add, ensure-client-business-name\n');
       process.exit(1);
   }
 }

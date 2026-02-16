@@ -1,6 +1,17 @@
 // @ts-nocheck
 export * from "./airtable";
 
+// Legacy field ID constants (for backward compatibility)
+// Modern code should use FIELD_IDS from "./airtable/events"
+const PASSED_APPETIZERS_FIELD_ID = "fldpprTRRFNydiV1m";
+const PRESENTED_APPETIZERS_FIELD_ID = "fldwku49gGffnnAOV";
+const BUFFET_METAL_FIELD_ID = "fldgi4mL7kyhpQzsy";
+const BUFFET_CHINA_FIELD_ID = "fldtpY6zR1KCag3mI";
+const DESSERTS_FIELD_ID = "flddPGfYJQxixWRq9";
+const BEVERAGES_FIELD_ID = "fldRb454yd3EQhcbo";
+const MENU_ITEMS_FIELD_ID = "fld7n9gmBURwXzrnB";
+const MENU_ITEM_SPECS_FIELD_ID = "fldX9ayAyjMqYT2Oi";
+
 export type ClientDetails = {
   clientFirstName: string;
   clientLastName: string;
@@ -175,7 +186,8 @@ export const listMenuItemSpecs = async (): Promise<MenuItemRecord[]> =>
 export type MenuSelections = {
   passedAppetizers: string[];
   presentedAppetizers: string[];
-  buffetItems: string[];
+  buffetMetal: string[];
+  buffetChina: string[];
   desserts: string[];
   beverages: string[];
   menuItems: string[];
@@ -196,7 +208,8 @@ export const getMenuSelections = async (recordId: string): Promise<MenuSelection
   return {
     passedAppetizers: toArray(fields[PASSED_APPETIZERS_FIELD_ID]),
     presentedAppetizers: toArray(fields[PRESENTED_APPETIZERS_FIELD_ID]),
-    buffetItems: toArray(fields[BUFFET_ITEMS_FIELD_ID]),
+    buffetMetal: toArray(fields[BUFFET_METAL_FIELD_ID]),
+    buffetChina: toArray(fields[BUFFET_CHINA_FIELD_ID]),
     desserts: toArray(fields[DESSERTS_FIELD_ID]),
     beverages: toArray(fields[BEVERAGES_FIELD_ID]),
     menuItems: toArray(fields[MENU_ITEMS_FIELD_ID]),
@@ -216,7 +229,8 @@ export const updateMenuSelections = async (
   if (update.passedAppetizers !== undefined) fields[PASSED_APPETIZERS_FIELD_ID] = update.passedAppetizers;
   if (update.presentedAppetizers !== undefined)
     fields[PRESENTED_APPETIZERS_FIELD_ID] = update.presentedAppetizers;
-  if (update.buffetItems !== undefined) fields[BUFFET_ITEMS_FIELD_ID] = update.buffetItems;
+  if (update.buffetMetal !== undefined) fields[BUFFET_METAL_FIELD_ID] = update.buffetMetal;
+  if (update.buffetChina !== undefined) fields[BUFFET_CHINA_FIELD_ID] = update.buffetChina;
   if (update.desserts !== undefined) fields[DESSERTS_FIELD_ID] = update.desserts;
   if (update.beverages !== undefined) fields[BEVERAGES_FIELD_ID] = update.beverages;
   if (update.menuItems !== undefined) fields[MENU_ITEMS_FIELD_ID] = update.menuItems;

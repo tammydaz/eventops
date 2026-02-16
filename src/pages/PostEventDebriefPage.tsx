@@ -462,6 +462,7 @@ const PostEventDebriefPage: React.FC = () => {
           </span>
         </div>
       </div>
+      </div>
     </>
   );
 };

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { FIELD_IDS, type EventDetails } from "../../services/airtable/events";
 import { asSingleSelectName, asString } from "../../services/airtable/selectors";
 import { useEventStore } from "../../state/eventStore";
+import { secondsToTimeString, timeStringToSeconds } from "../../utils/timeHelpers";
 
 const EVENT_TYPE_OPTIONS = [
   "Full Service",
@@ -73,16 +74,10 @@ export const EventDetailsPanel = () => {
       venueCity: asString(selectedEventData[FIELD_IDS.VENUE_CITY]),
       venueState: asSingleSelectName(selectedEventData[FIELD_IDS.VENUE_STATE]),
       venueFullAddress: asString(selectedEventData[FIELD_IDS.VENUE_FULL_ADDRESS]),
-      dispatchTime: asString(selectedEventData[FIELD_IDS.DISPATCH_TIME]),
-      eventStartTime: selectedEventData[FIELD_IDS.EVENT_START_TIME] !== undefined
-        ? String(selectedEventData[FIELD_IDS.EVENT_START_TIME])
-        : "",
-      eventEndTime: selectedEventData[FIELD_IDS.EVENT_END_TIME] !== undefined
-        ? String(selectedEventData[FIELD_IDS.EVENT_END_TIME])
-        : "",
-      foodwerxArrival: selectedEventData[FIELD_IDS.FOODWERX_ARRIVAL] !== undefined
-        ? String(selectedEventData[FIELD_IDS.FOODWERX_ARRIVAL])
-        : "",
+      dispatchTime: secondsToTimeString(selectedEventData[FIELD_IDS.DISPATCH_TIME] as number),
+      eventStartTime: secondsToTimeString(selectedEventData[FIELD_IDS.EVENT_START_TIME] as number),
+      eventEndTime: secondsToTimeString(selectedEventData[FIELD_IDS.EVENT_END_TIME] as number),
+      foodwerxArrival: secondsToTimeString(selectedEventData[FIELD_IDS.FOODWERX_ARRIVAL] as number),
       jobNumber: asString(selectedEventData["Job Number"]),
     });
   }, [selectedEventId, selectedEventData]);
@@ -281,7 +276,7 @@ export const EventDetailsPanel = () => {
             disabled={!canEdit}
             onChange={(event) => {
               handleChange("dispatchTime", event.target.value);
-              saveField(FIELD_IDS.DISPATCH_TIME, event.target.value || null);
+              saveField(FIELD_IDS.DISPATCH_TIME, timeStringToSeconds(event.target.value));
             }}
             className="mt-2 w-full rounded-md bg-gray-950 border border-gray-700 text-gray-300 px-3 py-2"
           />
@@ -294,7 +289,7 @@ export const EventDetailsPanel = () => {
             disabled={!canEdit}
             onChange={(event) => {
               handleChange("eventStartTime", event.target.value);
-              saveField(FIELD_IDS.EVENT_START_TIME, event.target.value || null);
+              saveField(FIELD_IDS.EVENT_START_TIME, timeStringToSeconds(event.target.value));
             }}
             className="mt-2 w-full rounded-md bg-gray-950 border border-gray-700 text-gray-300 px-3 py-2"
           />
@@ -307,7 +302,7 @@ export const EventDetailsPanel = () => {
             disabled={!canEdit}
             onChange={(event) => {
               handleChange("eventEndTime", event.target.value);
-              saveField(FIELD_IDS.EVENT_END_TIME, event.target.value || null);
+              saveField(FIELD_IDS.EVENT_END_TIME, timeStringToSeconds(event.target.value));
             }}
             className="mt-2 w-full rounded-md bg-gray-950 border border-gray-700 text-gray-300 px-3 py-2"
           />
@@ -320,7 +315,7 @@ export const EventDetailsPanel = () => {
             disabled={!canEdit}
             onChange={(event) => {
               handleChange("foodwerxArrival", event.target.value);
-              saveField(FIELD_IDS.FOODWERX_ARRIVAL, event.target.value || null);
+              saveField(FIELD_IDS.FOODWERX_ARRIVAL, timeStringToSeconds(event.target.value));
             }}
             className="mt-2 w-full rounded-md bg-gray-950 border border-gray-700 text-gray-300 px-3 py-2"
           />

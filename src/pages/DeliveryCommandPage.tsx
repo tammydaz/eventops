@@ -673,6 +673,7 @@ const DeliveryCommandPage: React.FC = () => {
           </div>
         </div>
       </div>
+      </div>
     </>
   );
 };

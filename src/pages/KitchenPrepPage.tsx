@@ -658,6 +658,8 @@ const KitchenPrepPage: React.FC = () => {
           {completed} of {totalTasks} tasks complete
         </div>
       </div>
+      </div>
+    </>
   );
 };
 
