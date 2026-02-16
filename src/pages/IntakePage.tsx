@@ -1,5 +1,6 @@
-import { useState, useEffect } from "react";
+import { useEffect } from "react";
 import { useEventStore } from "../state/eventStore";
+import { EventSelector } from "../components/EventSelector";
 import { ClientSection } from "../components/intake/ClientSection";
 import { EventDetailsSection } from "../components/intake/EventDetailsSection";
 import { MenuSection } from "../components/intake/MenuSection";
@@ -12,18 +13,36 @@ import { VenueFacilitiesSection } from "../components/intake/VenueFacilitiesSect
 import "./IntakePage.css";
 
 export const IntakePage = () => {
-  const { events, loadEvents, selectedEventId, selectEvent } = useEventStore();
-  const [isLoading, setIsLoading] = useState(true);
+  const { loadEvents, selectedEventId, selectEvent, setSelectedEventId } = useEventStore();
+
+  // Sync store from URL: form loads on direct link or refresh
+  useEffect(() => {
+    const pathname = window.location.pathname;
+    if (pathname.startsWith("/beo-intake/")) {
+      const eventIdFromUrl = pathname.split("/beo-intake/")[1]?.split("/")[0]?.trim();
+      if (eventIdFromUrl && eventIdFromUrl !== selectedEventId) {
+        selectEvent(eventIdFromUrl);
+      }
+    }
+  }, [selectedEventId, selectEvent]);
 
   useEffect(() => {
-    const load = async () => {
-      await loadEvents();
-      setIsLoading(false);
+    const onPopState = () => {
+      const pathname = window.location.pathname;
+      if (pathname.startsWith("/beo-intake/")) {
+        const eventIdFromUrl = pathname.split("/beo-intake/")[1]?.split("/")[0]?.trim();
+        if (eventIdFromUrl) selectEvent(eventIdFromUrl);
+      } else {
+        setSelectedEventId(null);
+      }
     };
-    load();
-  }, [loadEvents]);
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+  }, [selectEvent, setSelectedEventId]);
 
-  const selectedEvent = events.find(e => e.id === selectedEventId);
+  useEffect(() => {
+    loadEvents();
+  }, [loadEvents]);
 
   return (
     <div style={{
@@ -33,7 +52,6 @@ export const IntakePage = () => {
       position: "relative",
       fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif",
     }}>
-      {/* Background overlay */}
       <div style={{
         position: "fixed",
         top: 0,
@@ -63,49 +81,44 @@ export const IntakePage = () => {
               alignItems: "center",
               gap: "12px",
               textDecoration: "none",
-              color: "#a0a0a0",
               background: "none",
               border: "none",
               cursor: "pointer",
-              fontSize: "14px",
-              fontWeight: "600",
-              transition: "all 0.3s ease",
+              padding: 0,
             }}
-            onClick={() => {
-              window.location.href = "/";
-            }}
+            onClick={() => window.history.pushState({}, "", "/")}
           >
             <div style={{
-              width: "40px",
-              height: "40px",
-              background: "linear-gradient(135deg, #cc0000, #ff3333)",
-              transform: "rotate(45deg)",
+              width: "48px",
+              height: "48px",
+              background: "linear-gradient(135deg, #ff3333 0%, #cc0000 100%)",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              borderRadius: "4px",
-              boxShadow: "0 0 20px rgba(204, 0, 0, 0.4)",
+              borderRadius: "12px",
+              fontSize: "24px",
+              boxShadow: "0 4px 12px rgba(255, 51, 51, 0.3)",
             }}>
-              <span style={{
-                transform: "rotate(-45deg)",
-                color: "#fff",
-                fontWeight: "900",
-                fontSize: "20px",
-              }}>←</span>
+              ←
             </div>
-            <span>Back to Dashboard</span>
+            <span style={{
+              fontSize: "14px",
+              color: "#e0e0e0",
+              fontWeight: "600",
+            }}>Back to Dashboard</span>
           </button>
-          
-          <div style={{ textAlign: "center" }}>
+
+          <div style={{ textAlign: "center", flex: 1 }}>
             <h1 style={{
-              fontSize: "28px",
+              fontSize: "32px",
               fontWeight: "900",
-              color: "#ffffff",
-              marginBottom: "6px",
-              textShadow: "-2px -2px 0 #ff3333, 2px -2px 0 #ff3333, -2px 2px 0 #ff3333, 2px 2px 0 #ff3333",
-            }}>BEO INTAKE</h1>
+              color: "#ff3333",
+              letterSpacing: "4px",
+              textTransform: "uppercase",
+              margin: 0,
+            }}>BEO Intake</h1>
             <p style={{
-              fontSize: "12px",
+              fontSize: "10px",
               color: "#ffc107",
               fontWeight: "600",
               letterSpacing: "2px",
@@ -113,39 +126,8 @@ export const IntakePage = () => {
             }}>Event Operations Form</p>
           </div>
 
-          <div style={{ minWidth: "150px" }}>
-            {isLoading ? (
-              <div style={{ color: "#888", fontSize: "14px" }}>Loading events...</div>
-            ) : (
-              <select
-                value={selectedEventId || ""}
-                onChange={(e) => {
-                  if (e.target.value) {
-                    selectEvent(e.target.value);
-                  }
-                }}
-                style={{
-                  width: "100%",
-                  padding: "12px 16px",
-                  borderRadius: "8px",
-                  border: "2px solid #ff3333",
-                  background: "linear-gradient(135deg, rgba(255, 51, 51, 0.1), rgba(255, 51, 51, 0.05))",
-                  color: "#fff",
-                  fontSize: "14px",
-                  fontWeight: "600",
-                  cursor: "pointer",
-                  backdropFilter: "blur(5px)",
-                  outline: "none",
-                }}
-              >
-                <option value="">Select Event...</option>
-                {events.map((event) => (
-                  <option key={event.id} value={event.id}>
-                    {event.eventName} {event.eventDate ? `• ${event.eventDate}` : ""}
-                  </option>
-                ))}
-              </select>
-            )}
+          <div style={{ minWidth: "220px", maxWidth: "320px" }}>
+            <EventSelector variant="beo-header" />
           </div>
         </div>
 

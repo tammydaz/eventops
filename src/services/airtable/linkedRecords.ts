@@ -1,13 +1,16 @@
 import { airtableFetch, getEventsTable, type AirtableListResponse, type AirtableErrorResult } from "./client";
-import { isErrorResult, asString } from "./selectors";
+import { isErrorResult, asString, asSingleSelectName } from "./selectors";
 
 export type LinkedRecordItem = {
   id: string;
   name: string;
+  serviceType?: string | null;
 };
 
 const MENU_ITEMS_TABLE_ID = "tbl0aN33DGG6R1sPZ";
-const MENU_ITEMS_NAME_FIELD_ID = "fldW5gfSlHRTl01v1";
+const MENU_ITEMS_FORMATTED_NAME_FIELD_ID = "fldQ83gpgOmMxNMQw";
+const MENU_ITEMS_SERVICE_TYPE_FIELD_ID = "fld2EhDP5GRalZJzQ";
+
 const MENU_ITEM_SPECS_TABLE_ID = "tblGeCmzJscnocs1T";
 const MENU_ITEM_SPECS_NAME_FIELD_ID = "fldjrrdBySGDHLLLl";
 
@@ -50,7 +53,49 @@ const listLinkedTableItems = async (
   }));
 };
 
-export const loadMenuItems = async () => listLinkedTableItems(MENU_ITEMS_TABLE_ID, MENU_ITEMS_NAME_FIELD_ID);
+export const loadMenuItems = async (): Promise<LinkedRecordItem[] | AirtableErrorResult> => {
+  const baseId = getEventsTable();
+  if (typeof baseId !== "string") {
+    return baseId;
+  }
+
+  const params = new URLSearchParams();
+  params.set("maxRecords", "500");
+  params.set("cellFormat", "json");
+  params.set("returnFieldsByFieldId", "true");
+  params.append("fields[]", MENU_ITEMS_FORMATTED_NAME_FIELD_ID);
+  params.append("fields[]", MENU_ITEMS_SERVICE_TYPE_FIELD_ID);
+
+  const data = await airtableFetch<AirtableListResponse<Record<string, unknown>>>(
+    `/${MENU_ITEMS_TABLE_ID}?${params.toString()}`
+  );
+
+  if (isErrorResult(data)) {
+    return data;
+  }
+
+  return data.records.map((record) => {
+    const formattedName = asString(record.fields[MENU_ITEMS_FORMATTED_NAME_FIELD_ID]);
+    const serviceTypeRaw = record.fields[MENU_ITEMS_SERVICE_TYPE_FIELD_ID];
+    
+    let serviceType: string | null = null;
+    
+    // Handle both string and single-select object formats
+    if (typeof serviceTypeRaw === "string") {
+      serviceType = serviceTypeRaw;
+    } else if (serviceTypeRaw && typeof serviceTypeRaw === "object" && "name" in serviceTypeRaw) {
+      serviceType = String(serviceTypeRaw.name);
+    }
+    
+    const item = {
+      id: record.id,
+      name: formattedName || "",
+      serviceType
+    };
+    
+    return item;
+  });
+};
 
 export const loadMenuItemSpecs = async () =>
   listLinkedTableItems(MENU_ITEM_SPECS_TABLE_ID, MENU_ITEM_SPECS_NAME_FIELD_ID);

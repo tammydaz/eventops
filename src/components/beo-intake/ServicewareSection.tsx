@@ -1,0 +1,64 @@
+import { useEffect, useState } from "react";
+import { useEventStore } from "../../state/eventStore";
+import { FIELD_IDS } from "../../services/airtable/events";
+import { asString } from "../../services/airtable/selectors";
+import { FormSection } from "./FormSection";
+
+export const ServicewareSection = () => {
+  const { selectedEventId, selectedEventData, setFields } = useEventStore();
+  const [details, setDetails] = useState({ serviceWare: "", serviceWareSource: "", chinaPaperGlassware: "" });
+
+  useEffect(() => {
+    if (!selectedEventId || !selectedEventData) {
+      setDetails({ serviceWare: "", serviceWareSource: "", chinaPaperGlassware: "" });
+      return;
+    }
+    setDetails({
+      serviceWare: asString(selectedEventData[FIELD_IDS.SERVICE_WARE]),
+      serviceWareSource: asString(selectedEventData[FIELD_IDS.SERVICE_WARE_SOURCE]),
+      chinaPaperGlassware: asString(selectedEventData[FIELD_IDS.CHINA_PAPER_GLASSWARE]),
+    });
+  }, [selectedEventId, selectedEventData]);
+
+  const handleFieldChange = async (fieldId: string, value: unknown) => {
+    if (!selectedEventId) return;
+    await setFields(selectedEventId, { [fieldId]: value });
+  };
+
+  const canEdit = Boolean(selectedEventId);
+
+  const inputStyle = {
+    width: "100%",
+    padding: "12px",
+    borderRadius: "8px",
+    border: "1px solid #444",
+    backgroundColor: "#1a1a1a",
+    color: "#e0e0e0",
+    fontSize: "14px",
+  };
+
+  const labelStyle = {
+    display: "block",
+    fontSize: "11px",
+    color: "#999",
+    marginBottom: "6px",
+    fontWeight: "600",
+  };
+
+  return (
+    <FormSection title="Serviceware (Optional)" icon="🍴">
+      <div style={{ gridColumn: "1 / -1" }}>
+        <label style={labelStyle}>Serviceware</label>
+        <textarea rows={3} value={details.serviceWare} disabled={!canEdit} onChange={(e) => { setDetails(p => ({ ...p, serviceWare: e.target.value })); handleFieldChange(FIELD_IDS.SERVICE_WARE, e.target.value); }} style={{ ...inputStyle, resize: "vertical", fontFamily: "inherit" }} placeholder="Describe serviceware needs..." />
+      </div>
+      <div>
+        <label style={labelStyle}>Serviceware Source</label>
+        <input type="text" value={details.serviceWareSource} disabled={!canEdit} onChange={(e) => { setDetails(p => ({ ...p, serviceWareSource: e.target.value })); handleFieldChange(FIELD_IDS.SERVICE_WARE_SOURCE, e.target.value); }} style={inputStyle} placeholder="FoodWerx, Client, Rental" />
+      </div>
+      <div style={{ gridColumn: "1 / -1" }}>
+        <label style={labelStyle}>China / Paper / Glassware</label>
+        <textarea rows={3} value={details.chinaPaperGlassware} disabled={!canEdit} onChange={(e) => { setDetails(p => ({ ...p, chinaPaperGlassware: e.target.value })); handleFieldChange(FIELD_IDS.CHINA_PAPER_GLASSWARE, e.target.value); }} style={{ ...inputStyle, resize: "vertical", fontFamily: "inherit" }} placeholder="Details about plates, cups, glassware..." />
+      </div>
+    </FormSection>
+  );
+};

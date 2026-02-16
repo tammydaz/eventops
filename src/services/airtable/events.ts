@@ -27,51 +27,63 @@ import {
 export type { AttachmentItem } from "./selectors";
 
 export const FIELD_IDS = {
-  EVENT_NAME: "fldZuHc9D29Wcj60h",
+  // ── Event Core ──
+  EVENT_NAME: "fldZuHc9D29Wcj60h",              // Formula - READ ONLY
   EVENT_DATE: "fldFYaE7hI27R3PsX",
   EVENT_TYPE: "fldtqnvD7M8xbc0Xb",
-  SERVICE_STYLE: "fldqnW1ulcchcQ05t",
+  SERVICE_STYLE: "fldO8D4thzfEmQwzv",            // 🔴 WAS WRONG
   GUEST_COUNT: "fldjgqDUxVxaJ7Y9V",
-  VENUE: "fldtCOxi4Axjfjt0V",
-  VENUE_ADDRESS: "fldJsajSl1l6marzw",
+  STATUS: "fldwdqfHaKXmqObE2",
+
+  // ── Venue & Address ──
+  VENUE: "fldfQoT3yhCBXzHWT",                    // 🔴 WAS WRONG
+  VENUE_NAME: "fldK8j9JRu0VYCFV9",
+  VENUE_ADDRESS: "fldJsajSl1l6marzw",            // Event Location (Final Print)
   VENUE_CITY: "fldNToCnV799eggiD",
   VENUE_STATE: "fldxCz5cPLwCetb0C",
   VENUE_FULL_ADDRESS: "fldOKQTp8Zf6a462f",
 
+  // ── Client ──
+  CLIENT: "fldRYDTj6V7L1xRP3",                   // Linked record
   CLIENT_FIRST_NAME: "fldFAspB1ds9Yn0Kl",
   CLIENT_LAST_NAME: "fldeciZmsIY3c2T1v",
+  CLIENT_BUSINESS_NAME: "fld4YxQOjzPyyBIHL",     // Formula - READ ONLY
   CLIENT_EMAIL: "fldT5lcdCL5ndh84D",
   CLIENT_PHONE: "fldnw1VGIi3oXM4g3",
+
+  // ── Primary Contact ──
   PRIMARY_CONTACT_NAME: "fldmsFPsl2gAtiSCD",
   PRIMARY_CONTACT_PHONE: "fld4OK9zVwr16qMIt",
   PRIMARY_CONTACT_ROLE: "fldMTRGNFa4pHbjY5",
 
+  // ── Menu Sections (Sacred Placement Lanes) ──
   PASSED_APPETIZERS: "fldpprTRRFNydiV1m",
+  CUSTOM_PASSED_APP: "fldDbT9eLZUoJUnmS",
   PRESENTED_APPETIZERS: "fldwku49gGffnnAOV",
-  BUFFET_ITEMS: "fld4LR3nFdqp3MmEf",
+  CUSTOM_PRESENTED_APP: "fldsIaND0Bp3ByW1c",
+  BUFFET_METAL: "fldgi4mL7kyhpQzsy",
+  CUSTOM_BUFFET_METAL: "fldm1qYJE55QVjYsd",
+  BUFFET_CHINA: "fldtpY6zR1KCag3mI",
+  CUSTOM_BUFFET_CHINA: "fldtquSPyLWUEYX6P",
   DESSERTS: "flddPGfYJQxixWRq9",
+  CUSTOM_DESSERTS: "fld95NEZsIfHpVvAk",
+  ROOM_TEMP_DISPLAY: "fld1373dtkeXhufoL",
   BEVERAGES: "fldRb454yd3EQhcbo",
   MENU_ITEMS: "fld7n9gmBURwXzrnB",
   MENU_ITEM_SPECS: "fldX9ayAyjMqYT2Oi",
 
-  BAR_SERVICE_NEEDED: "fldXm91QjyvVKbiyO",
-  INFUSED_WATER: "fldwdqfHaKXmqObE2",
-  INFUSION_INGREDIENTS: "fldh2X9DDVMg6wQju",
-  DISPENSER_COUNT: "fldsvVThjvIysL6yA",
-  COFFEE_SERVICE_NEEDED: "fldT7fDNhbiAu4JYE",
+  // ── Bar & Beverage ──
+  BAR_SERVICE_NEEDED: "fldOisfjYPDeBwM1B",       // 🔴 WAS WRONG
 
-  LEGACY_BOTTLED_WATER: "fldBOTTLEDWATER",
-  LEGACY_UNSWEETENED_TEA: "fldUNSWEETTEA",
-  LEGACY_SWEET_TEA: "fldSWEETTEA",
-  LEGACY_COKE: "fldCOKE",
-  LEGACY_DIET_COKE: "fldDIETCOKE",
-  LEGACY_GINGER_ALE: "fldGINGERALE",
-  LEGACY_SPRITE: "fldSPRITE",
-  LEGACY_OTHER_SODA: "fldOTHER",
-  LEGACY_BOTTLED_TEA: "fldBOTTLEDTEA",
-  LEGACY_DIET_TEA: "fldDIETTEA",
-  LEGACY_MIXTURE: "fldMIXTURE",
+  // ── Hydration ──
+  INFUSED_WATER: "fldyzrU3YnO8dzxbd",            // 🔴 WAS WRONG (was using STATUS field ID!)
+  INFUSION_INGREDIENTS: "fldRxshZ4GqXGrJnu",     // 🔴 WAS WRONG
+  DISPENSER_COUNT: "fldlDyMCzOTpzAPEh",          // 🔴 WAS WRONG
 
+  // ── Coffee/Tea ──
+  COFFEE_SERVICE_NEEDED: "fldWIMlTc0Za6BTYk",    // 🔴 WAS WRONG
+
+  // ── Staff ──
   STAFF: "fldWkHPhynjxyecq7",
   CAPTAIN: "fldN2W8ITqFotKUF4",
   SERVERS: "fld4QUBWxoSu6o29l",
@@ -82,16 +94,24 @@ export const FIELD_IDS = {
   DISPLAY_DESIGN: "fldJUrDnCSnw31wan",
   DINING_CREW: "fldaT7wcJglqPr8dA",
 
+  // ── Dietary & Notes ──
   DIETARY_NOTES: "fldhGj51bQQWLJSX0",
   SPECIAL_NOTES: "fldlTlYgvPTIUzzMn",
-  OPS_EXCEPTIONS_SPECIAL_HANDLING: "fldOpsExceptionsSpecialHandling", // This will need to be updated with actual field ID
-  THEME_COLOR_SCHEME: "fld5raG6Afilj1wDo",
+  OPS_EXCEPTIONS_SPECIAL_HANDLING: "fldL35sEiLnkyftFa",  // 🔴 WAS PLACEHOLDER
 
-  EVENT_DOCUMENTS: "fld8C7fjOqVtYmnCi",
-  INVOICE_PDF: "fld5cENFzJ2DkL3yk",
-  GENERATED_BEO_PDF: "fldi3Q1KcYTMoDDxr",
+  // ── Serviceware ──
+  SERVICE_WARE: "fld3C67SAUsTxCS8E",
+  RENTALS: "fldMKe8NjFvQABy5j",
+  RENTAL_ITEMS: "fldv5sitKjwsIleEK",
+  RENTALS_NEEDED: "fldKFjPzm1w9OoqOD",
 
-  STATUS: "fldYQ10cBNuPJtEpN",
+  // ── Timeline & Logistics ──
+  DISPATCH_TIME: "fldbbHmaWqOBNUlJP",
+  EVENT_START_TIME: "fldDwDE87M9kFAIDn",
+  EVENT_END_TIME: "fld7xeCnV751pxmWz",
+  FOODWERX_ARRIVAL: "fldMYjGf8dQPNiY4Y",
+
+  // ── Status & Booking ──
   BOOKING_STATUS: "fldUfOemMR4gpALQR",
   PAYMENT_STATUS: "fld84akZRtjijhCHQ",
   PAYMENT_TYPE: "fldfHa7vpohlikzaM",
@@ -100,36 +120,7 @@ export const FIELD_IDS = {
   INVOICE_SENT: "fldtWmLeBbuecOeCi",
   INVOICE_PAID: "fldi2FjcfMFmOCV82",
 
-  RENTALS: "fldMKe8NjFvQABy5j",
-  RENTAL_ITEMS: "fldv5sitKjwsIleEK",
-  RENTALS_NEEDED: "fldKFjPzm1w9OoqOD",
-  SERVICE_WARE: "fld3C67SAUsTxCS8E",
-  SERVICE_WARE_SOURCE: "fldlPI3Ix1UTuGrCf",
-  LINENS_OVERLAYS: "fldLyuDJTQ6bXQY3X",
-
-  DISPATCH_TIME: "fldbbHmaWqOBNUlJP",
-  EVENT_START_TIME: "fldDwDE87M9kFAIDn",
-  EVENT_END_TIME: "fld7xeCnV751pxmWz",
-  FOODWERX_ARRIVAL: "fldMYjGf8dQPNiY4Y",
-  TIMELINE: "flduvl7yt3kqf7FIO",
-  PARKING_ACCESS: "fldMzNI4UGTkg9r0u",
-  PARKING_NOTES: "fldWVHbtnZ5unHdHA",
-
-  ALLERGIES_PRINT: "fld0W6FZxATCOa8oP",
-  DIETARY_SUMMARY: "fldN3z0LgsiM8eE5C",
-
-  PRINT_EVENT_HEADER: "fldqC8ojaYB5RJiWM",
-  PRINT_EVENT_DETAILS: "fld8vx9rXXYQ1hHN5",
-  PRINT_CLIENT_BLOCK: "fld9LnsDlMBTl7C1G",
-  PRINT_ADDRESS_BLOCK: "fldJsajSl1l6marzw",
-
-  CHINA_PAPER_GLASSWARE: "fldWc6PpHh5w2nl6l",
-  SERVICE_WARE_SOURCE_ALT: "fldQK1G8pE7VvDhoC",
-  BBS: "fldC1hp7tQH1AXLpr",
-  LARGE_PLATES: "fldm4fQK7mV5WuPZg",
-  SALAD_PLATES: "fld7Jk0HF0P1uqVmk",
-  PAPER_TYPE: "fld8pWDC3b0zuMZto",
-
+  // ── Hydration Detail ──
   HYDRATION_BOTTLED_WATER: "fldQ8sJ6BzzbZDQ7v",
   HYDRATION_UNSWEET_TEA: "fldhJq2wz89p8ByQy",
   HYDRATION_SWEET_TEA: "fldI8bUs0r9kF0R2d",
@@ -138,6 +129,33 @@ export const FIELD_IDS = {
   HYDRATION_BOTTLED_TEA: "fld91JcDezV20RarF",
   HYDRATION_DIET_TEA: "fldGUB8Thl42pJcx6",
   HYDRATION_MIXTURE: "fldV6XXkMe5S0zyEV",
+
+  // ── Print & Docs ──
+  THEME_COLOR_SCHEME: "fld5raG6Afilj1wDo",
+  EVENT_DOCUMENTS: "fld8C7fjOqVtYmnCi",
+  INVOICE_PDF: "fld5cENFzJ2DkL3yk",
+  GENERATED_BEO_PDF: "fldi3Q1KcYTMoDDxr",
+  PRINT_EVENT_HEADER: "fldqC8ojaYB5RJiWM",
+  PRINT_EVENT_DETAILS: "fld8vx9rXXYQ1hHN5",
+  PRINT_CLIENT_BLOCK: "fld9LnsDlMBTl7C1G",
+  PRINT_ADDRESS_BLOCK: "fldJsajSl1l6marzw",
+  ALLERGIES_PRINT: "fld0W6FZxATCOa8oP",
+  DIETARY_SUMMARY: "fldN3z0LgsiM8eE5C",
+
+  // ── Serviceware Detail ──
+  CHINA_PAPER_GLASSWARE: "fldWc6PpHh5w2nl6l",
+  SERVICE_WARE_SOURCE: "fldlPI3Ix1UTuGrCf",
+  SERVICE_WARE_SOURCE_ALT: "fldQK1G8pE7VvDhoC",
+  BBS: "fldC1hp7tQH1AXLpr",
+  LARGE_PLATES: "fldm4fQK7mV5WuPZg",
+  SALAD_PLATES: "fld7Jk0HF0P1uqVmk",
+  PAPER_TYPE: "fld8pWDC3b0zuMZto",
+
+  // ── Logistics Detail ──
+  TIMELINE: "flduvl7yt3kqf7FIO",
+  PARKING_ACCESS: "fldMzNI4UGTkg9r0u",
+  PARKING_NOTES: "fldWVHbtnZ5unHdHA",
+  LINENS_OVERLAYS: "fldLyuDJTQ6bXQY3X",
 } as const;
 
 export type EventRecordData = {
@@ -181,6 +199,27 @@ const getReturnFieldsParams = () => {
   return params;
 };
 
+let cachedCreatedTimeFieldId: string | null | undefined = undefined;
+
+/** Resolve the Events table's Created time field ID from Airtable Meta API (cached). */
+async function getCreatedTimeFieldId(): Promise<string | null> {
+  if (cachedCreatedTimeFieldId !== undefined) return cachedCreatedTimeFieldId;
+  const tableId = getEventsTable();
+  if (typeof tableId !== "string") {
+    cachedCreatedTimeFieldId = null;
+    return null;
+  }
+  const data = await airtableMetaFetch<AirtableTablesResponse>("/tables");
+  if (isErrorResult(data)) {
+    cachedCreatedTimeFieldId = null;
+    return null;
+  }
+  const table = data.tables.find((t) => t.id === tableId);
+  const createdField = table?.fields.find((f) => f.type === "createdTime");
+  cachedCreatedTimeFieldId = createdField?.id ?? null;
+  return cachedCreatedTimeFieldId;
+}
+
 export const loadEvent = async (recordId: string): Promise<EventRecordData | AirtableErrorResult> => {
   const table = getEventsTable();
   if (typeof table !== "string") return table;
@@ -203,7 +242,7 @@ export const loadEvents = async (): Promise<EventListItem[] | AirtableErrorResul
   if (typeof table !== "string") return table;
 
   const params = new URLSearchParams();
-  params.set("maxRecords", "200");
+  params.set("pageSize", "100");
   params.set("cellFormat", "json");
   params.set("returnFieldsByFieldId", "true");
   params.append("fields[]", FIELD_IDS.EVENT_NAME);
@@ -211,14 +250,26 @@ export const loadEvents = async (): Promise<EventListItem[] | AirtableErrorResul
   params.append("fields[]", FIELD_IDS.EVENT_TYPE);
   params.append("fields[]", FIELD_IDS.SERVICE_STYLE);
   params.append("fields[]", FIELD_IDS.GUEST_COUNT);
+  const createdTimeFieldId = await getCreatedTimeFieldId();
+  if (createdTimeFieldId) {
+    params.append("sort[0][field]", createdTimeFieldId);
+    params.append("sort[0][direction]", "desc");
+  }
 
-  const data = await airtableFetch<AirtableListResponse<Record<string, unknown>>>(
-    `/${table}?${params.toString()}`
-  );
+  type ListResponse = AirtableListResponse<Record<string, unknown>> & { offset?: string };
+  let offset: string | undefined;
+  let allRecords: AirtableRecord<Record<string, unknown>>[] = [];
 
-  if (isErrorResult(data)) return data;
+  do {
+    const pageParams = new URLSearchParams(params);
+    if (offset) pageParams.set("offset", offset);
+    const data = await airtableFetch<ListResponse>(`/${table}?${pageParams.toString()}`);
+    if (isErrorResult(data)) return data;
+    allRecords.push(...data.records);
+    offset = data.offset;
+  } while (offset);
 
-  return data.records.map((record) => {
+  return allRecords.map((record) => {
     const fields = record.fields ?? {};
     return {
       id: record.id,
@@ -367,6 +418,7 @@ export const uploadAttachment = async (
 export type ClientDetails = {
   clientFirstName: string;
   clientLastName: string;
+  clientBusinessName: string;
   clientEmail: string;
   clientPhone: string;
   primaryContactName: string;
@@ -384,6 +436,7 @@ export const getClientDetails = async (
   return {
     clientFirstName: asString(fields[FIELD_IDS.CLIENT_FIRST_NAME]),
     clientLastName: asString(fields[FIELD_IDS.CLIENT_LAST_NAME]),
+    clientBusinessName: asString(fields[FIELD_IDS.CLIENT_BUSINESS_NAME]),
     clientEmail: asString(fields[FIELD_IDS.CLIENT_EMAIL]),
     clientPhone: asString(fields[FIELD_IDS.CLIENT_PHONE]),
     primaryContactName: asString(fields[FIELD_IDS.PRIMARY_CONTACT_NAME]),
@@ -434,7 +487,8 @@ export type MenuItemRecord = {
 export type MenuSelections = {
   passedAppetizers: string[];
   presentedAppetizers: string[];
-  buffetItems: string[];
+  buffetMetal: string[];
+  buffetChina: string[];
   desserts: string[];
   beverages: string[];
   menuItems: string[];
@@ -451,7 +505,8 @@ export const getMenuSelections = async (
   return {
     passedAppetizers: asLinkedRecordIds(fields[FIELD_IDS.PASSED_APPETIZERS]),
     presentedAppetizers: asLinkedRecordIds(fields[FIELD_IDS.PRESENTED_APPETIZERS]),
-    buffetItems: asLinkedRecordIds(fields[FIELD_IDS.BUFFET_ITEMS]),
+    buffetMetal: asLinkedRecordIds(fields[FIELD_IDS.BUFFET_METAL]),
+    buffetChina: asLinkedRecordIds(fields[FIELD_IDS.BUFFET_CHINA]),
     desserts: asLinkedRecordIds(fields[FIELD_IDS.DESSERTS]),
     beverages: asLinkedRecordIds(fields[FIELD_IDS.BEVERAGES]),
     menuItems: asLinkedRecordIds(fields[FIELD_IDS.MENU_ITEMS]),

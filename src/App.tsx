@@ -13,6 +13,7 @@ function App() {
   const isPapaChulo = pathname.startsWith("/papa-chulo");
   const isFOH = pathname.startsWith("/foh");
   const isDashboardOld = pathname.startsWith("/dashboard-old");
+  const isBeoIntake = pathname.startsWith("/beo-intake");
 
   useEffect(() => {
     loadEvents();
@@ -28,7 +29,7 @@ function App() {
     }
   }, [pathname, selectedEventId, selectEvent]);
 
-  if (isPrintTest || isHome || isQuickIntake || isWatchtower || isPapaChulo || isFOH || isDashboardOld) {
+  if (isPrintTest || isHome || isQuickIntake || isWatchtower || isPapaChulo || isFOH || isDashboardOld || isBeoIntake) {
     console.log("APP RENDERED");
     return <Router selectedEventId={selectedEventId} />;
   }
@@ -42,18 +43,20 @@ function App() {
             Error saving — retrying…
           </div>
         ) : null}
-        <header className="fwx-header rounded-lg p-8 mb-8">
-          <h1 className="fwx-title text-2xl font-bold text-red-500">FOODWERX EVENTOPS</h1>
-          <p className="fwx-subtitle text-sm mt-2 uppercase tracking-[0.35em]">BEO Intake</p>
-          {!selectedEventId ? (
-            <div className="mt-4">
-              <EventSelector />
+        {!isBeoIntake && (
+          <header className="fwx-header rounded-lg p-8 mb-8">
+            <h1 className="fwx-title text-2xl font-bold text-red-500">FOODWERX EVENTOPS</h1>
+            <p className="fwx-subtitle text-sm mt-2 uppercase tracking-[0.35em]">BEO Intake</p>
+            {!selectedEventId ? (
+              <div className="mt-4">
+                <EventSelector />
+              </div>
+            ) : null}
+            <div className="mt-4 text-xs text-gray-400">
+              Selected Event ID: {selectedEventId ?? "None"}
             </div>
-          ) : null}
-          <div className="mt-4 text-xs text-gray-400">
-            Selected Event ID: {selectedEventId ?? "None"}
-          </div>
-        </header>
+          </header>
+        )}
 
         <Router selectedEventId={selectedEventId} />
       </div>

@@ -436,6 +436,16 @@
 
 .dp-card:hover .dp-card-neon-top { opacity: 1; }
 
+/* Invoice upload modal card – same look as dp-card, no hover lift */
+.invoice-upload-overlay .dp-card {
+  cursor: default;
+}
+.invoice-upload-overlay .dp-card:hover {
+  transform: none;
+}
+.invoice-upload-overlay .dp-card:hover::before,
+.invoice-upload-overlay .dp-card:hover::after { opacity: 0; }
+
 /* Card header */
 .dp-card-header {
   display: flex;

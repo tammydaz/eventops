@@ -15,6 +15,7 @@ const ROLE_OPTIONS = [
 const emptyDetails: ClientDetails = {
   clientFirstName: "",
   clientLastName: "",
+  clientBusinessName: "",
   clientEmail: "",
   clientPhone: "",
   primaryContactName: "",
@@ -40,6 +41,7 @@ export const ClientDetailsPanel = () => {
     setDetails({
       clientFirstName: asString(selectedEventData[FIELD_IDS.CLIENT_FIRST_NAME]),
       clientLastName: asString(selectedEventData[FIELD_IDS.CLIENT_LAST_NAME]),
+      clientBusinessName: asString(selectedEventData[FIELD_IDS.CLIENT_BUSINESS_NAME]),
       clientEmail: asString(selectedEventData[FIELD_IDS.CLIENT_EMAIL]),
       clientPhone: asString(selectedEventData[FIELD_IDS.CLIENT_PHONE]),
       primaryContactName: asString(selectedEventData[FIELD_IDS.PRIMARY_CONTACT_NAME]),
@@ -126,6 +128,18 @@ export const ClientDetailsPanel = () => {
               saveField(FIELD_IDS.CLIENT_LAST_NAME, event.target.value);
             }}
             className="mt-2 w-full rounded-md bg-gray-950 border border-gray-700 text-gray-300 px-3 py-2"
+          />
+        </div>
+        <div className="md:col-span-2">
+          <label className="text-xs uppercase tracking-widest text-gray-400">Client Business Name</label>
+          <input
+            type="text"
+            value={details.clientBusinessName}
+            disabled
+            readOnly
+            className="mt-2 w-full rounded-md bg-gray-950 border border-gray-700 text-gray-500 px-3 py-2"
+            placeholder="Computed from client name / business"
+            title="Computed in Airtable (formula)"
           />
         </div>
         <div>
