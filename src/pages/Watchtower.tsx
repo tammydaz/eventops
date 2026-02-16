@@ -348,6 +348,26 @@ const Watchtower = () => {
                         e.currentTarget.style.transform = "translateX(0)";
                       }}
                     >
+                      <span style={styles.actionIcon}>✏️</span>
+                      <span style={styles.actionText}>Edit Event (Full Intake)</span>
+                    </Link>
+
+                    <Link
+                      to={`/beo-intake/${evt.id}`}
+                      style={styles.actionItem}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedEventId(evt.id);
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.background = styles.actionItemHover.background as string;
+                        e.currentTarget.style.transform = "translateX(5px)";
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.background = styles.actionItem.background as string;
+                        e.currentTarget.style.transform = "translateX(0)";
+                      }}
+                    >
                       <span style={styles.actionIcon}>📂</span>
                       <span style={styles.actionText}>Open Event</span>
                     </Link>
@@ -387,6 +407,57 @@ const Watchtower = () => {
                       <span style={styles.actionIcon}>💳</span>
                       <span style={styles.actionText}>View Invoice (QuickBooks)</span>
                     </button>
+
+                    <Link
+                      to="/delivery-command"
+                      style={styles.actionItem}
+                      onClick={(e) => e.stopPropagation()}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.background = styles.actionItemHover.background as string;
+                        e.currentTarget.style.transform = "translateX(5px)";
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.background = styles.actionItem.background as string;
+                        e.currentTarget.style.transform = "translateX(0)";
+                      }}
+                    >
+                      <span style={styles.actionIcon}>🚛</span>
+                      <span style={styles.actionText}>Delivery & Dispatch Command</span>
+                    </Link>
+
+                    <Link
+                      to="/returned-equipment"
+                      style={styles.actionItem}
+                      onClick={(e) => e.stopPropagation()}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.background = styles.actionItemHover.background as string;
+                        e.currentTarget.style.transform = "translateX(5px)";
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.background = styles.actionItem.background as string;
+                        e.currentTarget.style.transform = "translateX(0)";
+                      }}
+                    >
+                      <span style={styles.actionIcon}>📋</span>
+                      <span style={styles.actionText}>Returned Equipment Tracker</span>
+                    </Link>
+
+                    <Link
+                      to="/post-event-debrief"
+                      style={styles.actionItem}
+                      onClick={(e) => e.stopPropagation()}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.background = styles.actionItemHover.background as string;
+                        e.currentTarget.style.transform = "translateX(5px)";
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.background = styles.actionItem.background as string;
+                        e.currentTarget.style.transform = "translateX(0)";
+                      }}
+                    >
+                      <span style={styles.actionIcon}>📝</span>
+                      <span style={styles.actionText}>Post-Event Debrief</span>
+                    </Link>
                   </div>
                 </>
               );
