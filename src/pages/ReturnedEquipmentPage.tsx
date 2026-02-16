@@ -242,17 +242,28 @@ const ReturnedEquipmentPage: React.FC = () => {
     }, 0);
 
   return (
-    <div style={s.page}>
-      <button style={s.backBtn} onClick={() => window.history.back()}>← Back</button>
+    <>
+      <style>{`
+        @media (max-width: 768px) {
+          .equipment-page { padding: 16px !important; }
+          .equipment-title { font-size: 24px !important; }
+          .equipment-stats { flex-direction: column !important; gap: 16px !important; }
+          .equipment-table-header { grid-template-columns: 1fr 60px 60px 60px 100px !important; font-size: 9px !important; }
+          .equipment-table-row { grid-template-columns: 1fr 60px 60px 60px 100px !important; font-size: 11px !important; }
+          .equipment-event-meta { flex-direction: column !important; gap: 8px !important; }
+        }
+      `}</style>
+      <div style={s.page} className="equipment-page">
+        <button style={s.backBtn} onClick={() => window.history.back()}>← Back</button>
 
       {/* Header */}
       <div style={s.header}>
-        <div style={s.title}>📋 RETURNED EQUIPMENT TRACKER</div>
+        <div style={s.title} className="equipment-title">📋 RETURNED EQUIPMENT TRACKER</div>
         <div style={s.subtitle}>WHAT LEFT • WHAT CAME BACK • WHAT'S MISSING</div>
       </div>
 
       {/* Stats */}
-      <div style={s.statsBar}>
+      <div style={s.statsBar} className="equipment-stats">
         <div style={s.stat}>
           <div style={s.statNumber}>{events.length}</div>
           <div style={s.statLabel}>Events</div>
@@ -360,7 +371,7 @@ const ReturnedEquipmentPage: React.FC = () => {
             </div>
 
             {/* Event Meta */}
-            <div style={s.eventMeta}>
+            <div style={s.eventMeta} className="equipment-event-meta">
               <div style={s.metaItem}>
                 <div style={s.metaLabel}>Event Date</div>
                 <div style={s.metaValue}>{ev.eventDate}</div>
@@ -384,7 +395,7 @@ const ReturnedEquipmentPage: React.FC = () => {
             </div>
 
             {/* Table Header */}
-            <div style={s.tableHeader}>
+            <div style={s.tableHeader} className="equipment-table-header">
               <div></div>
               <div>ITEM</div>
               <div>SENT</div>
@@ -405,6 +416,7 @@ const ReturnedEquipmentPage: React.FC = () => {
                       ...s.tableRow,
                       background: cfg.bg,
                     }}
+                    className="equipment-table-row"
                   >
                     <div>{categoryIcons[item.category] || "📦"}</div>
                     <div style={{ color: "#eee", fontWeight: 500 }}>{item.name}</div>
@@ -515,7 +527,7 @@ const ReturnedEquipmentPage: React.FC = () => {
           Track this monthly. If it exceeds $500/month, implement equipment checkout signatures.
         </div>
       </div>
-    </div>
+    </>
   );
 };
 
