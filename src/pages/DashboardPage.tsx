@@ -63,14 +63,9 @@ const NAV = [
 
 /* ── Department circles data ── */
 const DEPARTMENTS = [
-  { id: "kitchen",   label: "Kitchen",        icon: "🍳", cls: "bubble-1" },
-  { id: "front",     label: "Front of House",  icon: "🎯", cls: "bubble-2" },
-  { id: "bar",       label: "Bar",            icon: "🍸", cls: "bubble-3" },
-  { id: "rentals",   label: "Rentals",        icon: "📦", cls: "bubble-4" },
-  { id: "logistics", label: "Logistics",      icon: "🚚", cls: "bubble-5" },
-  { id: "intake",    label: "Client Intake",  icon: "📝", cls: "bubble-2" },
-  { id: "vault",     label: "Ops Vault",      icon: "📁", cls: "bubble-3" },
-  { id: "sister",    label: "Hi Sister",      icon: "👋", cls: "bubble-4" },
+  { id: "kitchen",   label: "Kitchen",                icon: "🍳", cls: "bubble-1", hasSubmenu: true },
+  { id: "logistics", label: "Delivery/Fleet Command Center", icon: "🚚", cls: "bubble-5", hasSubmenu: true },
+  { id: "intake",    label: "CENTRAL COMMAND CENTER", icon: "📝", cls: "bubble-2", hasSubmenu: true },
 ];
 
 /* ═══════════════════════════════════════════
@@ -80,6 +75,8 @@ export default function DashboardPage() {
   const [activeTab, setActiveTab] = useState("Live Events");
   const viewMode: ViewMode = "owner";
   const [intakeOpen, setIntakeOpen] = useState(false);
+  const [kitchenOpen, setKitchenOpen] = useState(false);
+  const [logisticsOpen, setLogisticsOpen] = useState(false);
   const [vaultOpen, setVaultOpen] = useState(false);
 
   const tabs = ["Live Events", "Upcoming", "Completed", "Archive"];
@@ -157,7 +154,15 @@ export default function DashboardPage() {
           </div>
 
           {/* ── Department Command Ring ── */}
-          <section className="dp-dept-section" id="departments">
+          <section
+            className="dp-dept-section"
+            id="departments"
+            onClick={() => {
+              setIntakeOpen(false);
+              setKitchenOpen(false);
+              setLogisticsOpen(false);
+            }}
+          >
             {/* Diamond: Ops Chief */}
             <div
               className="dp-diamond dp-diamond-left"
@@ -184,20 +189,27 @@ export default function DashboardPage() {
             <div className="dp-dept-grid">
               {DEPARTMENTS.map((dept) => {
                 const isIntake = dept.id === "intake";
-                const isVault = dept.id === "vault";
+                const isKitchen = dept.id === "kitchen";
+                const isLogistics = dept.id === "logistics";
+                const isVault = false;
                 return (
                   <div key={dept.id} className="dp-dept-wrap">
                     <div
                       className={`dp-dept-bubble ${dept.cls}`}
                       role="button"
                       tabIndex={0}
-                      onClick={() => {
+                      onClick={(e) => {
+                        e.stopPropagation();
                         if (isIntake) setIntakeOpen(!intakeOpen);
+                        if (isKitchen) setKitchenOpen(!kitchenOpen);
+                        if (isLogistics) setLogisticsOpen(!logisticsOpen);
                         if (isVault) setVaultOpen(!vaultOpen);
                       }}
                       onKeyDown={(e) => {
                         if (e.key === "Enter" || e.key === " ") {
                           if (isIntake) setIntakeOpen(!intakeOpen);
+                          if (isKitchen) setKitchenOpen(!kitchenOpen);
+                          if (isLogistics) setLogisticsOpen(!logisticsOpen);
                           if (isVault) setVaultOpen(!vaultOpen);
                         }
                       }}
@@ -206,20 +218,34 @@ export default function DashboardPage() {
                       <div className="dp-bubble-label">{dept.label}</div>
                     </div>
 
-                    {/* Intake submenu */}
+                    {/* Kitchen submenu */}
+                    {isKitchen && kitchenOpen && (
+                      <div className="dp-submenu">
+                        <a href="/kitchen-prep" className="dp-submenu-item">🔪 Kitchen Prep Timeline</a>
+                        <div className="dp-submenu-item">📦 Pack-Out Checklist</div>
+                        <div className="dp-submenu-item">🍽️ Menu Specs</div>
+                        <div className="dp-submenu-item">🧊 Inventory</div>
+                      </div>
+                    )}
+
+                    {/* Logistics submenu */}
+                    {isLogistics && logisticsOpen && (
+                      <div className="dp-submenu">
+                        <a href="/delivery-command" className="dp-submenu-item">🚛 Delivery & Dispatch Command</a>
+                        <div className="dp-submenu-item">🗺️ Route Planning</div>
+                        <div className="dp-submenu-item">📍 Vehicle Tracking</div>
+                        <div className="dp-submenu-item">⚙️ Fleet Management</div>
+                      </div>
+                    )}
+
+                    {/* Intake submenu / CENTRAL COMMAND CENTER */}
                     {isIntake && intakeOpen && (
                       <div className="dp-submenu">
                         <a href="/quick-intake" className="dp-submenu-item">Quick Client Intake</a>
                         <a href="/beo-intake" className="dp-submenu-item">BEO Full Intake</a>
-                      </div>
-                    )}
-
-                    {/* Vault submenu */}
-                    {isVault && vaultOpen && (
-                      <div className="dp-submenu">
-                        <div className="dp-submenu-item">BEO Packets</div>
-                        <div className="dp-submenu-item">Staffing Grid</div>
-                        <div className="dp-submenu-item">Vendor Notes</div>
+                        <div className="dp-submenu-item">Rentals</div>
+                        <div className="dp-submenu-item">Ops Vault</div>
+                        <a href="/foh" className="dp-submenu-item">Upload Invoice</a>
                       </div>
                     )}
                   </div>
