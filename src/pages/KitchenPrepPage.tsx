@@ -360,7 +360,7 @@ const KitchenPrepPage: React.FC = () => {
     }
 
     return (
-      <div key={task.id} style={s.taskRow}>
+      <div key={task.id} style={s.taskRow} className="kitchen-task-row">
         <div>
           <input
             type="checkbox"
@@ -576,11 +576,20 @@ const KitchenPrepPage: React.FC = () => {
   };
 
   return (
-    <div style={s.page}>
-      <button style={s.backBtn} onClick={() => window.history.back()}>← Back</button>
+    <>
+      <style>{`
+        @media (max-width: 768px) {
+          .kitchen-page { padding: 16px !important; }
+          .kitchen-title { font-size: 24px !important; }
+          .kitchen-stats { flex-direction: column !important; gap: 16px !important; }
+          .kitchen-task-row { grid-template-columns: 32px 1fr !important; font-size: 12px !important; }
+        }
+      `}</style>
+      <div style={s.page} className="kitchen-page">
+        <button style={s.backBtn} onClick={() => window.history.back()}>← Back</button>
 
       <div style={s.header}>
-        <div style={s.title}>🔪 KITCHEN PREP — WEEK OF FEB 16</div>
+        <div style={s.title} className="kitchen-title">🔪 KITCHEN PREP — WEEK OF FEB 16</div>
         <div style={s.subtitle}>OFF-PREMISE PRODUCTION MANIFEST • PREP → COOK → WRAP → LABEL → STAGE</div>
       </div>
 
@@ -599,7 +608,7 @@ const KitchenPrepPage: React.FC = () => {
         </button>
       </div>
 
-      <div style={s.statsBar}>
+      <div style={s.statsBar} className="kitchen-stats">
         <div style={s.stat}>
           <div style={s.statNumber}>{events.length}</div>
           <div style={s.statLabel}>Events</div>
@@ -649,7 +658,6 @@ const KitchenPrepPage: React.FC = () => {
           {completed} of {totalTasks} tasks complete
         </div>
       </div>
-    </div>
   );
 };
 

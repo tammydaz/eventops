@@ -414,13 +414,25 @@ const DeliveryCommandPage: React.FC = () => {
   );
 
   return (
-    <div style={s.page}>
-      <button style={s.backBtn} onClick={() => window.history.back()}>← Back</button>
+    <>
+      <style>{`
+        @media (max-width: 768px) {
+          .delivery-page { padding: 16px !important; }
+          .delivery-header { font-size: 24px !important; }
+          .delivery-subtitle { font-size: 12px !important; }
+          .delivery-stats { flex-direction: column !important; gap: 16px !important; }
+          .delivery-card-grid { grid-template-columns: 1fr !important; gap: 4px !important; font-size: 11px !important; }
+          .delivery-conflict-banner { padding: 12px 16px !important; }
+          .delivery-driver-jobs { flex-wrap: wrap !important; }
+        }
+      `}</style>
+      <div style={s.page} className="delivery-page">
+        <button style={s.backBtn} onClick={() => window.history.back()}>← Back</button>
 
       {/* Header */}
-      <div style={s.header}>
-        <div style={s.title}>🚛 DELIVERY & DISPATCH COMMAND</div>
-        <div style={s.subtitle}>Saturday, February 15, 2026 • OPS CHIEF VIEW</div>
+      <div style={s.header} className="delivery-header-wrap">
+        <div style={s.title} className="delivery-header">🚛 DELIVERY & DISPATCH COMMAND</div>
+        <div style={s.subtitle} className="delivery-subtitle">Saturday, February 15, 2026 • OPS CHIEF VIEW</div>
       </div>
 
       {/* Conflict Banner */}
@@ -439,7 +451,7 @@ const DeliveryCommandPage: React.FC = () => {
       )}
 
       {/* Stats */}
-      <div style={s.statsBar}>
+      <div style={s.statsBar} className="delivery-stats">
         <div style={s.stat}>
           <div style={s.statNumber}>{dispatches.length}</div>
           <div style={s.statLabel}>Total Dispatches</div>
@@ -502,7 +514,7 @@ const DeliveryCommandPage: React.FC = () => {
             {driver.assignments.length} assignment{driver.assignments.length > 1 ? "s" : ""} •{" "}
             {driver.totalDriveMinutes} min total drive time
           </div>
-          <div style={s.driverJobs}>
+          <div style={s.driverJobs} className="delivery-driver-jobs">
             {driver.assignments.map((job) => (
               <span key={job} style={s.jobTag}>{job}</span>
             ))}
@@ -554,7 +566,7 @@ const DeliveryCommandPage: React.FC = () => {
             </span>
 
             {/* Details Grid */}
-            <div style={s.cardGrid}>
+            <div style={s.cardGrid} className="delivery-card-grid">
               <div>
                 <div style={s.cardLabel}>Dispatch Time</div>
                 <div style={{ ...s.cardValue, color: "#ff6b6b", fontSize: 16 }}>
@@ -661,7 +673,7 @@ const DeliveryCommandPage: React.FC = () => {
           </div>
         </div>
       </div>
-    </div>
+    </>
   );
 };
 

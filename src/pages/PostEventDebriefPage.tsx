@@ -229,12 +229,22 @@ const PostEventDebriefPage: React.FC = () => {
     debrief.staffRatings.reduce((sum, sr) => sum + sr.rating, 0) / debrief.staffRatings.length;
 
   return (
-    <div style={s.page}>
-      <button style={s.backBtn} onClick={() => window.history.back()}>← Back</button>
+    <>
+      <style>{`
+        @media (max-width: 768px) {
+          .debrief-page { padding: 16px !important; max-width: 100% !important; }
+          .debrief-title { font-size: 24px !important; }
+          .debrief-event-meta { flex-direction: column !important; gap: 8px !important; }
+          .debrief-food-row { grid-template-columns: 1fr !important; gap: 4px !important; }
+          .debrief-staff-row { grid-template-columns: 1fr !important; gap: 4px !important; }
+        }
+      `}</style>
+      <div style={s.page} className="debrief-page">
+        <button style={s.backBtn} onClick={() => window.history.back()}>← Back</button>
 
       {/* Header */}
       <div style={s.header}>
-        <div style={s.title}>📝 POST-EVENT DEBRIEF</div>
+        <div style={s.title} className="debrief-title">📝 POST-EVENT DEBRIEF</div>
         <div style={s.subtitle}>WHAT HAPPENED • WHAT TO FIX • WHAT TO REMEMBER</div>
       </div>
 
@@ -244,7 +254,7 @@ const PostEventDebriefPage: React.FC = () => {
           <span style={s.eventTitle}>{debrief.eventName}</span>
           <span style={s.jobTag}>{debrief.jobNumber}</span>
         </div>
-        <div style={s.eventMeta}>
+        <div style={s.eventMeta} className="debrief-event-meta">
           <span>📅 {debrief.eventDate}</span>
           <span>📍 {debrief.venue}</span>
           <span>👥 Planned: {debrief.guestCount}</span>
@@ -280,7 +290,7 @@ const PostEventDebriefPage: React.FC = () => {
             const cfg = resultConfig[food.result];
             return (
               <React.Fragment key={idx}>
-                <div style={{ ...s.foodRow, background: cfg.bg }}>
+                <div style={{ ...s.foodRow, background: cfg.bg }} className="debrief-food-row">
                   <div style={{ color: "#eee", fontWeight: 500 }}>{food.itemName}</div>
                   <div style={{ color: "#888", fontSize: 11 }}>{food.section}</div>
                   <div>
@@ -317,7 +327,7 @@ const PostEventDebriefPage: React.FC = () => {
         </div>
         <div style={s.sectionBody}>
           {debrief.staffRatings.map((staff, idx) => (
-            <div key={idx} style={s.staffRow}>
+            <div key={idx} style={s.staffRow} className="debrief-staff-row">
               <div style={{ color: "#eee", fontWeight: 600 }}>{staff.name}</div>
               <div style={{ color: "#888", fontSize: 12 }}>{staff.role}</div>
               <div>
@@ -452,7 +462,7 @@ const PostEventDebriefPage: React.FC = () => {
           </span>
         </div>
       </div>
-    </div>
+    </>
   );
 };
 
