@@ -236,8 +236,8 @@ const BeoPrintPage: React.FC = () => {
     // Fetch each record's name from the Menu Items table
     const MENU_TABLE = "tbl0aN33DGG6R1sPZ";
     const NAME_FIELD = "fldQ83gpgOmMxNMQw"; // Description Name/Formula
-    const apiKey = import.meta.env.VITE_AIRTABLE_API_KEY as string;
-    const baseId = import.meta.env.VITE_AIRTABLE_BASE_ID as string;
+    const apiKey = (import.meta.env.VITE_AIRTABLE_API_KEY as string)?.trim() || "";
+    const baseId = (import.meta.env.VITE_AIRTABLE_BASE_ID as string)?.trim() || "";
 
     const fetchNames = async () => {
       const newNames: Record<string, string> = { ...menuNames };

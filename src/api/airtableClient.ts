@@ -1,10 +1,10 @@
 const AIRTABLE_API_URL = "https://api.airtable.com/v0";
 
-const AIRTABLE_API_KEY = import.meta.env.VITE_AIRTABLE_API_KEY as string | undefined;
-const AIRTABLE_BASE_ID = import.meta.env.VITE_AIRTABLE_BASE_ID as string | undefined;
-const AIRTABLE_EVENTS_TABLE = import.meta.env.VITE_AIRTABLE_EVENTS_TABLE as
+const AIRTABLE_API_KEY = (import.meta.env.VITE_AIRTABLE_API_KEY as string | undefined)?.trim();
+const AIRTABLE_BASE_ID = (import.meta.env.VITE_AIRTABLE_BASE_ID as string | undefined)?.trim();
+const AIRTABLE_EVENTS_TABLE = (import.meta.env.VITE_AIRTABLE_EVENTS_TABLE as
   | string
-  | undefined;
+  | undefined)?.trim();
 
 export type EventRecord = {
   id: string;
