@@ -31,10 +31,14 @@ const getEnvValue = (value: string | undefined, name: string): string | Airtable
   return value;
 };
 
-const getHeaders = (apiKey: string) => ({
-  Authorization: `Bearer ${apiKey}`,
-  "Content-Type": "application/json",
-});
+const getHeaders = (apiKey: string) => {
+  // Ensure API key contains only ASCII characters
+  const cleanApiKey = apiKey.replace(/[^\x00-\x7F]/g, "");
+  return {
+    Authorization: `Bearer ${cleanApiKey}`,
+    "Content-Type": "application/json",
+  };
+};
 
 export const getEventsTable = (): string | AirtableErrorResult =>
   getEnvValue(AIRTABLE_EVENTS_TABLE, "VITE_AIRTABLE_EVENTS_TABLE");
@@ -56,10 +60,23 @@ export const airtableFetch = async <T>(
   const url = `${AIRTABLE_API_URL}/${baseId}${path}`;
 
   try {
+    const headers = getHeaders(apiKey);
+    
+    // Debug: Check for non-ASCII in Authorization header
+    const authHeader = headers.Authorization;
+    const hasNonAscii = /[^\x00-\x7F]/.test(authHeader);
+    if (hasNonAscii) {
+      console.error("Non-ASCII character found in Authorization header:", authHeader);
+      return {
+        error: true,
+        message: `Authorization header contains non-ASCII characters. Please check your API key.`,
+      };
+    }
+
     const response = await fetch(url, {
       ...init,
       headers: {
-        ...getHeaders(apiKey),
+        ...headers,
         ...(init?.headers ?? {}),
       },
     });
@@ -99,10 +116,23 @@ export const airtableMetaFetch = async <T>(
   const url = `${AIRTABLE_META_API_URL}/${baseId}${path}`;
 
   try {
+    const headers = getHeaders(apiKey);
+    
+    // Debug: Check for non-ASCII in Authorization header
+    const authHeader = headers.Authorization;
+    const hasNonAscii = /[^\x00-\x7F]/.test(authHeader);
+    if (hasNonAscii) {
+      console.error("Non-ASCII character found in Authorization header:", authHeader);
+      return {
+        error: true,
+        message: `Authorization header contains non-ASCII characters. Please check your API key.`,
+      };
+    }
+
     const response = await fetch(url, {
       ...init,
       headers: {
-        ...getHeaders(apiKey),
+        ...headers,
         ...(init?.headers ?? {}),
       },
     });
