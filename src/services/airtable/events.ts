@@ -196,6 +196,7 @@ export type SingleSelectOption = { id: string; name: string };
 const getReturnFieldsParams = () => {
   const params = new URLSearchParams();
   params.set("returnFieldsByFieldId", "true");
+  params.set("cellFormat", "json");
   return params;
 };
 
