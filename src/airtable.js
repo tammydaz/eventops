@@ -2,11 +2,11 @@
 // Simplest possible version. No React. No errors. No guessing.
 
 const AIRTABLE_API_KEY =
-  import.meta.env.VITE_AT_API || import.meta.env.VITE_AIRTABLE_API_KEY;
+  (import.meta.env.VITE_AT_API || import.meta.env.VITE_AIRTABLE_API_KEY)?.trim() || "";
 const BASE_ID =
-  import.meta.env.VITE_AT_BASE || import.meta.env.VITE_AIRTABLE_BASE;
-const TABLE = import.meta.env.VITE_AT_TABLE || "Events"; // Your Events table
-const VIEW = import.meta.env.VITE_AT_VIEW || "Grid view";
+  (import.meta.env.VITE_AT_BASE || import.meta.env.VITE_AIRTABLE_BASE)?.trim() || "";
+const TABLE = (import.meta.env.VITE_AT_TABLE)?.trim() || "Events"; // Your Events table
+const VIEW = (import.meta.env.VITE_AT_VIEW)?.trim() || "Grid view";
 const VIEW_ID = import.meta.env.VITE_AT_VIEW_ID || "";
 const MENU_TABLE = import.meta.env.VITE_AT_MENU_TABLE || "Menu Items";
 

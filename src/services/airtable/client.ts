@@ -20,9 +20,9 @@ type AirtableApiError = {
 
 const AIRTABLE_API_URL = "https://api.airtable.com/v0";
 const AIRTABLE_META_API_URL = "https://api.airtable.com/v0/meta/bases";
-const AIRTABLE_API_KEY = import.meta.env.VITE_AIRTABLE_API_KEY as string | undefined;
-const AIRTABLE_BASE_ID = import.meta.env.VITE_AIRTABLE_BASE_ID as string | undefined;
-const AIRTABLE_EVENTS_TABLE = import.meta.env.VITE_AIRTABLE_EVENTS_TABLE as string | undefined;
+const AIRTABLE_API_KEY = (import.meta.env.VITE_AIRTABLE_API_KEY as string | undefined)?.trim();
+const AIRTABLE_BASE_ID = (import.meta.env.VITE_AIRTABLE_BASE_ID as string | undefined)?.trim();
+const AIRTABLE_EVENTS_TABLE = (import.meta.env.VITE_AIRTABLE_EVENTS_TABLE as string | undefined)?.trim();
 
 const getEnvValue = (value: string | undefined, name: string): string | AirtableErrorResult => {
   if (!value) {

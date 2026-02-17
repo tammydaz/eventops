@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from "react";
 
-const AIRTABLE_API_KEY = import.meta.env.VITE_AIRTABLE_API_KEY;
-const AIRTABLE_BASE_ID = import.meta.env.VITE_AIRTABLE_BASE_ID;
-const AIRTABLE_EVENTS_TABLE = import.meta.env.VITE_AIRTABLE_EVENTS_TABLE;
+const AIRTABLE_API_KEY = (import.meta.env.VITE_AIRTABLE_API_KEY as string)?.trim() || "";
+const AIRTABLE_BASE_ID = (import.meta.env.VITE_AIRTABLE_BASE_ID as string)?.trim() || "";
+const AIRTABLE_EVENTS_TABLE = (import.meta.env.VITE_AIRTABLE_EVENTS_TABLE as string)?.trim() || "";
 
 const FIELD_MAP = {
   clientFirstName: "Client First Name",
