@@ -59,6 +59,14 @@ export const airtableFetch = async <T>(
 
   const url = `${AIRTABLE_API_URL}/${baseId}${path}`;
 
+  console.log("🔍 Airtable Fetch Debug:", {
+    baseId,
+    path,
+    fullUrl: url,
+    method: init?.method || "GET",
+    body: init?.body,
+  });
+
   try {
     const headers = getHeaders(apiKey);
     
