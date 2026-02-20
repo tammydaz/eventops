@@ -1,23 +1,84 @@
-# Copilot instructions for eventops
+# FoodWerx EventOps — Copilot Context
 
-## Big picture
-- This Vite app currently renders a static HTML shell in [index.html](index.html) and runs vanilla DOM logic from [src/main.jsx](src/main.jsx). React components in [src/App.jsx](src/App.jsx) and [src/pages/clientIntake.jsx](src/pages/clientIntake.jsx) are present but not wired to the HTML entry yet.
-- The UI is built with hard-coded IDs/classes in [index.html](index.html). The JS in [src/main.jsx](src/main.jsx) expects DOM nodes like `eventSelectorButton`, `eventDropdown`, `eventList`, and toggles `.hidden`.
+## System Architecture
+- Vite + React + TypeScript app
+- Airtable backend (Events table: `tblYfaWh67Ag4ydXq`, Menu Items table: `tbl0aN33DGG6R1sPZ`)
+- Zustand state management (`src/state/eventStore.tsx`)
+- Deployed on Vercel
 
-## Data flow & integrations
-- Airtable access is centralized in [src/airtable.js](src/airtable.js) with `listEvents()`, `updateEvent()`, and `snapshotEvent()` calling the Airtable REST API.
-- Env vars are required for Airtable: `VITE_AIRTABLE_API_KEY` and `VITE_AIRTABLE_BASE` (see [src/airtable.js](src/airtable.js)).
+## ONE Intake System
+- **ONLY** use `/beo-intake/:eventId` → `src/components/beo-intake/*`
+- Old intake at `src/components/intake/` is DEPRECATED — do not use
+- Quick Intake creates event → redirects to BEO Full Intake
 
-## Styling conventions
-- Global utility classes (Tailwind-like) live in [src/index.css](src/index.css) and are heavily used in [index.html](index.html) (e.g., `.bg-gray-900`, `.text-red-600`, `.rounded-md`).
-- Feature-specific styles exist in [src/pages/clientIntake.css](src/pages/clientIntake.css) and [src/App.css](src/App.css), but these are not referenced in the current HTML entry.
+## Field IDs — Source of Truth
+- ALL field IDs live in `src/services/airtable/events.ts` → `FIELD_IDS` object
+- NEVER use raw field ID strings — always use `FIELD_IDS.CONSTANT_NAME`
+- NEVER write to computed/formula fields
 
-## Developer workflows
-- Start dev server: `npm run dev` (Vite)
-- Build: `npm run build`
-- Lint: `npm run lint`
-- Preview: `npm run preview`
+## Computed Fields — READ ONLY, NEVER WRITE
+- `EVENT_NAME` (`fldZuHc9D29Wcj60h`) — Formula
+- `CLIENT_BUSINESS_NAME` (`fld4YxQOjzPyyBIHL`) — Formula
+- `VENUE_FULL_ADDRESS` (`fldOKQTp8Zf6a462f`) — Formula (VenuePrint)
+- ANY field ending in "Print" is a formula — NEVER write to it
+- `updateEventMultiple()` must filter these out before PATCH
 
-## Practical notes for edits
-- When adding UI elements, wire them via IDs in [index.html](index.html) and update the DOM handlers in [src/main.jsx](src/main.jsx) so dropdown/search behaviors remain consistent.
-- If you move toward React rendering, ensure the Vite entrypoint switches to a React `createRoot` flow and update [index.html](index.html) accordingly; right now it is purely static HTML + DOM scripts.
+## Menu Items — How They Work
+- Menu Items table: `tbl0aN33DGG6R1sPZ`
+- Display name field: `fldQ83gpgOmMxNMQw` (Description Name/Formula)
+- Service Type field: `fld2EhDP5GRalZJzQ` (determines picker category)
+- Vessel Type field: `fldZCnfKzWijIDaeV` (Metal vs China for buffet)
+- Items WITHOUT Service Type are INVISIBLE in the picker
+- Sacred placement order: Passed Apps → Presented Apps → Buffet Metal → Buffet China → Desserts
+
+## BEO Print Page — 3 Views
+- Route: `/beo-print/:eventId`
+- 🍳 Kitchen BEO: 2 columns (Spec | Item Name), no designer notes
+- 📐 Spec View: 3 columns (Auto-spec | Item Name | Editable override)
+- 📦 Pack-Out View: 2 columns (Item Name | Editable pack-out items)
+- Header: Date top-left, Client/Phone/Address left, Guests/Start/End/Arrival right
+- Dispatch + Job # centered large font between header and allergy banner
+- Color-coded section borders: green=apps, orange=buffet-metal+desserts, blue=buffet-china
+- One item per line ALWAYS. Sauces indented under parent.
+
+## Kitchen Logic
+- `Kitchen On-Site?` (`fldSpUlS9qEQ5ly6T`) — Single select: Yes/No
+- `Food Must Go Hot` (`fldJFB69mmB5T4Ysp`) — Checkbox
+- When No Kitchen + Hot checked → "ALL FOOD MUST GO HOT" banner on BEO
+
+## Timeline Fields
+- `DISPATCH_TIME`: `fldbbHmaWqOBNUlJP`
+- `EVENT_START_TIME`: `fldDwDE87M9kFAIDn`
+- `EVENT_END_TIME`: `fld7xeCnV751pxmWz`
+- `FOODWERX_ARRIVAL`: `fldMYjGf8dQPNiY4Y`
+
+## BEO Extra Fields
+- `BEO_NOTES`: `fldnGtJVWf4u39SHI` (Long text)
+- `BEO_TIMELINE`: `fld6Z6xw9ciygqyff` (Long text)
+- `PARKING_LOAD_IN_NOTES`: `fldqXqiwryBHhJmUc` (Long text)
+
+## Input Pattern — MANDATORY
+- All text inputs use LOCAL STATE + onBlur save
+- NEVER save on every keystroke (causes cursor jumping + Airtable spam)
+- Dropdowns, checkboxes, and time pickers save on onChange (that's fine)
+
+## Delivery Events
+- When Event Type = "Delivery", venue section labels change:
+  - "Venue Name" → "Business / Location Name"
+  - "Venue Address" → "Delivery Address"
+  - Show Delivery Notes textarea
+- Same Airtable fields underneath — only labels change
+
+## Job # Logic
+- Auto-generated from dispatch time, resets daily
+- Format: clientName + " – " + eventDate (temporary)
+- Future: MMDDYY-sequence based on dispatch order
+
+## DO NOT
+- Assign new field names
+- Create new Airtable fields without permission
+- Write to Print/formula fields
+- Use raw field ID strings (use FIELD_IDS)
+- Maintain two intake systems
+- Add designer notes to BEO print
+- Guess field IDs or structure
