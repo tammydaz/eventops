@@ -16,9 +16,9 @@ import { FormSection } from "./FormSection";
 // ============================================================
 const SERVICE_TYPE_MAP: Record<string, string[]> = {
   passed:       ['Passed App'],
-  presented:    ['Presented App', 'Appetizer'],
-  buffet_metal: ['Buffet', 'Buffet \u2013 Hot'],
-  buffet_china: ['Buffet', 'Buffet \u2013 Cold'],
+  presented:    ['Room Temp Display'],
+  buffet_metal: ['Buffet \u2013 Hot', 'Buffet'],
+  buffet_china: ['Buffet'],
   desserts:     ['Dessert'],
 };
 
