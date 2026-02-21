@@ -258,6 +258,7 @@ export const MenuItemsPanel = () => {
                       + Add {section.label}
                     </button>
                   </div>
+                  {section.customFieldName ? (
                   <div>
                     <label className="text-xs text-gray-400 mb-1 block">Custom {section.label}</label>
                     <textarea
@@ -275,6 +276,7 @@ export const MenuItemsPanel = () => {
                       placeholder={`Enter custom ${section.label.toLowerCase()}...`}
                     />
                   </div>
+                  ) : null}
                 </div>
               );
             })}
