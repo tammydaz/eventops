@@ -1,15 +1,18 @@
 import { airtableFetch, getEventsTable, type AirtableListResponse, type AirtableErrorResult } from "./client";
-import { isErrorResult, asString, asSingleSelectName } from "./selectors";
+import { isErrorResult, asString } from "./selectors";
 
 export type LinkedRecordItem = {
   id: string;
   name: string;
-  serviceType?: string | null;
+  category?: string | null;
+  dietaryTags?: string | null;
 };
 
 const MENU_ITEMS_TABLE_ID = "tbl0aN33DGG6R1sPZ";
 const MENU_ITEMS_FORMATTED_NAME_FIELD_ID = "fldQ83gpgOmMxNMQw";
-const MENU_ITEMS_SERVICE_TYPE_FIELD_ID = "fld2EhDP5GRalZJzQ";
+const MENU_ITEMS_CATEGORY_FIELD_ID = "fldM7lWvjH8S0YNSX";
+// TODO: Replace empty string with the actual field ID for "Menu Item Allergen/Restriction Tags (AI)"
+const MENU_ITEMS_DIETARY_TAGS_FIELD_ID = "";
 
 const MENU_ITEM_SPECS_TABLE_ID = "tblGeCmzJscnocs1T";
 const MENU_ITEM_SPECS_NAME_FIELD_ID = "fldjrrdBySGDHLLLl";
@@ -64,7 +67,10 @@ export const loadMenuItems = async (): Promise<LinkedRecordItem[] | AirtableErro
   params.set("cellFormat", "json");
   params.set("returnFieldsByFieldId", "true");
   params.append("fields[]", MENU_ITEMS_FORMATTED_NAME_FIELD_ID);
-  params.append("fields[]", MENU_ITEMS_SERVICE_TYPE_FIELD_ID);
+  params.append("fields[]", MENU_ITEMS_CATEGORY_FIELD_ID);
+  if (MENU_ITEMS_DIETARY_TAGS_FIELD_ID) {
+    params.append("fields[]", MENU_ITEMS_DIETARY_TAGS_FIELD_ID);
+  }
 
   const data = await airtableFetch<AirtableListResponse<Record<string, unknown>>>(
     `/${MENU_ITEMS_TABLE_ID}?${params.toString()}`
@@ -76,24 +82,25 @@ export const loadMenuItems = async (): Promise<LinkedRecordItem[] | AirtableErro
 
   return data.records.map((record) => {
     const formattedName = asString(record.fields[MENU_ITEMS_FORMATTED_NAME_FIELD_ID]);
-    const serviceTypeRaw = record.fields[MENU_ITEMS_SERVICE_TYPE_FIELD_ID];
-    
-    let serviceType: string | null = null;
-    
-    // Handle both string and single-select object formats
-    if (typeof serviceTypeRaw === "string") {
-      serviceType = serviceTypeRaw;
-    } else if (serviceTypeRaw && typeof serviceTypeRaw === "object" && "name" in serviceTypeRaw) {
-      serviceType = String(serviceTypeRaw.name);
+    const categoryRaw = record.fields[MENU_ITEMS_CATEGORY_FIELD_ID];
+
+    let category: string | null = null;
+    if (typeof categoryRaw === "string") {
+      category = categoryRaw;
+    } else if (categoryRaw && typeof categoryRaw === "object" && "name" in categoryRaw) {
+      category = String(categoryRaw.name);
     }
-    
-    const item = {
+
+    const dietaryTags = MENU_ITEMS_DIETARY_TAGS_FIELD_ID
+      ? asString(record.fields[MENU_ITEMS_DIETARY_TAGS_FIELD_ID]) || null
+      : null;
+
+    return {
       id: record.id,
       name: formattedName || "",
-      serviceType
+      category,
+      dietaryTags,
     };
-    
-    return item;
   });
 };
 

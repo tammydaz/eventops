@@ -10,30 +10,19 @@ import { useEventStore } from "../../state/eventStore";
 import { FormSection } from "./FormSection";
 
 // ============================================================
-// CATEGORY KEY → Airtable "Service Type" values
-// These are the EXACT strings from your Airtable single-select field.
-// \u2013 = EN DASH (–) which is what Airtable returns
+// CATEGORY KEY → Airtable "Category" values (fldM7lWvjH8S0YNSX)
+// These are the EXACT strings from your Airtable Category single-select field.
 // ============================================================
 const SERVICE_TYPE_MAP: Record<string, string[]> = {
-  passed:       ['Passed App'],
-  presented:    ['Room Temp Display'],
-  buffet_metal: ['Buffet \u2013 Hot', 'Buffet'],
-  buffet_china: ['Buffet'],
+  passed:       ['Appetizer'],
+  presented:    ['Appetizer'],
+  buffet_metal: ['Entr\u00e9e', 'Side'],
+  buffet_china: ['Entr\u00e9e', 'Side'],
   desserts:     ['Dessert'],
+  beverages:    ['Beverage'],
 };
 
 type CategoryKey = keyof typeof SERVICE_TYPE_MAP;
-
-function norm(input: string | null | undefined): string {
-  if (!input) return '';
-  return input
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[\u2010-\u2015\u2212\uFE58\uFE63\uFF0D\-]/g, '-')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .toLowerCase();
-}
 
 type MenuSelections = {
   passedAppetizers: string[];
@@ -96,9 +85,9 @@ export const MenuSection = () => {
         }
         if (active) {
           console.log("📦 Menu items loaded:", items.length);
-          // Log unique service types so we can verify the mapping
-          const uniqueTypes = [...new Set(items.map((i) => i.serviceType))];
-          console.log("📋 Unique serviceType values:", uniqueTypes);
+          // Log unique categories so we can verify the mapping
+          const uniqueCategories = [...new Set(items.map((i) => i.category))];
+          console.log("📋 Unique category values:", uniqueCategories);
           setMenuItems(items);
         }
       } catch (err) {
@@ -208,31 +197,28 @@ export const MenuSection = () => {
   };
 
   // ============================================================
-  // THE FIXED FILTER — uses serviceType + normalized comparison
+  // THE FIXED FILTER — uses category field for comparison
   // ============================================================
   const filteredPickerItems = useMemo(() => {
     if (!pickerState.categoryKey) return [];
 
-    const allowedRaw = SERVICE_TYPE_MAP[pickerState.categoryKey];
-    if (!allowedRaw) {
+    const allowedCategories = SERVICE_TYPE_MAP[pickerState.categoryKey];
+    if (!allowedCategories) {
       console.log("⚠️ No SERVICE_TYPE_MAP entry for:", pickerState.categoryKey);
       return [];
     }
 
-    const allowedNormalized = allowedRaw.map(norm);
-
     console.log("🔎 FILTER DEBUG:", {
       categoryKey: pickerState.categoryKey,
-      allowedRaw,
-      allowedNormalized,
+      allowedCategories,
       totalMenuItems: menuItems.length,
     });
 
     const filtered = menuItems.filter((item) => {
-      const itemTypeNorm = norm(item.serviceType);
-      if (!itemTypeNorm) return false;
+      const itemCategory = item.category || "";
+      if (!itemCategory) return false;
 
-      const matchesCategory = allowedNormalized.includes(itemTypeNorm);
+      const matchesCategory = allowedCategories.includes(itemCategory);
       const matchesSearch =
         pickerSearch.trim() === "" ||
         item.name.toLowerCase().includes(pickerSearch.toLowerCase());
@@ -243,10 +229,9 @@ export const MenuSection = () => {
     console.log(`  ✅ Filtered: ${filtered.length} / ${menuItems.length}`);
 
     if (filtered.length === 0) {
-      const uniqueTypes = [...new Set(menuItems.map((i) => i.serviceType))];
-      console.log("  🚨 0 RESULTS — unique serviceType values:", uniqueTypes);
-      console.log("  🚨 0 RESULTS — normalized:", uniqueTypes.map(norm));
-      console.log("  🚨 0 RESULTS — allowed normalized:", allowedNormalized);
+      const uniqueCategories = [...new Set(menuItems.map((i) => i.category))];
+      console.log("  🚨 0 RESULTS — unique category values:", uniqueCategories);
+      console.log("  🚨 0 RESULTS — allowed categories:", allowedCategories);
     }
 
     return filtered;
@@ -471,10 +456,12 @@ export const MenuSection = () => {
                     }}
                   >
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                      <span>{item.name}</span>
-                      {item.serviceType && (
-                        <span style={{ fontSize: "11px", color: "#777" }}>{item.serviceType}</span>
-                      )}
+                      <div>
+                        <span>{item.name}</span>
+                        {item.dietaryTags && (
+                          <span style={{ display: "block", fontSize: "11px", color: "#777" }}>{item.dietaryTags}</span>
+                        )}
+                      </div>
                     </div>
                   </div>
                 ))}

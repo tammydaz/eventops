@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
-import { SERVICE_TYPE_MAP, type MenuCategoryKey } from '../constants/menuCategories';
+import { CATEGORY_FILTER_MAP, type MenuCategoryKey } from '../constants/menuCategories';
 
 export interface MenuItemRecord {
   id: string;
   name: string;
-  serviceType?: string | null;
+  category?: string | null;
+  dietaryTags?: string | null;
 }
 
 interface MenuPickerModalProps {
@@ -16,24 +17,6 @@ interface MenuPickerModalProps {
   currentlySelected: MenuItemRecord[];
   onSelect: (item: MenuItemRecord) => void;
   onClose: () => void;
-}
-
-/**
- * Normalize a string for comparison:
- * - Lowercase
- * - Replace ALL dash-like Unicode characters with plain hyphen
- * - Collapse whitespace
- * - Strip diacritics (é → e)
- */
-function norm(input: string | null | undefined): string {
-  if (!input) return '';
-  return input
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[\u2010-\u2015\u2212\uFE58\uFE63\uFF0D\-]/g, '-')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .toLowerCase();
 }
 
 export const MenuPickerModal: React.FC<MenuPickerModalProps> = ({
@@ -59,31 +42,26 @@ export const MenuPickerModal: React.FC<MenuPickerModalProps> = ({
       return [];
     }
 
-    const allowedRaw = SERVICE_TYPE_MAP[categoryKey];
-    if (!allowedRaw) {
-      console.log('⚠️ No SERVICE_TYPE_MAP entry for categoryKey:', categoryKey);
+    const allowedCategories = CATEGORY_FILTER_MAP[categoryKey];
+    if (!allowedCategories) {
+      console.log('⚠️ No CATEGORY_FILTER_MAP entry for categoryKey:', categoryKey);
       return [];
     }
 
-    // Pre-normalize the allowed service type strings
-    const allowedNormalized = allowedRaw.map(norm);
-
     console.log('🔎 FILTER DEBUG:', {
       categoryKey,
-      allowedRaw,
-      allowedNormalized,
+      allowedCategories,
       totalMenuItems: menuItems.length,
     });
 
     const filtered = menuItems.filter((item) => {
-      // Normalize the item's service type
-      const itemTypeNorm = norm(item.serviceType);
+      const itemCategory = item.category || "";
 
-      // If the item has no service type, it can't match any category
-      if (!itemTypeNorm) return false;
+      // If the item has no category, it can't match any section
+      if (!itemCategory) return false;
 
-      // Check if this item's service type is in the allowed list
-      const matchesCategory = allowedNormalized.includes(itemTypeNorm);
+      // Check if this item's category is in the allowed list
+      const matchesCategory = allowedCategories.includes(itemCategory);
 
       // Check search term
       const matchesSearch =
@@ -95,21 +73,11 @@ export const MenuPickerModal: React.FC<MenuPickerModalProps> = ({
 
     console.log(`  ✅ Filtered: ${filtered.length} / ${menuItems.length}`);
 
-    // If 0 results, log ALL unique service types so we can see what Airtable actually sent
+    // If 0 results, log ALL unique categories so we can see what Airtable actually sent
     if (filtered.length === 0) {
-      const uniqueTypes = [...new Set(menuItems.map((i) => i.serviceType))];
-      console.log('  🚨 0 RESULTS — all unique serviceType values from data:', uniqueTypes);
-      console.log('  🚨 0 RESULTS — normalized:', uniqueTypes.map(norm));
-      console.log('  🚨 0 RESULTS — allowed normalized:', allowedNormalized);
-
-      // Byte-level debug for first non-null service type
-      const firstType = uniqueTypes.find((t) => t != null);
-      if (firstType) {
-        const bytes = [...firstType].map(
-          (c) => `U+${c.charCodeAt(0).toString(16).toUpperCase().padStart(4, '0')}`
-        );
-        console.log(`  🔬 First serviceType "${firstType}" bytes: [${bytes.join(', ')}]`);
-      }
+      const uniqueCategories = [...new Set(menuItems.map((i) => i.category))];
+      console.log('  🚨 0 RESULTS — all unique category values from data:', uniqueCategories);
+      console.log('  🚨 0 RESULTS — allowed categories:', allowedCategories);
     }
 
     return filtered;
@@ -189,10 +157,12 @@ export const MenuPickerModal: React.FC<MenuPickerModalProps> = ({
                     : 'bg-gray-800 border border-gray-700 hover:bg-red-900 hover:border-red-600'
                 }`}
               >
-                <span className="text-gray-300">{item.name}</span>
-                {item.serviceType && (
-                  <span className="text-xs text-gray-500 ml-auto">{item.serviceType}</span>
-                )}
+                <div>
+                  <span className="text-gray-300">{item.name}</span>
+                  {item.dietaryTags && (
+                    <span className="block text-xs text-gray-500">{item.dietaryTags}</span>
+                  )}
+                </div>
               </div>
             );
           })}
