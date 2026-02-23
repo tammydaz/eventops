@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from "react";
 import { useEventStore } from "../state/eventStore";
 import { FIELD_IDS } from "../services/airtable/events";
+import { BEO_EVENTS, BEO_MENU_ITEM_FIELDS } from "../config/beoFieldIds";
+import { calculateSpec } from "../services/airtable/specEngine";
 
 // ── Types ──
 type MenuLineItem = {
@@ -9,6 +11,7 @@ type MenuLineItem = {
   specQty?: string;
   specVessel?: string;
   packOutItems?: string;
+  loaded?: boolean;
 };
 
 type SectionData = {
@@ -184,7 +187,14 @@ const styles: Record<string, React.CSSProperties> = {
 };
 
 // ── View Modes ──
-type ViewMode = "kitchen" | "spec" | "packout";
+type ViewMode = "kitchen" | "spec" | "packout" | "expeditor";
+
+const GRID_TEMPLATES: Record<ViewMode, string> = {
+  kitchen: '140px 1fr',
+  spec: '140px 1fr 200px',
+  packout: '1fr 250px',
+  expeditor: '40px 1fr',
+};
 
 const BeoPrintPage: React.FC = () => {
   const {
@@ -212,11 +222,12 @@ const BeoPrintPage: React.FC = () => {
   // ── Step 2: Resolve linked record IDs to names ──
   useEffect(() => {
     const menuFieldIds = [
-      FIELD_IDS.PASSED_APPETIZERS,
-      FIELD_IDS.PRESENTED_APPETIZERS,
-      FIELD_IDS.BUFFET_METAL,
-      FIELD_IDS.BUFFET_CHINA,
-      FIELD_IDS.DESSERTS,
+      BEO_EVENTS.PASSED_APPETIZERS,
+      BEO_EVENTS.PRESENTED_APPETIZERS,
+      BEO_EVENTS.BUFFET_METAL,
+      BEO_EVENTS.BUFFET_CHINA,
+      BEO_EVENTS.DESSERTS,
+      BEO_EVENTS.STATIONS,
     ];
 
     const allRecordIds: string[] = [];
@@ -288,16 +299,24 @@ const BeoPrintPage: React.FC = () => {
     return String(val);
   };
 
+  // ── Smart Header: Client / Contact collapsing ──
   const clientName =
-    (f(FIELD_IDS.CLIENT_FIRST_NAME) + " " + f(FIELD_IDS.CLIENT_LAST_NAME)).trim();
-  const phone = f(FIELD_IDS.CLIENT_PHONE);
-  const venue = f(FIELD_IDS.VENUE_NAME) || f(FIELD_IDS.VENUE);
-  const venueAddress = f(FIELD_IDS.VENUE_ADDRESS);
-  const eventDate = f(FIELD_IDS.EVENT_DATE);
-  const guestCount = f(FIELD_IDS.GUEST_COUNT);
-  const dispatchTime = f(FIELD_IDS.DISPATCH_TIME);
-  const serviceStyle = f(FIELD_IDS.SERVICE_STYLE);
-  const allergies = f(FIELD_IDS.DIETARY_NOTES);
+    (f(BEO_EVENTS.CLIENT_FIRST_NAME) + " " + f(BEO_EVENTS.CLIENT_LAST_NAME)).trim();
+  const contactName =
+    (f(BEO_EVENTS.CONTACT_FIRST_NAME) + " " + f(BEO_EVENTS.CONTACT_LAST_NAME)).trim();
+  const clientPhone = f(BEO_EVENTS.CLIENT_PHONE);
+  const contactPhone = f(BEO_EVENTS.CONTACT_PHONE);
+  const isSamePerson = clientName === contactName && clientName !== "";
+
+  const venue = f(BEO_EVENTS.VENUE_NAME) || f(FIELD_IDS.VENUE);
+  const venueAddress = f(BEO_EVENTS.VENUE_FULL_ADDRESS_CLEAN);
+  const eventDate = f(BEO_EVENTS.EVENT_DATE);
+  const guestCount = f(BEO_EVENTS.GUEST_COUNT);
+  const dispatchTime = f(BEO_EVENTS.DISPATCH_TIME);
+  const eventStartTime = f(BEO_EVENTS.EVENT_START_TIME);
+  const eventEndTime = f(BEO_EVENTS.EVENT_END_TIME);
+  const serviceStyle = f(BEO_EVENTS.SERVICE_STYLE);
+  const allergies = f(BEO_EVENTS.DIETARY_NOTES);
   const jobNumber = clientName + " \u2013 " + eventDate;
 
   // Service style banner: only show if NOT buffet / full service
@@ -337,33 +356,60 @@ const BeoPrintPage: React.FC = () => {
   const menuSections: SectionData[] = [
     {
       title: "PASSED APPETIZERS",
-      fieldId: FIELD_IDS.PASSED_APPETIZERS,
-      items: parseMenuItems(FIELD_IDS.PASSED_APPETIZERS),
+      fieldId: BEO_EVENTS.PASSED_APPETIZERS,
+      items: parseMenuItems(BEO_EVENTS.PASSED_APPETIZERS),
     },
     {
       title: "PRESENTED APPETIZERS",
-      fieldId: FIELD_IDS.PRESENTED_APPETIZERS,
-      items: parseMenuItems(FIELD_IDS.PRESENTED_APPETIZERS),
+      fieldId: BEO_EVENTS.PRESENTED_APPETIZERS,
+      items: parseMenuItems(BEO_EVENTS.PRESENTED_APPETIZERS),
     },
     {
       title: "BUFFET \u2013 METAL",
-      fieldId: FIELD_IDS.BUFFET_METAL,
-      items: parseMenuItems(FIELD_IDS.BUFFET_METAL),
+      fieldId: BEO_EVENTS.BUFFET_METAL,
+      items: parseMenuItems(BEO_EVENTS.BUFFET_METAL),
     },
     {
       title: "BUFFET \u2013 CHINA",
-      fieldId: FIELD_IDS.BUFFET_CHINA,
-      items: parseMenuItems(FIELD_IDS.BUFFET_CHINA),
+      fieldId: BEO_EVENTS.BUFFET_CHINA,
+      items: parseMenuItems(BEO_EVENTS.BUFFET_CHINA),
     },
     {
       title: "DESSERTS",
-      fieldId: FIELD_IDS.DESSERTS,
-      items: parseMenuItems(FIELD_IDS.DESSERTS),
+      fieldId: BEO_EVENTS.DESSERTS,
+      items: parseMenuItems(BEO_EVENTS.DESSERTS),
+    },
+    {
+      title: "STATIONS",
+      fieldId: BEO_EVENTS.STATIONS,
+      items: parseMenuItems(BEO_EVENTS.STATIONS),
     },
   ];
 
   // Collapse empty sections
   const activeSections = menuSections.filter((s) => s.items.length > 0);
+
+  // ── Expeditor: Toggle loaded state ──
+  const MENU_TABLE = "tbl0aN33DGG6R1sPZ";
+  const apiKey = (import.meta.env.VITE_AIRTABLE_API_KEY as string)?.trim() || "";
+  const baseId = (import.meta.env.VITE_AIRTABLE_BASE_ID as string)?.trim() || "";
+
+  const toggleLoaded = async (itemId: string, currentState: boolean) => {
+    try {
+      await fetch(`https://api.airtable.com/v0/${baseId}/${MENU_TABLE}/${itemId}`, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          fields: { [BEO_MENU_ITEM_FIELDS.LOADED]: !currentState },
+        }),
+      });
+    } catch (e) {
+      console.error("Failed to toggle loaded state:", e);
+    }
+  };
 
   // ── Loading State ──
   if (loading) {
@@ -413,6 +459,15 @@ const BeoPrintPage: React.FC = () => {
           📦 Pack-Out View
         </button>
         <button
+          style={{
+            ...styles.toolbarBtn,
+            ...(viewMode === "expeditor" ? styles.activeBtn : styles.inactiveBtn),
+          }}
+          onClick={() => setViewMode("expeditor")}
+        >
+          ☑️ Expeditor View
+        </button>
+        <button
           style={{ ...styles.toolbarBtn, background: "#2d8cf0" }}
           onClick={() => window.print()}
         >
@@ -431,14 +486,37 @@ const BeoPrintPage: React.FC = () => {
         {/* ── Header ── */}
         <div style={styles.header}>
           <div style={styles.headerLeft}>
-            <div style={styles.headerRow}>
-              <span style={styles.headerLabel}>CLIENT:</span>
-              <span style={styles.headerValue}>{clientName || "\u2014"}</span>
-            </div>
-            <div style={styles.headerRow}>
-              <span style={styles.headerLabel}>PHONE:</span>
-              <span style={styles.headerValue}>{phone || "\u2014"}</span>
-            </div>
+            {isSamePerson ? (
+              <>
+                <div style={styles.headerRow}>
+                  <span style={styles.headerLabel}>CLIENT:</span>
+                  <span style={styles.headerValue}>{clientName || "\u2014"}</span>
+                </div>
+                <div style={styles.headerRow}>
+                  <span style={styles.headerLabel}>PHONE:</span>
+                  <span style={styles.headerValue}>{clientPhone || "\u2014"}</span>
+                </div>
+              </>
+            ) : (
+              <>
+                <div style={styles.headerRow}>
+                  <span style={styles.headerLabel}>CLIENT:</span>
+                  <span style={styles.headerValue}>{clientName || "\u2014"}</span>
+                </div>
+                <div style={styles.headerRow}>
+                  <span style={styles.headerLabel}>PHONE:</span>
+                  <span style={styles.headerValue}>{clientPhone || "\u2014"} (Client)</span>
+                </div>
+                <div style={styles.headerRow}>
+                  <span style={styles.headerLabel}>PRIMARY CONTACT:</span>
+                  <span style={styles.headerValue}>{contactName || "\u2014"}</span>
+                </div>
+                <div style={styles.headerRow}>
+                  <span style={styles.headerLabel}>CONTACT PHONE:</span>
+                  <span style={styles.headerValue}>{contactPhone || "\u2014"} (Day-Of)</span>
+                </div>
+              </>
+            )}
             <div style={styles.headerRow}>
               <span style={styles.headerLabel}>VENUE:</span>
               <span style={styles.headerValue}>
@@ -453,7 +531,15 @@ const BeoPrintPage: React.FC = () => {
               <span style={styles.headerValue}>{eventDate || "\u2014"}</span>
             </div>
             <div style={styles.headerRowRight}>
-              <span style={styles.headerLabel}>GUEST COUNT:</span>
+              <span style={styles.headerLabel}>START:</span>
+              <span style={styles.headerValue}>{eventStartTime || "\u2014"}</span>
+            </div>
+            <div style={styles.headerRowRight}>
+              <span style={styles.headerLabel}>END:</span>
+              <span style={styles.headerValue}>{eventEndTime || "\u2014"}</span>
+            </div>
+            <div style={styles.headerRowRight}>
+              <span style={styles.headerLabel}>GUESTS:</span>
               <span style={styles.headerValue}>{guestCount || "\u2014"}</span>
             </div>
             <div style={styles.headerRowRight}>
@@ -498,55 +584,81 @@ const BeoPrintPage: React.FC = () => {
         {activeSections.map((section) => (
           <div key={section.fieldId}>
             <div style={styles.sectionHeader}>{section.title}</div>
-            {section.items.map((item, idx) => (
-              <div key={item.id + idx} style={styles.lineItem}>
-                {/* Column 1: Specs */}
-                <div style={styles.specCol}>
-                  {viewMode === "spec" ? (
-                    <input
-                      type="text"
-                      placeholder="qty / pan / vessel"
-                      style={{
-                        width: "100%",
-                        padding: "4px 6px",
-                        fontSize: 12,
-                        background: "#f5f5f5",
-                        border: "1px solid #ccc",
-                        borderRadius: 3,
-                      }}
-                      className="no-print"
-                    />
-                  ) : (
-                    <span>{item.specQty || "\u2014"}</span>
+            {section.items.map((item, idx) => {
+              const autoSpec = calculateSpec({
+                itemId: item.id,
+                itemName: item.name,
+                section: section.title,
+                guestCount: parseInt(guestCount) || 0,
+                nickQtyOverride: item.specQty,
+              });
+              const gridTemplateColumns = GRID_TEMPLATES[viewMode];
+              return (
+                <div key={item.id + idx} style={{ ...styles.lineItem, gridTemplateColumns }}>
+                  {/* Expeditor: Checkbox column */}
+                  {viewMode === "expeditor" && (
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      <input
+                        type="checkbox"
+                        checked={item.loaded || false}
+                        onChange={() => toggleLoaded(item.id, item.loaded || false)}
+                        style={{ width: 18, height: 18, cursor: "pointer" }}
+                      />
+                    </div>
+                  )}
+
+                  {/* Kitchen / Spec: Spec column */}
+                  {(viewMode === "kitchen" || viewMode === "spec") && (
+                    <div style={styles.specCol}>
+                      <span>{autoSpec}</span>
+                    </div>
+                  )}
+
+                  {/* Column: Item Name */}
+                  <div style={styles.itemCol}>{item.name}</div>
+
+                  {/* Spec: Override input column */}
+                  {viewMode === "spec" && (
+                    <div>
+                      <input
+                        type="text"
+                        placeholder="qty / pan / vessel"
+                        defaultValue={item.specQty || ""}
+                        style={{
+                          width: "100%",
+                          padding: "4px 6px",
+                          fontSize: 12,
+                          background: "#f5f5f5",
+                          border: "1px solid #ccc",
+                          borderRadius: 3,
+                        }}
+                        className="no-print"
+                      />
+                    </div>
+                  )}
+
+                  {/* Pack-Out: Equipment column */}
+                  {viewMode === "packout" && (
+                    <div style={styles.packOutCol}>
+                      <input
+                        type="text"
+                        placeholder="chafer, tongs, riser..."
+                        style={{
+                          width: "100%",
+                          padding: "4px 6px",
+                          fontSize: 11,
+                          background: "#f5f5f5",
+                          border: "1px solid #ccc",
+                          borderRadius: 3,
+                          textAlign: "right" as const,
+                        }}
+                        className="no-print"
+                      />
+                    </div>
                   )}
                 </div>
-
-                {/* Column 2: Item Name */}
-                <div style={styles.itemCol}>{item.name}</div>
-
-                {/* Column 3: Pack-Out Items */}
-                <div style={styles.packOutCol}>
-                  {viewMode === "packout" ? (
-                    <input
-                      type="text"
-                      placeholder="chafer, tongs, riser..."
-                      style={{
-                        width: "100%",
-                        padding: "4px 6px",
-                        fontSize: 11,
-                        background: "#f5f5f5",
-                        border: "1px solid #ccc",
-                        borderRadius: 3,
-                        textAlign: "right" as const,
-                      }}
-                      className="no-print"
-                    />
-                  ) : (
-                    <span>{item.packOutItems || ""}</span>
-                  )}
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         ))}
 
