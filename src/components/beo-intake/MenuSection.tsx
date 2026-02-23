@@ -2,6 +2,10 @@ import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { FIELD_IDS } from "../../services/airtable/events";
 import {
+  BEO_MENU_FIELDS,
+  SECTION_SERVICE_TYPES,
+} from "../../config/beoFieldIds";
+import {
   loadMenuItems,
   type LinkedRecordItem,
 } from "../../services/airtable/linkedRecords";
@@ -12,14 +16,15 @@ import { FormSection } from "./FormSection";
 // ============================================================
 // CATEGORY KEY → Airtable "Service Type" values
 // These are the EXACT strings from your Airtable single-select field.
-// \u2013 = EN DASH (–) which is what Airtable returns
+// Sourced from SECTION_SERVICE_TYPES in beoFieldIds.ts.
 // ============================================================
 const SERVICE_TYPE_MAP: Record<string, string[]> = {
-  passed:       ['Passed App'],
-  presented:    ['Room Temp Display'],
-  buffet_metal: ['Buffet \u2013 Hot', 'Buffet'],
-  buffet_china: ['Buffet'],
-  desserts:     ['Dessert'],
+  passed:       SECTION_SERVICE_TYPES.passedAppetizers,
+  presented:    SECTION_SERVICE_TYPES.presentedAppetizers,
+  buffet_metal: SECTION_SERVICE_TYPES.buffetMetal,
+  buffet_china: SECTION_SERVICE_TYPES.buffetChina,
+  desserts:     SECTION_SERVICE_TYPES.desserts,
+  beverages:    SECTION_SERVICE_TYPES.beverages,
 };
 
 type CategoryKey = keyof typeof SERVICE_TYPE_MAP;
@@ -41,6 +46,7 @@ type MenuSelections = {
   buffetMetal: string[];
   buffetChina: string[];
   desserts: string[];
+  beverages: string[];
 };
 
 type CustomFields = {
@@ -67,6 +73,7 @@ export const MenuSection = () => {
     buffetMetal: [],
     buffetChina: [],
     desserts: [],
+    beverages: [],
   });
   const [customFields, setCustomFields] = useState<CustomFields>({
     customPassedApp: "",
@@ -118,6 +125,7 @@ export const MenuSection = () => {
         buffetMetal: [],
         buffetChina: [],
         desserts: [],
+        beverages: [],
       });
       setCustomFields({
         customPassedApp: "",
@@ -135,6 +143,7 @@ export const MenuSection = () => {
       buffetMetal: asLinkedRecordIds(selectedEventData[FIELD_IDS.BUFFET_METAL]),
       buffetChina: asLinkedRecordIds(selectedEventData[FIELD_IDS.BUFFET_CHINA]),
       desserts: asLinkedRecordIds(selectedEventData[FIELD_IDS.DESSERTS]),
+      beverages: asLinkedRecordIds(selectedEventData[BEO_MENU_FIELDS.BEVERAGES]),
     });
 
     setCustomFields({
@@ -154,6 +163,7 @@ export const MenuSection = () => {
     buffetMetal: FIELD_IDS.BUFFET_METAL,
     buffetChina: FIELD_IDS.BUFFET_CHINA,
     desserts: FIELD_IDS.DESSERTS,
+    beverages: BEO_MENU_FIELDS.BEVERAGES,
   };
 
   const openPicker = (categoryKey: CategoryKey, fieldKey: keyof MenuSelections, title: string) => {
@@ -390,6 +400,22 @@ export const MenuSection = () => {
           <label style={labelStyle}>Custom Desserts (free text)</label>
           <textarea rows={2} value={customFields.customDessert} disabled={!canEdit} onChange={(e) => { setCustomFields((p) => ({ ...p, customDessert: e.target.value })); saveCustomField(FIELD_IDS.CUSTOM_DESSERTS, e.target.value); }} style={inputStyle} placeholder="Enter custom desserts..." />
         </div>
+      </div>
+
+      {/* Beverages */}
+      <div style={{ gridColumn: "1 / -1" }}>
+        <label style={labelStyle}>Beverages</label>
+        <div style={{ marginBottom: "8px" }}>
+          {selections.beverages.map((itemId) => (
+            <div key={itemId} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", backgroundColor: "#2a2a2a", border: "1px solid #ff6b6b", borderRadius: "6px", padding: "8px 12px", marginBottom: "6px" }}>
+              <span style={{ fontSize: "14px", color: "#e0e0e0" }}>{getItemName(itemId)}</span>
+              <button type="button" disabled={!canEdit} onClick={() => removeMenuItem("beverages", itemId)} style={{ background: "none", border: "none", color: "#ff6b6b", cursor: "pointer", fontSize: "16px", fontWeight: "bold" }}>✕</button>
+            </div>
+          ))}
+        </div>
+        <button type="button" disabled={!canEdit} onClick={() => openPicker("beverages", "beverages", "Select Beverages")} style={buttonStyle}>
+          + Add Beverage
+        </button>
       </div>
 
       {/* Picker Modal */}
