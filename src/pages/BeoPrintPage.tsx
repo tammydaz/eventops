@@ -1,47 +1,44 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { useEventStore } from "../state/eventStore";
-import { FIELD_IDS } from "../services/airtable/events";
-
-// ── Types ──
-type MenuLineItem = {
-  id: string;
-  name: string;
-  specQty?: string;
-  specVessel?: string;
-  packOutItems?: string;
-};
-
-type SectionData = {
-  title: string;
-  fieldId: string;
-  items: MenuLineItem[];
-};
+import { fetchBeoData, updateSpecOverrides } from "../services/airtable/beo";
+import { isErrorResult } from "../services/airtable/selectors";
+import { SECTION_ORDER, SECTION_LABELS } from "../config/beoFieldIds";
+import type { BeoData, BeoViewMode, MenuItem, SaveStatus, SpecOverrides } from "../types/beo";
 
 // ── Extract eventId from URL ──
 const getEventIdFromUrl = (): string | null => {
   const parts = window.location.pathname.split("/");
-  // /beo-print/:eventId
   const idx = parts.indexOf("beo-print");
-  if (idx !== -1 && parts[idx + 1]) {
-    return parts[idx + 1];
-  }
+  if (idx !== -1 && parts[idx + 1]) return parts[idx + 1];
   return null;
 };
 
-// ── Styles ──
+// ── Print styles ──
 const printStyles = `
   @media print {
     body { margin: 0; padding: 0; background: #fff; }
     .no-print { display: none !important; }
     .print-page { break-after: page; }
+    .spec-override-col { display: none !important; }
   }
   @page { margin: 0.5in; }
 `;
 
+// ── Section border colors ──
+const SECTION_COLORS: Record<string, string> = {
+  passedAppetizers: "#22c55e",
+  presentedAppetizers: "#22c55e",
+  buffetMetal: "#f97316",
+  buffetChina: "#3b82f6",
+  desserts: "#f97316",
+  beverages: "#8b5cf6",
+};
+
+// ── Styles ──
 const styles: Record<string, React.CSSProperties> = {
   page: {
     fontFamily: "'Segoe UI', Arial, sans-serif",
-    maxWidth: 900,
+    maxWidth: 960,
     margin: "0 auto",
     padding: "24px 32px",
     background: "#fff",
@@ -56,12 +53,7 @@ const styles: Record<string, React.CSSProperties> = {
   },
   headerLeft: { flex: 1 },
   headerRight: { flex: 1, textAlign: "right" as const },
-  headerRow: {
-    display: "flex",
-    gap: 8,
-    marginBottom: 4,
-    fontSize: 13,
-  },
+  headerRow: { display: "flex", gap: 8, marginBottom: 4, fontSize: 13 },
   headerRowRight: {
     display: "flex",
     gap: 8,
@@ -71,6 +63,15 @@ const styles: Record<string, React.CSSProperties> = {
   },
   headerLabel: { fontWeight: 700, minWidth: 100 },
   headerValue: { fontWeight: 400 },
+  beoTitle: {
+    textAlign: "center" as const,
+    fontSize: 16,
+    fontWeight: 700,
+    letterSpacing: 2,
+    padding: "8px 0",
+    background: "#f0f0f0",
+    marginBottom: 8,
+  },
   allergyBanner: {
     background: "#ff0000",
     color: "#fff",
@@ -82,7 +83,7 @@ const styles: Record<string, React.CSSProperties> = {
     letterSpacing: 1,
   },
   serviceStyleBanner: {
-    background: "#000",
+    background: "#f97316",
     color: "#fff",
     padding: "6px 16px",
     fontSize: 14,
@@ -90,19 +91,11 @@ const styles: Record<string, React.CSSProperties> = {
     textAlign: "center" as const,
     marginBottom: 8,
     letterSpacing: 1,
-    border: "2px solid #000",
-  },
-  noKitchenBanner: {
-    background: "#ff6600",
-    color: "#fff",
-    padding: "8px 16px",
-    fontSize: 14,
-    fontWeight: 700,
-    textAlign: "center" as const,
-    marginBottom: 8,
-    letterSpacing: 1,
   },
   sectionHeader: {
+    display: "flex",
+    alignItems: "center",
+    gap: 10,
     background: "#1a1a1a",
     color: "#fff",
     padding: "8px 16px",
@@ -112,47 +105,62 @@ const styles: Record<string, React.CSSProperties> = {
     marginTop: 16,
     marginBottom: 0,
   },
-  lineItem: {
+  sectionEmpty: {
+    padding: "10px 16px",
+    fontSize: 13,
+    color: "#999",
+    fontStyle: "italic" as const,
+    borderBottom: "1px solid #eee",
+  },
+  lineItemGrid: {
     display: "grid",
-    gridTemplateColumns: "140px 1fr 200px",
-    padding: "8px 16px",
+    gridTemplateColumns: "160px 1fr 200px",
+    padding: "7px 16px",
     borderBottom: "1px solid #ddd",
     fontSize: 13,
     alignItems: "center" as const,
+    gap: 8,
   },
-  specCol: { fontWeight: 700, color: "#333" },
+  childLineItemGrid: {
+    display: "grid",
+    gridTemplateColumns: "160px 1fr 200px",
+    padding: "5px 16px 5px 32px",
+    borderBottom: "1px solid #f0f0f0",
+    fontSize: 12,
+    alignItems: "center" as const,
+    gap: 8,
+    background: "#fafafa",
+  },
+  specCol: { fontWeight: 700, color: "#333", fontSize: 12 },
   itemCol: { fontWeight: 500 },
-  packOutCol: { fontSize: 11, color: "#666", textAlign: "right" as const },
+  overrideCol: { fontSize: 11 },
+  allergenChip: {
+    display: "inline-block",
+    marginLeft: 4,
+    fontSize: 12,
+  },
+  noteRow: {
+    padding: "2px 16px 6px 176px",
+    fontSize: 11,
+    color: "#555",
+    borderBottom: "1px solid #ddd",
+    fontStyle: "italic" as const,
+  },
   footer: {
     borderTop: "3px solid #000",
     marginTop: 24,
-    paddingTop: 8,
-  },
-  footerAllergyRepeat: {
-    background: "#ff0000",
-    color: "#fff",
-    padding: "4px 12px",
-    fontSize: 11,
-    fontWeight: 700,
-    textAlign: "center" as const,
-    marginBottom: 4,
-  },
-  footerServiceStyle: {
-    background: "#000",
-    color: "#fff",
-    padding: "4px 12px",
-    fontSize: 11,
-    fontWeight: 700,
-    textAlign: "center" as const,
-    marginBottom: 4,
+    paddingTop: 4,
   },
   footerStrip: {
+    background: "#e5e7eb",
+    border: "1px solid #000",
+    padding: "6px 16px",
+    fontSize: 11,
+    fontWeight: 600,
     display: "flex",
     justifyContent: "center",
-    gap: 24,
-    fontSize: 12,
-    fontWeight: 600,
-    padding: "6px 0",
+    gap: 16,
+    flexWrap: "wrap" as const,
   },
   toolbar: {
     display: "flex",
@@ -160,6 +168,7 @@ const styles: Record<string, React.CSSProperties> = {
     padding: "16px 32px",
     background: "#111",
     justifyContent: "center",
+    flexWrap: "wrap" as const,
   },
   toolbarBtn: {
     padding: "10px 24px",
@@ -172,6 +181,9 @@ const styles: Record<string, React.CSSProperties> = {
   },
   activeBtn: { background: "#ff6b6b" },
   inactiveBtn: { background: "#333" },
+  saveBtn: { background: "#22c55e" },
+  lockBtn: { background: "#f97316" },
+  backBtn: { background: "#555" },
   loading: {
     display: "flex",
     justifyContent: "center",
@@ -181,250 +193,286 @@ const styles: Record<string, React.CSSProperties> = {
     color: "#999",
     fontFamily: "'Segoe UI', Arial, sans-serif",
   },
+  overrideInput: {
+    width: "100%",
+    padding: "3px 6px",
+    fontSize: 12,
+    background: "#f5f5f5",
+    border: "1px solid #ccc",
+    borderRadius: 3,
+    boxSizing: "border-box" as const,
+  },
+  saveStatus: {
+    padding: "4px 16px",
+    fontSize: 11,
+    textAlign: "center" as const,
+    color: "#666",
+  },
 };
 
-// ── View Modes ──
-type ViewMode = "kitchen" | "spec" | "packout";
+// ── Spec display helper ──
+function getDisplaySpec(item: MenuItem): string {
+  if (item.specOverride?.qty) return item.specOverride.qty;
+  return item.autoSpec || "\u2014";
+}
+
+// ── SpecOverrideInput component ──
+type SpecOverrideInputProps = {
+  menuItemId: string;
+  currentOverrides?: SpecOverrides;
+  onSave: (itemId: string, overrides: SpecOverrides) => void;
+  locked: boolean;
+};
+
+const SpecOverrideInput: React.FC<SpecOverrideInputProps> = ({
+  menuItemId,
+  currentOverrides,
+  onSave,
+  locked,
+}) => {
+  const [localQty, setLocalQty] = useState(currentOverrides?.qty ?? "");
+
+  useEffect(() => {
+    setLocalQty(currentOverrides?.qty ?? "");
+  }, [currentOverrides?.qty]);
+
+  const handleBlur = () => {
+    onSave(menuItemId, { ...currentOverrides, qty: localQty || undefined });
+  };
+
+  return (
+    <input
+      type="text"
+      className="no-print"
+      placeholder="override qty…"
+      value={localQty}
+      disabled={locked}
+      onChange={(e) => setLocalQty(e.target.value)}
+      onBlur={handleBlur}
+      style={styles.overrideInput}
+    />
+  );
+};
+
+// ── MenuItem row renderer ──
+type MenuItemRowProps = {
+  item: MenuItem;
+  viewMode: BeoViewMode;
+  overrides: Record<string, SpecOverrides>;
+  onSaveOverride: (itemId: string, overrides: SpecOverrides) => void;
+  locked: boolean;
+  isChild?: boolean;
+};
+
+const MenuItemRow: React.FC<MenuItemRowProps> = ({
+  item,
+  viewMode,
+  overrides,
+  onSaveOverride,
+  locked,
+  isChild = false,
+}) => {
+  const rowStyle = isChild ? styles.childLineItemGrid : styles.lineItemGrid;
+  const combinedOverrides = overrides[item.id] ?? item.specOverride;
+  const displaySpec = getDisplaySpec({ ...item, specOverride: combinedOverrides });
+
+  const nameWithPrefix = isChild ? `– ${item.name}` : item.name;
+
+  return (
+    <>
+      <div style={rowStyle}>
+        {/* Column 1: Spec */}
+        <div style={styles.specCol}>
+          {viewMode === "packout" ? null : <span>{displaySpec}</span>}
+        </div>
+
+        {/* Column 2: Item Name + Allergens */}
+        <div style={styles.itemCol}>
+          <span>{nameWithPrefix}</span>
+          {item.allergens.map((icon, i) => (
+            <span key={i} style={styles.allergenChip}>{icon}</span>
+          ))}
+        </div>
+
+        {/* Column 3: Override (spec view only) or Pack-Out (packout view) */}
+        <div style={{ ...styles.overrideCol, ...(viewMode === "spec" ? {} : { display: "none" }) }} className="spec-override-col">
+          {viewMode === "spec" && (
+            <SpecOverrideInput
+              menuItemId={item.id}
+              currentOverrides={combinedOverrides}
+              onSave={onSaveOverride}
+              locked={locked}
+            />
+          )}
+        </div>
+      </div>
+      {/* Notes row */}
+      {item.notes && (
+        <div style={styles.noteRow}>📝 {item.notes}</div>
+      )}
+    </>
+  );
+};
+
+// ── Main Component ────────────────────────────────────────────────────────────
 
 const BeoPrintPage: React.FC = () => {
-  const {
-    selectedEventId,
-    selectEvent,
-    eventData,
-    loadEventData,
-  } = useEventStore();
-  const [viewMode, setViewMode] = useState<ViewMode>("kitchen");
+  const { selectedEventId, selectEvent, loadEventData } = useEventStore();
+  const [viewMode, setViewMode] = useState<BeoViewMode>("kitchen");
+  const [locked, setLocked] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [menuNames, setMenuNames] = useState<Record<string, string>>({});
+  const [beoData, setBeoData] = useState<BeoData | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [overrides, setOverrides] = useState<Record<string, SpecOverrides>>({});
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
 
-  // ── Step 1: Grab event ID from URL and select it ──
+  // Load event data
   useEffect(() => {
     const urlEventId = getEventIdFromUrl();
+    const load = async (id: string) => {
+      setLoading(true);
+      setError(null);
+      try {
+        const data = await fetchBeoData(id);
+        if (isErrorResult(data)) {
+          setError(data.message ?? "Failed to load BEO data.");
+        } else {
+          setBeoData(data);
+        }
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Unknown error");
+      } finally {
+        setLoading(false);
+      }
+    };
+
     if (urlEventId && urlEventId !== selectedEventId) {
-      selectEvent(urlEventId).then(() => setLoading(false));
+      selectEvent(urlEventId).then(() => load(urlEventId));
     } else if (selectedEventId) {
-      loadEventData().then(() => setLoading(false));
+      loadEventData().then(() => load(selectedEventId));
     } else {
       setLoading(false);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ── Step 2: Resolve linked record IDs to names ──
-  useEffect(() => {
-    const menuFieldIds = [
-      FIELD_IDS.PASSED_APPETIZERS,
-      FIELD_IDS.PRESENTED_APPETIZERS,
-      FIELD_IDS.BUFFET_METAL,
-      FIELD_IDS.BUFFET_CHINA,
-      FIELD_IDS.DESSERTS,
-    ];
-
-    const allRecordIds: string[] = [];
-    menuFieldIds.forEach((fid) => {
-      const val = eventData[fid];
-      if (Array.isArray(val)) {
-        val.forEach((id: string) => {
-          if (typeof id === "string" && id.startsWith("rec") && !menuNames[id]) {
-            allRecordIds.push(id);
-          }
-        });
-      }
-    });
-
-    if (allRecordIds.length === 0) return;
-
-    // Fetch each record's name from the Menu Items table
-    const MENU_TABLE = "tbl0aN33DGG6R1sPZ";
-    const NAME_FIELD = "fldQ83gpgOmMxNMQw"; // Description Name/Formula
-    const apiKey = (import.meta.env.VITE_AIRTABLE_API_KEY as string)?.trim() || "";
-    const baseId = (import.meta.env.VITE_AIRTABLE_BASE_ID as string)?.trim() || "";
-
-    const fetchNames = async () => {
-      const newNames: Record<string, string> = { ...menuNames };
-
-      // Airtable allows fetching by formula OR individual gets
-      // We'll batch with filterByFormula using OR(RECORD_ID()=...)
-      const chunks: string[][] = [];
-      for (let i = 0; i < allRecordIds.length; i += 10) {
-        chunks.push(allRecordIds.slice(i, i + 10));
-      }
-
-      for (const chunk of chunks) {
-        const formula = `OR(${chunk.map((id) => `RECORD_ID()='${id}'`).join(",")})`;
-        const params = new URLSearchParams();
-        params.set("filterByFormula", formula);
-        params.set("returnFieldsByFieldId", "true");
-        params.append("fields[]", NAME_FIELD);
-
-        try {
-          const res = await fetch(
-            `https://api.airtable.com/v0/${baseId}/${MENU_TABLE}?${params.toString()}`,
-            { headers: { Authorization: `Bearer ${apiKey}` } }
-          );
-          const data = await res.json();
-          if (data.records) {
-            data.records.forEach((rec: { id: string; fields: Record<string, unknown> }) => {
-              const name = rec.fields[NAME_FIELD];
-              newNames[rec.id] = typeof name === "string" ? name : rec.id;
-            });
-          }
-        } catch (e) {
-          console.error("Failed to resolve menu item names:", e);
-        }
-      }
-
-      setMenuNames(newNames);
-    };
-
-    fetchNames();
-  }, [eventData]);
-
-  // ── Extract event fields ──
-  const f = (id: string): string => {
-    const val = eventData[id];
-    if (val === null || val === undefined) return "";
-    if (typeof val === "string") return val;
-    if (typeof val === "number") return String(val);
-    return String(val);
-  };
-
-  const clientName =
-    (f(FIELD_IDS.CLIENT_FIRST_NAME) + " " + f(FIELD_IDS.CLIENT_LAST_NAME)).trim();
-  const phone = f(FIELD_IDS.CLIENT_PHONE);
-  const venue = f(FIELD_IDS.VENUE_NAME) || f(FIELD_IDS.VENUE);
-  const venueAddress = f(FIELD_IDS.VENUE_ADDRESS);
-  const eventDate = f(FIELD_IDS.EVENT_DATE);
-  const guestCount = f(FIELD_IDS.GUEST_COUNT);
-  const dispatchTime = f(FIELD_IDS.DISPATCH_TIME);
-  const serviceStyle = f(FIELD_IDS.SERVICE_STYLE);
-  const allergies = f(FIELD_IDS.DIETARY_NOTES);
-  const jobNumber = clientName + " \u2013 " + eventDate;
-
-  // Service style banner: only show if NOT buffet / full service
-  const styleLower = serviceStyle.toLowerCase();
-  const isBuffetStyle =
-    styleLower.includes("buffet") || styleLower.includes("full service");
-  const showServiceStyleBanner = serviceStyle && !isBuffetStyle;
-
-  // No kitchen available (wire to real field when ready)
-  const noKitchenAvailable = false; // TODO: wire to actual field
-
-  // ── Parse linked menu items ──
-  const parseMenuItems = (fieldId: string): MenuLineItem[] => {
-    const raw = eventData[fieldId];
-    if (!raw || !Array.isArray(raw)) return [];
-
-    return raw.map((item: unknown) => {
-      if (typeof item === "string") {
-        // It's a record ID — resolve from menuNames
-        return {
-          id: item,
-          name: menuNames[item] || "Loading...",
-        };
-      }
-      if (item && typeof item === "object" && "id" in item) {
-        const obj = item as { id: string; name?: string };
-        return {
-          id: obj.id,
-          name: obj.name || menuNames[obj.id] || "Loading...",
-        };
-      }
-      return { id: String(item), name: String(item) };
-    });
-  };
-
-  // ── Menu Sections (Sacred Order) ──
-  const menuSections: SectionData[] = [
-    {
-      title: "PASSED APPETIZERS",
-      fieldId: FIELD_IDS.PASSED_APPETIZERS,
-      items: parseMenuItems(FIELD_IDS.PASSED_APPETIZERS),
+  // Save a single override to Airtable
+  const handleSaveOverride = useCallback(
+    async (itemId: string, newOverrides: SpecOverrides) => {
+      setOverrides((prev) => ({ ...prev, [itemId]: newOverrides }));
+      setSaveStatus("saving");
+      const result = await updateSpecOverrides(itemId, newOverrides);
+      setSaveStatus(isErrorResult(result) ? "error" : "saved");
+      setTimeout(() => setSaveStatus("idle"), 2000);
     },
-    {
-      title: "PRESENTED APPETIZERS",
-      fieldId: FIELD_IDS.PRESENTED_APPETIZERS,
-      items: parseMenuItems(FIELD_IDS.PRESENTED_APPETIZERS),
-    },
-    {
-      title: "BUFFET \u2013 METAL",
-      fieldId: FIELD_IDS.BUFFET_METAL,
-      items: parseMenuItems(FIELD_IDS.BUFFET_METAL),
-    },
-    {
-      title: "BUFFET \u2013 CHINA",
-      fieldId: FIELD_IDS.BUFFET_CHINA,
-      items: parseMenuItems(FIELD_IDS.BUFFET_CHINA),
-    },
-    {
-      title: "DESSERTS",
-      fieldId: FIELD_IDS.DESSERTS,
-      items: parseMenuItems(FIELD_IDS.DESSERTS),
-    },
-  ];
+    []
+  );
 
-  // Collapse empty sections
-  const activeSections = menuSections.filter((s) => s.items.length > 0);
-
-  // ── Loading State ──
-  if (loading) {
-    return <div style={styles.loading}>Loading event data...</div>;
-  }
-
-  if (!selectedEventId) {
-    return (
-      <div style={styles.loading}>
-        No event selected. Go to the dashboard and click Print/View BEO.
-      </div>
+  // Save all pending overrides
+  const handleSaveAll = useCallback(async () => {
+    if (!Object.keys(overrides).length) {
+      setSaveStatus("saved");
+      setTimeout(() => setSaveStatus("idle"), 1500);
+      return;
+    }
+    setSaveStatus("saving");
+    const results = await Promise.all(
+      Object.entries(overrides).map(([id, ov]) => updateSpecOverrides(id, ov))
     );
-  }
+    const hasError = results.some(isErrorResult);
+    setSaveStatus(hasError ? "error" : "saved");
+    setTimeout(() => setSaveStatus("idle"), 2000);
+  }, [overrides]);
 
-  // ── Render ──
-  return (
-    <>
-      <style>{printStyles}</style>
+  // Lock specs → save + switch to kitchen (print) mode
+  const handleLockSpecs = useCallback(async () => {
+    await handleSaveAll();
+    setLocked(true);
+    setViewMode("kitchen");
+  }, [handleSaveAll]);
 
-      {/* ── Toolbar (doesn't print) ── */}
-      <div className="no-print" style={styles.toolbar}>
+  if (loading) return <div style={styles.loading}>Loading BEO data…</div>;
+
+  if (error) {
+    return (
+      <div style={{ ...styles.loading, flexDirection: "column", gap: 12 }}>
+        <div style={{ color: "#ff4444" }}>{error}</div>
         <button
-          style={{
-            ...styles.toolbarBtn,
-            ...(viewMode === "kitchen" ? styles.activeBtn : styles.inactiveBtn),
-          }}
-          onClick={() => setViewMode("kitchen")}
-        >
-          🍳 Kitchen BEO
-        </button>
-        <button
-          style={{
-            ...styles.toolbarBtn,
-            ...(viewMode === "spec" ? styles.activeBtn : styles.inactiveBtn),
-          }}
-          onClick={() => setViewMode("spec")}
-        >
-          📐 Spec View
-        </button>
-        <button
-          style={{
-            ...styles.toolbarBtn,
-            ...(viewMode === "packout" ? styles.activeBtn : styles.inactiveBtn),
-          }}
-          onClick={() => setViewMode("packout")}
-        >
-          📦 Pack-Out View
-        </button>
-        <button
-          style={{ ...styles.toolbarBtn, background: "#2d8cf0" }}
-          onClick={() => window.print()}
-        >
-          🖨️ Print
-        </button>
-        <button
-          style={{ ...styles.toolbarBtn, background: "#555" }}
+          style={{ ...styles.toolbarBtn, ...styles.backBtn }}
           onClick={() => window.history.back()}
         >
           ← Back
         </button>
       </div>
+    );
+  }
+
+  if (!selectedEventId || !beoData) {
+    return (
+      <div style={styles.loading}>
+        No event selected. Go to the dashboard and click Print / View BEO.
+      </div>
+    );
+  }
+
+  const { event, menuSections } = beoData;
+
+  // ── Derived display values ──
+  const clientName = event.clientDisplay || "\u2014";
+  const jobNumber = event.jobNumber || `${clientName} \u2013 ${event.eventDate}`;
+  const styleLower = event.serviceStyle.toLowerCase();
+  const isBuffetStyle = styleLower.includes("buffet") || styleLower.includes("full service");
+  const showServiceStyleBanner = event.serviceStyle && !isBuffetStyle;
+
+  const saveStatusLabel: Record<SaveStatus, string> = {
+    idle: "",
+    saving: "Saving…",
+    saved: "✅ Saved",
+    error: "❌ Save failed",
+  };
+
+  return (
+    <>
+      <style>{printStyles}</style>
+
+      {/* ── Toolbar (no-print) ── */}
+      <div className="no-print" style={styles.toolbar}>
+        <button
+          style={{ ...styles.toolbarBtn, ...(viewMode === "kitchen" ? styles.activeBtn : styles.inactiveBtn) }}
+          onClick={() => setViewMode("kitchen")}
+        >
+          🍳 Kitchen BEO
+        </button>
+        <button
+          style={{ ...styles.toolbarBtn, ...(viewMode === "spec" ? styles.activeBtn : styles.inactiveBtn) }}
+          onClick={() => { if (!locked) setViewMode("spec"); }}
+          disabled={locked}
+        >
+          📐 Spec View
+        </button>
+        <button
+          style={{ ...styles.toolbarBtn, ...(viewMode === "packout" ? styles.activeBtn : styles.inactiveBtn) }}
+          onClick={() => setViewMode("packout")}
+        >
+          📦 Pack-Out View
+        </button>
+        <button style={{ ...styles.toolbarBtn, ...styles.saveBtn }} onClick={handleSaveAll} disabled={locked}>
+          💾 Save Progress
+        </button>
+        <button style={{ ...styles.toolbarBtn, ...styles.lockBtn }} onClick={handleLockSpecs} disabled={locked}>
+          🔒 Lock Specs
+        </button>
+        <button style={{ ...styles.toolbarBtn, background: "#2d8cf0" }} onClick={() => window.print()}>
+          🖨️ Print
+        </button>
+        <button style={{ ...styles.toolbarBtn, ...styles.backBtn }} onClick={() => window.history.back()}>
+          ← Back
+        </button>
+      </div>
+
+      {saveStatus !== "idle" && (
+        <div className="no-print" style={styles.saveStatus}>{saveStatusLabel[saveStatus]}</div>
+      )}
 
       {/* ── Print Page ── */}
       <div style={styles.page}>
@@ -432,147 +480,129 @@ const BeoPrintPage: React.FC = () => {
         <div style={styles.header}>
           <div style={styles.headerLeft}>
             <div style={styles.headerRow}>
+              <span style={styles.headerLabel}>DATE:</span>
+              <span style={styles.headerValue}>{event.eventDate || "\u2014"}</span>
+            </div>
+            <div style={styles.headerRow}>
               <span style={styles.headerLabel}>CLIENT:</span>
-              <span style={styles.headerValue}>{clientName || "\u2014"}</span>
+              <span style={styles.headerValue}>{clientName}</span>
             </div>
             <div style={styles.headerRow}>
               <span style={styles.headerLabel}>PHONE:</span>
-              <span style={styles.headerValue}>{phone || "\u2014"}</span>
+              <span style={styles.headerValue}>{event.clientPhone || "\u2014"}</span>
             </div>
             <div style={styles.headerRow}>
               <span style={styles.headerLabel}>VENUE:</span>
               <span style={styles.headerValue}>
-                {venue || "\u2014"}
-                {venueAddress ? `, ${venueAddress}` : ""}
+                {event.venueName || "\u2014"}
+                {event.eventLocation ? `, ${event.eventLocation}` : ""}
               </span>
             </div>
           </div>
           <div style={styles.headerRight}>
             <div style={styles.headerRowRight}>
-              <span style={styles.headerLabel}>DATE:</span>
-              <span style={styles.headerValue}>{eventDate || "\u2014"}</span>
+              <span style={styles.headerLabel}>GUESTS:</span>
+              <span style={styles.headerValue}>{event.guestCount || "\u2014"}</span>
             </div>
             <div style={styles.headerRowRight}>
-              <span style={styles.headerLabel}>GUEST COUNT:</span>
-              <span style={styles.headerValue}>{guestCount || "\u2014"}</span>
+              <span style={styles.headerLabel}>START:</span>
+              <span style={styles.headerValue}>{event.eventStartTime || "\u2014"}</span>
             </div>
             <div style={styles.headerRowRight}>
-              <span style={styles.headerLabel}>DISPATCH:</span>
-              <span style={styles.headerValue}>{dispatchTime || "\u2014"}</span>
+              <span style={styles.headerLabel}>END:</span>
+              <span style={styles.headerValue}>{event.eventEndTime || "\u2014"}</span>
             </div>
             <div style={styles.headerRowRight}>
-              <span style={styles.headerLabel}>JOB #:</span>
-              <span style={styles.headerValue}>{jobNumber}</span>
+              <span style={styles.headerLabel}>ARRIVAL:</span>
+              <span style={styles.headerValue}>{event.eventArrivalTime || "\u2014"}</span>
             </div>
           </div>
         </div>
 
+        {/* ── BEO Title ── */}
+        <div style={styles.beoTitle}>BANQUET EVENT ORDER</div>
+
+        {/* ── Dispatch + Job # ── */}
+        <div style={{ textAlign: "center", fontWeight: 700, fontSize: 18, marginBottom: 8 }}>
+          {event.dispatchTime ? `DISPATCH: ${event.dispatchTime}` : ""}{" "}
+          {event.dispatchTime && jobNumber ? " | " : ""}
+          {jobNumber ? `JOB #: ${jobNumber}` : ""}
+        </div>
+
         {/* ── Allergy Banner ── */}
-        {allergies && (
+        {event.dietaryNotes && (
           <div style={styles.allergyBanner}>
-            ⚠️ ALLERGY ALERT: {allergies.toUpperCase()}
+            ⚠️ ALLERGY ALERT: {event.dietaryNotes.toUpperCase()}
           </div>
         )}
 
-        {/* ── Service Style Banner (only if NOT buffet) ── */}
+        {/* ── Service Style Banner ── */}
         {showServiceStyleBanner && (
           <div style={styles.serviceStyleBanner}>
-            SERVICE STYLE: {serviceStyle.toUpperCase()}
+            SERVICE STYLE: {event.serviceStyle.toUpperCase()}
           </div>
         )}
 
-        {/* ── No Kitchen Banner ── */}
-        {noKitchenAvailable && (
-          <div style={styles.noKitchenBanner}>
-            🔥 NO KITCHEN AVAILABLE — ALL FOOD MUST GO HOT
-          </div>
-        )}
+        {/* ── Menu Sections (Sacred Order) ── */}
+        {SECTION_ORDER.map((sectionKey) => {
+          const items: MenuItem[] = menuSections[sectionKey];
+          const label = SECTION_LABELS[sectionKey];
+          const borderColor = SECTION_COLORS[sectionKey] ?? "#999";
 
-        {/* ── Menu Sections ── */}
-        {activeSections.length === 0 && (
-          <div style={{ padding: 32, textAlign: "center", color: "#999", fontSize: 16 }}>
-            No menu items assigned to this event yet.
-          </div>
-        )}
-
-        {activeSections.map((section) => (
-          <div key={section.fieldId}>
-            <div style={styles.sectionHeader}>{section.title}</div>
-            {section.items.map((item, idx) => (
-              <div key={item.id + idx} style={styles.lineItem}>
-                {/* Column 1: Specs */}
-                <div style={styles.specCol}>
-                  {viewMode === "spec" ? (
-                    <input
-                      type="text"
-                      placeholder="qty / pan / vessel"
-                      style={{
-                        width: "100%",
-                        padding: "4px 6px",
-                        fontSize: 12,
-                        background: "#f5f5f5",
-                        border: "1px solid #ccc",
-                        borderRadius: 3,
-                      }}
-                      className="no-print"
-                    />
-                  ) : (
-                    <span>{item.specQty || "\u2014"}</span>
-                  )}
-                </div>
-
-                {/* Column 2: Item Name */}
-                <div style={styles.itemCol}>{item.name}</div>
-
-                {/* Column 3: Pack-Out Items */}
-                <div style={styles.packOutCol}>
-                  {viewMode === "packout" ? (
-                    <input
-                      type="text"
-                      placeholder="chafer, tongs, riser..."
-                      style={{
-                        width: "100%",
-                        padding: "4px 6px",
-                        fontSize: 11,
-                        background: "#f5f5f5",
-                        border: "1px solid #ccc",
-                        borderRadius: 3,
-                        textAlign: "right" as const,
-                      }}
-                      className="no-print"
-                    />
-                  ) : (
-                    <span>{item.packOutItems || ""}</span>
-                  )}
-                </div>
+          return (
+            <div key={sectionKey} style={{ borderLeft: `4px solid ${borderColor}`, marginBottom: 0 }}>
+              <div style={styles.sectionHeader}>
+                <span style={{ width: 12, height: 12, borderRadius: "50%", background: borderColor, display: "inline-block", flexShrink: 0 }} />
+                {label}
               </div>
-            ))}
-          </div>
-        ))}
-
-        {/* ── KITCHEN STOPS HERE ── */}
+              {items.length === 0 ? (
+                <div style={styles.sectionEmpty}>No {label.toLowerCase()} items</div>
+              ) : (
+                items.map((item) => (
+                  <React.Fragment key={item.id}>
+                    <MenuItemRow
+                      item={item}
+                      viewMode={viewMode}
+                      overrides={overrides}
+                      onSaveOverride={handleSaveOverride}
+                      locked={locked}
+                    />
+                    {item.children.map((child) => (
+                      <MenuItemRow
+                        key={child.id}
+                        item={child}
+                        viewMode={viewMode}
+                        overrides={overrides}
+                        onSaveOverride={handleSaveOverride}
+                        locked={locked}
+                        isChild
+                      />
+                    ))}
+                    {/* Blank line after each parent-child block */}
+                    <div style={{ height: 4 }} />
+                  </React.Fragment>
+                ))
+              )}
+            </div>
+          );
+        })}
 
         {/* ── Footer ── */}
         <div style={styles.footer}>
-          {allergies && (
-            <div style={styles.footerAllergyRepeat}>
-              ⚠️ {allergies.toUpperCase()}
-            </div>
-          )}
-          {showServiceStyleBanner && (
-            <div style={styles.footerServiceStyle}>
-              {serviceStyle.toUpperCase()}
+          {event.dietaryNotes && (
+            <div style={{ ...styles.allergyBanner, fontSize: 11, padding: "4px 12px", marginBottom: 4 }}>
+              ⚠️ {event.dietaryNotes.toUpperCase()}
             </div>
           )}
           <div style={styles.footerStrip}>
             <span>CLIENT: {clientName}</span>
-            <span>•</span>
-            <span>VENUE: {venue}{venueAddress ? `, ${venueAddress}` : ""}</span>
-            <span>•</span>
-            <span>DISPATCH: {dispatchTime || "\u2014"}</span>
-            <span>•</span>
-            <span>GUESTS: {guestCount}</span>
-            <span>•</span>
+            <span>|</span>
+            <span>VENUE: {event.venueName}{event.eventLocation ? `, ${event.eventLocation}` : ""}</span>
+            <span>|</span>
+            <span>DISPATCH: {event.dispatchTime || "\u2014"}</span>
+            <span>|</span>
+            <span>GUESTS: {event.guestCount || "\u2014"}</span>
+            <span>|</span>
             <span>JOB #: {jobNumber}</span>
           </div>
         </div>
