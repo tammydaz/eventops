@@ -13,14 +13,25 @@ export const ServicewareSection = () => {
       setDetails({ serviceWare: "", serviceWareSource: "", chinaPaperGlassware: "" });
       return;
     }
-    setDetails({
+    
+    const newDetails = {
       serviceWare: asString(selectedEventData[FIELD_IDS.SERVICE_WARE]),
       serviceWareSource: asString(selectedEventData[FIELD_IDS.SERVICE_WARE_SOURCE]),
       chinaPaperGlassware: asString(selectedEventData[FIELD_IDS.CHINA_PAPER_GLASSWARE]),
+    };
+    
+    // Only update if the values are actually different to prevent cursor jumping
+    setDetails(prev => {
+      if (prev.serviceWare === newDetails.serviceWare &&
+          prev.serviceWareSource === newDetails.serviceWareSource &&
+          prev.chinaPaperGlassware === newDetails.chinaPaperGlassware) {
+        return prev;
+      }
+      return newDetails;
     });
   }, [selectedEventId, selectedEventData]);
 
-  const handleFieldChange = async (fieldId: string, value: unknown) => {
+  const handleBlur = async (fieldId: string, value: unknown) => {
     if (!selectedEventId) return;
     await setFields(selectedEventId, { [fieldId]: value });
   };
@@ -46,18 +57,42 @@ export const ServicewareSection = () => {
   };
 
   return (
-    <FormSection title="Serviceware (Optional)" icon="🍴">
+    <FormSection title="Serviceware" icon="🍴">
       <div style={{ gridColumn: "1 / -1" }}>
         <label style={labelStyle}>Serviceware</label>
-        <textarea rows={3} value={details.serviceWare} disabled={!canEdit} onChange={(e) => { setDetails(p => ({ ...p, serviceWare: e.target.value })); handleFieldChange(FIELD_IDS.SERVICE_WARE, e.target.value); }} style={{ ...inputStyle, resize: "vertical", fontFamily: "inherit" }} placeholder="Describe serviceware needs..." />
+        <textarea 
+          rows={3} 
+          value={details.serviceWare} 
+          disabled={!canEdit} 
+          onChange={(e) => setDetails(p => ({ ...p, serviceWare: e.target.value }))} 
+          onBlur={(e) => handleBlur(FIELD_IDS.SERVICE_WARE, e.target.value)}
+          style={{ ...inputStyle, resize: "vertical", fontFamily: "inherit" }} 
+          placeholder="Describe serviceware needs..." 
+        />
       </div>
       <div>
         <label style={labelStyle}>Serviceware Source</label>
-        <input type="text" value={details.serviceWareSource} disabled={!canEdit} onChange={(e) => { setDetails(p => ({ ...p, serviceWareSource: e.target.value })); handleFieldChange(FIELD_IDS.SERVICE_WARE_SOURCE, e.target.value); }} style={inputStyle} placeholder="FoodWerx, Client, Rental" />
+        <input 
+          type="text" 
+          value={details.serviceWareSource} 
+          disabled={!canEdit} 
+          onChange={(e) => setDetails(p => ({ ...p, serviceWareSource: e.target.value }))} 
+          onBlur={(e) => handleBlur(FIELD_IDS.SERVICE_WARE_SOURCE, e.target.value)}
+          style={inputStyle} 
+          placeholder="FoodWerx, Client, Rental" 
+        />
       </div>
       <div style={{ gridColumn: "1 / -1" }}>
         <label style={labelStyle}>China / Paper / Glassware</label>
-        <textarea rows={3} value={details.chinaPaperGlassware} disabled={!canEdit} onChange={(e) => { setDetails(p => ({ ...p, chinaPaperGlassware: e.target.value })); handleFieldChange(FIELD_IDS.CHINA_PAPER_GLASSWARE, e.target.value); }} style={{ ...inputStyle, resize: "vertical", fontFamily: "inherit" }} placeholder="Details about plates, cups, glassware..." />
+        <textarea 
+          rows={3} 
+          value={details.chinaPaperGlassware} 
+          disabled={!canEdit} 
+          onChange={(e) => setDetails(p => ({ ...p, chinaPaperGlassware: e.target.value }))} 
+          onBlur={(e) => handleBlur(FIELD_IDS.CHINA_PAPER_GLASSWARE, e.target.value)}
+          style={{ ...inputStyle, resize: "vertical", fontFamily: "inherit" }} 
+          placeholder="Details about plates, cups, glassware..." 
+        />
       </div>
     </FormSection>
   );

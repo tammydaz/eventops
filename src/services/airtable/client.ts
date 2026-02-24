@@ -43,6 +43,12 @@ const getHeaders = (apiKey: string) => {
 export const getEventsTable = (): string | AirtableErrorResult =>
   getEnvValue(AIRTABLE_EVENTS_TABLE, "VITE_AIRTABLE_EVENTS_TABLE");
 
+export const getBaseId = (): string | AirtableErrorResult =>
+  getEnvValue(AIRTABLE_BASE_ID, "VITE_AIRTABLE_BASE_ID");
+
+export const getApiKey = (): string | AirtableErrorResult =>
+  getEnvValue(AIRTABLE_API_KEY, "VITE_AIRTABLE_API_KEY");
+
 export const airtableFetch = async <T>(
   path: string,
   init?: RequestInit
@@ -92,12 +98,18 @@ export const airtableFetch = async <T>(
     const data = (await response.json()) as T & AirtableApiError;
 
     if (!response.ok || data?.error) {
+      console.error('❌ AIRTABLE ERROR:', {
+        status: response.status,
+        error: JSON.stringify(data, null, 2),
+        requestBody: init?.body
+      });
       return {
         error: true,
         message: data?.error?.message || `Airtable request failed: ${response.status}`,
       };
     }
 
+    console.log("🔍 Airtable Fetch Response:", JSON.stringify(data, null, 2));
     return data as T;
   } catch (error) {
     return {

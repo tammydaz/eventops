@@ -1,9 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useEventStore } from "../../state/eventStore";
 import { FIELD_IDS } from "../../services/airtable/events";
 import { asSingleSelectName, asString } from "../../services/airtable/selectors";
 import { FormSection } from "./FormSection";
 import type { EventCore } from "./types";
+import { secondsToTimeString, MINUTE_INCREMENTS } from "../../utils/timeHelpers";
 
 const EVENT_TYPE_OPTIONS = [
   "Full Service",
@@ -26,20 +27,32 @@ const SERVICE_STYLE_OPTIONS = [
 
 export const EventCoreSection = () => {
   const { selectedEventId, selectedEventData, setFields } = useEventStore();
+  const isUpdatingRef = useRef(false);
   const [details, setDetails] = useState<EventCore>({
     eventType: "",
     serviceStyle: "",
     eventDate: "",
     guestCount: null,
+    dispatchTime: "",
+    eventStartTime: "",
+    eventEndTime: "",
+    eventArrivalTime: "",
+    opsExceptions: "",
   });
 
   useEffect(() => {
+    if (isUpdatingRef.current) return;
     if (!selectedEventId || !selectedEventData) {
       setDetails({
         eventType: "",
         serviceStyle: "",
         eventDate: "",
         guestCount: null,
+        dispatchTime: "",
+        eventStartTime: "",
+        eventEndTime: "",
+        eventArrivalTime: "",
+        opsExceptions: "",
       });
       return;
     }
@@ -51,19 +64,38 @@ export const EventCoreSection = () => {
       guestCount: selectedEventData[FIELD_IDS.GUEST_COUNT] !== undefined
         ? Number(selectedEventData[FIELD_IDS.GUEST_COUNT])
         : null,
+      dispatchTime: secondsToTimeString(selectedEventData[FIELD_IDS.DISPATCH_TIME]),
+      eventStartTime: secondsToTimeString(selectedEventData[FIELD_IDS.EVENT_START_TIME]),
+      eventEndTime: secondsToTimeString(selectedEventData[FIELD_IDS.EVENT_END_TIME]),
+      eventArrivalTime: secondsToTimeString(selectedEventData[FIELD_IDS.FOODWERX_ARRIVAL]),
+      opsExceptions: asString(selectedEventData[FIELD_IDS.OPS_EXCEPTIONS_SPECIAL_HANDLING]),
     });
   }, [selectedEventId, selectedEventData]);
 
-  const handleFieldChange = async (fieldId: string, value: unknown) => {
-    if (!selectedEventId) return;
-    await setFields(selectedEventId, { [fieldId]: value });
-  };
-
-  const handleChange = <K extends keyof EventCore>(key: K, value: EventCore[K]) => {
-    setDetails((prev) => ({ ...prev, [key]: value }));
-  };
-
   const canEdit = Boolean(selectedEventId);
+
+  const handleTimeChange = (stateKey: keyof EventCore, timeValue: string) => {
+    setDetails(prev => ({ ...prev, [stateKey]: timeValue }));
+  };
+
+  const handleTimeSelectChange = (stateKey: keyof EventCore, fieldId: string, hour: number, minute: number) => {
+    const timeValue = `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+    setDetails(prev => ({ ...prev, [stateKey]: timeValue }));
+    if (selectedEventId) {
+      const seconds = hour * 3600 + minute * 60;
+      setFields(selectedEventId, { [fieldId]: seconds });
+    }
+  };
+
+  const saveField = async (fieldId: string, value: unknown) => {
+    if (!selectedEventId) return;
+    isUpdatingRef.current = true;
+    try {
+      await setFields(selectedEventId, { [fieldId]: value });
+    } finally {
+      isUpdatingRef.current = false;
+    }
+  };
 
   const inputStyle = {
     width: "100%",
@@ -84,16 +116,19 @@ export const EventCoreSection = () => {
   };
 
   return (
-    <FormSection title="Event Details (Optional)" icon="🎉">
+    <FormSection title="Event Details" icon="🎉">
       <div>
         <label style={labelStyle}>Event Date</label>
         <input
           type="date"
           value={details.eventDate}
           disabled={!canEdit}
-          onChange={(e) => {
-            handleChange("eventDate", e.target.value);
-            handleFieldChange(FIELD_IDS.EVENT_DATE, e.target.value || null);
+          onChange={async (e) => {
+            const value = e.target.value;
+            setDetails(prev => ({ ...prev, eventDate: value }));
+            if (selectedEventId) {
+              await saveField(FIELD_IDS.EVENT_DATE, value || null);
+            }
           }}
           style={inputStyle}
         />
@@ -107,8 +142,13 @@ export const EventCoreSection = () => {
           disabled={!canEdit}
           onChange={(e) => {
             const value = e.target.value === "" ? null : Number(e.target.value);
-            handleChange("guestCount", value);
-            handleFieldChange(FIELD_IDS.GUEST_COUNT, value);
+            setDetails(prev => ({ ...prev, guestCount: value }));
+          }}
+          onBlur={async (e) => {
+            const value = e.target.value === "" ? null : Number(e.target.value);
+            if (selectedEventId) {
+              await saveField(FIELD_IDS.GUEST_COUNT, value);
+            }
           }}
           style={inputStyle}
           placeholder="Number of guests"
@@ -121,9 +161,12 @@ export const EventCoreSection = () => {
         <select
           value={details.eventType}
           disabled={!canEdit}
-          onChange={(e) => {
-            handleChange("eventType", e.target.value);
-            handleFieldChange(FIELD_IDS.EVENT_TYPE, e.target.value || null);
+          onChange={async (e) => {
+            const value = e.target.value;
+            setDetails(prev => ({ ...prev, eventType: value }));
+            if (selectedEventId) {
+              await saveField(FIELD_IDS.EVENT_TYPE, value || null);
+            }
           }}
           style={inputStyle}
         >
@@ -141,9 +184,12 @@ export const EventCoreSection = () => {
         <select
           value={details.serviceStyle}
           disabled={!canEdit}
-          onChange={(e) => {
-            handleChange("serviceStyle", e.target.value);
-            handleFieldChange(FIELD_IDS.SERVICE_STYLE, e.target.value || null);
+          onChange={async (e) => {
+            const value = e.target.value;
+            setDetails(prev => ({ ...prev, serviceStyle: value }));
+            if (selectedEventId) {
+              await saveField(FIELD_IDS.SERVICE_STYLE, value || null);
+            }
           }}
           style={inputStyle}
         >
@@ -154,6 +200,76 @@ export const EventCoreSection = () => {
             </option>
           ))}
         </select>
+      </div>
+
+      {(["dispatchTime", "eventStartTime", "eventEndTime", "eventArrivalTime"] as const).map((key) => {
+        const fieldIdMap = {
+          dispatchTime: FIELD_IDS.DISPATCH_TIME,
+          eventStartTime: FIELD_IDS.EVENT_START_TIME,
+          eventEndTime: FIELD_IDS.EVENT_END_TIME,
+          eventArrivalTime: FIELD_IDS.FOODWERX_ARRIVAL,
+        };
+        const labelMap = {
+          dispatchTime: "Dispatch Time",
+          eventStartTime: "Event Start Time",
+          eventEndTime: "Event End Time",
+          eventArrivalTime: "Event Arrival Time",
+        };
+        const raw = details[key];
+        const [h, m] = raw && raw !== "—" ? raw.split(":").map(Number) : [0, 0];
+        const hour = isNaN(h) ? 0 : Math.max(0, Math.min(23, h));
+        const minute = isNaN(m) ? 0 : MINUTE_INCREMENTS.reduce((prev, curr) =>
+          Math.abs(curr - m) < Math.abs(prev - m) ? curr : prev
+        );
+        return (
+          <div key={key}>
+            <label style={labelStyle}>{labelMap[key]}</label>
+            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              <select
+                value={hour}
+                disabled={!canEdit}
+                onChange={(e) => handleTimeSelectChange(key, fieldIdMap[key], Number(e.target.value), minute)}
+                style={{ ...inputStyle, flex: 1 }}
+              >
+                {Array.from({ length: 24 }, (_, i) => (
+                  <option key={i} value={i}>{String(i).padStart(2, "0")}</option>
+                ))}
+              </select>
+              <span style={{ color: "#999", fontSize: 14 }}>:</span>
+              <select
+                value={minute}
+                disabled={!canEdit}
+                onChange={(e) => handleTimeSelectChange(key, fieldIdMap[key], hour, Number(e.target.value))}
+                style={{ ...inputStyle, flex: 1 }}
+              >
+                {MINUTE_INCREMENTS.map((m) => (
+                  <option key={m} value={m}>{String(m).padStart(2, "0")}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+        );
+      })}
+
+      <div style={{ gridColumn: "1 / -1" }}>
+        <label style={labelStyle}>Kitchen Notes / Ops Exceptions</label>
+        <textarea
+          rows={3}
+          value={details.opsExceptions}
+          disabled={!canEdit}
+          onChange={(e) => setDetails(prev => ({ ...prev, opsExceptions: e.target.value }))}
+          onBlur={async (e) => {
+            if (selectedEventId) {
+              await saveField(FIELD_IDS.OPS_EXCEPTIONS_SPECIAL_HANDLING, e.target.value);
+            }
+          }}
+          style={{
+            ...inputStyle,
+            resize: "vertical",
+            fontFamily: "inherit",
+          }}
+          placeholder="Special instructions, exceptions..."
+        />
       </div>
     </FormSection>
   );

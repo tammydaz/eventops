@@ -1,20 +1,31 @@
-// SINGLE SOURCE OF TRUTH — category keys, labels, field names, and allowed Airtable service types
-// Values below are the EXACT strings from Airtable's Service Type single-select field.
-// \u2013 = EN DASH (–) which is what Airtable returns (NOT a regular hyphen)
-//
-// From Omni's verified output, these are ALL possible Service Type values:
-//   "Dessert", "Passed App", "Entrée", "Room Temp Display",
-//   "Buffet – Hot", "Buffet", "Beverage", "Appetizer", null
+// SINGLE SOURCE OF TRUTH — category keys, labels, field names, and allowed Airtable CATEGORY values
+// Values below are the EXACT strings from Airtable's Category single-select field.
 
-export const SERVICE_TYPE_MAP: Record<string, string[]> = {
+export const CATEGORY_MAP: Record<string, string[]> = {
   passed:       ['Passed App'],
-  presented:    ['Presented App', 'Appetizer'],
-  buffet_metal: ['Buffet', 'Buffet \u2013 Hot'],
-  buffet_china: ['Buffet', 'Buffet \u2013 Cold'],
+  presented:    ['Presented App'],
+  buffet_metal: [
+    "Buffet Metal",
+    "Buffet",
+    "Buffet Item",
+    "Side",
+    "Vegetable (Side)",
+    "Starch (Side)",
+    "Pasta (Side)",
+  ],
+  buffet_china: [
+    "Buffet China",
+    "Salad",
+    "Bread",
+    "Side",
+    "Vegetable (Side)",
+  ],
   desserts:     ['Dessert'],
+  stations:     ['Station'],
+  dressing:     ['Dressing'],
 };
 
-export type MenuCategoryKey = keyof typeof SERVICE_TYPE_MAP;
+export type MenuCategoryKey = keyof typeof CATEGORY_MAP;
 
 export interface MenuSection {
   categoryKey: MenuCategoryKey;
@@ -53,5 +64,11 @@ export const MENU_SECTIONS: MenuSection[] = [
     label: 'Desserts',
     fieldName: 'desserts',
     customFieldName: 'customDessert',
+  },
+  {
+    categoryKey: 'stations',
+    label: 'Stations',
+    fieldName: 'stations',
+    customFieldName: 'customStation',
   },
 ];

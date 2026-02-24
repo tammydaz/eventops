@@ -20,11 +20,12 @@ export default function FullIntake() {
   return (
     <div className="p-6">
       <h2 className="text-xl font-bold mb-4">Full Intake Form</h2>
-      <label>Event Name</label>
+      <label>Event Name (Auto-Generated)</label>
       <input
         value={form[FIELD_IDS.EVENT_NAME] || ""}
-        onChange={e => handleChange(FIELD_IDS.EVENT_NAME, e.target.value)}
-        className="block mb-2 border px-2 py-1"
+        disabled
+        readOnly
+        className="block mb-2 border px-2 py-1 bg-gray-100 text-gray-600 cursor-not-allowed"
       />
       <label>Event Date</label>
       <input

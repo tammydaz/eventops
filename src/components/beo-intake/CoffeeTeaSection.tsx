@@ -17,18 +17,24 @@ export const CoffeeTeaSection = () => {
       return;
     }
 
-    setDetails({
-      coffeeServiceNeeded: asString(selectedEventData[FIELD_IDS.COFFEE_SERVICE_NEEDED]),
+    const newCoffee = asString(selectedEventData[FIELD_IDS.COFFEE_SERVICE_NEEDED]);
+    
+    // Only update if the value is actually different to prevent cursor jumping
+    setDetails(prev => {
+      if (prev.coffeeServiceNeeded === newCoffee) {
+        return prev;
+      }
+      return { coffeeServiceNeeded: newCoffee };
     });
   }, [selectedEventId, selectedEventData]);
 
-  const handleFieldChange = async (fieldId: string, value: unknown) => {
-    if (!selectedEventId) return;
-    await setFields(selectedEventId, { [fieldId]: value });
-  };
-
   const handleChange = <K extends keyof CoffeeTea>(key: K, value: CoffeeTea[K]) => {
     setDetails((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const handleBlur = async (fieldId: string, value: unknown) => {
+    if (!selectedEventId) return;
+    await setFields(selectedEventId, { [fieldId]: value });
   };
 
   const canEdit = Boolean(selectedEventId);
@@ -54,17 +60,15 @@ export const CoffeeTeaSection = () => {
   };
 
   return (
-    <FormSection title="Coffee / Tea Service (Optional)" icon="☕">
+    <FormSection title="Coffee / Tea Service" icon="☕">
       <div style={{ gridColumn: "1 / -1" }}>
         <label style={labelStyle}>Coffee Service Needed</label>
         <textarea
           rows={3}
           value={details.coffeeServiceNeeded}
           disabled={!canEdit}
-          onChange={(e) => {
-            handleChange("coffeeServiceNeeded", e.target.value);
-            handleFieldChange(FIELD_IDS.COFFEE_SERVICE_NEEDED, e.target.value);
-          }}
+          onChange={(e) => handleChange("coffeeServiceNeeded", e.target.value)}
+          onBlur={(e) => handleBlur(FIELD_IDS.COFFEE_SERVICE_NEEDED, e.target.value)}
           style={inputStyle}
           placeholder="Describe coffee/tea service requirements (regular/decaf, hot/iced tea, service style, etc.)"
         />

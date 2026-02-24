@@ -10,7 +10,7 @@ type FormSectionProps = {
 export const FormSection = ({
   title,
   children,
-  defaultOpen = true,
+  defaultOpen = false,
   icon = "📋",
 }: FormSectionProps) => {
   const [isOpen, setIsOpen] = useState(defaultOpen);
@@ -22,7 +22,9 @@ export const FormSection = ({
         borderRadius: "16px",
         padding: "24px",
         marginBottom: "20px",
-        boxShadow: "0 4px 12px rgba(0, 0, 0, 0.3)",
+        border: "2px solid #00bcd4",
+        boxShadow: "0 15px 35px rgba(0,0,0,0.4), 0 0 20px rgba(0,188,212,0.2), inset -2px -2px 8px rgba(0,0,0,0.2), inset 2px 2px 8px rgba(255,255,255,0.04)",
+        transition: "all 0.4s cubic-bezier(0.34,1.56,0.64,1)",
       }}
     >
       {/* Section Header - Collapsible */}

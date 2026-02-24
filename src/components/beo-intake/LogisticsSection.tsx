@@ -21,19 +21,28 @@ export const LogisticsSection = () => {
       return;
     }
 
-    setDetails({
+    const newDetails = {
       parkingAccess: asString(selectedEventData[FIELD_IDS.PARKING_ACCESS]),
       parkingNotes: asString(selectedEventData[FIELD_IDS.PARKING_NOTES]),
+    };
+    
+    // Only update if the values are actually different to prevent cursor jumping
+    setDetails(prev => {
+      if (prev.parkingAccess === newDetails.parkingAccess &&
+          prev.parkingNotes === newDetails.parkingNotes) {
+        return prev;
+      }
+      return newDetails;
     });
   }, [selectedEventId, selectedEventData]);
 
-  const handleFieldChange = async (fieldId: string, value: unknown) => {
-    if (!selectedEventId) return;
-    await setFields(selectedEventId, { [fieldId]: value });
-  };
-
   const handleChange = <K extends keyof Logistics>(key: K, value: Logistics[K]) => {
     setDetails((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const handleBlur = async (fieldId: string, value: unknown) => {
+    if (!selectedEventId) return;
+    await setFields(selectedEventId, { [fieldId]: value });
   };
 
   const canEdit = Boolean(selectedEventId);
@@ -57,17 +66,15 @@ export const LogisticsSection = () => {
   };
 
   return (
-    <FormSection title="Logistics & Access (Optional)" icon="🚚">
+    <FormSection title="Logistics & Access" icon="🚚">
       <div>
         <label style={labelStyle}>Parking Access</label>
         <input
           type="text"
           value={details.parkingAccess}
           disabled={!canEdit}
-          onChange={(e) => {
-            handleChange("parkingAccess", e.target.value);
-            handleFieldChange(FIELD_IDS.PARKING_ACCESS, e.target.value);
-          }}
+          onChange={(e) => handleChange("parkingAccess", e.target.value)}
+          onBlur={(e) => handleBlur(FIELD_IDS.PARKING_ACCESS, e.target.value)}
           style={inputStyle}
           placeholder="Describe parking situation"
         />
@@ -79,10 +86,8 @@ export const LogisticsSection = () => {
           rows={4}
           value={details.parkingNotes}
           disabled={!canEdit}
-          onChange={(e) => {
-            handleChange("parkingNotes", e.target.value);
-            handleFieldChange(FIELD_IDS.PARKING_NOTES, e.target.value);
-          }}
+          onChange={(e) => handleChange("parkingNotes", e.target.value)}
+          onBlur={(e) => handleBlur(FIELD_IDS.PARKING_NOTES, e.target.value)}
           style={{
             ...inputStyle,
             resize: "vertical",

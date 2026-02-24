@@ -15,6 +15,7 @@ import KitchenPrepPage from "./pages/KitchenPrepPage";
 import DeliveryCommandPage from "./pages/DeliveryCommandPage";
 import ReturnedEquipmentPage from "./pages/ReturnedEquipmentPage";
 import PostEventDebriefPage from "./pages/PostEventDebriefPage";
+import KitchenBEOPrintPage from "./pages/KitchenBEOPrintPage";
 
 export const Router = ({ selectedEventId }: { selectedEventId: string | null }) => {
 	const pathname = window.location.pathname;
@@ -69,6 +70,10 @@ export const Router = ({ selectedEventId }: { selectedEventId: string | null }) 
 
   if (pathname.startsWith("/health/")) {
     return <Health />;
+  }
+
+  if (pathname.startsWith("/kitchen-beo-print")) {
+    return <KitchenBEOPrintPage />;
   }
 
   if (pathname.startsWith("/kitchen-prep")) {

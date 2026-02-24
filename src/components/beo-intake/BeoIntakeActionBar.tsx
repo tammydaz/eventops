@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useEventStore } from "../../state/eventStore";
-import { FIELD_IDS } from "../../services/airtable/events";
+import { filterToEditableOnly } from "../../services/airtable/events";
 
 type BeoIntakeActionBarProps = {
   eventId: string | null;
@@ -10,18 +10,36 @@ export const BeoIntakeActionBar = ({ eventId }: BeoIntakeActionBarProps) => {
   const { setFields } = useEventStore();
   const [isSaving, setIsSaving] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   const handleUpdate = async () => {
     if (!eventId) return;
     setIsSaving(true);
-    
-    // Trigger a save - in practice, fields are already saved instantly
-    // This provides user feedback that changes are persisted
-    await new Promise((resolve) => setTimeout(resolve, 300));
-    
+    setSaveError(null);
+
+    // Blur active element so any focused field (e.g. Event Arrival Time) saves via onBlur
+    (document.activeElement as HTMLElement)?.blur();
+    await new Promise((resolve) => setTimeout(resolve, 600));
+
+    // Get fresh event data from store (after blur handlers have run)
+    const { eventData, selectedEventId } = useEventStore.getState();
+    const raw = selectedEventId === eventId ? eventData : {};
+    const dataToSave = filterToEditableOnly(raw);
+
+    let succeeded = true;
+    if (Object.keys(dataToSave).length > 0) {
+      succeeded = await setFields(eventId, { ...dataToSave });
+      if (!succeeded) {
+        const err = useEventStore.getState().saveError;
+        setSaveError(err ?? "Failed to save");
+      }
+    }
+
     setIsSaving(false);
-    setShowSuccess(true);
-    setTimeout(() => setShowSuccess(false), 2000);
+    if (succeeded) {
+      setShowSuccess(true);
+      setTimeout(() => setShowSuccess(false), 2000);
+    }
   };
 
   const handleReadyForSpec = async () => {
@@ -51,6 +69,12 @@ export const BeoIntakeActionBar = ({ eventId }: BeoIntakeActionBarProps) => {
   return (
     <div style={styles.container}>
       <div style={styles.inner}>
+        {saveError && (
+          <div style={styles.errorBanner}>
+            {saveError}
+            <button type="button" onClick={() => setSaveError(null)} style={styles.errorDismiss}>✕</button>
+          </div>
+        )}
         <button
           style={{
             ...styles.button,
@@ -100,6 +124,32 @@ export const BeoIntakeActionBar = ({ eventId }: BeoIntakeActionBarProps) => {
 };
 
 const styles: Record<string, React.CSSProperties> = {
+  errorBanner: {
+    position: "absolute",
+    top: -44,
+    left: "50%",
+    transform: "translateX(-50%)",
+    background: "#b91c1c",
+    color: "#fff",
+    padding: "8px 36px 8px 16px",
+    borderRadius: 8,
+    fontSize: 13,
+    fontWeight: 600,
+    display: "flex",
+    alignItems: "center",
+    gap: 12,
+  },
+  errorDismiss: {
+    position: "absolute",
+    right: 8,
+    top: "50%",
+    transform: "translateY(-50%)",
+    background: "none",
+    border: "none",
+    color: "#fff",
+    cursor: "pointer",
+    fontSize: 16,
+  },
   container: {
     position: "fixed",
     bottom: 0,
@@ -112,6 +162,7 @@ const styles: Record<string, React.CSSProperties> = {
     boxShadow: "0 -4px 20px rgba(0, 0, 0, 0.5)",
   },
   inner: {
+    position: "relative",
     maxWidth: "1400px",
     margin: "0 auto",
     padding: "16px 20px",
