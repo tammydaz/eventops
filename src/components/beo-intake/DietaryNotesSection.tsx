@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useEventStore } from "../../state/eventStore";
 import { FIELD_IDS } from "../../services/airtable/events";
 import { asString } from "../../services/airtable/selectors";
@@ -6,20 +6,34 @@ import { FormSection } from "./FormSection";
 
 export const DietaryNotesSection = () => {
   const { selectedEventId, selectedEventData, setFields } = useEventStore();
-  const [details, setDetails] = useState({ dietaryNotes: "", specialNotes: "" });
+  const [details, setDetails] = useState({ 
+    dietaryNotes: "", 
+    specialNotes: "", 
+    beoNotes: "", 
+    beoTimeline: "" 
+  });
+  const lastEventIdRef = useRef<string | null>(null);
 
   useEffect(() => {
-    if (!selectedEventId || !selectedEventData) {
-      setDetails({ dietaryNotes: "", specialNotes: "" });
-      return;
+    // Only update when event ID changes, not on every data update
+    if (selectedEventId !== lastEventIdRef.current) {
+      lastEventIdRef.current = selectedEventId;
+      
+      if (!selectedEventId || !selectedEventData) {
+        setDetails({ dietaryNotes: "", specialNotes: "", beoNotes: "", beoTimeline: "" });
+        return;
+      }
+      
+      setDetails({
+        dietaryNotes: asString(selectedEventData[FIELD_IDS.DIETARY_NOTES]),
+        specialNotes: asString(selectedEventData[FIELD_IDS.SPECIAL_NOTES]),
+        beoNotes: asString(selectedEventData[FIELD_IDS.BEO_NOTES]),
+        beoTimeline: asString(selectedEventData[FIELD_IDS.BEO_TIMELINE]),
+      });
     }
-    setDetails({
-      dietaryNotes: asString(selectedEventData[FIELD_IDS.DIETARY_NOTES]),
-      specialNotes: asString(selectedEventData[FIELD_IDS.SPECIAL_NOTES]),
-    });
   }, [selectedEventId, selectedEventData]);
 
-  const handleFieldChange = async (fieldId: string, value: unknown) => {
+  const handleBlur = async (fieldId: string, value: unknown) => {
     if (!selectedEventId) return;
     await setFields(selectedEventId, { [fieldId]: value });
   };
@@ -47,14 +61,54 @@ export const DietaryNotesSection = () => {
   };
 
   return (
-    <FormSection title="Dietary & Special Notes (Optional)" icon="⚠️">
+    <FormSection title="Dietary & Special Notes" icon="⚠️">
       <div style={{ gridColumn: "1 / -1" }}>
         <label style={labelStyle}>Dietary Notes</label>
-        <textarea rows={4} value={details.dietaryNotes} disabled={!canEdit} onChange={(e) => { setDetails(p => ({ ...p, dietaryNotes: e.target.value })); handleFieldChange(FIELD_IDS.DIETARY_NOTES, e.target.value); }} style={inputStyle} placeholder="Allergies, dietary restrictions, special requirements..." />
+        <textarea 
+          rows={4} 
+          value={details.dietaryNotes} 
+          disabled={!canEdit} 
+          onChange={(e) => setDetails(p => ({ ...p, dietaryNotes: e.target.value }))} 
+          onBlur={(e) => handleBlur(FIELD_IDS.DIETARY_NOTES, e.target.value)}
+          style={inputStyle} 
+          placeholder="Allergies, dietary restrictions, special requirements..." 
+        />
       </div>
       <div style={{ gridColumn: "1 / -1" }}>
         <label style={labelStyle}>Special Notes</label>
-        <textarea rows={4} value={details.specialNotes} disabled={!canEdit} onChange={(e) => { setDetails(p => ({ ...p, specialNotes: e.target.value })); handleFieldChange(FIELD_IDS.SPECIAL_NOTES, e.target.value); }} style={inputStyle} placeholder="Any other special notes or considerations..." />
+        <textarea 
+          rows={4} 
+          value={details.specialNotes} 
+          disabled={!canEdit} 
+          onChange={(e) => setDetails(p => ({ ...p, specialNotes: e.target.value }))} 
+          onBlur={(e) => handleBlur(FIELD_IDS.SPECIAL_NOTES, e.target.value)}
+          style={inputStyle} 
+          placeholder="Any other special notes or considerations..." 
+        />
+      </div>
+      <div style={{ gridColumn: "1 / -1" }}>
+        <label style={labelStyle}>BEO Notes (Kitchen)</label>
+        <textarea 
+          rows={4} 
+          value={details.beoNotes} 
+          disabled={!canEdit} 
+          onChange={(e) => setDetails(p => ({ ...p, beoNotes: e.target.value }))} 
+          onBlur={(e) => handleBlur(FIELD_IDS.BEO_NOTES, e.target.value)}
+          style={inputStyle} 
+          placeholder="Kitchen notes, special handling, venue setup instructions..." 
+        />
+      </div>
+      <div style={{ gridColumn: "1 / -1" }}>
+        <label style={labelStyle}>BEO Timeline</label>
+        <textarea 
+          rows={4} 
+          value={details.beoTimeline} 
+          disabled={!canEdit} 
+          onChange={(e) => setDetails(p => ({ ...p, beoTimeline: e.target.value }))} 
+          onBlur={(e) => handleBlur(FIELD_IDS.BEO_TIMELINE, e.target.value)}
+          style={inputStyle} 
+          placeholder="10:30AM Staff Arrival / 12:00PM Event Begins / 4:00PM Load Out..." 
+        />
       </div>
     </FormSection>
   );

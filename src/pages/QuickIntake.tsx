@@ -9,10 +9,6 @@ const initialForm = {
   clientPhone: "",
   eventDate: "",
   eventTypeId: "",
-  venue: "",
-  venueAddress: "",
-  venueCity: "",
-  venueStateId: "",
 };
 
 export const QuickIntake = () => {
@@ -23,21 +19,19 @@ export const QuickIntake = () => {
   const [submitMessage, setSubmitMessage] = useState<string | null>(null);
   const [createdId, setCreatedId] = useState<string | null>(null);
   const [eventTypeOptions, setEventTypeOptions] = useState<SingleSelectOption[]>([]);
-  const [venueStateOptions, setVenueStateOptions] = useState<SingleSelectOption[]>([]);
   const [optionsError, setOptionsError] = useState<string | null>(null);
 
   useEffect(() => {
     let isMounted = true;
 
     const loadOptions = async () => {
-      const result = await loadSingleSelectOptions([FIELD_IDS.EVENT_TYPE, FIELD_IDS.VENUE_STATE]);
+      const result = await loadSingleSelectOptions([FIELD_IDS.EVENT_TYPE]);
       if (!isMounted) return;
       if (isErrorResult(result)) {
         setOptionsError(result.message ?? "Unable to load select options.");
         return;
       }
       setEventTypeOptions(result[FIELD_IDS.EVENT_TYPE] ?? []);
-      setVenueStateOptions(result[FIELD_IDS.VENUE_STATE] ?? []);
     };
 
     loadOptions();
@@ -51,6 +45,7 @@ export const QuickIntake = () => {
     () => form.clientFirstName.trim().length > 0 && form.clientLastName.trim().length > 0 && form.clientPhone.trim().length > 0,
     [form.clientFirstName, form.clientLastName, form.clientPhone]
   );
+
 
   const handleChange = (field: keyof typeof initialForm) => (event: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     setForm((prev) => ({
@@ -87,23 +82,35 @@ export const QuickIntake = () => {
 
     const fields: Record<string, unknown> = {};
 
+    // Required fields
     fields[FIELD_IDS.CLIENT_FIRST_NAME] = form.clientFirstName.trim();
     fields[FIELD_IDS.CLIENT_LAST_NAME] = form.clientLastName.trim();
     fields[FIELD_IDS.CLIENT_PHONE] = form.clientPhone.trim();
 
-    if (form.eventDate) fields[FIELD_IDS.EVENT_DATE] = form.eventDate;
-    if (form.eventTypeId) fields[FIELD_IDS.EVENT_TYPE] = { id: form.eventTypeId };
-    if (form.venue.trim()) fields[FIELD_IDS.VENUE] = form.venue.trim();
-    if (form.venueAddress.trim()) fields[FIELD_IDS.VENUE_ADDRESS] = form.venueAddress.trim();
-    if (form.venueCity.trim()) fields[FIELD_IDS.VENUE_CITY] = form.venueCity.trim();
-    if (form.venueStateId) fields[FIELD_IDS.VENUE_STATE] = { id: form.venueStateId };
+    // Optional fields - only include if they have values
+    if (form.eventDate && form.eventDate.trim()) {
+      fields[FIELD_IDS.EVENT_DATE] = form.eventDate;
+    }
+    
+    // Convert eventTypeId to the actual name string
+    if (form.eventTypeId && form.eventTypeId.trim()) {
+      const selectedOption = eventTypeOptions.find(opt => opt.id === form.eventTypeId);
+      if (selectedOption) {
+        fields[FIELD_IDS.EVENT_TYPE] = selectedOption.name;
+      }
+    }
+
+    console.log("📤 Fields being sent to Airtable:", JSON.stringify(fields, null, 2));
 
     const result = await createEvent(fields);
+    console.log("📤 Create Event Request:", fields);
     if (isErrorResult(result)) {
+      console.error("❌ Create Event Error:", result);
       setError(result.message ?? "Unable to create event.");
       setIsSubmitting(false);
       return;
     }
+    console.log("✅ Create Event Success:", result);
 
     setSubmitMessage("✅ Event created successfully!");
     setCreatedId(result.id);
@@ -409,153 +416,6 @@ export const QuickIntake = () => {
                     Select event type...
                   </option>
                   {eventTypeOptions.map((option) => (
-                    <option key={option.id} value={option.id} style={{ backgroundColor: "#2d2d2d", color: "#fff" }}>
-                      {option.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            <div>
-              <h3
-                style={{
-                  color: "#4a6b5b",
-                  fontSize: "14px",
-                  fontWeight: "700",
-                  textTransform: "uppercase",
-                  letterSpacing: "0.5px",
-                  margin: "0 0 16px 0",
-                }}
-              >
-                📍 Venue (Optional)
-              </h3>
-
-              <div style={{ marginBottom: "16px" }}>
-                <label
-                  style={{
-                    fontSize: "13px",
-                    fontWeight: "600",
-                    color: "#4a6b5b",
-                    display: "block",
-                    marginBottom: "6px",
-                  }}
-                >
-                  Venue Name
-                </label>
-                <input
-                  type="text"
-                  placeholder="e.g. The Grand Ballroom"
-                  value={form.venue}
-                  onChange={handleChange("venue")}
-                  style={{
-                    width: "100%",
-                    padding: "12px",
-                    borderRadius: "6px",
-                    border: "2px solid #4a6b5b",
-                    backgroundColor: "#1a1a1a",
-                    color: "#fff",
-                    fontSize: "14px",
-                    outline: "none",
-                    boxSizing: "border-box",
-                  }}
-                />
-              </div>
-
-              <div style={{ marginBottom: "16px" }}>
-                <label
-                  style={{
-                    fontSize: "13px",
-                    fontWeight: "600",
-                    color: "#4a6b5b",
-                    display: "block",
-                    marginBottom: "6px",
-                  }}
-                >
-                  Venue Address
-                </label>
-                <input
-                  type="text"
-                  placeholder="e.g. 123 Main St"
-                  value={form.venueAddress}
-                  onChange={handleChange("venueAddress")}
-                  style={{
-                    width: "100%",
-                    padding: "12px",
-                    borderRadius: "6px",
-                    border: "2px solid #4a6b5b",
-                    backgroundColor: "#1a1a1a",
-                    color: "#fff",
-                    fontSize: "14px",
-                    outline: "none",
-                    boxSizing: "border-box",
-                  }}
-                />
-              </div>
-
-              <div style={{ marginBottom: "16px" }}>
-                <label
-                  style={{
-                    fontSize: "13px",
-                    fontWeight: "600",
-                    color: "#4a6b5b",
-                    display: "block",
-                    marginBottom: "6px",
-                  }}
-                >
-                  Venue City
-                </label>
-                <input
-                  type="text"
-                  placeholder="e.g. Springfield"
-                  value={form.venueCity}
-                  onChange={handleChange("venueCity")}
-                  style={{
-                    width: "100%",
-                    padding: "12px",
-                    borderRadius: "6px",
-                    border: "2px solid #4a6b5b",
-                    backgroundColor: "#1a1a1a",
-                    color: "#fff",
-                    fontSize: "14px",
-                    outline: "none",
-                    boxSizing: "border-box",
-                  }}
-                />
-              </div>
-
-              <div style={{ marginBottom: "0" }}>
-                <label
-                  style={{
-                    fontSize: "13px",
-                    fontWeight: "600",
-                    color: "#4a6b5b",
-                    display: "block",
-                    marginBottom: "6px",
-                  }}
-                >
-                  Venue State
-                </label>
-                <select
-                  value={form.venueStateId}
-                  onChange={handleChange("venueStateId")}
-                  style={{
-                    width: "100%",
-                    padding: "12px",
-                    borderRadius: "6px",
-                    border: "2px solid #4a6b5b",
-                    backgroundColor: "#1a1a1a",
-                    color: "#fff",
-                    fontSize: "14px",
-                    outline: "none",
-                    cursor: "pointer",
-                    boxSizing: "border-box",
-                  }}
-                >
-                  <option value="" style={{ backgroundColor: "#2d2d2d", color: "#fff" }}>
-                    Select state...
-                  </option>
-                  {venueStateOptions.map((option) => (
                     <option key={option.id} value={option.id} style={{ backgroundColor: "#2d2d2d", color: "#fff" }}>
                       {option.name}
                     </option>

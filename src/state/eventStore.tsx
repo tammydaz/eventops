@@ -3,6 +3,7 @@ import {
   loadEvents as fetchEventsList,
   loadEvent as fetchEventById,
   updateEventMultiple,
+  filterToEditableOnly,
   type EventListItem,
 } from "../services/airtable/events";
 import { isErrorResult } from "../services/airtable/selectors";
@@ -23,9 +24,9 @@ export type EventStore = {
   selectedEventData: Fields;
   loadEventData: () => Promise<void>;
 
-  updateEvent: (eventId: string, patch: Fields) => Promise<void>;
-  setField: (eventId: string, fieldId: string, value: unknown) => Promise<void>;
-  setFields: (eventId: string, patch: Fields) => Promise<void>;
+  updateEvent: (eventId: string, patch: Fields) => Promise<boolean>;
+  setField: (eventId: string, fieldId: string, value: unknown) => Promise<boolean>;
+  setFields: (eventId: string, patch: Fields) => Promise<boolean>;
 
   saveError: string | null;
   setSaveError: (error: string | null) => void;
@@ -75,22 +76,26 @@ export const useEventStore = create<EventStore>((set, get) => ({
       set({ eventData: emptyFields, selectedEventData: emptyFields });
       return;
     }
+    // Load all fields into state (including computed fields for display)
+    // Components only send individual field updates, never the full object
     const fields = result.fields ?? {};
     set({ eventData: fields, selectedEventData: fields });
   },
 
   updateEvent: async (eventId, patch) => {
-    const result = await updateEventMultiple(eventId, patch);
+    const filtered = filterToEditableOnly(patch);
+    const result = await updateEventMultiple(eventId, filtered);
     if (isErrorResult(result)) {
       set({ saveError: result.message ?? "Failed to save" });
-      return;
+      return false;
     }
     set({ saveError: null });
     const { selectedEventId, eventData } = get();
     if (selectedEventId === eventId) {
-      const next = { ...eventData, ...patch };
+      const next = { ...eventData, ...filtered };
       set({ eventData: next, selectedEventData: next });
     }
+    return true;
   },
 
   setField: async (eventId, fieldId, value) => {

@@ -63,14 +63,42 @@ export async function listMenuItems() {
 // ------------------------------------------------------
 // UPDATE A SINGLE EVENT
 // ------------------------------------------------------
+const COMPUTED_FIELDS = [
+  "fldZuHc9D29Wcj60h",  // EVENT_NAME - Formula
+  "fld4YxQOjzPyyBIHL",  // CLIENT_BUSINESS_NAME - Formula
+  "fldOKQTp8Zf6a462f",  // VENUE_FULL_ADDRESS (Venue Full Address Clean) - Formula
+  "flddestyZNoX9sKGE",  // EVENT_LOCATION_FINAL_PRINT - Formula
+  "fldJsajSl1l6marzw",  // PRINT_VENUE_ADDRESS (VenuePrint) - Formula - THE BUG!
+];
+
 export async function updateEvent(recordId, fields) {
+  // Debug: Log what's being sent BEFORE filtering
+  console.log("🔍 updateEvent (legacy) - BEFORE filter:", JSON.stringify(fields, null, 2));
+
+  const filtered = {};
+  const blocked = [];
+  
+  for (const [key, value] of Object.entries(fields)) {
+    if (!COMPUTED_FIELDS.includes(key)) {
+      filtered[key] = value;
+    } else {
+      blocked.push(key);
+    }
+  }
+  
+  // Debug: Log what was blocked and what will be sent
+  if (blocked.length > 0) {
+    console.warn("⚠️ BLOCKED computed fields (legacy):", blocked);
+  }
+  console.log("✅ updateEvent (legacy) - AFTER filter:", JSON.stringify(filtered, null, 2));
+  
+  if (Object.keys(filtered).length === 0) {
+    console.log("⏭️ No fields to update after filtering (legacy)");
+    return { records: [] };
+  }
+  
   return api(`/${TABLE}`, "PATCH", {
-    records: [
-      {
-        id: recordId,
-        fields,
-      },
-    ],
+    records: [{ id: recordId, fields: filtered }],
     typecast: true,
   });
 }

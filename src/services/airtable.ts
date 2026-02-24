@@ -86,7 +86,6 @@ export type EventDetails = {
   venueAddress: string;
   venueCity: string;
   venueState: string;
-  venueFullAddress: string;
 };
 
 export const getEventDetails = async (recordId: string): Promise<EventDetails> => {
@@ -114,7 +113,6 @@ export const getEventDetails = async (recordId: string): Promise<EventDetails> =
     venueAddress: String(fields[VENUE_ADDRESS_FIELD_ID] ?? ""),
     venueCity: String(fields[VENUE_CITY_FIELD_ID] ?? ""),
     venueState: typeof venueState === "string" ? venueState : (venueState as { name?: string })?.name ?? "",
-    venueFullAddress: String(fields[VENUE_FULL_ADDRESS_FIELD_ID] ?? ""),
   };
 };
 

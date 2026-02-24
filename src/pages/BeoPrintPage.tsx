@@ -1,6 +1,9 @@
 import React, { useEffect, useState } from "react";
 import { useEventStore } from "../state/eventStore";
 import { FIELD_IDS } from "../services/airtable/events";
+import { asSingleSelectName } from "../services/airtable/selectors";
+import { calculateSpec } from "../services/airtable/specEngine";
+import { secondsToTimeString } from "../utils/timeHelpers";
 
 // ── Types ──
 type MenuLineItem = {
@@ -9,6 +12,7 @@ type MenuLineItem = {
   specQty?: string;
   specVessel?: string;
   packOutItems?: string;
+  loaded?: boolean;
 };
 
 type SectionData = {
@@ -17,10 +21,77 @@ type SectionData = {
   items: MenuLineItem[];
 };
 
+// ── View Modes ──
+type ViewMode = "kitchen" | "spec" | "packout" | "expeditor";
+
+// ── Section color by type ──
+const getSectionColor = (sectionTitle: string): string => {
+  if (sectionTitle.includes("PASSED")) return "#22c55e";
+  if (sectionTitle.includes("PRESENTED")) return "#f97316";
+  if (sectionTitle.includes("BUFFET")) return "#3b82f6";
+  if (sectionTitle.includes("DESSERT")) return "#ef4444";
+  if (sectionTitle.includes("STATION")) return "#a855f7";
+  return "#6b7280";
+};
+
+// ── Header design tokens (coral reserved for dietary alerts only) ──
+const ACCENT = "#e85d5d";           // dietary / highlights only
+const HEADER_ACCENT = "#0d9488";    // dispatch/job/times — light teal, ink-friendly
+
+// ── Header row: label | value (for 4-col grid) ──
+function HeaderRow({ label, value, last, highlight }: { label: string; value: string; last?: boolean; highlight?: boolean }) {
+  return (
+    <>
+      <div style={{
+        padding: "4px 10px 4px 0",
+        borderBottom: last ? "none" : "1px solid rgba(0,0,0,0.06)",
+        fontSize: 10,
+        textTransform: "uppercase",
+        letterSpacing: "0.08em",
+        color: "#6b7280",
+        fontWeight: 600,
+        lineHeight: 1.3,
+      }}>{label}</div>
+      <div style={{
+        padding: "4px 0",
+        borderBottom: last ? "none" : "1px solid rgba(0,0,0,0.06)",
+        fontWeight: 600,
+        color: highlight ? HEADER_ACCENT : "#1f2937",
+        fontSize: 13,
+        lineHeight: 1.3,
+      }}>{value || "—"}</div>
+    </>
+  );
+}
+
+function HighlightField({ label, value, accentColor }: { label: string; value: string; accentColor: string }) {
+  return (
+    <div style={{
+      display: "flex",
+      flexDirection: "column",
+      alignItems: "center",
+      justifyContent: "center",
+      padding: "6px 16px",
+    }}>
+      <span style={{
+        fontSize: 9,
+        textTransform: "uppercase",
+        letterSpacing: "0.12em",
+        color: "#6b7280",
+        fontWeight: 600,
+        marginBottom: 2,
+        lineHeight: 1.2,
+      }}>{label}</span>
+      <span style={{ fontSize: 16, fontWeight: 800, letterSpacing: "-0.02em", color: accentColor, lineHeight: 1.2 }}>
+        {value || "—"}
+      </span>
+    </div>
+  );
+}
+
 // ── Extract eventId from URL ──
 const getEventIdFromUrl = (): string | null => {
   const parts = window.location.pathname.split("/");
-  // /beo-print/:eventId
   const idx = parts.indexOf("beo-print");
   if (idx !== -1 && parts[idx + 1]) {
     return parts[idx + 1];
@@ -43,116 +114,117 @@ const styles: Record<string, React.CSSProperties> = {
     fontFamily: "'Segoe UI', Arial, sans-serif",
     maxWidth: 900,
     margin: "0 auto",
-    padding: "24px 32px",
+    padding: "12px 24px",
     background: "#fff",
     color: "#000",
   },
   header: {
-    display: "flex",
-    justifyContent: "space-between",
-    borderBottom: "3px solid #000",
-    paddingBottom: 12,
-    marginBottom: 8,
+    display: "grid",
+    gridTemplateColumns: "1fr 1fr",
+    gridTemplateRows: "auto auto auto auto",
+    gap: "6px 32px",
+    padding: "16px 24px",
+    background: "#f5f5f5",
+    marginBottom: 16,
+    borderRadius: 8,
+    border: "2px solid #000",
+    alignItems: "center",
   },
-  headerLeft: { flex: 1 },
-  headerRight: { flex: 1, textAlign: "right" as const },
-  headerRow: {
+  headerLeft: {
     display: "flex",
-    gap: 8,
-    marginBottom: 4,
     fontSize: 13,
+    lineHeight: 1.5,
+    alignItems: "center",
   },
-  headerRowRight: {
+  headerRight: {
     display: "flex",
-    gap: 8,
-    marginBottom: 4,
-    fontSize: 13,
     justifyContent: "flex-end",
+    alignItems: "center",
+    fontSize: 13,
+    lineHeight: 1.5,
+    textAlign: "right" as const,
   },
-  headerLabel: { fontWeight: 700, minWidth: 100 },
+  headerLabel: {
+    fontWeight: 700,
+    marginRight: 4,
+    minWidth: "auto",
+  },
   headerValue: { fontWeight: 400 },
   allergyBanner: {
-    background: "#ff0000",
-    color: "#fff",
-    padding: "8px 16px",
-    fontSize: 14,
+    background: "#ffe5e5",
+    color: "#c41e3a",
+    padding: "10px 16px",
+    fontSize: 13,
     fontWeight: 700,
     textAlign: "center" as const,
-    marginBottom: 8,
-    letterSpacing: 1,
+    marginBottom: 12,
+    border: "2px solid #ff0000",
+    borderRadius: 6,
+    letterSpacing: 0.5,
   },
-  serviceStyleBanner: {
-    background: "#000",
-    color: "#fff",
-    padding: "6px 16px",
-    fontSize: 14,
+  notBuffetBanner: {
+    background: "#e0f2fe",
+    color: "#0369a1",
+    padding: "10px 16px",
+    fontSize: 13,
     fontWeight: 700,
     textAlign: "center" as const,
-    marginBottom: 8,
-    letterSpacing: 1,
-    border: "2px solid #000",
+    marginBottom: 12,
+    border: "2px solid #0284c7",
+    borderRadius: 6,
+    letterSpacing: 0.5,
   },
-  noKitchenBanner: {
-    background: "#ff6600",
-    color: "#fff",
-    padding: "8px 16px",
-    fontSize: 14,
-    fontWeight: 700,
-    textAlign: "center" as const,
-    marginBottom: 8,
-    letterSpacing: 1,
+  sectionCard: {
+    background: "#f5f5f5",
+    border: "3px solid #000",
+    borderRadius: 8,
+    marginBottom: 12,
+    overflow: "hidden" as const,
   },
   sectionHeader: {
-    background: "#1a1a1a",
-    color: "#fff",
-    padding: "8px 16px",
+    background: "transparent",
+    color: "#000",
+    padding: "10px 16px",
     fontSize: 14,
     fontWeight: 700,
-    letterSpacing: 1,
+    textAlign: "center" as const,
     marginTop: 16,
-    marginBottom: 0,
+    marginBottom: 8,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: "10px",
   },
   lineItem: {
     display: "grid",
-    gridTemplateColumns: "140px 1fr 200px",
     padding: "8px 16px",
-    borderBottom: "1px solid #ddd",
+    borderBottom: "1px solid #eee",
     fontSize: 13,
     alignItems: "center" as const,
   },
-  specCol: { fontWeight: 700, color: "#333" },
-  itemCol: { fontWeight: 500 },
+  specCol: { fontWeight: 700, color: "#555", fontSize: 12 },
+  itemCol: { fontWeight: 600, color: "#333" },
   packOutCol: { fontSize: 11, color: "#666", textAlign: "right" as const },
+  checkboxCol: { display: "flex", alignItems: "center", justifyContent: "center" },
   footer: {
     borderTop: "3px solid #000",
-    marginTop: 24,
-    paddingTop: 8,
-  },
-  footerAllergyRepeat: {
-    background: "#ff0000",
-    color: "#fff",
-    padding: "4px 12px",
-    fontSize: 11,
-    fontWeight: 700,
-    textAlign: "center" as const,
-    marginBottom: 4,
-  },
-  footerServiceStyle: {
-    background: "#000",
-    color: "#fff",
-    padding: "4px 12px",
-    fontSize: 11,
-    fontWeight: 700,
-    textAlign: "center" as const,
-    marginBottom: 4,
+    marginTop: 20,
+    paddingTop: 6,
+    paddingBottom: 6,
   },
   footerStrip: {
     display: "flex",
     justifyContent: "center",
-    gap: 24,
-    fontSize: 12,
-    fontWeight: 600,
-    padding: "6px 0",
+    alignItems: "center",
+    gap: 8,
+    fontSize: 11,
+    fontWeight: 500,
+    color: "#333",
+  },
+  footerSeparator: {
+    color: "#999",
+    fontSize: 10,
+    userSelect: "none" as const,
   },
   toolbar: {
     display: "flex",
@@ -182,9 +254,6 @@ const styles: Record<string, React.CSSProperties> = {
     fontFamily: "'Segoe UI', Arial, sans-serif",
   },
 };
-
-// ── View Modes ──
-type ViewMode = "kitchen" | "spec" | "packout";
 
 const BeoPrintPage: React.FC = () => {
   const {
@@ -217,6 +286,7 @@ const BeoPrintPage: React.FC = () => {
       FIELD_IDS.BUFFET_METAL,
       FIELD_IDS.BUFFET_CHINA,
       FIELD_IDS.DESSERTS,
+      FIELD_IDS.STATIONS,
     ];
 
     const allRecordIds: string[] = [];
@@ -233,17 +303,13 @@ const BeoPrintPage: React.FC = () => {
 
     if (allRecordIds.length === 0) return;
 
-    // Fetch each record's name from the Menu Items table
     const MENU_TABLE = "tbl0aN33DGG6R1sPZ";
-    const NAME_FIELD = "fldQ83gpgOmMxNMQw"; // Description Name/Formula
+    const NAME_FIELD = "fldQ83gpgOmMxNMQw";
     const apiKey = (import.meta.env.VITE_AIRTABLE_API_KEY as string)?.trim() || "";
     const baseId = (import.meta.env.VITE_AIRTABLE_BASE_ID as string)?.trim() || "";
 
     const fetchNames = async () => {
       const newNames: Record<string, string> = { ...menuNames };
-
-      // Airtable allows fetching by formula OR individual gets
-      // We'll batch with filterByFormula using OR(RECORD_ID()=...)
       const chunks: string[][] = [];
       for (let i = 0; i < allRecordIds.length; i += 10) {
         chunks.push(allRecordIds.slice(i, i + 10));
@@ -288,26 +354,27 @@ const BeoPrintPage: React.FC = () => {
     return String(val);
   };
 
-  const clientName =
-    (f(FIELD_IDS.CLIENT_FIRST_NAME) + " " + f(FIELD_IDS.CLIENT_LAST_NAME)).trim();
-  const phone = f(FIELD_IDS.CLIENT_PHONE);
-  const venue = f(FIELD_IDS.VENUE_NAME) || f(FIELD_IDS.VENUE);
-  const venueAddress = f(FIELD_IDS.VENUE_ADDRESS);
+  const clientName = `${f(FIELD_IDS.CLIENT_FIRST_NAME)} ${f(FIELD_IDS.CLIENT_LAST_NAME)}`.trim();
+  const contactName = `${f(FIELD_IDS.CONTACT_FIRST_NAME)} ${f(FIELD_IDS.CONTACT_LAST_NAME)}`.trim();
+  const clientPhone = f(FIELD_IDS.CLIENT_PHONE);
+  const contactPhone = f(FIELD_IDS.CONTACT_PHONE);
+
+  const eventLocation = f(FIELD_IDS.EVENT_LOCATION_FINAL_PRINT);
+  const venueAddress = f(FIELD_IDS.PRINT_VENUE_ADDRESS);
   const eventDate = f(FIELD_IDS.EVENT_DATE);
+  const eventStart = secondsToTimeString(eventData[FIELD_IDS.EVENT_START_TIME]);
+  const eventEnd = secondsToTimeString(eventData[FIELD_IDS.EVENT_END_TIME]);
   const guestCount = f(FIELD_IDS.GUEST_COUNT);
-  const dispatchTime = f(FIELD_IDS.DISPATCH_TIME);
-  const serviceStyle = f(FIELD_IDS.SERVICE_STYLE);
+  const dispatchTime = secondsToTimeString(eventData[FIELD_IDS.DISPATCH_TIME]) || f(FIELD_IDS.DISPATCH_TIME);
+  const fwStaff = f(FIELD_IDS.CAPTAIN);
+  const eventArrival = secondsToTimeString(eventData[FIELD_IDS.FOODWERX_ARRIVAL]);
   const allergies = f(FIELD_IDS.DIETARY_NOTES);
-  const jobNumber = clientName + " \u2013 " + eventDate;
-
-  // Service style banner: only show if NOT buffet / full service
-  const styleLower = serviceStyle.toLowerCase();
-  const isBuffetStyle =
-    styleLower.includes("buffet") || styleLower.includes("full service");
-  const showServiceStyleBanner = serviceStyle && !isBuffetStyle;
-
-  // No kitchen available (wire to real field when ready)
-  const noKitchenAvailable = false; // TODO: wire to actual field
+  const serviceStyle = asSingleSelectName(eventData[FIELD_IDS.SERVICE_STYLE]).trim();
+  const notBuffetBanner = serviceStyle && !serviceStyle.toLowerCase().includes("buffet")
+    ? `NOT BUFFET – ${serviceStyle.toUpperCase()}`
+    : "";
+  const jobNumber = `${clientName} – ${eventDate}`;
+  const phone = contactPhone || clientPhone;
 
   // ── Parse linked menu items ──
   const parseMenuItems = (fieldId: string): MenuLineItem[] => {
@@ -316,7 +383,6 @@ const BeoPrintPage: React.FC = () => {
 
     return raw.map((item: unknown) => {
       if (typeof item === "string") {
-        // It's a record ID — resolve from menuNames
         return {
           id: item,
           name: menuNames[item] || "Loading...",
@@ -333,7 +399,7 @@ const BeoPrintPage: React.FC = () => {
     });
   };
 
-  // ── Menu Sections (Sacred Order) ──
+  // ── Menu Sections ──
   const menuSections: SectionData[] = [
     {
       title: "PASSED APPETIZERS",
@@ -346,12 +412,12 @@ const BeoPrintPage: React.FC = () => {
       items: parseMenuItems(FIELD_IDS.PRESENTED_APPETIZERS),
     },
     {
-      title: "BUFFET \u2013 METAL",
+      title: "BUFFET – METAL",
       fieldId: FIELD_IDS.BUFFET_METAL,
       items: parseMenuItems(FIELD_IDS.BUFFET_METAL),
     },
     {
-      title: "BUFFET \u2013 CHINA",
+      title: "BUFFET – CHINA",
       fieldId: FIELD_IDS.BUFFET_CHINA,
       items: parseMenuItems(FIELD_IDS.BUFFET_CHINA),
     },
@@ -360,10 +426,22 @@ const BeoPrintPage: React.FC = () => {
       fieldId: FIELD_IDS.DESSERTS,
       items: parseMenuItems(FIELD_IDS.DESSERTS),
     },
+    {
+      title: "STATIONS",
+      fieldId: FIELD_IDS.STATIONS,
+      items: parseMenuItems(FIELD_IDS.STATIONS),
+    },
   ];
 
-  // Collapse empty sections
   const activeSections = menuSections.filter((s) => s.items.length > 0);
+
+  // Grid columns based on view mode
+  const gridTemplateColumns =
+    viewMode === "kitchen" ? "140px 1fr" :
+    viewMode === "spec" ? "140px 1fr 200px" :
+    viewMode === "packout" ? "1fr 250px" :
+    viewMode === "expeditor" ? "40px 1fr" :
+    "1fr";
 
   // ── Loading State ──
   if (loading) {
@@ -383,7 +461,7 @@ const BeoPrintPage: React.FC = () => {
     <>
       <style>{printStyles}</style>
 
-      {/* ── Toolbar (doesn't print) ── */}
+      {/* ── Toolbar ── */}
       <div className="no-print" style={styles.toolbar}>
         <button
           style={{
@@ -413,6 +491,15 @@ const BeoPrintPage: React.FC = () => {
           📦 Pack-Out View
         </button>
         <button
+          style={{
+            ...styles.toolbarBtn,
+            ...(viewMode === "expeditor" ? styles.activeBtn : styles.inactiveBtn),
+          }}
+          onClick={() => setViewMode("expeditor")}
+        >
+          ☑️ Expeditor View
+        </button>
+        <button
           style={{ ...styles.toolbarBtn, background: "#2d8cf0" }}
           onClick={() => window.print()}
         >
@@ -428,63 +515,83 @@ const BeoPrintPage: React.FC = () => {
 
       {/* ── Print Page ── */}
       <div style={styles.page}>
-        {/* ── Header ── */}
-        <div style={styles.header}>
-          <div style={styles.headerLeft}>
-            <div style={styles.headerRow}>
-              <span style={styles.headerLabel}>CLIENT:</span>
-              <span style={styles.headerValue}>{clientName || "\u2014"}</span>
+        {/* ── Header (redesigned) ── */}
+        <div style={{
+          borderRadius: 10,
+          border: "1px solid #e5e7eb",
+          background: "#fff",
+          overflow: "hidden",
+          marginBottom: 16,
+          boxShadow: "0 1px 8px rgba(0,0,0,0.05)",
+        }}>
+          {/* Top — 4-column layout, grey */}
+          <div style={{
+            display: "grid",
+            gridTemplateColumns: "1fr 1fr",
+            width: "100%",
+            background: "#f3f4f6",
+          }}>
+            {/* Left block: Label | Value */}
+            <div style={{
+              display: "grid",
+              gridTemplateColumns: "minmax(100px, auto) 1fr",
+              gap: "0 16px",
+              padding: "10px 16px",
+              alignItems: "stretch",
+            }}>
+              <HeaderRow label="Client" value={clientName} />
+              {contactName && contactName !== clientName && (
+                <HeaderRow label="Contact" value={contactName} />
+              )}
+              <HeaderRow label="Phone" value={phone} />
+              <HeaderRow label="Venue" value={eventLocation} />
+              <HeaderRow label="Venue Address" value={venueAddress} last />
             </div>
-            <div style={styles.headerRow}>
-              <span style={styles.headerLabel}>PHONE:</span>
-              <span style={styles.headerValue}>{phone || "\u2014"}</span>
-            </div>
-            <div style={styles.headerRow}>
-              <span style={styles.headerLabel}>VENUE:</span>
-              <span style={styles.headerValue}>
-                {venue || "\u2014"}
-                {venueAddress ? `, ${venueAddress}` : ""}
-              </span>
+            {/* Right block: Label | Value — with vertical separator */}
+            <div style={{
+              display: "grid",
+              gridTemplateColumns: "minmax(100px, auto) 1fr",
+              gap: "0 16px",
+              padding: "10px 16px",
+              borderLeft: "1px solid #e5e7eb",
+              alignItems: "stretch",
+            }}>
+              <HeaderRow label="Guest Count" value={guestCount} />
+              <HeaderRow label="Event Date" value={eventDate} />
+              <HeaderRow label="Event Start" value={eventStart} highlight />
+              <HeaderRow label="Event End" value={eventEnd} highlight />
+              <HeaderRow label="FW Staff" value={fwStaff} />
+              <HeaderRow label="Event Arrival" value={eventArrival} last />
             </div>
           </div>
-          <div style={styles.headerRight}>
-            <div style={styles.headerRowRight}>
-              <span style={styles.headerLabel}>DATE:</span>
-              <span style={styles.headerValue}>{eventDate || "\u2014"}</span>
+
+          {/* Bottom band — Dispatch Time & Job #, white */}
+          <div style={{
+            display: "grid",
+            gridTemplateColumns: "1fr 1fr",
+            background: "#fff",
+            borderTop: "1px solid #e5e7eb",
+          }}>
+            <div style={{ borderRight: "1px solid #e5e7eb" }}>
+              <HighlightField label="DISPATCH TIME" value={dispatchTime || "TBD"} accentColor={HEADER_ACCENT} />
             </div>
-            <div style={styles.headerRowRight}>
-              <span style={styles.headerLabel}>GUEST COUNT:</span>
-              <span style={styles.headerValue}>{guestCount || "\u2014"}</span>
-            </div>
-            <div style={styles.headerRowRight}>
-              <span style={styles.headerLabel}>DISPATCH:</span>
-              <span style={styles.headerValue}>{dispatchTime || "\u2014"}</span>
-            </div>
-            <div style={styles.headerRowRight}>
-              <span style={styles.headerLabel}>JOB #:</span>
-              <span style={styles.headerValue}>{jobNumber}</span>
+            <div>
+              <HighlightField label="JOB #" value={jobNumber} accentColor={HEADER_ACCENT} />
             </div>
           </div>
         </div>
 
+        {/* ── Not Buffet Banner (when service style is plated, family style, etc.) ── */}
+        {notBuffetBanner && (
+          <div style={styles.notBuffetBanner}>
+            {notBuffetBanner}
+          </div>
+        )}
+
         {/* ── Allergy Banner ── */}
         {allergies && (
           <div style={styles.allergyBanner}>
-            ⚠️ ALLERGY ALERT: {allergies.toUpperCase()}
-          </div>
-        )}
-
-        {/* ── Service Style Banner (only if NOT buffet) ── */}
-        {showServiceStyleBanner && (
-          <div style={styles.serviceStyleBanner}>
-            SERVICE STYLE: {serviceStyle.toUpperCase()}
-          </div>
-        )}
-
-        {/* ── No Kitchen Banner ── */}
-        {noKitchenAvailable && (
-          <div style={styles.noKitchenBanner}>
-            🔥 NO KITCHEN AVAILABLE — ALL FOOD MUST GO HOT
+            ⚠️ ALLERGIES / DIETARY RESTRICTIONS: {allergies.toUpperCase()}
           </div>
         )}
 
@@ -496,40 +603,63 @@ const BeoPrintPage: React.FC = () => {
         )}
 
         {activeSections.map((section) => (
-          <div key={section.fieldId}>
-            <div style={styles.sectionHeader}>{section.title}</div>
+          <div key={section.fieldId} style={styles.sectionCard}>
+            <div style={styles.sectionHeader}>
+              <span style={{ color: getSectionColor(section.title), fontSize: "18px", lineHeight: 0 }}>●</span>
+              <span>{section.title}</span>
+              <span style={{ color: getSectionColor(section.title), fontSize: "18px", lineHeight: 0 }}>●</span>
+            </div>
             {section.items.map((item, idx) => (
-              <div key={item.id + idx} style={styles.lineItem}>
-                {/* Column 1: Specs */}
-                <div style={styles.specCol}>
-                  {viewMode === "spec" ? (
-                    <input
-                      type="text"
-                      placeholder="qty / pan / vessel"
-                      style={{
-                        width: "100%",
-                        padding: "4px 6px",
-                        fontSize: 12,
-                        background: "#f5f5f5",
-                        border: "1px solid #ccc",
-                        borderRadius: 3,
-                      }}
-                      className="no-print"
-                    />
-                  ) : (
-                    <span>{item.specQty || "\u2014"}</span>
-                  )}
-                </div>
+              <div key={item.id + idx} style={{ ...styles.lineItem, gridTemplateColumns }}>
+                {/* EXPEDITOR: Checkbox */}
+                {viewMode === "expeditor" && (
+                  <div style={styles.checkboxCol}>
+                    <input type="checkbox" checked={item.loaded || false} />
+                  </div>
+                )}
 
-                {/* Column 2: Item Name */}
+                {/* KITCHEN/SPEC: Spec Column */}
+                {(viewMode === "kitchen" || viewMode === "spec") && (
+                  <div style={styles.specCol}>
+                    {viewMode === "spec" ? (
+                      <input
+                        type="text"
+                        placeholder="override spec..."
+                        defaultValue={item.specQty}
+                        style={{
+                          width: "100%",
+                          padding: "4px 6px",
+                          fontSize: 12,
+                          background: "#f5f5f5",
+                          border: "1px solid #ccc",
+                          borderRadius: 3,
+                        }}
+                        className="no-print"
+                      />
+                    ) : (
+                      <span>
+                        {calculateSpec({
+                          itemId: item.id,
+                          itemName: item.name,
+                          section: section.title,
+                          guestCount: parseInt(guestCount) || 0,
+                          nickQtyOverride: item.specQty,
+                        })}
+                      </span>
+                    )}
+                  </div>
+                )}
+
+                {/* ALL MODES: Item Name */}
                 <div style={styles.itemCol}>{item.name}</div>
 
-                {/* Column 3: Pack-Out Items */}
-                <div style={styles.packOutCol}>
-                  {viewMode === "packout" ? (
+                {/* PACK-OUT: Equipment Column */}
+                {viewMode === "packout" && (
+                  <div style={styles.packOutCol}>
                     <input
                       type="text"
-                      placeholder="chafer, tongs, riser..."
+                      placeholder="equipment..."
+                      defaultValue={item.packOutItems}
                       style={{
                         width: "100%",
                         padding: "4px 6px",
@@ -541,39 +671,32 @@ const BeoPrintPage: React.FC = () => {
                       }}
                       className="no-print"
                     />
-                  ) : (
-                    <span>{item.packOutItems || ""}</span>
-                  )}
-                </div>
+                  </div>
+                )}
               </div>
             ))}
           </div>
         ))}
 
-        {/* ── KITCHEN STOPS HERE ── */}
+        {/* ── Allergy Banner (Footer) ── */}
+        {allergies && (
+          <div style={{ ...styles.allergyBanner, marginTop: 20, marginBottom: 12 }}>
+            ⚠️ ALLERGIES / DIETARY RESTRICTIONS: {allergies.toUpperCase()}
+          </div>
+        )}
 
         {/* ── Footer ── */}
         <div style={styles.footer}>
-          {allergies && (
-            <div style={styles.footerAllergyRepeat}>
-              ⚠️ {allergies.toUpperCase()}
-            </div>
-          )}
-          {showServiceStyleBanner && (
-            <div style={styles.footerServiceStyle}>
-              {serviceStyle.toUpperCase()}
-            </div>
-          )}
           <div style={styles.footerStrip}>
-            <span>CLIENT: {clientName}</span>
-            <span>•</span>
-            <span>VENUE: {venue}{venueAddress ? `, ${venueAddress}` : ""}</span>
-            <span>•</span>
-            <span>DISPATCH: {dispatchTime || "\u2014"}</span>
-            <span>•</span>
-            <span>GUESTS: {guestCount}</span>
-            <span>•</span>
-            <span>JOB #: {jobNumber}</span>
+            <span>Client: {clientName || "—"}</span>
+            <span style={styles.footerSeparator}>|</span>
+            <span>Venue: {eventLocation || "—"}</span>
+            <span style={styles.footerSeparator}>|</span>
+            <span>Dispatch: {dispatchTime || "—"}</span>
+            <span style={styles.footerSeparator}>|</span>
+            <span>Guests: {guestCount || "—"}</span>
+            <span style={styles.footerSeparator}>|</span>
+            <span>Job #: {jobNumber || "—"}</span>
           </div>
         </div>
       </div>

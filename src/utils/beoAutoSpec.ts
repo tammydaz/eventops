@@ -1,9 +1,15 @@
 /**
  * FoodWerx Kitchen BEO Auto-Spec Engine
- * Following Tammy's Dropbox Blueprint Rules
+ * OFFICIAL CONSERVATIVE HYBRID RULES
  * 
- * Pattern-based calculations (NOT linear math)
- * Based on real event analysis from operational data
+ * These are the locked business rules.
+ * Do not modify without operational approval.
+ * Do not apply generic banquet math.
+ * Output must match FoodWerx kitchen terminology exactly.
+ * 
+ * CRITICAL: This engine does NOT infer item types from names.
+ * It relies strictly on the FoodCategory input.
+ * If categorization is wrong, that is a data problem, not a spec engine problem.
  */
 
 export type AutoSpecResult = {
@@ -15,8 +21,18 @@ export type AutoSpecResult = {
 export type FoodCategory = "passed" | "presented" | "buffet" | "dessert";
 
 /**
- * Calculate spec quantities based on category and guest count
- * Uses tiered, pattern-based logic from Tammy's approved rules
+ * Round to nearest 5
+ */
+function roundToNearest5(value: number): number {
+  return Math.round(value / 5) * 5;
+}
+
+/**
+ * Calculate spec quantities based on FoodWerx conservative hybrid rules
+ * 
+ * @param itemName - Item name (used only for display, NOT for logic)
+ * @param category - Food category (determines spec rule)
+ * @param guestCount - Number of guests
  */
 export function calculateAutoSpec(
   itemName: string,
@@ -27,79 +43,27 @@ export function calculateAutoSpec(
     return { quantity: "—", flagForReview: true };
   }
 
-  const name = itemName.toLowerCase();
-
   // =======================================
   // PASSED & PRESENTED APPETIZERS
   // =======================================
   if (category === "passed" || category === "presented") {
-    // Special case: Meatballs and cakes = 1.5 oz per guest
-    if (name.includes("meatball") || name.includes("cake")) {
-      const oz = Math.ceil(guestCount * 1.5);
-      return { quantity: `${oz} oz` };
-    }
-
-    // Standard passed/presented = 2 oz per guest
-    const oz = Math.ceil(guestCount * 2);
-    return { quantity: `${oz} oz` };
+    // 1.35 pieces per guest per item
+    // Round to nearest 5
+    const rawPieces = guestCount * 1.35;
+    const pieces = roundToNearest5(rawPieces);
+    return { quantity: `${pieces} PC` };
   }
 
   // =======================================
-  // BUFFET ITEMS
+  // BUFFET ITEMS (SIDES DEFAULT)
   // =======================================
   if (category === "buffet") {
-    let fullPans = 0;
-    let halfPans = 0;
-
-    // Tiered guest count logic (Tammy's tier-based system)
-    if (guestCount <= 25) {
-      halfPans = 1;
-    } else if (guestCount <= 50) {
-      fullPans = 1;
-    } else if (guestCount <= 75) {
-      fullPans = 1;
-      halfPans = 1;
-    } else if (guestCount <= 100) {
-      fullPans = 2;
-    } else if (guestCount <= 150) {
-      fullPans = 3;
-    } else if (guestCount <= 200) {
-      fullPans = 4;
-    } else {
-      // Over 200: 1 full pan per 50 guests
-      fullPans = Math.ceil(guestCount / 50);
-    }
-
-    // Convert half pans: 2 halves = 1 full
-    if (halfPans >= 2) {
-      fullPans += Math.floor(halfPans / 2);
-      halfPans = halfPans % 2;
-    }
-
-    // Build quantity string
-    let result = "";
-    if (fullPans > 0) result += `${fullPans} full`;
-    if (halfPans > 0) result += (result ? " + " : "") + `${halfPans} half`;
-
-    // Special notes
-    let notes: string | undefined;
-    let flagForReview = false;
-
-    // Round pan detection
-    if (name.includes("round") || name.includes("cake")) {
-      notes = "⚠️ Round chafer required";
-    }
-
-    // Odd half pan flag
-    if (halfPans === 1) {
-      flagForReview = true;
-      notes = notes ? `${notes} • Odd half pan` : "⚠️ Odd half pan";
-    }
-
+    // Default: SIDES logic (most common, most conservative)
+    // 1 HOTEL per 40 servings
+    const hotelCount = Math.ceil(guestCount / 40);
     return { 
-      quantity: result || "1 full", 
-      notes,
-      flagForReview 
+      quantity: `${hotelCount} HOTEL`,
+      notes: "⚠️ Verify if protein or sauce (manual override may be needed)"
     };
   }
 
@@ -107,8 +71,9 @@ export function calculateAutoSpec(
   // DESSERTS
   // =======================================
   if (category === "dessert") {
-    // 1 per guest (no linear math exceptions)
-    return { quantity: `${guestCount} pcs` };
+    // 1 per guest, round to nearest 5
+    const pieces = roundToNearest5(guestCount);
+    return { quantity: `${pieces} PC` };
   }
 
   // Fallback

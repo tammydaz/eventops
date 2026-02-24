@@ -54,7 +54,7 @@ export const BeoIntakePage = () => {
     <div style={{ minHeight: "100vh", backgroundColor: "#1a1a1a", color: "#e0e0e0", position: "relative", fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif" }}>
       <div style={{ position: "relative", zIndex: 10 }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "20px 40px", borderBottom: "3px solid #ff6b6b", backdropFilter: "blur(10px)" }}>
-          <button type="button" style={{ display: "flex", alignItems: "center", gap: "12px", textDecoration: "none", background: "none", border: "none", cursor: "pointer", padding: 0 }} onClick={() => window.history.pushState({}, "", "/")}>
+          <button type="button" style={{ display: "flex", alignItems: "center", gap: "12px", textDecoration: "none", background: "none", border: "none", cursor: "pointer", padding: 0 }} onClick={() => { window.location.pathname = "/"; }}>
             <div style={{ width: "48px", height: "48px", background: "#ff6b6b", display: "flex", alignItems: "center", justifyContent: "center", borderRadius: "12px", fontSize: "24px", boxShadow: "0 4px 12px rgba(255, 107, 107, 0.3)" }}>←</div>
             <span style={{ fontSize: "14px", color: "#e0e0e0", fontWeight: "600" }}>Back to Dashboard</span>
           </button>

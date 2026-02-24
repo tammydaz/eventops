@@ -1,3 +1,11 @@
+/**
+ * ⚠️ GOLDEN RULE: NEVER write to computed fields.
+ * Any Airtable field ending in "Print" is a FORMULA — read-only.
+ * Examples: VenuePrint, EventLocationPrint, ClientNamePrint, ContactPrint
+ * Only write to source fields (Venue, Client Address, City/State, etc.)
+ * Print fields calculate automatically from source fields.
+ */
+
 export async function fetchEvents() {
   const response = await fetch("/api/events");
   if (!response.ok) {
@@ -31,17 +39,22 @@ export const FIELD_IDS = {
   EVENT_NAME: "fldZuHc9D29Wcj60h",              // Formula - READ ONLY
   EVENT_DATE: "fldFYaE7hI27R3PsX",
   EVENT_TYPE: "fldtqnvD7M8xbc0Xb",
-  SERVICE_STYLE: "fldO8D4thzfEmQwzv",            // 🔴 WAS WRONG
+  SERVICE_STYLE: "fldqnW1ulcchcQ05t",  // Service Style (was wrong: fldR0ljDqgPKtRenQ is Ice Needed?)
   GUEST_COUNT: "fldjgqDUxVxaJ7Y9V",
   STATUS: "fldwdqfHaKXmqObE2",
 
   // ── Venue & Address ──
   VENUE: "fldfQoT3yhCBXzHWT",                    // 🔴 WAS WRONG
   VENUE_NAME: "fldK8j9JRu0VYCFV9",
-  VENUE_ADDRESS: "fldJsajSl1l6marzw",            // Event Location (Final Print)
+  VENUE_ADDRESS: "fldtCOxi4Axjfjt0V",
   VENUE_CITY: "fldNToCnV799eggiD",
   VENUE_STATE: "fldxCz5cPLwCetb0C",
-  VENUE_FULL_ADDRESS: "fldOKQTp8Zf6a462f",
+  VENUE_FULL_ADDRESS_CLEAN: "fldJsajSl1l6marzw",
+  
+  // ── Computed Address Fields (READ ONLY - Never write to these) ──
+  VENUE_FULL_ADDRESS: "fldOKQTp8Zf6a462f",       // Formula: "Venue Full Address (Clean)"
+  EVENT_LOCATION_FINAL_PRINT: "flddestyZNoX9sKGE", // Formula: "Event Location (Final Print)"
+  PRINT_VENUE_ADDRESS: "fldJsajSl1l6marzw",      // Formula: "VenuePrint" - THIS WAS THE BUG!
 
   // ── Client ──
   CLIENT: "fldRYDTj6V7L1xRP3",                   // Linked record
@@ -51,9 +64,12 @@ export const FIELD_IDS = {
   CLIENT_EMAIL: "fldT5lcdCL5ndh84D",
   CLIENT_PHONE: "fldnw1VGIi3oXM4g3",
 
-  // ── Primary Contact ──
+  // ── Primary Contact (Day-Of Person) ──
   PRIMARY_CONTACT_NAME: "fldmsFPsl2gAtiSCD",
   PRIMARY_CONTACT_PHONE: "fld4OK9zVwr16qMIt",
+  CONTACT_FIRST_NAME: "fld9LnsDlMBTl7C1G",
+  CONTACT_LAST_NAME: "fldmsFPsl2gAtiSCD",
+  CONTACT_PHONE: "fld4OK9zVwr16qMIt",
   PRIMARY_CONTACT_ROLE: "fldMTRGNFa4pHbjY5",
 
   // ── Menu Sections (Sacred Placement Lanes) ──
@@ -68,12 +84,21 @@ export const FIELD_IDS = {
   DESSERTS: "flddPGfYJQxixWRq9",
   CUSTOM_DESSERTS: "fld95NEZsIfHpVvAk",
   ROOM_TEMP_DISPLAY: "fld1373dtkeXhufoL",
+  STATIONS: "fldbbDlpheiUGQbKu",
   BEVERAGES: "fldRb454yd3EQhcbo",
   MENU_ITEMS: "fld7n9gmBURwXzrnB",
   MENU_ITEM_SPECS: "fldX9ayAyjMqYT2Oi",
+  LOADED: "fldrKmicpgzVJRGjp",
 
   // ── Bar & Beverage ──
   BAR_SERVICE_NEEDED: "fldOisfjYPDeBwM1B",       // 🔴 WAS WRONG
+  BAR_SERVICE: "fldXm91QjyvVKbiyO",              // Single select
+  BAR_SIG_DRINK: "fldcry8vpUBY3fkHk",            // Single select: Yes/No
+  BAR_DRINK_NAME: "fldZSIBTkzcEmG7bt",           // Text
+  BAR_RECIPE: "fld1sg6vQi7lziPDz",               // Long text
+  BAR_WHO_SUPPLIES: "fldoek1mpdi2ESyzu",         // Single select: Foodwerx/Client
+  BAR_MIXERS: "fldXL37gOon7wyQss",               // Text
+  BAR_GARNISHES: "flduv4RtRR0lLm4vY",            // Text
 
   // ── Hydration ──
   INFUSED_WATER: "fldyzrU3YnO8dzxbd",            // 🔴 WAS WRONG (was using STATUS field ID!)
@@ -106,10 +131,16 @@ export const FIELD_IDS = {
   RENTALS_NEEDED: "fldKFjPzm1w9OoqOD",
 
   // ── Timeline & Logistics ──
-  DISPATCH_TIME: "fldbbHmaWqOBNUlJP",
-  EVENT_START_TIME: "fldDwDE87M9kFAIDn",
-  EVENT_END_TIME: "fld7xeCnV751pxmWz",
+  DISPATCH_TIME: "fldbbHmaWqOBNUlJP",  // was wrong: flddmE3MvGNzCbt8K doesn't exist in Events
+  EVENT_START_TIME: "fldDwDE87M9kFAIDn",  // duration (seconds) - was wrong ID
+  EVENT_END_TIME: "fld7xeCnV751pxmWz",     // duration (seconds) - was wrong ID
   FOODWERX_ARRIVAL: "fldMYjGf8dQPNiY4Y",
+  VENUE_ARRIVAL_TIME: "fld807MPvraEV8QvN",
+  PARKING_LOAD_IN_NOTES: "fldqXqiwryBHhJmUc",
+
+  // ── Kitchen / Hot Food Logic ──
+  KITCHEN_ON_SITE: "fldSpUlS9qEQ5ly6T",        // Single select: Yes/No/None
+  FOOD_MUST_GO_HOT: "fldJFB69mmB5T4Ysp",       // Checkbox
 
   // ── Status & Booking ──
   BOOKING_STATUS: "fldUfOemMR4gpALQR",
@@ -138,9 +169,11 @@ export const FIELD_IDS = {
   PRINT_EVENT_HEADER: "fldqC8ojaYB5RJiWM",
   PRINT_EVENT_DETAILS: "fld8vx9rXXYQ1hHN5",
   PRINT_CLIENT_BLOCK: "fld9LnsDlMBTl7C1G",
-  PRINT_ADDRESS_BLOCK: "fldJsajSl1l6marzw",
+  PRINT_ADDRESS_BLOCK: "fldJsajSl1l6marzw",       // Formula (same as PRINT_VENUE_ADDRESS) - READ ONLY
   ALLERGIES_PRINT: "fld0W6FZxATCOa8oP",
   DIETARY_SUMMARY: "fldN3z0LgsiM8eE5C",
+  BEO_NOTES: "fldnGtJVWf4u39SHI",              // Long text
+  BEO_TIMELINE: "fld6Z6xw9ciygqyff",           // Long text
 
   // ── Serviceware Detail ──
   CHINA_PAPER_GLASSWARE: "fldWc6PpHh5w2nl6l",
@@ -152,7 +185,7 @@ export const FIELD_IDS = {
   PAPER_TYPE: "fld8pWDC3b0zuMZto",
 
   // ── Logistics Detail ──
-  TIMELINE: "flduvl7yt3kqf7FIO",
+  TIMELINE: "fldCGIJmP74Vk8ViQ",  // was wrong: flduvl7yt3kqf7FIO is Print_Allergies (formula)
   PARKING_ACCESS: "fldMzNI4UGTkg9r0u",
   PARKING_NOTES: "fldWVHbtnZ5unHdHA",
   LINENS_OVERLAYS: "fldLyuDJTQ6bXQY3X",
@@ -313,6 +346,136 @@ export const loadSingleSelectOptions = async (
   return optionsMap;
 };
 
+// STRICT WHITELIST: Only these field IDs are ever sent to Airtable PATCH.
+// Anything not in this list is dropped. Add new IDs here after confirming they are NOT formula/rollup/lookup.
+const SAVE_WHITELIST = new Set([
+  "fldFYaE7hI27R3PsX",   // EVENT_DATE
+  "fldtqnvD7M8xbc0Xb",   // EVENT_TYPE
+  "fldqnW1ulcchcQ05t",   // SERVICE_STYLE
+  "fldjgqDUxVxaJ7Y9V",   // GUEST_COUNT
+  "fldfQoT3yhCBXzHWT",   // VENUE
+  "fldK8j9JRu0VYCFV9",   // VENUE_NAME
+  "fldtCOxi4Axjfjt0V",   // VENUE_ADDRESS
+  "fldNToCnV799eggiD",   // VENUE_CITY
+  "fldxCz5cPLwCetb0C",   // VENUE_STATE
+  "fldFAspB1ds9Yn0Kl",   // CLIENT_FIRST_NAME
+  "fldeciZmsIY3c2T1v",   // CLIENT_LAST_NAME
+  "fldT5lcdCL5ndh84D",   // CLIENT_EMAIL
+  "fldnw1VGIi3oXM4g3",   // CLIENT_PHONE
+  "fldmsFPsl2gAtiSCD",   // PRIMARY_CONTACT_NAME
+  "fld4OK9zVwr16qMIt",   // PRIMARY_CONTACT_PHONE
+  "fld9LnsDlMBTl7C1G",   // CONTACT_FIRST_NAME
+  "fldMTRGNFa4pHbjY5",   // PRIMARY_CONTACT_ROLE
+  "fldbbHmaWqOBNUlJP",   // DISPATCH_TIME
+  "fldDwDE87M9kFAIDn",   // EVENT_START_TIME
+  "fld7xeCnV751pxmWz",   // EVENT_END_TIME
+  "fld807MPvraEV8QvN",   // VENUE_ARRIVAL_TIME
+  "fldqXqiwryBHhJmUc",   // PARKING_LOAD_IN_NOTES
+  "fldCGIJmP74Vk8ViQ",   // TIMELINE
+  "fldWVHbtnZ5unHdHA",   // PARKING_NOTES
+  "fldhGj51bQQWLJSX0",   // DIETARY_NOTES
+  "fldlTlYgvPTIUzzMn",   // SPECIAL_NOTES
+  "fld3C67SAUsTxCS8E",   // SERVICE_WARE
+  "fldMKe8NjFvQABy5j",   // RENTALS
+  "fldv5sitKjwsIleEK",   // RENTAL_ITEMS
+  "fldKFjPzm1w9OoqOD",   // RENTALS_NEEDED
+  "fldlPI3Ix1UTuGrCf",   // SERVICE_WARE_SOURCE
+  "fldOisfjYPDeBwM1B",   // BAR_SERVICE_NEEDED
+  "fldXm91QjyvVKbiyO",   // BAR_SERVICE
+  "fldyzrU3YnO8dzxbd",   // INFUSED_WATER
+  "fldRxshZ4GqXGrJnu",   // INFUSION_INGREDIENTS
+  "fldlDyMCzOTpzAPEh",   // DISPENSER_COUNT
+  "fldWIMlTc0Za6BTYk",   // COFFEE_SERVICE_NEEDED
+  "fldWkHPhynjxyecq7",   // STAFF
+  "fld4QUBWxoSu6o29l",   // SERVERS
+  "fldox9emNqGoemhz0",   // UTILITY
+  "flddTPAvICJSztxrj",   // STATION_CREW
+  "fldmROaYyanyZi77Z",   // CHEF
+  "fldHgVYksw8YsGX8f",   // BARTENDERS
+  "fldJUrDnCSnw31wan",   // DISPLAY_DESIGN
+  "fldaT7wcJglqPr8dA",   // DINING_CREW
+  "fldSpUlS9qEQ5ly6T",   // KITCHEN_ON_SITE
+  "fldJFB69mmB5T4Ysp",   // FOOD_MUST_GO_HOT
+  "fldnGtJVWf4u39SHI",   // BEO_NOTES
+  "fld6Z6xw9ciygqyff",   // BEO_TIMELINE
+  "fld5raG6Afilj1wDo",   // THEME_COLOR_SCHEME
+  "fldpprTRRFNydiV1m",   // PASSED_APPETIZERS
+  "fldwku49gGffnnAOV",   // PRESENTED_APPETIZERS
+  "fldgi4mL7kyhpQzsy",   // BUFFET_METAL
+  "fldtpY6zR1KCag3mI",   // BUFFET_CHINA
+  "flddPGfYJQxixWRq9",   // DESSERTS
+  "fldRb454yd3EQhcbo",   // BEVERAGES
+  "fld7n9gmBURwXzrnB",   // MENU_ITEMS
+  "fldX9ayAyjMqYT2Oi",   // MENU_ITEM_SPECS
+  "fldwdqfHaKXmqObE2",   // STATUS
+  "fldUfOemMR4gpALQR",   // BOOKING_STATUS
+  "fld84akZRtjijhCHQ",   // PAYMENT_STATUS
+  "fldfHa7vpohlikzaM",   // PAYMENT_TYPE
+  "flduHZcyV31cdfl6h",   // CONTRACT_SENT
+  "fldUMBfmLyRTtR1t1",   // CONTRACT_SIGNED
+  "fldtWmLeBbuecOeCi",   // INVOICE_SENT
+  "fldi2FjcfMFmOCV82",   // INVOICE_PAID
+  "fldL35sEiLnkyftFa",   // OPS_EXCEPTIONS_SPECIAL_HANDLING
+  "fldRYDTj6V7L1xRP3",   // CLIENT (linked record)
+  "fldDbT9eLZUoJUnmS",   // CUSTOM_PASSED_APP
+  "fldsIaND0Bp3ByW1c",   // CUSTOM_PRESENTED_APP
+  "fldm1qYJE55QVjYsd",   // CUSTOM_BUFFET_METAL
+  "fldtquSPyLWUEYX6P",   // CUSTOM_BUFFET_CHINA
+  "fld95NEZsIfHpVvAk",   // CUSTOM_DESSERTS
+  "fldcry8vpUBY3fkHk",   // BAR_SIG_DRINK
+  "fldZSIBTkzcEmG7bt",   // BAR_DRINK_NAME
+  "fld1sg6vQi7lziPDz",   // BAR_RECIPE
+  "fldoek1mpdi2ESyzu",   // BAR_WHO_SUPPLIES
+  "fldXL37gOon7wyQss",   // BAR_MIXERS
+  "flduv4RtRR0lLm4vY",   // BAR_GARNISHES
+  "fldWc6PpHh5w2nl6l",   // CHINA_PAPER_GLASSWARE
+  "fldQK1G8pE7VvDhoC",   // SERVICE_WARE_SOURCE_ALT
+  "fldC1hp7tQH1AXLpr",   // BBS
+  "fldm4fQK7mV5WuPZg",   // LARGE_PLATES
+  "fld7Jk0HF0P1uqVmk",   // SALAD_PLATES
+  "fld8pWDC3b0zuMZto",   // PAPER_TYPE
+  "fldQ8sJ6BzzbZDQ7v",   // HYDRATION_BOTTLED_WATER
+  "fldhJq2wz89p8ByQy",   // HYDRATION_UNSWEET_TEA
+  "fldI8bUs0r9kF0R2d",   // HYDRATION_SWEET_TEA
+  "fldvM9UQdP3yQxTi6",   // HYDRATION_SODA_SELECTION
+  "fldWjQ9vqN3zDhy7X",   // HYDRATION_OTHER
+  "fld91JcDezV20RarF",   // HYDRATION_BOTTLED_TEA
+  "fldGUB8Thl42pJcx6",   // HYDRATION_DIET_TEA
+  "fldV6XXkMe5S0zyEV",   // HYDRATION_MIXTURE
+  "fldbbDlpheiUGQbKu",   // STATIONS
+]);
+
+export const EDITABLE_FIELD_IDS = SAVE_WHITELIST;
+
+/** Strip to whitelist only. Call before setFields to avoid sending computed fields. */
+export function filterToEditableOnly(fields: Record<string, unknown>): Record<string, unknown> {
+  const result: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(fields)) {
+    if (!SAVE_WHITELIST.has(key)) continue;
+    if (value === undefined) continue;
+    if (Array.isArray(value) && value.length > 0 && typeof value[0] === "object" && value[0] !== null && "url" in (value[0] as object)) continue;
+    result[key] = value;
+  }
+  return result;
+}
+
+// dateTime fields: convert seconds → ISO. (Event Start/End are duration—send seconds as-is.)
+const DATE_TIME_FIELD_IDS = new Set([
+  FIELD_IDS.FOODWERX_ARRIVAL,
+  FIELD_IDS.DISPATCH_TIME,
+]);
+
+/** Convert seconds (from midnight) + date string → ISO datetime for Airtable */
+function secondsAndDateToIso(seconds: number, dateStr: string): string {
+  const [y, m, d] = dateStr ? dateStr.split("-").map(Number) : [];
+  const base = y && m && d ? new Date(Date.UTC(y, m - 1, d)) : new Date();
+  const h = Math.floor(seconds / 3600);
+  const min = Math.floor((seconds % 3600) / 60);
+  const sec = Math.floor(seconds % 60);
+  base.setUTCHours(h, min, sec, 0);
+  return base.toISOString();
+}
+
 export const updateEventMultiple = async (
   recordId: string,
   updatesObject: Record<string, unknown>
@@ -320,19 +483,51 @@ export const updateEventMultiple = async (
   const table = getEventsTable();
   if (typeof table !== "string") return table;
 
+  const filteredFields: Record<string, unknown> = {};
+  const blockedFields: string[] = [];
+  const eventDate = asString(updatesObject[FIELD_IDS.EVENT_DATE]) || "";
+
+  for (const [key, value] of Object.entries(updatesObject)) {
+    if (!SAVE_WHITELIST.has(key)) {
+      blockedFields.push(key);
+      continue;
+    }
+    // Skip attachment fields — they need special handling and can cause PATCH to fail
+    if (Array.isArray(value) && value.length > 0 && typeof value[0] === "object" && value[0] !== null && "url" in (value[0] as object)) {
+      blockedFields.push(key);
+      continue;
+    }
+    if (value === undefined) continue;
+
+    // dateTime fields: convert seconds (number) → ISO string for Airtable
+    if (DATE_TIME_FIELD_IDS.has(key) && typeof value === "number" && !isNaN(value)) {
+      filteredFields[key] = secondsAndDateToIso(value, eventDate);
+    } else {
+      filteredFields[key] = value;
+    }
+  }
+
+  if (blockedFields.length > 0) {
+    console.warn("⚠️ BLOCKED (whitelist):", blockedFields.length, "fields");
+  }
+  console.log("✅ updateEventMultiple - AFTER filter:", JSON.stringify(filteredFields, null, 2));
+
+  if (Object.keys(filteredFields).length === 0) {
+    console.log("⏭️ No fields to update after filtering");
+    return { success: true };
+  }
+
   const data = await airtableFetch(`/${table}`, {
     method: "PATCH",
     body: JSON.stringify({
-      records: [
-        {
-          id: recordId,
-          fields: updatesObject,
-        },
-      ],
+      records: [{ id: recordId, fields: filteredFields }],
     }),
   });
 
-  if (isErrorResult(data)) return data;
+  if (isErrorResult(data)) {
+    console.error("❌ updateEventMultiple ERROR:", data);
+    return data;
+  }
   return { success: true };
 };
 
@@ -456,7 +651,6 @@ export type EventDetails = {
   venueAddress: string;
   venueCity: string;
   venueState: string;
-  venueFullAddress: string;
 };
 
 export const getEventDetails = async (
@@ -476,7 +670,6 @@ export const getEventDetails = async (
     venueAddress: asString(fields[FIELD_IDS.VENUE_ADDRESS]),
     venueCity: asString(fields[FIELD_IDS.VENUE_CITY]),
     venueState: asSingleSelectName(fields[FIELD_IDS.VENUE_STATE]),
-    venueFullAddress: asString(fields[FIELD_IDS.VENUE_FULL_ADDRESS]),
   };
 };
 

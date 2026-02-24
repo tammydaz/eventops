@@ -16,6 +16,11 @@ export const VenueDetailsSection = () => {
     venueState: "",
     venueFullAddress: "",
   });
+  const [deliveryNotes, setDeliveryNotes] = useState("");
+
+  // Determine if this is a delivery event
+  const eventType = selectedEventData ? asSingleSelectName(selectedEventData[FIELD_IDS.EVENT_TYPE]) : "";
+  const isDelivery = eventType === "Delivery";
 
   useEffect(() => {
     if (!selectedEventId || !selectedEventData) {
@@ -26,25 +31,41 @@ export const VenueDetailsSection = () => {
         venueState: "",
         venueFullAddress: "",
       });
+      setDeliveryNotes("");
       return;
     }
 
-    setDetails({
+    const newDetails = {
       venue: asString(selectedEventData[FIELD_IDS.VENUE]),
       venueAddress: asString(selectedEventData[FIELD_IDS.VENUE_ADDRESS]),
       venueCity: asString(selectedEventData[FIELD_IDS.VENUE_CITY]),
       venueState: asSingleSelectName(selectedEventData[FIELD_IDS.VENUE_STATE]),
       venueFullAddress: asString(selectedEventData[FIELD_IDS.VENUE_FULL_ADDRESS]),
+    };
+    const newDeliveryNotes = asString(selectedEventData[FIELD_IDS.PARKING_LOAD_IN_NOTES]);
+    
+    // Only update if the values are actually different to prevent cursor jumping
+    setDetails(prev => {
+      if (prev.venue === newDetails.venue &&
+          prev.venueAddress === newDetails.venueAddress &&
+          prev.venueCity === newDetails.venueCity &&
+          prev.venueState === newDetails.venueState &&
+          prev.venueFullAddress === newDetails.venueFullAddress) {
+        return prev;
+      }
+      return newDetails;
     });
+    
+    setDeliveryNotes(prev => prev === newDeliveryNotes ? prev : newDeliveryNotes);
   }, [selectedEventId, selectedEventData]);
-
-  const handleFieldChange = async (fieldId: string, value: unknown) => {
-    if (!selectedEventId) return;
-    await setFields(selectedEventId, { [fieldId]: value });
-  };
 
   const handleChange = <K extends keyof VenueDetails>(key: K, value: VenueDetails[K]) => {
     setDetails((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const handleBlur = async (fieldId: string, value: unknown) => {
+    if (!selectedEventId) return;
+    await setFields(selectedEventId, { [fieldId]: value });
   };
 
   const canEdit = Boolean(selectedEventId);
@@ -68,34 +89,45 @@ export const VenueDetailsSection = () => {
   };
 
   return (
-    <FormSection title="Venue (Optional)" icon="📍">
+    <FormSection 
+      title={isDelivery ? "Delivery Location" : "Venue"} 
+      icon="📍"
+    >
       <div style={{ gridColumn: "1 / -1" }}>
-        <label style={labelStyle}>Venue Name</label>
+        <label style={labelStyle}>
+          {isDelivery ? "Business / Location Name" : "Venue Name"}
+        </label>
         <input
           type="text"
           value={details.venue}
           disabled={!canEdit}
-          onChange={(e) => {
-            handleChange("venue", e.target.value);
-            handleFieldChange(FIELD_IDS.VENUE, e.target.value);
-          }}
+          onChange={(e) => handleChange("venue", e.target.value)}
+          onBlur={(e) => handleBlur(FIELD_IDS.VENUE, e.target.value)}
+          autoComplete="off"
           style={inputStyle}
-          placeholder="e.g. The Grand Ballroom"
+          placeholder={isDelivery ? "e.g. ABC Corporation" : "e.g. The Merion – Palazzo Room"}
         />
+        <div style={{ fontSize: "10px", color: "#888", marginTop: "4px" }}>
+          {isDelivery 
+            ? "💡 Enter the business name if delivering to a company/organization"
+            : "💡 Only fill this if the event is at a venue different from the client's residence"
+          }
+        </div>
       </div>
 
       <div style={{ gridColumn: "1 / -1" }}>
-        <label style={labelStyle}>Venue Address</label>
+        <label style={labelStyle}>
+          {isDelivery ? "Delivery Address" : "Venue Address"}
+        </label>
         <input
           type="text"
           value={details.venueAddress}
           disabled={!canEdit}
-          onChange={(e) => {
-            handleChange("venueAddress", e.target.value);
-            handleFieldChange(FIELD_IDS.VENUE_ADDRESS, e.target.value);
-          }}
+          onChange={(e) => handleChange("venueAddress", e.target.value)}
+          onBlur={(e) => handleBlur(FIELD_IDS.VENUE_ADDRESS, e.target.value)}
+          autoComplete="off"
           style={inputStyle}
-          placeholder="e.g. 123 Main St"
+          placeholder={isDelivery ? "e.g. 456 Business Blvd" : "e.g. 123 Main St"}
         />
       </div>
 
@@ -105,10 +137,9 @@ export const VenueDetailsSection = () => {
           type="text"
           value={details.venueCity}
           disabled={!canEdit}
-          onChange={(e) => {
-            handleChange("venueCity", e.target.value);
-            handleFieldChange(FIELD_IDS.VENUE_CITY, e.target.value);
-          }}
+          onChange={(e) => handleChange("venueCity", e.target.value)}
+          onBlur={(e) => handleBlur(FIELD_IDS.VENUE_CITY, e.target.value)}
+          autoComplete="off"
           style={inputStyle}
           placeholder="City"
         />
@@ -121,7 +152,7 @@ export const VenueDetailsSection = () => {
           disabled={!canEdit}
           onChange={(e) => {
             handleChange("venueState", e.target.value);
-            handleFieldChange(FIELD_IDS.VENUE_STATE, e.target.value || null);
+            handleBlur(FIELD_IDS.VENUE_STATE, e.target.value || null);
           }}
           style={inputStyle}
         >
@@ -134,23 +165,48 @@ export const VenueDetailsSection = () => {
         </select>
       </div>
 
+      {/* READ-ONLY: Full Address (Computed by Airtable) */}
       <div style={{ gridColumn: "1 / -1" }}>
-        <label style={labelStyle}>Full Address (Auto-Generated)</label>
+        <label style={labelStyle}>
+          Full Address (Auto-Computed) ⚙️
+        </label>
         <input
           type="text"
           value={details.venueFullAddress}
-          disabled
-          readOnly
+          disabled={true}
+          readOnly={true}
           style={{
             ...inputStyle,
-            backgroundColor: "#0f0f0f",
-            color: "#666",
+            backgroundColor: "#2a2a2a",
             cursor: "not-allowed",
-            border: "1px solid #333",
+            color: "#888",
+            fontStyle: "italic",
           }}
-          placeholder="Computed from address fields"
+          placeholder="Auto-computed from venue or client address"
         />
+        <div style={{ fontSize: "10px", color: "#666", marginTop: "4px" }}>
+          ⚙️ This field is automatically computed by Airtable and cannot be edited
+        </div>
       </div>
+
+      {isDelivery && (
+        <div style={{ gridColumn: "1 / -1" }}>
+          <label style={labelStyle}>Delivery Notes</label>
+          <textarea
+            rows={3}
+            value={deliveryNotes}
+            disabled={!canEdit}
+            onChange={(e) => setDeliveryNotes(e.target.value)}
+            onBlur={() => handleBlur(FIELD_IDS.PARKING_LOAD_IN_NOTES, deliveryNotes)}
+            style={{
+              ...inputStyle,
+              resize: "vertical" as const,
+              fontFamily: "inherit",
+            }}
+            placeholder="Loading dock, call upon arrival, leave at front desk, etc."
+          />
+        </div>
+      )}
     </FormSection>
   );
 };

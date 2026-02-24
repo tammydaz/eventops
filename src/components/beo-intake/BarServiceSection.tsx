@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useEventStore } from "../../state/eventStore";
+import { FIELD_IDS } from "../../services/airtable/events";
 import { asSingleSelectName, asString } from "../../services/airtable/selectors";
 import { FormSection } from "./FormSection";
 
@@ -12,14 +13,29 @@ export const BarServiceSection = () => {
       setDetails({ barService: "", sigDrink: "", drinkName: "", recipe: "", whoSupplies: "", mixers: "", garnishes: "" });
       return;
     }
-    setDetails({
-      barService: asSingleSelectName(selectedEventData["fldXm91QjyvVKbiyO"]),
-      sigDrink: asSingleSelectName(selectedEventData["fldcry8vpUBY3fkHk"]),
-      drinkName: asString(selectedEventData["fldZSIBTkzcEmG7bt"]),
-      recipe: asString(selectedEventData["fld1sg6vQi7lziPDz"]),
-      whoSupplies: asSingleSelectName(selectedEventData["fldoek1mpdi2ESyzu"]),
-      mixers: asString(selectedEventData["fldXL37gOon7wyQss"]),
-      garnishes: asString(selectedEventData["flduv4RtRR0lLm4vY"]),
+    
+    const newDetails = {
+      barService: asSingleSelectName(selectedEventData[FIELD_IDS.BAR_SERVICE]),
+      sigDrink: asSingleSelectName(selectedEventData[FIELD_IDS.BAR_SIG_DRINK]),
+      drinkName: asString(selectedEventData[FIELD_IDS.BAR_DRINK_NAME]),
+      recipe: asString(selectedEventData[FIELD_IDS.BAR_RECIPE]),
+      whoSupplies: asSingleSelectName(selectedEventData[FIELD_IDS.BAR_WHO_SUPPLIES]),
+      mixers: asString(selectedEventData[FIELD_IDS.BAR_MIXERS]),
+      garnishes: asString(selectedEventData[FIELD_IDS.BAR_GARNISHES]),
+    };
+    
+    // Only update if the values are actually different to prevent cursor jumping
+    setDetails(prev => {
+      if (prev.barService === newDetails.barService &&
+          prev.sigDrink === newDetails.sigDrink &&
+          prev.drinkName === newDetails.drinkName &&
+          prev.recipe === newDetails.recipe &&
+          prev.whoSupplies === newDetails.whoSupplies &&
+          prev.mixers === newDetails.mixers &&
+          prev.garnishes === newDetails.garnishes) {
+        return prev;
+      }
+      return newDetails;
     });
   }, [selectedEventId, selectedEventData]);
 
@@ -49,10 +65,10 @@ export const BarServiceSection = () => {
   };
 
   return (
-    <FormSection title="Bar Service (Optional)" icon="🍹">
+    <FormSection title="Bar Service" icon="🍹">
       <div>
         <label style={labelStyle}>Bar Service Needed</label>
-        <select value={details.barService} disabled={!canEdit} onChange={(e) => { setDetails(p => ({ ...p, barService: e.target.value })); save("fldXm91QjyvVKbiyO", e.target.value || null); }} style={inputStyle}>
+        <select value={details.barService} disabled={!canEdit} onChange={(e) => { setDetails(p => ({ ...p, barService: e.target.value })); save(FIELD_IDS.BAR_SERVICE, e.target.value || null); }} style={inputStyle}>
           <option value="">Select</option>
           <option value="None">None</option>
           <option value="Full Bar Package">Full Bar Package</option>
@@ -62,7 +78,7 @@ export const BarServiceSection = () => {
       </div>
       <div>
         <label style={labelStyle}>Signature Drink</label>
-        <select value={details.sigDrink} disabled={!canEdit} onChange={(e) => { setDetails(p => ({ ...p, sigDrink: e.target.value })); save("fldcry8vpUBY3fkHk", e.target.value || null); }} style={inputStyle}>
+        <select value={details.sigDrink} disabled={!canEdit} onChange={(e) => { setDetails(p => ({ ...p, sigDrink: e.target.value })); save(FIELD_IDS.BAR_SIG_DRINK, e.target.value || null); }} style={inputStyle}>
           <option value="">Select</option>
           <option value="Yes">Yes</option>
           <option value="No">No</option>
@@ -72,15 +88,15 @@ export const BarServiceSection = () => {
         <>
           <div style={{ gridColumn: "1 / -1" }}>
             <label style={labelStyle}>Drink Name</label>
-            <input type="text" value={details.drinkName} disabled={!canEdit} onChange={(e) => { setDetails(p => ({ ...p, drinkName: e.target.value })); save("fldZSIBTkzcEmG7bt", e.target.value); }} style={inputStyle} placeholder="Name of signature drink" />
+            <input type="text" value={details.drinkName} disabled={!canEdit} onChange={(e) => { setDetails(p => ({ ...p, drinkName: e.target.value })); save(FIELD_IDS.BAR_DRINK_NAME, e.target.value); }} style={inputStyle} placeholder="Name of signature drink" />
           </div>
           <div style={{ gridColumn: "1 / -1" }}>
             <label style={labelStyle}>Recipe</label>
-            <textarea rows={3} value={details.recipe} disabled={!canEdit} onChange={(e) => { setDetails(p => ({ ...p, recipe: e.target.value })); save("fld1sg6vQi7lziPDz", e.target.value); }} style={{ ...inputStyle, resize: "vertical", fontFamily: "inherit" }} placeholder="Recipe instructions..." />
+            <textarea rows={3} value={details.recipe} disabled={!canEdit} onChange={(e) => { setDetails(p => ({ ...p, recipe: e.target.value })); save(FIELD_IDS.BAR_RECIPE, e.target.value); }} style={{ ...inputStyle, resize: "vertical", fontFamily: "inherit" }} placeholder="Recipe instructions..." />
           </div>
           <div>
             <label style={labelStyle}>Who Supplies Mixers/Garnishes</label>
-            <select value={details.whoSupplies} disabled={!canEdit} onChange={(e) => { setDetails(p => ({ ...p, whoSupplies: e.target.value })); save("fldoek1mpdi2ESyzu", e.target.value || null); }} style={inputStyle}>
+            <select value={details.whoSupplies} disabled={!canEdit} onChange={(e) => { setDetails(p => ({ ...p, whoSupplies: e.target.value })); save(FIELD_IDS.BAR_WHO_SUPPLIES, e.target.value || null); }} style={inputStyle}>
               <option value="">Select</option>
               <option value="Foodwerx">Foodwerx</option>
               <option value="Client">Client</option>
@@ -90,11 +106,11 @@ export const BarServiceSection = () => {
             <>
               <div>
                 <label style={labelStyle}>Mixers</label>
-                <input type="text" value={details.mixers} disabled={!canEdit} onChange={(e) => { setDetails(p => ({ ...p, mixers: e.target.value })); save("fldXL37gOon7wyQss", e.target.value); }} style={inputStyle} placeholder="e.g. Tonic, Ginger Beer" />
+                <input type="text" value={details.mixers} disabled={!canEdit} onChange={(e) => { setDetails(p => ({ ...p, mixers: e.target.value })); save(FIELD_IDS.BAR_MIXERS, e.target.value); }} style={inputStyle} placeholder="e.g. Tonic, Ginger Beer" />
               </div>
               <div>
                 <label style={labelStyle}>Garnishes</label>
-                <input type="text" value={details.garnishes} disabled={!canEdit} onChange={(e) => { setDetails(p => ({ ...p, garnishes: e.target.value })); save("flduv4RtRR0lLm4vY", e.target.value); }} style={inputStyle} placeholder="e.g. Limes, Mint, Olives" />
+                <input type="text" value={details.garnishes} disabled={!canEdit} onChange={(e) => { setDetails(p => ({ ...p, garnishes: e.target.value })); save(FIELD_IDS.BAR_GARNISHES, e.target.value); }} style={inputStyle} placeholder="e.g. Limes, Mint, Olives" />
               </div>
             </>
           )}

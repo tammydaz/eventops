@@ -22,6 +22,11 @@ export type EventCore = {
   serviceStyle: string;
   eventDate: string;
   guestCount: number | null;
+  dispatchTime: string;
+  eventStartTime: string;
+  eventEndTime: string;
+  eventArrivalTime: string;
+  opsExceptions: string;
 };
 
 export type VenueDetails = {
