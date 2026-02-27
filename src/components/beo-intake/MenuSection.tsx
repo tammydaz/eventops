@@ -14,6 +14,7 @@ import {
 import { asLinkedRecordIds, asString, isErrorResult } from "../../services/airtable/selectors";
 import { useEventStore } from "../../state/eventStore";
 import { FormSection, CollapsibleSubsection } from "./FormSection";
+import { sanitizeForHeader } from "../../utils/httpHeaders";
 
 /** Picker to add a menu item to a station. */
 function StationItemPicker(props: {
@@ -325,7 +326,7 @@ export const MenuSection = ({ embedded = false }: MenuSectionProps) => {
       try {
         const response = await fetch(
           `https://api.airtable.com/v0/${baseId}/${MENU_TABLE_ID}?${params.toString()}`,
-          { headers: { Authorization: `Bearer ${apiKey}` } }
+          { headers: { Authorization: `Bearer ${sanitizeForHeader(apiKey)}` } }
         );
         const data = (await response.json()) as { records?: Array<{ id: string; fields: Record<string, unknown> }> };
         const names: Record<string, string> = {};

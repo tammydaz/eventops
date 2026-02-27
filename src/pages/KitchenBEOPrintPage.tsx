@@ -5,6 +5,7 @@ import { asString, asSingleSelectName, asBoolean, asStringArray } from "../servi
 import { calculateSpec } from "../services/airtable/specEngine";
 import { EventSelector } from "../components/EventSelector";
 import { secondsTo12HourString } from "../utils/timeHelpers";
+import { sanitizeForHeader } from "../utils/httpHeaders";
 
 // ── Types ──
 type SubItem = {
@@ -1069,7 +1070,7 @@ const KitchenBEOPrintPage: React.FC = () => {
         params.append("fields[]", CHILD_ITEMS);
         const res = await fetch(
           `https://api.airtable.com/v0/${baseId}/${MENU_TABLE}?${params.toString()}`,
-          { headers: { Authorization: `Bearer ${apiKey}` } }
+          { headers: { Authorization: `Bearer ${sanitizeForHeader(apiKey)}` } }
         );
         const data = await res.json();
         if (data.records) {
@@ -1104,7 +1105,7 @@ const KitchenBEOPrintPage: React.FC = () => {
           childParams.append("fields[]", ITEM_NAME);
           const res = await fetch(
             `https://api.airtable.com/v0/${baseId}/${MENU_TABLE}?${childParams.toString()}`,
-            { headers: { Authorization: `Bearer ${apiKey}` } }
+            { headers: { Authorization: `Bearer ${sanitizeForHeader(apiKey)}` } }
           );
           const childData = await res.json();
           if (childData.records) {

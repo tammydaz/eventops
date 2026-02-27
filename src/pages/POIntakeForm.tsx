@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 
-const AIRTABLE_API_KEY = (import.meta.env.VITE_AIRTABLE_API_KEY as string)?.trim() || "";
+const AIRTABLE_API_KEY = (import.meta.env.VITE_AIRTABLE_API_KEY as string)?.replace(/[^\x00-\x7F]/g, "").trim() || "";
 const AIRTABLE_BASE_ID = (import.meta.env.VITE_AIRTABLE_BASE_ID as string)?.trim() || "";
 const AIRTABLE_EVENTS_TABLE = (import.meta.env.VITE_AIRTABLE_EVENTS_TABLE as string)?.trim() || "";
 
