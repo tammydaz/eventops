@@ -42,7 +42,7 @@ export const VenueDetailsSection = () => {
       venueState: asSingleSelectName(selectedEventData[FIELD_IDS.VENUE_STATE]),
       venueFullAddress: asString(selectedEventData[FIELD_IDS.VENUE_FULL_ADDRESS]),
     };
-    const newDeliveryNotes = asString(selectedEventData[FIELD_IDS.PARKING_LOAD_IN_NOTES]);
+    const newDeliveryNotes = asString(selectedEventData[FIELD_IDS.LOAD_IN_NOTES]);
     
     // Only update if the values are actually different to prevent cursor jumping
     setDetails(prev => {
@@ -197,7 +197,7 @@ export const VenueDetailsSection = () => {
             value={deliveryNotes}
             disabled={!canEdit}
             onChange={(e) => setDeliveryNotes(e.target.value)}
-            onBlur={() => handleBlur(FIELD_IDS.PARKING_LOAD_IN_NOTES, deliveryNotes)}
+            onBlur={() => handleBlur(FIELD_IDS.LOAD_IN_NOTES, deliveryNotes)}
             style={{
               ...inputStyle,
               resize: "vertical" as const,

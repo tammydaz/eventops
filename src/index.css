@@ -45,8 +45,12 @@ code {
   .no-print {
     display: none !important;
   }
+  html {
+    color-scheme: light !important;
+  }
   body {
     background: white !important;
+    color: #000 !important;
     margin: 0 !important;
     padding: 0 !important;
   }

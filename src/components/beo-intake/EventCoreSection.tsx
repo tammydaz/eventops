@@ -14,15 +14,21 @@ const EVENT_TYPE_OPTIONS = [
   "Tasting",
 ];
 
+const EVENT_OCCASION_OPTIONS = [
+  "Wedding",
+  "Bar/Bat Mitzvah",
+  "Corporate",
+  "Social",
+  "Birthday",
+  "Other",
+];
+
 const SERVICE_STYLE_OPTIONS = [
   "Buffet",
   "Cocktail / Passed Apps Only",
-  "Plated Meal",
   "Hybrid (Cocktail + Buffet)",
-  "Displays Only (Grazing)",
   "Family Style",
   "Plated",
-  "Grazing",
 ];
 
 export const EventCoreSection = () => {
@@ -30,6 +36,7 @@ export const EventCoreSection = () => {
   const isUpdatingRef = useRef(false);
   const [details, setDetails] = useState<EventCore>({
     eventType: "",
+    eventOccasion: "",
     serviceStyle: "",
     eventDate: "",
     guestCount: null,
@@ -45,6 +52,7 @@ export const EventCoreSection = () => {
     if (!selectedEventId || !selectedEventData) {
       setDetails({
         eventType: "",
+        eventOccasion: "",
         serviceStyle: "",
         eventDate: "",
         guestCount: null,
@@ -59,6 +67,7 @@ export const EventCoreSection = () => {
 
     setDetails({
       eventType: asSingleSelectName(selectedEventData[FIELD_IDS.EVENT_TYPE]),
+      eventOccasion: asSingleSelectName(selectedEventData[FIELD_IDS.EVENT_OCCASION]),
       serviceStyle: asSingleSelectName(selectedEventData[FIELD_IDS.SERVICE_STYLE]),
       eventDate: asString(selectedEventData[FIELD_IDS.EVENT_DATE]),
       guestCount: selectedEventData[FIELD_IDS.GUEST_COUNT] !== undefined
@@ -180,7 +189,33 @@ export const EventCoreSection = () => {
       </div>
 
       <div>
-        <label style={labelStyle}>Service Style</label>
+        <label style={labelStyle}>Event Occasion</label>
+        <select
+          value={details.eventOccasion}
+          disabled={!canEdit}
+          onChange={async (e) => {
+            const value = e.target.value;
+            setDetails(prev => ({ ...prev, eventOccasion: value }));
+            if (selectedEventId) {
+              await saveField(FIELD_IDS.EVENT_OCCASION, value || null);
+            }
+          }}
+          style={inputStyle}
+        >
+          <option value="">Select occasion...</option>
+          {EVENT_OCCASION_OPTIONS.map((option) => (
+            <option key={option} value={option}>
+              {option}
+            </option>
+          ))}
+        </select>
+        <div style={{ fontSize: "11px", color: "#666", marginTop: "6px", lineHeight: 1.4 }}>
+          Wedding & Bar/Bat Mitzvah show extra timeline prompts below.
+        </div>
+      </div>
+
+      <div>
+        <label style={labelStyle}>Service Style (kitchen banner)</label>
         <select
           value={details.serviceStyle}
           disabled={!canEdit}
@@ -200,6 +235,9 @@ export const EventCoreSection = () => {
             </option>
           ))}
         </select>
+        <div style={{ fontSize: "11px", color: "#666", marginTop: "6px", lineHeight: 1.4 }}>
+          Buffet vs plated/cocktail/etc. When not buffet, a banner warns the kitchen. (Different from Food Service Flow in Site Visit—that one is for servers.)
+        </div>
       </div>
 
       {(["dispatchTime", "eventStartTime", "eventEndTime", "eventArrivalTime"] as const).map((key) => {
@@ -216,35 +254,57 @@ export const EventCoreSection = () => {
           eventArrivalTime: "Event Arrival Time",
         };
         const raw = details[key];
-        const [h, m] = raw && raw !== "—" ? raw.split(":").map(Number) : [0, 0];
-        const hour = isNaN(h) ? 0 : Math.max(0, Math.min(23, h));
-        const minute = isNaN(m) ? 0 : MINUTE_INCREMENTS.reduce((prev, curr) =>
-          Math.abs(curr - m) < Math.abs(prev - m) ? curr : prev
-        );
+        const hasValue = raw && raw !== "—";
+        const [h, m] = hasValue ? raw.split(":").map(Number) : [12, 0];
+        const hour24 = isNaN(h) ? 12 : Math.max(0, Math.min(23, h));
+        const minute = (() => {
+          const mNum = isNaN(m) ? 0 : m;
+          return MINUTE_INCREMENTS.reduce((prev, curr) =>
+            Math.abs(curr - mNum) < Math.abs(prev - mNum) ? curr : prev
+          );
+        })();
+        const hour12 = hour24 === 0 ? 12 : hour24 > 12 ? hour24 - 12 : hour24;
+        const isPM = hour24 >= 12;
+        const handleHourChange = (newHour12: number, newIsPM: boolean) => {
+          const newHour24 = newHour12 === 12 ? (newIsPM ? 12 : 0) : (newIsPM ? newHour12 + 12 : newHour12);
+          handleTimeSelectChange(key, fieldIdMap[key], newHour24, minute);
+        };
+        const handleMinuteChange = (newMinute: number) => {
+          handleTimeSelectChange(key, fieldIdMap[key], hour24, newMinute);
+        };
         return (
           <div key={key}>
             <label style={labelStyle}>{labelMap[key]}</label>
-            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
               <select
-                value={hour}
+                value={hour12}
                 disabled={!canEdit}
-                onChange={(e) => handleTimeSelectChange(key, fieldIdMap[key], Number(e.target.value), minute)}
-                style={{ ...inputStyle, flex: 1 }}
+                onChange={(e) => handleHourChange(Number(e.target.value), isPM)}
+                style={{ ...inputStyle, flex: 1, minWidth: 70 }}
               >
-                {Array.from({ length: 24 }, (_, i) => (
-                  <option key={i} value={i}>{String(i).padStart(2, "0")}</option>
+                {[12, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].map((i) => (
+                  <option key={i} value={i}>{i}</option>
                 ))}
               </select>
               <span style={{ color: "#999", fontSize: 14 }}>:</span>
               <select
                 value={minute}
                 disabled={!canEdit}
-                onChange={(e) => handleTimeSelectChange(key, fieldIdMap[key], hour, Number(e.target.value))}
-                style={{ ...inputStyle, flex: 1 }}
+                onChange={(e) => handleMinuteChange(Number(e.target.value))}
+                style={{ ...inputStyle, flex: 1, minWidth: 70 }}
               >
                 {MINUTE_INCREMENTS.map((m) => (
                   <option key={m} value={m}>{String(m).padStart(2, "0")}</option>
                 ))}
+              </select>
+              <select
+                value={isPM ? "PM" : "AM"}
+                disabled={!canEdit}
+                onChange={(e) => handleHourChange(hour12, e.target.value === "PM")}
+                style={{ ...inputStyle, flex: 1, minWidth: 60 }}
+              >
+                <option value="AM">AM</option>
+                <option value="PM">PM</option>
               </select>
             </div>
           </div>

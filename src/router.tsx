@@ -1,4 +1,6 @@
+import { useLocation } from "react-router-dom";
 import { BeoIntakePage } from "./pages/BeoIntakePage";
+import { SeedDemoEventPage } from "./pages/SeedDemoEventPage";
 import PrintTestPage from "./pages/PrintTestPage";
 import { HomeDashboard } from "./pages/HomeDashboard";
 import { QuickIntake } from "./pages/QuickIntake";
@@ -16,9 +18,23 @@ import DeliveryCommandPage from "./pages/DeliveryCommandPage";
 import ReturnedEquipmentPage from "./pages/ReturnedEquipmentPage";
 import PostEventDebriefPage from "./pages/PostEventDebriefPage";
 import KitchenBEOPrintPage from "./pages/KitchenBEOPrintPage";
+import SiteVisitPage from "./pages/SiteVisitPage";
+import InvoiceIntakePage from "./pages/InvoiceIntakePage";
 
 export const Router = ({ selectedEventId }: { selectedEventId: string | null }) => {
-	const pathname = window.location.pathname;
+	const { pathname } = useLocation();
+
+  if (pathname.startsWith("/invoice-intake")) {
+    return <InvoiceIntakePage />;
+  }
+
+  if (pathname.startsWith("/site-visit")) {
+    return <SiteVisitPage />;
+  }
+
+  if (pathname.startsWith("/seed-demo")) {
+    return <SeedDemoEventPage />;
+  }
 
   if (pathname.startsWith("/print-test")) {
     return <PrintTestPage />;

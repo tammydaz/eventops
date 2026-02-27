@@ -7,6 +7,30 @@ function roundToNearest15(seconds: number): number {
   return h * 3600 + m * 60;
 }
 
+/** Convert seconds since midnight or "HH:mm" string → "4:00 PM" (12-hour format), or "—" for empty */
+export function secondsTo12HourString(seconds: number | string | null | undefined): string {
+  if (seconds === undefined || seconds === null) return "—";
+  let totalSeconds: number;
+  if (typeof seconds === "string") {
+    const hmMatch = seconds.match(/^(\d{1,2}):(\d{2})/);
+    if (hmMatch) {
+      totalSeconds = parseInt(hmMatch[1], 10) * 3600 + parseInt(hmMatch[2], 10) * 60;
+    } else {
+      const date = new Date(seconds);
+      if (!isNaN(date.getTime())) {
+        totalSeconds = date.getUTCHours() * 3600 + date.getUTCMinutes() * 60 + date.getUTCSeconds();
+      } else return "—";
+    }
+  } else if (typeof seconds === "number" && !isNaN(seconds)) {
+    totalSeconds = seconds;
+  } else return "—";
+  const h = Math.floor(totalSeconds / 3600);
+  const m = Math.floor((totalSeconds % 3600) / 60);
+  const hour12 = h === 0 ? 12 : h > 12 ? h - 12 : h;
+  const ampm = h < 12 ? "AM" : "PM";
+  return `${hour12}:${String(m).padStart(2, "0")} ${ampm}`;
+}
+
 /** Convert Airtable duration (seconds or timestamp) → "HH:mm" (rounded to 15-min), or "—" for empty */
 export function secondsToTimeString(seconds: number | string | null | undefined): string {
   if (seconds === undefined || seconds === null) {
