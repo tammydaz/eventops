@@ -9,6 +9,10 @@ export type ClientDetails = {
   clientBusinessName: string;
   clientEmail: string;
   clientPhone: string;
+  clientStreet: string;
+  clientCity: string;
+  clientState: string;
+  clientZip: string;
 };
 
 export type PrimaryContact = {
@@ -19,6 +23,7 @@ export type PrimaryContact = {
 
 export type EventCore = {
   eventType: string;
+  eventOccasion: string;
   serviceStyle: string;
   eventDate: string;
   guestCount: number | null;

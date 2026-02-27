@@ -1,23 +1,28 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useEventStore } from "../../state/eventStore";
-import { filterToEditableOnly } from "../../services/airtable/events";
+import { filterToEditableOnly, getBarServiceFieldId } from "../../services/airtable/events";
 
 type BeoIntakeActionBarProps = {
   eventId: string | null;
 };
 
 export const BeoIntakeActionBar = ({ eventId }: BeoIntakeActionBarProps) => {
-  const { setFields } = useEventStore();
+  const { setFields, saveError: storeSaveError, setSaveError: clearStoreError } = useEventStore();
   const [isSaving, setIsSaving] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+
+  // Show store save errors (e.g. from Bar Service dropdown save)
+  useEffect(() => {
+    if (storeSaveError) setSaveError(storeSaveError);
+  }, [storeSaveError]);
 
   const handleUpdate = async () => {
     if (!eventId) return;
     setIsSaving(true);
     setSaveError(null);
 
-    // Blur active element so any focused field (e.g. Event Arrival Time) saves via onBlur
+    await getBarServiceFieldId(); // ensure Bar Service field ID resolved for filter
     (document.activeElement as HTMLElement)?.blur();
     await new Promise((resolve) => setTimeout(resolve, 600));
 
@@ -55,8 +60,26 @@ export const BeoIntakeActionBar = ({ eventId }: BeoIntakeActionBarProps) => {
     setTimeout(() => setShowSuccess(false), 2000);
   };
 
-  const handlePrintBeo = () => {
+  const handlePrintBeo = async () => {
     if (!eventId) return;
+    setIsSaving(true);
+    setSaveError(null);
+    await getBarServiceFieldId(); // ensure Bar Service field ID resolved for filter
+    (document.activeElement as HTMLElement)?.blur();
+    await new Promise((r) => setTimeout(r, 400));
+    const { eventData, selectedEventId } = useEventStore.getState();
+    const raw = selectedEventId === eventId ? eventData : {};
+    const dataToSave = filterToEditableOnly(raw);
+    if (Object.keys(dataToSave).length > 0) {
+      const ok = await setFields(eventId, { ...dataToSave });
+      if (!ok) {
+        const err = useEventStore.getState().saveError;
+        setSaveError(err ?? "Failed to save before opening BEO");
+        setIsSaving(false);
+        return;
+      }
+    }
+    setIsSaving(false);
     window.location.href = `/beo-print/${eventId}`;
   };
 
@@ -72,7 +95,7 @@ export const BeoIntakeActionBar = ({ eventId }: BeoIntakeActionBarProps) => {
         {saveError && (
           <div style={styles.errorBanner}>
             {saveError}
-            <button type="button" onClick={() => setSaveError(null)} style={styles.errorDismiss}>✕</button>
+            <button type="button" onClick={() => { setSaveError(null); clearStoreError(null); }} style={styles.errorDismiss}>✕</button>
           </div>
         )}
         <button
@@ -107,6 +130,15 @@ export const BeoIntakeActionBar = ({ eventId }: BeoIntakeActionBarProps) => {
           onClick={handlePrintBeo}
         >
           Print / View BEO
+        </button>
+        <button
+          style={{
+            ...styles.button,
+            ...styles.buttonSecondary,
+          }}
+          onClick={() => { if (eventId) window.location.href = `/kitchen-beo-print/${eventId}`; }}
+        >
+          Excel-Style Kitchen BEO
         </button>
 
         <button

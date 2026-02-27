@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type ChangeEvent, type FormEvent } from "react";
+import { Link } from "react-router-dom";
 import { FIELD_IDS, createEvent, loadSingleSelectOptions, type SingleSelectOption } from "../services/airtable/events";
 import { isErrorResult } from "../services/airtable/selectors";
 import { useEventStore } from "../state/eventStore";
@@ -158,6 +159,19 @@ export const QuickIntake = () => {
           <p style={{ color: "#888", fontSize: "14px", margin: 0 }}>
             Get your event into the system in 60 seconds
           </p>
+          <Link
+            to="/invoice-intake"
+            style={{
+              display: "inline-block",
+              marginTop: 12,
+              fontSize: 13,
+              color: "#4ade80",
+              textDecoration: "none",
+              fontWeight: 600,
+            }}
+          >
+            📄 Or upload an invoice PDF instead →
+          </Link>
         </div>
 
         <div

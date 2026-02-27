@@ -4,6 +4,7 @@ import {
   loadEvent as fetchEventById,
   updateEventMultiple,
   filterToEditableOnly,
+  FIELD_IDS,
   type EventListItem,
 } from "../services/airtable/events";
 import { isErrorResult } from "../services/airtable/selectors";
@@ -22,6 +23,7 @@ export type EventStore = {
 
   eventData: Fields;
   selectedEventData: Fields;
+  eventDataLoading: boolean;
   loadEventData: () => Promise<void>;
 
   updateEvent: (eventId: string, patch: Fields) => Promise<boolean>;
@@ -59,42 +61,54 @@ export const useEventStore = create<EventStore>((set, get) => ({
   selectedEventId: null,
   setSelectedEventId: (id) => set({ selectedEventId: id }),
   selectEvent: async (id) => {
-    set({ selectedEventId: id });
-    await get().loadEventData();
+    set({ selectedEventId: id, selectedEventData: emptyFields, eventDataLoading: true });
+    get().loadEventData();
   },
 
   eventData: { ...emptyFields },
   selectedEventData: { ...emptyFields },
+  eventDataLoading: false,
   loadEventData: async () => {
     const { selectedEventId } = get();
     if (!selectedEventId) {
-      set({ eventData: emptyFields, selectedEventData: emptyFields });
+      set({ eventData: emptyFields, selectedEventData: emptyFields, eventDataLoading: false });
       return;
     }
+    set({ eventDataLoading: true });
     const result = await fetchEventById(selectedEventId);
     if (isErrorResult(result)) {
-      set({ eventData: emptyFields, selectedEventData: emptyFields });
+      set({ eventData: emptyFields, selectedEventData: emptyFields, eventDataLoading: false });
       return;
     }
-    // Load all fields into state (including computed fields for display)
-    // Components only send individual field updates, never the full object
     const fields = result.fields ?? {};
-    set({ eventData: fields, selectedEventData: fields });
+    set({ eventData: fields, selectedEventData: fields, eventDataLoading: false });
   },
 
   updateEvent: async (eventId, patch) => {
-    const filtered = filterToEditableOnly(patch);
+    const { selectedEventId, eventData } = get();
+    const timeFieldIdSet = new Set<string>([
+      FIELD_IDS.DISPATCH_TIME,
+      FIELD_IDS.FOODWERX_ARRIVAL,
+      FIELD_IDS.VENUE_ARRIVAL_TIME,
+    ]);
+    const hasTimeField = Object.keys(patch).some((k) => timeFieldIdSet.has(k));
+    const needsEventDate = hasTimeField && !patch[FIELD_IDS.EVENT_DATE] && eventData?.[FIELD_IDS.EVENT_DATE];
+    const augmented = needsEventDate
+      ? { ...patch, [FIELD_IDS.EVENT_DATE]: eventData[FIELD_IDS.EVENT_DATE] }
+      : patch;
+    const filtered = filterToEditableOnly(augmented);
+    // Optimistic update: merge into store immediately so "Update Event" and other consumers
+    // see the latest values even before the API call completes (fixes Bar Service not carrying over)
+    if (selectedEventId === eventId && Object.keys(filtered).length > 0) {
+      const next = { ...eventData, ...filtered };
+      set({ eventData: next, selectedEventData: next });
+    }
     const result = await updateEventMultiple(eventId, filtered);
     if (isErrorResult(result)) {
       set({ saveError: result.message ?? "Failed to save" });
       return false;
     }
     set({ saveError: null });
-    const { selectedEventId, eventData } = get();
-    if (selectedEventId === eventId) {
-      const next = { ...eventData, ...filtered };
-      set({ eventData: next, selectedEventData: next });
-    }
     return true;
   },
 
