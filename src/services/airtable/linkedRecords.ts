@@ -1,4 +1,5 @@
 import { airtableFetch, getBaseId, getApiKey, getStationsTable, type AirtableListResponse, type AirtableErrorResult } from "./client";
+import { sanitizeForHeader } from "../../utils/httpHeaders";
 import { airtableMetaFetch } from "./client";
 import { isErrorResult, asString, asSingleSelectName, asLinkedRecordIds } from "./selectors";
 import { STATION_ITEMS_FIELD_ID, STATION_EVENT_FIELD_ID } from "../../constants/stations";
@@ -123,7 +124,7 @@ export const loadMenuItems = async (): Promise<LinkedRecordItem[] | AirtableErro
 
       const res = await fetch(
         `https://api.airtable.com/v0/${baseId}/${MENU_ITEMS_TABLE_ID}?${params.toString()}`,
-        { headers: { Authorization: `Bearer ${apiKey}` } }
+        { headers: { Authorization: `Bearer ${sanitizeForHeader(apiKey)}` } }
       );
 
       const data = (await res.json()) as {
@@ -216,7 +217,7 @@ export async function fetchLinkedRecordOptions(
 
     const response = await fetch(url, {
       headers: {
-        Authorization: `Bearer ${apiKey}`,
+        Authorization: `Bearer ${sanitizeForHeader(apiKey)}`,
       },
     });
 

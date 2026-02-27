@@ -5,6 +5,7 @@ import { FIELD_IDS, getBarServiceFieldId } from "../services/airtable/events";
 import { asSingleSelectName, asString, asStringArray } from "../services/airtable/selectors";
 import { calculateSpec } from "../services/airtable/specEngine";
 import { secondsToTimeString, secondsTo12HourString } from "../utils/timeHelpers";
+import { sanitizeForHeader } from "../utils/httpHeaders";
 import { FULL_BAR_PACKAGE, FULL_BAR_PACKAGE_SPECK_ROWS, getFullBarPackagePackoutItems, getSignatureCocktailGreeting } from "../constants/fullBarPackage";
 
 // ── Types ──
@@ -1785,7 +1786,7 @@ const BeoPrintPage: React.FC = () => {
         params.append("fields[]", DIETARY_TAGS);
         const res = await fetch(
           `https://api.airtable.com/v0/${baseId}/${MENU_TABLE}?${params.toString()}`,
-          { headers: { Authorization: `Bearer ${apiKey}` } }
+          { headers: { Authorization: `Bearer ${sanitizeForHeader(apiKey)}` } }
         );
         const data = await res.json();
         if (data.records) {
@@ -1831,7 +1832,7 @@ const BeoPrintPage: React.FC = () => {
           childParams.append("fields[]", DIETARY_TAGS);
           const res = await fetch(
             `https://api.airtable.com/v0/${baseId}/${MENU_TABLE}?${childParams.toString()}`,
-            { headers: { Authorization: `Bearer ${apiKey}` } }
+            { headers: { Authorization: `Bearer ${sanitizeForHeader(apiKey)}` } }
           );
           const childData = await res.json();
           if (childData.records) {

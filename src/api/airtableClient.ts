@@ -25,10 +25,14 @@ const requireEnv = (value: string | undefined, name: string) => {
   return value;
 };
 
-const getHeaders = () => ({
-  Authorization: `Bearer ${requireEnv(AIRTABLE_API_KEY, "VITE_AIRTABLE_API_KEY")}`,
-  "Content-Type": "application/json",
-});
+const getHeaders = () => {
+  const key = requireEnv(AIRTABLE_API_KEY, "VITE_AIRTABLE_API_KEY");
+  const cleanKey = key.replace(/[^\x00-\x7F]/g, "").trim();
+  return {
+    Authorization: `Bearer ${cleanKey}`,
+    "Content-Type": "application/json",
+  };
+};
 
 export const listEvents = async (): Promise<EventRecord[]> => {
   const baseId = requireEnv(AIRTABLE_BASE_ID, "VITE_AIRTABLE_BASE_ID");

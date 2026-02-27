@@ -21,6 +21,7 @@ import {
   type AirtableRecord,
   type AirtableErrorResult,
 } from "./client";
+import { sanitizeForHeader } from "../../utils/httpHeaders";
 import {
   asAttachments,
   asBoolean,
@@ -783,7 +784,7 @@ export const uploadAttachment = async (
     {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${apiKey}`,
+        Authorization: `Bearer ${sanitizeForHeader(apiKey)}`,
       },
       body: formData,
     }

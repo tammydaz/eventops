@@ -1,4 +1,4 @@
-const OPENAI_API_KEY = import.meta.env.VITE_OPENAI_API_KEY;
+const OPENAI_API_KEY = (import.meta.env.VITE_OPENAI_API_KEY as string)?.replace(/[^\x00-\x7F]/g, "").trim() ?? "";
 
 if (!OPENAI_API_KEY) {
   console.warn("[invoiceParser] VITE_OPENAI_API_KEY is not set. Invoice parsing will be disabled.");
