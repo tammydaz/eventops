@@ -39,22 +39,20 @@ export const FIELD_IDS = {
   EVENT_NAME: "fldZuHc9D29Wcj60h",              // Formula - READ ONLY
   EVENT_DATE: "fldFYaE7hI27R3PsX",
   EVENT_TYPE: "fldtqnvD7M8xbc0Xb",
+  EVENT_OCCASION: "fldVBvZ2m6zQ5xd2D",  // Single Select: Wedding, Bar/Bat Mitzvah, Corporate, Social, Birthday, Other
   SERVICE_STYLE: "fldqnW1ulcchcQ05t",  // Service Style (was wrong: fldR0ljDqgPKtRenQ is Ice Needed?)
   GUEST_COUNT: "fldjgqDUxVxaJ7Y9V",
   STATUS: "fldwdqfHaKXmqObE2",
 
-  // ── Venue & Address ──
-  VENUE: "fldfQoT3yhCBXzHWT",                    // 🔴 WAS WRONG
-  VENUE_NAME: "fldK8j9JRu0VYCFV9",
-  VENUE_ADDRESS: "fldtCOxi4Axjfjt0V",
+  // ── Venue & Address (per Omni field logic) ──
+  VENUE: "fldtCOxi4Axjfjt0V",                     // Main venue name (single line text)
+  VENUE_ADDRESS: "fldJsajSl1l6marzw",             // Venue street address
   VENUE_CITY: "fldNToCnV799eggiD",
   VENUE_STATE: "fldxCz5cPLwCetb0C",
-  VENUE_FULL_ADDRESS_CLEAN: "fldJsajSl1l6marzw",
-  
-  // ── Computed Address Fields (READ ONLY - Never write to these) ──
-  VENUE_FULL_ADDRESS: "fldOKQTp8Zf6a462f",       // Formula: "Venue Full Address (Clean)"
-  EVENT_LOCATION_FINAL_PRINT: "flddestyZNoX9sKGE", // Formula: "Event Location (Final Print)"
-  PRINT_VENUE_ADDRESS: "fldJsajSl1l6marzw",      // Formula: "VenuePrint" - THIS WAS THE BUG!
+  VENUE_FULL_ADDRESS: "fld0oRsZp6YCUsOki",        // Venue Full Address (composite)
+  VENUE_NAME_PRINT: "fldbglrqpkwjFon2w",          // Formula: "VENUE: [Venue Name]" - READ ONLY
+  EVENT_LOCATION_FINAL_PRINT: "flddestyZNoX9sKGE", // Formula: Event Location (Final Print) - READ ONLY
+  PRINT_VENUE_ADDRESS: "fld0oRsZp6YCUsOki",       // Use Venue Full Address for print (or formula if exists)
 
   // ── Client ──
   CLIENT: "fldRYDTj6V7L1xRP3",                   // Linked record
@@ -63,11 +61,16 @@ export const FIELD_IDS = {
   CLIENT_BUSINESS_NAME: "fld4YxQOjzPyyBIHL",     // Formula - READ ONLY
   CLIENT_EMAIL: "fldT5lcdCL5ndh84D",
   CLIENT_PHONE: "fldnw1VGIi3oXM4g3",
+  CLIENT_STREET: "fldUyi7xzG60H1ML4",
+  CLIENT_CITY: "fldoYWmGny8pkCKJQ",
+  CLIENT_STATE: "fldffsjG72MWzrCjl",
+  CLIENT_ZIP: "fldBuaBTjAkwmtd0J",
+  CLIENT_ADDRESS_PRINT: "fldUddIF6WcrTCPHX",    // Formula - READ ONLY (suppresses if client=venue)
 
   // ── Primary Contact (Day-Of Person) ──
   PRIMARY_CONTACT_NAME: "fldmsFPsl2gAtiSCD",
   PRIMARY_CONTACT_PHONE: "fld4OK9zVwr16qMIt",
-  CONTACT_FIRST_NAME: "fld9LnsDlMBTl7C1G",
+  CONTACT_FIRST_NAME: "fldmsFPsl2gAtiSCD",  // Alias for PRIMARY_CONTACT_NAME (legacy fld9LnsDlMBTl7C1G was formula - DO NOT USE)
   CONTACT_LAST_NAME: "fldmsFPsl2gAtiSCD",
   CONTACT_PHONE: "fld4OK9zVwr16qMIt",
   PRIMARY_CONTACT_ROLE: "fldMTRGNFa4pHbjY5",
@@ -90,23 +93,48 @@ export const FIELD_IDS = {
   MENU_ITEM_SPECS: "fldX9ayAyjMqYT2Oi",
   LOADED: "fldrKmicpgzVJRGjp",
 
-  // ── Bar & Beverage ──
-  BAR_SERVICE_NEEDED: "fldOisfjYPDeBwM1B",       // 🔴 WAS WRONG
-  BAR_SERVICE: "fldXm91QjyvVKbiyO",              // Single select
-  BAR_SIG_DRINK: "fldcry8vpUBY3fkHk",            // Single select: Yes/No
-  BAR_DRINK_NAME: "fldZSIBTkzcEmG7bt",           // Text
-  BAR_RECIPE: "fld1sg6vQi7lziPDz",               // Long text
-  BAR_WHO_SUPPLIES: "fldoek1mpdi2ESyzu",         // Single select: Foodwerx/Client
-  BAR_MIXERS: "fldXL37gOon7wyQss",               // Text
-  BAR_GARNISHES: "flduv4RtRR0lLm4vY",            // Text
+  // ── Menu Items table (tbl0aN33DGG6R1sPZ) ──
+  MENU_ITEM_NAME: "fldW5gfSlHRTl01v1",       // Item Name (single line)
+  MENU_ITEM_CHILD_ITEMS: "fldIu6qmlUwAEn2W9", // Child Items (linked records)
+  MENU_ITEM_DESCRIPTION: "fldtN2hxy9TS559Rm", // Description/Client Facing (long text)
+  MENU_ITEM_DIETARY_TAGS: "fldUSr1QgzP4nv9vs", // Dietary tags / allergen icons
 
-  // ── Hydration ──
-  INFUSED_WATER: "fldyzrU3YnO8dzxbd",            // 🔴 WAS WRONG (was using STATUS field ID!)
-  INFUSION_INGREDIENTS: "fldRxshZ4GqXGrJnu",     // 🔴 WAS WRONG
-  DISPENSER_COUNT: "fldlDyMCzOTpzAPEh",          // 🔴 WAS WRONG
+  // ── Bar & Beverage ──
+  BAR_SERVICE: "fldOisfjYPDeBwM1B",              // Bar Service Needed (Single select)
+  BAR_SIGNATURE_DRINK_YES_NO: "fldcry8vpUBY3fkHk", // Signature Drink? (Yes/No) — shown when Full Bar
+  BAR_SIGNATURE_DRINK_NAME: "fldZSIBTkzcEmG7bt",  // Signature Drink Name
+  BAR_SIGNATURE_DRINK_INGREDIENTS: "fld1sg6vQi7lziPDz", // Signature Drink Recipe & Ingredients
+  BAR_SIGNATURE_DRINK_MIXERS_SUPPLIER: "fldoek1mpdi2ESyzu", // Who is supplying signature drink mixers and garnishes (Foodwerx, Client)
+  BAR_SERVICE_NEEDED: "fldOisfjYPDeBwM1B",       // Alias for BAR_SERVICE
+  BAR_DRINK_NAME: "fldZSIBTkzcEmG7bt",           // Alias for BAR_SIGNATURE_DRINK_NAME
+  BAR_RECIPE: "fld1sg6vQi7lziPDz",               // Alias for BAR_SIGNATURE_DRINK_INGREDIENTS
+  BAR_WHO_SUPPLIES: "fldoek1mpdi2ESyzu",         // Alias for BAR_SIGNATURE_DRINK_MIXERS_SUPPLIER
+  BAR_MIXERS: "fldXL37gOon7wyQss",               // Signature Drink Mixers
+  BAR_GARNISHES: "flduv4RtRR0lLm4vY",           // Signature Drink Garnishes
+  // Bar narrative/print fields (Long text, often formula — typically read-only):
+  BAR_SERVICE_PRINT_BLOCK: "fldQXaTtw94L6AGR0",
+  BAR_SERVICE_SUMMARY: "fldrziYkLGiUcKHbT",
+  BAR_SERVICE_KITCHEN_BEO: "fldXotqfetP6azASU",
+  BAR_MIXER_ITEMS: "fldWj4wQIwIkz0rjg",         // Linked record → Bar Components
+  BAR_GARNISH_ITEMS: "fldIPOF7dPSZWANg6",        // Linked record → Bar Components
+
+  // ── Hydration (Events table) ──
+  HYDRATION_STATION_PROVIDED: "fldfNln4oe566nENv",   // Single Select: Hydration Station Provided?
+  HYDRATION_STATION_DRINK_OPTIONS: "fldxa3VSW1gNPqRQ0", // Multiple Select: Hydration Station Drink Options
+  HYDRATION_STATION_NOTES: "fldZA0JhJF50PFiwM",      // Long Text: Hydration Station Notes
+  HYDRATION_JSON: "fldfocVQF3rmmVsyD",               // JSON (automation) - typically read-only
+
+  // Legacy hydration (kept for backward compat / other consumers)
+  INFUSED_WATER: "fldyzrU3YnO8dzxbd",
+  INFUSION_INGREDIENTS: "fldRxshZ4GqXGrJnu",
+  DISPENSER_COUNT: "fldlDyMCzOTpzAPEh",
 
   // ── Coffee/Tea ──
-  COFFEE_SERVICE_NEEDED: "fldWIMlTc0Za6BTYk",    // 🔴 WAS WRONG
+  COFFEE_SERVICE_NEEDED: "fldKlKX0HEGX3NTcR",    // Single Select: Coffee Service Needed (Yes/No)
+  COFFEE_MUG_TYPE: "fldCoffeeMugTypeTODO",        // Single Select: Standard / Premium / Irish — create in Airtable, replace ID
+
+  // ── Ice ──
+  ICE_PROVIDED_BY: "fldlPI3Ix1UTuGrCf",         // Single Select: Ice Provided By (options from Airtable)
 
   // ── Staff ──
   STAFF: "fldWkHPhynjxyecq7",
@@ -120,9 +148,26 @@ export const FIELD_IDS = {
   DINING_CREW: "fldaT7wcJglqPr8dA",
 
   // ── Dietary & Notes ──
-  DIETARY_NOTES: "fldhGj51bQQWLJSX0",
+  DIETARY_NOTES: "fldhGj51bQQWLJSX0",           // Allergies / Dietary
   SPECIAL_NOTES: "fldlTlYgvPTIUzzMn",
-  OPS_EXCEPTIONS_SPECIAL_HANDLING: "fldL35sEiLnkyftFa",  // 🔴 WAS PLACEHOLDER
+  OPS_EXCEPTIONS_SPECIAL_HANDLING: "fldL35sEiLnkyftFa",
+
+  // ── Site Visit / Logistics (reused & new) ──
+  PARKING_NOTES: "fldkmY1Y9b5ToJFsg",           // Parking Notes (Long Text)
+  LOAD_IN_NOTES: "fldc75GFDDO1vv5rK",            // Load-In Notes (Long Text)
+  VENUE_NOTES: "fldlc2oZdkJDtk1Mh",              // Venue Notes (Long Text)
+  KITCHEN_ACCESS_NOTES: "fld1rsHIkn06rYh9H",     // Kitchen Access Notes (Long Text)
+  POWER_NOTES: "fldzlZ54PL1WQ5glw",              // Power Notes (Long Text)
+  TIMELINE_NOTES: "fldNmAssiLj9iYKx9",            // Timeline Notes (Long Text)
+  EQUIPMENT_NOTES: "fldYmHWaoDv6OL7Mo",          // Equipment Notes (Long Text)
+  STAIRS_STEPS: "fldSN2TvT87Nuhc0X",             // Stairs / Steps (Single Select)
+  ELEVATORS_AVAILABLE: "fldbbYSVAn7ewQKOR",      // Elevators Available (Single Select)
+  ANIMALS_PETS: "fldUFLWnKGtt3TDXZ",             // Animals / Pets (Long Text)
+  FOOD_SETUP_LOCATION: "fldTecWfMr6IZoXKQ",      // Food Setup Location (Long Text)
+  EVENT_PURPOSE: "fldT1y9bQdjAyjOlr",            // Event Purpose (Long Text)
+  FOOD_SERVICE_FLOW: "fldCHZQBr3uffLjzp",        // Food Service Flow (Single Select)
+  CLIENT_SUPPLIED_FOOD: "fldkEYTytozApTWxo",     // Client-Supplied Food (Long Text)
+  RELIGIOUS_RESTRICTIONS: "fldL0tIU2I5oFI1gr",   // Religious Restrictions (Long Text)
 
   // ── Serviceware ──
   SERVICE_WARE: "fld3C67SAUsTxCS8E",
@@ -136,7 +181,7 @@ export const FIELD_IDS = {
   EVENT_END_TIME: "fld7xeCnV751pxmWz",     // duration (seconds) - was wrong ID
   FOODWERX_ARRIVAL: "fldMYjGf8dQPNiY4Y",
   VENUE_ARRIVAL_TIME: "fld807MPvraEV8QvN",
-  PARKING_LOAD_IN_NOTES: "fldqXqiwryBHhJmUc",
+  // PARKING_LOAD_IN_NOTES deprecated — use LOAD_IN_NOTES (fldc75GFDDO1vv5rK)
 
   // ── Kitchen / Hot Food Logic ──
   KITCHEN_ON_SITE: "fldSpUlS9qEQ5ly6T",        // Single select: Yes/No/None
@@ -163,6 +208,7 @@ export const FIELD_IDS = {
 
   // ── Print & Docs ──
   THEME_COLOR_SCHEME: "fld5raG6Afilj1wDo",
+  MENU_PRINT_THEME: "fldMenuPrintTheme", // Single Select: Classic European | Modern Minimal | Rustic Elegant | Black Tie Formal — update with actual Airtable field ID
   EVENT_DOCUMENTS: "fld8C7fjOqVtYmnCi",
   INVOICE_PDF: "fld5cENFzJ2DkL3yk",
   GENERATED_BEO_PDF: "fldi3Q1KcYTMoDDxr",
@@ -184,10 +230,18 @@ export const FIELD_IDS = {
   SALAD_PLATES: "fld7Jk0HF0P1uqVmk",
   PAPER_TYPE: "fld8pWDC3b0zuMZto",
 
+  // ── Serviceware Panel (Plates / Cutlery / Glassware / Notes) ──
+  PLATES_LIST: "fldpKcEoqYiHypHD3",
+  CUTLERY_LIST: "fld0bZAToUEOodhA2",
+  GLASSWARE_LIST: "fldNrnnkggmvbOGSU",
+  SERVICEWARE_NOTES: "fldBmeHBiI5K7VuXc",
+  SERVICEWARE_SOURCE: "fldTApRuNzh7uNWi2",   // FoodWerx / Client / Rentals / Mixed
+  SERVICEWARE_PAPER_TYPE: "fldorT4tCcxnBXxgj", // Standard / Premium / China
+  CARAFES_PER_TABLE: "fldCarafesPerTableTODO",  // Number — create in Airtable for China, replace ID
+
   // ── Logistics Detail ──
-  TIMELINE: "fldCGIJmP74Vk8ViQ",  // was wrong: flduvl7yt3kqf7FIO is Print_Allergies (formula)
+  TIMELINE: "fldCGIJmP74Vk8ViQ",
   PARKING_ACCESS: "fldMzNI4UGTkg9r0u",
-  PARKING_NOTES: "fldWVHbtnZ5unHdHA",
   LINENS_OVERLAYS: "fldLyuDJTQ6bXQY3X",
 } as const;
 
@@ -201,8 +255,10 @@ export type EventListItem = {
   eventName: string;
   eventDate?: string;
   eventType?: string;
+  eventOccasion?: string;
   serviceStyle?: string;
   guestCount?: number;
+  dispatchTimeSeconds?: number; // seconds since midnight for sorting
 };
 
 type AirtableFieldSchema = {
@@ -248,11 +304,45 @@ async function getCreatedTimeFieldId(): Promise<string | null> {
     cachedCreatedTimeFieldId = null;
     return null;
   }
-  const table = data.tables.find((t) => t.id === tableId);
+  const table = data.tables.find((t) => t.id === tableId || t.name === tableId);
   const createdField = table?.fields.find((f) => f.type === "createdTime");
   cachedCreatedTimeFieldId = createdField?.id ?? null;
   return cachedCreatedTimeFieldId;
 }
+
+let cachedBarServiceFieldId: string | null | undefined = undefined;
+
+/** Resolve "Bar Service Needed" field ID from Airtable Meta API by name (cached). */
+export async function getBarServiceFieldId(): Promise<string | null> {
+  if (cachedBarServiceFieldId !== undefined) return cachedBarServiceFieldId;
+  const tableKey = getEventsTable();
+  if (typeof tableKey !== "string") {
+    cachedBarServiceFieldId = null;
+    return null;
+  }
+  const data = await airtableMetaFetch<AirtableTablesResponse>("/tables");
+  if (isErrorResult(data)) {
+    cachedBarServiceFieldId = null;
+    return null;
+  }
+  const table = data.tables.find((t) => t.id === tableKey || t.name === tableKey);
+  const barServiceFields = table?.fields.filter(
+    (f) => f.type === "singleSelect" && /bar\s*service/i.test(f.name)
+  ) ?? [];
+  const field = barServiceFields.find((f) => /needed/i.test(f.name)) ?? barServiceFields[0];
+  cachedBarServiceFieldId = field?.id ?? null;
+  if (cachedBarServiceFieldId) {
+    additionalAllowedFieldIds.add(cachedBarServiceFieldId);
+    SINGLE_SELECT_FIELD_IDS.add(cachedBarServiceFieldId);
+    console.log("✅ Bar Service field resolved:", cachedBarServiceFieldId, field?.name);
+  } else {
+    console.warn("⚠️ Bar Service Needed field not found in Events table. Fields:", table?.fields.map((f) => f.name) ?? []);
+  }
+  return cachedBarServiceFieldId;
+}
+
+/** Field IDs resolved at runtime (e.g. Bar Service by name) — allowed in PATCH */
+const additionalAllowedFieldIds = new Set<string>();
 
 export const loadEvent = async (recordId: string): Promise<EventRecordData | AirtableErrorResult> => {
   const table = getEventsTable();
@@ -281,7 +371,9 @@ export const loadEvents = async (): Promise<EventListItem[] | AirtableErrorResul
   params.set("returnFieldsByFieldId", "true");
   params.append("fields[]", FIELD_IDS.EVENT_NAME);
   params.append("fields[]", FIELD_IDS.EVENT_DATE);
+  params.append("fields[]", FIELD_IDS.DISPATCH_TIME);
   params.append("fields[]", FIELD_IDS.EVENT_TYPE);
+  params.append("fields[]", FIELD_IDS.EVENT_OCCASION);
   params.append("fields[]", FIELD_IDS.SERVICE_STYLE);
   params.append("fields[]", FIELD_IDS.GUEST_COUNT);
   const createdTimeFieldId = await getCreatedTimeFieldId();
@@ -305,6 +397,16 @@ export const loadEvents = async (): Promise<EventListItem[] | AirtableErrorResul
 
   return allRecords.map((record) => {
     const fields = record.fields ?? {};
+    const rawDispatch = fields[FIELD_IDS.DISPATCH_TIME];
+    let dispatchTimeSeconds: number | undefined;
+    if (typeof rawDispatch === "number" && !isNaN(rawDispatch)) {
+      dispatchTimeSeconds = rawDispatch;
+    } else if (typeof rawDispatch === "string") {
+      const d = new Date(rawDispatch);
+      if (!isNaN(d.getTime())) {
+        dispatchTimeSeconds = d.getUTCHours() * 3600 + d.getUTCMinutes() * 60 + d.getUTCSeconds();
+      }
+    }
     return {
       id: record.id,
       eventName: asString(fields[FIELD_IDS.EVENT_NAME]),
@@ -313,8 +415,10 @@ export const loadEvents = async (): Promise<EventListItem[] | AirtableErrorResul
           ? (fields[FIELD_IDS.EVENT_DATE] as string)
           : undefined,
       eventType: asSingleSelectName(fields[FIELD_IDS.EVENT_TYPE]) || undefined,
+      eventOccasion: asSingleSelectName(fields[FIELD_IDS.EVENT_OCCASION]) || undefined,
       serviceStyle: asSingleSelectName(fields[FIELD_IDS.SERVICE_STYLE]) || undefined,
       guestCount: typeof fields[FIELD_IDS.GUEST_COUNT] === "number" ? (fields[FIELD_IDS.GUEST_COUNT] as number) : undefined,
+      dispatchTimeSeconds,
     };
   });
 };
@@ -336,7 +440,7 @@ export const loadSingleSelectOptions = async (
   const optionsMap: Record<string, SingleSelectOption[]> = {};
   fieldIds.forEach((fieldId) => {
     const field = table.fields.find((item) => item.id === fieldId);
-    if (field?.type === "singleSelect") {
+    if (field?.type === "singleSelect" || field?.type === "multipleSelects") {
       optionsMap[fieldId] = field.options?.choices?.map((choice) => ({ id: choice.id, name: choice.name })) ?? [];
     } else {
       optionsMap[fieldId] = [];
@@ -346,33 +450,77 @@ export const loadSingleSelectOptions = async (
   return optionsMap;
 };
 
+/** Call from browser console to find Bar Service field ID: window.__logBarServiceFieldId?.() */
+export async function logEventsTableFieldsForBarService(): Promise<void> {
+  const tableKey = getEventsTable();
+  if (typeof tableKey !== "string") {
+    console.error("No Events table configured");
+    return;
+  }
+  const data = await airtableMetaFetch<AirtableTablesResponse>("/tables");
+  if (isErrorResult(data)) {
+    console.error("Failed to fetch schema:", data);
+    return;
+  }
+  const table = data.tables.find((t) => t.id === tableKey || t.name === tableKey);
+  if (!table) {
+    console.error("Events table not found. Tables:", data.tables.map((t) => ({ id: t.id, name: t.name })));
+    return;
+  }
+  const barRelated = table.fields.filter(
+    (f) => /bar|beverage|drink|mixer|garnish|signature/i.test(f.name)
+  );
+  console.log("📋 Bar-related fields in Events table (use the 'id' for BAR_SERVICE):", barRelated.map((f) => ({ id: f.id, name: f.name, type: f.type })));
+  if (barRelated.length === 0) {
+    console.log("All fields:", table.fields.map((f) => ({ id: f.id, name: f.name })));
+  }
+}
+
 // STRICT WHITELIST: Only these field IDs are ever sent to Airtable PATCH.
 // Anything not in this list is dropped. Add new IDs here after confirming they are NOT formula/rollup/lookup.
 const SAVE_WHITELIST = new Set([
   "fldFYaE7hI27R3PsX",   // EVENT_DATE
   "fldtqnvD7M8xbc0Xb",   // EVENT_TYPE
+  "fldVBvZ2m6zQ5xd2D",   // EVENT_OCCASION (Wedding, Bar/Bat Mitzvah, etc.)
   "fldqnW1ulcchcQ05t",   // SERVICE_STYLE
   "fldjgqDUxVxaJ7Y9V",   // GUEST_COUNT
-  "fldfQoT3yhCBXzHWT",   // VENUE
-  "fldK8j9JRu0VYCFV9",   // VENUE_NAME
-  "fldtCOxi4Axjfjt0V",   // VENUE_ADDRESS
+  "fldtCOxi4Axjfjt0V",   // VENUE (main venue name)
+  "fldJsajSl1l6marzw",   // VENUE_ADDRESS (venue street address)
   "fldNToCnV799eggiD",   // VENUE_CITY
   "fldxCz5cPLwCetb0C",   // VENUE_STATE
   "fldFAspB1ds9Yn0Kl",   // CLIENT_FIRST_NAME
   "fldeciZmsIY3c2T1v",   // CLIENT_LAST_NAME
   "fldT5lcdCL5ndh84D",   // CLIENT_EMAIL
   "fldnw1VGIi3oXM4g3",   // CLIENT_PHONE
+  "fldUyi7xzG60H1ML4",   // CLIENT_STREET
+  "fldoYWmGny8pkCKJQ",   // CLIENT_CITY
+  "fldffsjG72MWzrCjl",   // CLIENT_STATE
+  "fldBuaBTjAkwmtd0J",   // CLIENT_ZIP
   "fldmsFPsl2gAtiSCD",   // PRIMARY_CONTACT_NAME
   "fld4OK9zVwr16qMIt",   // PRIMARY_CONTACT_PHONE
-  "fld9LnsDlMBTl7C1G",   // CONTACT_FIRST_NAME
+  // NOTE: fld9LnsDlMBTl7C1G is "Client Name Autofill - LEGACY" (formula) - READ ONLY, never write
   "fldMTRGNFa4pHbjY5",   // PRIMARY_CONTACT_ROLE
   "fldbbHmaWqOBNUlJP",   // DISPATCH_TIME
   "fldDwDE87M9kFAIDn",   // EVENT_START_TIME
   "fld7xeCnV751pxmWz",   // EVENT_END_TIME
   "fld807MPvraEV8QvN",   // VENUE_ARRIVAL_TIME
-  "fldqXqiwryBHhJmUc",   // PARKING_LOAD_IN_NOTES
+  "fldMYjGf8dQPNiY4Y",   // FOODWERX_ARRIVAL (Event Arrival Time)
+  "fldc75GFDDO1vv5rK",   // LOAD_IN_NOTES
   "fldCGIJmP74Vk8ViQ",   // TIMELINE
-  "fldWVHbtnZ5unHdHA",   // PARKING_NOTES
+  "fldkmY1Y9b5ToJFsg",   // PARKING_NOTES
+  "fldlc2oZdkJDtk1Mh",   // VENUE_NOTES
+  "fld1rsHIkn06rYh9H",   // KITCHEN_ACCESS_NOTES
+  "fldzlZ54PL1WQ5glw",   // POWER_NOTES
+  "fldNmAssiLj9iYKx9",   // TIMELINE_NOTES
+  "fldYmHWaoDv6OL7Mo",   // EQUIPMENT_NOTES
+  "fldSN2TvT87Nuhc0X",   // STAIRS_STEPS
+  "fldbbYSVAn7ewQKOR",   // ELEVATORS_AVAILABLE
+  "fldUFLWnKGtt3TDXZ",   // ANIMALS_PETS
+  "fldTecWfMr6IZoXKQ",   // FOOD_SETUP_LOCATION
+  "fldT1y9bQdjAyjOlr",   // EVENT_PURPOSE
+  "fldCHZQBr3uffLjzp",   // FOOD_SERVICE_FLOW
+  "fldkEYTytozApTWxo",   // CLIENT_SUPPLIED_FOOD
+  "fldL0tIU2I5oFI1gr",   // RELIGIOUS_RESTRICTIONS
   "fldhGj51bQQWLJSX0",   // DIETARY_NOTES
   "fldlTlYgvPTIUzzMn",   // SPECIAL_NOTES
   "fld3C67SAUsTxCS8E",   // SERVICE_WARE
@@ -380,12 +528,15 @@ const SAVE_WHITELIST = new Set([
   "fldv5sitKjwsIleEK",   // RENTAL_ITEMS
   "fldKFjPzm1w9OoqOD",   // RENTALS_NEEDED
   "fldlPI3Ix1UTuGrCf",   // SERVICE_WARE_SOURCE
-  "fldOisfjYPDeBwM1B",   // BAR_SERVICE_NEEDED
-  "fldXm91QjyvVKbiyO",   // BAR_SERVICE
-  "fldyzrU3YnO8dzxbd",   // INFUSED_WATER
-  "fldRxshZ4GqXGrJnu",   // INFUSION_INGREDIENTS
-  "fldlDyMCzOTpzAPEh",   // DISPENSER_COUNT
-  "fldWIMlTc0Za6BTYk",   // COFFEE_SERVICE_NEEDED
+  // BAR_SERVICE resolved dynamically via getBarServiceFieldId() — not in whitelist
+  "fldfNln4oe566nENv",   // HYDRATION_STATION_PROVIDED
+  "fldxa3VSW1gNPqRQ0",   // HYDRATION_STATION_DRINK_OPTIONS
+  "fldZA0JhJF50PFiwM",   // HYDRATION_STATION_NOTES
+  "fldyzrU3YnO8dzxbd",   // INFUSED_WATER (legacy)
+  "fldRxshZ4GqXGrJnu",   // INFUSION_INGREDIENTS (legacy)
+  "fldlDyMCzOTpzAPEh",   // DISPENSER_COUNT (legacy)
+  "fldKlKX0HEGX3NTcR",   // COFFEE_SERVICE_NEEDED
+  "fldCoffeeMugTypeTODO",   // COFFEE_MUG_TYPE
   "fldWkHPhynjxyecq7",   // STAFF
   "fld4QUBWxoSu6o29l",   // SERVERS
   "fldox9emNqGoemhz0",   // UTILITY
@@ -395,6 +546,7 @@ const SAVE_WHITELIST = new Set([
   "fldJUrDnCSnw31wan",   // DISPLAY_DESIGN
   "fldaT7wcJglqPr8dA",   // DINING_CREW
   "fldSpUlS9qEQ5ly6T",   // KITCHEN_ON_SITE
+  "fldMenuPrintTheme",   // MENU_PRINT_THEME (Single Select) — update if different from Airtable
   "fldJFB69mmB5T4Ysp",   // FOOD_MUST_GO_HOT
   "fldnGtJVWf4u39SHI",   // BEO_NOTES
   "fld6Z6xw9ciygqyff",   // BEO_TIMELINE
@@ -422,14 +574,21 @@ const SAVE_WHITELIST = new Set([
   "fldm1qYJE55QVjYsd",   // CUSTOM_BUFFET_METAL
   "fldtquSPyLWUEYX6P",   // CUSTOM_BUFFET_CHINA
   "fld95NEZsIfHpVvAk",   // CUSTOM_DESSERTS
-  "fldcry8vpUBY3fkHk",   // BAR_SIG_DRINK
-  "fldZSIBTkzcEmG7bt",   // BAR_DRINK_NAME
-  "fld1sg6vQi7lziPDz",   // BAR_RECIPE
-  "fldoek1mpdi2ESyzu",   // BAR_WHO_SUPPLIES
+  "fldcry8vpUBY3fkHk",   // BAR_SIGNATURE_DRINK_YES_NO
+  "fldZSIBTkzcEmG7bt",   // BAR_SIGNATURE_DRINK_NAME
+  "fld1sg6vQi7lziPDz",   // BAR_SIGNATURE_DRINK_INGREDIENTS (Recipe & Ingredients)
+  "fldoek1mpdi2ESyzu",   // BAR_SIGNATURE_DRINK_MIXERS_SUPPLIER (Who is supplying signature drink mixers and garnishes)
   "fldXL37gOon7wyQss",   // BAR_MIXERS
   "flduv4RtRR0lLm4vY",   // BAR_GARNISHES
   "fldWc6PpHh5w2nl6l",   // CHINA_PAPER_GLASSWARE
   "fldQK1G8pE7VvDhoC",   // SERVICE_WARE_SOURCE_ALT
+  "fldpKcEoqYiHypHD3",   // PLATES_LIST
+  "fld0bZAToUEOodhA2",   // CUTLERY_LIST
+  "fldNrnnkggmvbOGSU",   // GLASSWARE_LIST
+  "fldBmeHBiI5K7VuXc",   // SERVICEWARE_NOTES
+  "fldTApRuNzh7uNWi2",   // SERVICEWARE_SOURCE
+  "fldorT4tCcxnBXxgj",   // SERVICEWARE_PAPER_TYPE
+  // CARAFES_PER_TABLE: add real field ID here and to SAVE_WHITELIST when created in Airtable
   "fldC1hp7tQH1AXLpr",   // BBS
   "fldm4fQK7mV5WuPZg",   // LARGE_PLATES
   "fld7Jk0HF0P1uqVmk",   // SALAD_PLATES
@@ -448,10 +607,16 @@ const SAVE_WHITELIST = new Set([
 export const EDITABLE_FIELD_IDS = SAVE_WHITELIST;
 
 /** Strip to whitelist only. Call before setFields to avoid sending computed fields. */
+const PLACEHOLDER_FIELD_IDS = new Set([
+  "fldCarafesPerTableTODO",
+  "fldCoffeeMugTypeTODO",
+]);
+
 export function filterToEditableOnly(fields: Record<string, unknown>): Record<string, unknown> {
   const result: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(fields)) {
-    if (!SAVE_WHITELIST.has(key)) continue;
+    if (PLACEHOLDER_FIELD_IDS.has(key)) continue;
+    if (!SAVE_WHITELIST.has(key) && !additionalAllowedFieldIds.has(key)) continue;
     if (value === undefined) continue;
     if (Array.isArray(value) && value.length > 0 && typeof value[0] === "object" && value[0] !== null && "url" in (value[0] as object)) continue;
     result[key] = value;
@@ -463,6 +628,24 @@ export function filterToEditableOnly(fields: Record<string, unknown>): Record<st
 const DATE_TIME_FIELD_IDS = new Set([
   FIELD_IDS.FOODWERX_ARRIVAL,
   FIELD_IDS.DISPATCH_TIME,
+  FIELD_IDS.VENUE_ARRIVAL_TIME,
+]);
+
+// Field IDs Airtable rejects — strip before PATCH (Bar Service now resolved dynamically by name)
+const STRIP_FIELD_IDS = new Set<string>([]);
+
+// Single Select fields: Airtable REST API accepts string, but some bases require { name: "..." } format
+const SINGLE_SELECT_FIELD_IDS = new Set([
+  FIELD_IDS.BAR_SIGNATURE_DRINK_YES_NO,
+  FIELD_IDS.BAR_SIGNATURE_DRINK_MIXERS_SUPPLIER,
+  FIELD_IDS.EVENT_TYPE,
+  FIELD_IDS.EVENT_OCCASION,
+  FIELD_IDS.SERVICE_STYLE,
+  FIELD_IDS.KITCHEN_ON_SITE,
+  FIELD_IDS.SERVICE_WARE_SOURCE,
+  FIELD_IDS.STAIRS_STEPS,
+  FIELD_IDS.ELEVATORS_AVAILABLE,
+  FIELD_IDS.FOOD_SERVICE_FLOW,
 ]);
 
 /** Convert seconds (from midnight) + date string → ISO datetime for Airtable */
@@ -488,7 +671,11 @@ export const updateEventMultiple = async (
   const eventDate = asString(updatesObject[FIELD_IDS.EVENT_DATE]) || "";
 
   for (const [key, value] of Object.entries(updatesObject)) {
-    if (!SAVE_WHITELIST.has(key)) {
+    if (STRIP_FIELD_IDS.has(key)) {
+      blockedFields.push(key);
+      continue;
+    }
+    if (!SAVE_WHITELIST.has(key) && !additionalAllowedFieldIds.has(key)) {
       blockedFields.push(key);
       continue;
     }
@@ -502,13 +689,19 @@ export const updateEventMultiple = async (
     // dateTime fields: convert seconds (number) → ISO string for Airtable
     if (DATE_TIME_FIELD_IDS.has(key) && typeof value === "number" && !isNaN(value)) {
       filteredFields[key] = secondsAndDateToIso(value, eventDate);
+    } else if (SINGLE_SELECT_FIELD_IDS.has(key) && (value === null || value === "")) {
+      filteredFields[key] = null;
     } else {
       filteredFields[key] = value;
     }
   }
 
   if (blockedFields.length > 0) {
-    console.warn("⚠️ BLOCKED (whitelist):", blockedFields.length, "fields");
+    const stripped = blockedFields.filter((k) => STRIP_FIELD_IDS.has(k));
+    if (stripped.length > 0) {
+      console.warn("⚠️ STRIPPED (Airtable unknown field):", stripped, "→ Get correct ID from Airtable API docs and update FIELD_IDS");
+    }
+    console.warn("⚠️ BLOCKED:", blockedFields.length, "fields");
   }
   console.log("✅ updateEventMultiple - AFTER filter:", JSON.stringify(filteredFields, null, 2));
 
@@ -741,8 +934,9 @@ export const getCoffeeServiceDetails = async (
   const data = await loadEvent(recordId);
   if (isErrorResult(data)) return data;
 
+  const raw = data.fields[FIELD_IDS.COFFEE_SERVICE_NEEDED];
   return {
-    coffeeServiceNeeded: asBoolean(data.fields[FIELD_IDS.COFFEE_SERVICE_NEEDED]),
+    coffeeServiceNeeded: raw === true || (typeof raw === "string" && raw === "Yes"),
   };
 };
 

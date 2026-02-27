@@ -174,8 +174,21 @@ export default function FOHLandingPage() {
           </div>
         </div>
 
-        {/* Right: 10-Day button */}
-        <button
+        {/* Right: Upload Invoice + 10-Day */}
+        <div className="flex items-center gap-3">
+          <Link
+            to="/invoice-intake"
+            className="px-4 py-2.5 rounded-lg text-xs font-bold uppercase tracking-wide transition-all duration-300"
+            style={{
+              background: "rgba(34,197,94,0.15)",
+              border: "1px solid rgba(34,197,94,0.4)",
+              color: "#4ade80",
+              textDecoration: "none",
+            }}
+          >
+            📄 Upload Invoice
+          </Link>
+          <button
           onClick={() => setShowTenDay(!showTenDay)}
           className="px-5 py-2.5 rounded-lg text-xs font-bold uppercase tracking-wide transition-all duration-300"
           style={{
@@ -203,6 +216,7 @@ export default function FOHLandingPage() {
         >
           {showTenDay ? "← Back to Today" : "View 10-Day Panel →"}
         </button>
+        </div>
       </header>
 
       {/* Neon edge */}

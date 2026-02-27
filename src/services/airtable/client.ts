@@ -23,6 +23,7 @@ const AIRTABLE_META_API_URL = "https://api.airtable.com/v0/meta/bases";
 const AIRTABLE_API_KEY = (import.meta.env.VITE_AIRTABLE_API_KEY as string | undefined)?.trim();
 const AIRTABLE_BASE_ID = (import.meta.env.VITE_AIRTABLE_BASE_ID as string | undefined)?.trim();
 const AIRTABLE_EVENTS_TABLE = (import.meta.env.VITE_AIRTABLE_EVENTS_TABLE as string | undefined)?.trim();
+const AIRTABLE_STATIONS_TABLE = (import.meta.env.VITE_AIRTABLE_STATIONS_TABLE as string | undefined)?.trim() || "Stations";
 
 const getEnvValue = (value: string | undefined, name: string): string | AirtableErrorResult => {
   if (!value) {
@@ -42,6 +43,9 @@ const getHeaders = (apiKey: string) => {
 
 export const getEventsTable = (): string | AirtableErrorResult =>
   getEnvValue(AIRTABLE_EVENTS_TABLE, "VITE_AIRTABLE_EVENTS_TABLE");
+
+export const getStationsTable = (): string =>
+  AIRTABLE_STATIONS_TABLE || "Stations";
 
 export const getBaseId = (): string | AirtableErrorResult =>
   getEnvValue(AIRTABLE_BASE_ID, "VITE_AIRTABLE_BASE_ID");
@@ -98,11 +102,10 @@ export const airtableFetch = async <T>(
     const data = (await response.json()) as T & AirtableApiError;
 
     if (!response.ok || data?.error) {
-      console.error('❌ AIRTABLE ERROR:', {
-        status: response.status,
-        error: JSON.stringify(data, null, 2),
-        requestBody: init?.body
-      });
+      const errMsg = (data as { error?: { message?: string; type?: string } })?.error?.message;
+      const errType = (data as { error?: { message?: string; type?: string } })?.error?.type;
+      console.error('❌ AIRTABLE ERROR (422 = invalid field value):', response.status, errType || '', errMsg || JSON.stringify(data));
+      console.error('Request body:', init?.body);
       return {
         error: true,
         message: data?.error?.message || `Airtable request failed: ${response.status}`,

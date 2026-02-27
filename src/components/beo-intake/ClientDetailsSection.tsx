@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useEventStore } from "../../state/eventStore";
 import { FIELD_IDS } from "../../services/airtable/events";
-import { asString } from "../../services/airtable/selectors";
+import { asString, asSingleSelectName } from "../../services/airtable/selectors";
 import { FormSection } from "./FormSection";
 import type { ClientDetails } from "./types";
 
@@ -13,6 +13,10 @@ export const ClientDetailsSection = () => {
     clientBusinessName: "",
     clientEmail: "",
     clientPhone: "",
+    clientStreet: "",
+    clientCity: "",
+    clientState: "",
+    clientZip: "",
   });
 
   useEffect(() => {
@@ -23,6 +27,10 @@ export const ClientDetailsSection = () => {
         clientBusinessName: "",
         clientEmail: "",
         clientPhone: "",
+        clientStreet: "",
+        clientCity: "",
+        clientState: "",
+        clientZip: "",
       });
       return;
     }
@@ -33,6 +41,10 @@ export const ClientDetailsSection = () => {
       clientBusinessName: asString(selectedEventData[FIELD_IDS.CLIENT_BUSINESS_NAME]),
       clientEmail: asString(selectedEventData[FIELD_IDS.CLIENT_EMAIL]),
       clientPhone: asString(selectedEventData[FIELD_IDS.CLIENT_PHONE]),
+      clientStreet: asString(selectedEventData[FIELD_IDS.CLIENT_STREET]),
+      clientCity: asString(selectedEventData[FIELD_IDS.CLIENT_CITY]),
+      clientState: asString(selectedEventData[FIELD_IDS.CLIENT_STATE]),
+      clientZip: asString(selectedEventData[FIELD_IDS.CLIENT_ZIP]),
     };
     
     // Only update if the values are actually different to prevent cursor jumping
@@ -41,7 +53,11 @@ export const ClientDetailsSection = () => {
           prev.clientLastName === newDetails.clientLastName &&
           prev.clientBusinessName === newDetails.clientBusinessName &&
           prev.clientEmail === newDetails.clientEmail &&
-          prev.clientPhone === newDetails.clientPhone) {
+          prev.clientPhone === newDetails.clientPhone &&
+          prev.clientStreet === newDetails.clientStreet &&
+          prev.clientCity === newDetails.clientCity &&
+          prev.clientState === newDetails.clientState &&
+          prev.clientZip === newDetails.clientZip) {
         return prev;
       }
       return newDetails;
@@ -58,6 +74,8 @@ export const ClientDetailsSection = () => {
   };
 
   const canEdit = Boolean(selectedEventId);
+  const eventType = selectedEventData ? asSingleSelectName(selectedEventData[FIELD_IDS.EVENT_TYPE]) : "";
+  const isDelivery = eventType === "Delivery";
 
   return (
     <FormSection title="Client Information" icon="👤">
@@ -153,27 +171,125 @@ export const ClientDetailsSection = () => {
         />
       </div>
 
+      {isDelivery && (
+        <div style={{ gridColumn: "1 / -1" }}>
+          <label style={{ display: "block", fontSize: "11px", color: "#999", marginBottom: "6px", fontWeight: "600" }}>
+            Client Business Name (Auto-Generated)
+          </label>
+          <input
+            type="text"
+            value={details.clientBusinessName}
+            disabled
+            readOnly
+            style={{
+              width: "100%",
+              padding: "12px",
+              borderRadius: "8px",
+              border: "1px solid #333",
+              backgroundColor: "#0f0f0f",
+              color: "#666",
+              fontSize: "14px",
+              cursor: "not-allowed",
+            }}
+            placeholder="Computed from client name"
+          />
+        </div>
+      )}
+
       <div style={{ gridColumn: "1 / -1" }}>
         <label style={{ display: "block", fontSize: "11px", color: "#999", marginBottom: "6px", fontWeight: "600" }}>
-          Client Business Name (Auto-Generated)
+          Client Street
         </label>
         <input
           type="text"
-          value={details.clientBusinessName}
-          disabled
-          readOnly
+          value={details.clientStreet}
+          disabled={!canEdit}
+          onChange={(e) => handleChange("clientStreet", e.target.value)}
+          onBlur={(e) => handleBlur(FIELD_IDS.CLIENT_STREET, e.target.value)}
           style={{
             width: "100%",
             padding: "12px",
             borderRadius: "8px",
-            border: "1px solid #333",
-            backgroundColor: "#0f0f0f",
-            color: "#666",
+            border: "1px solid #444",
+            backgroundColor: "#1a1a1a",
+            color: "#e0e0e0",
             fontSize: "14px",
-            cursor: "not-allowed",
           }}
-          placeholder="Computed from client name"
+          placeholder="e.g. 123 Main St"
         />
+      </div>
+
+      <div>
+        <label style={{ display: "block", fontSize: "11px", color: "#999", marginBottom: "6px", fontWeight: "600" }}>
+          Client City
+        </label>
+        <input
+          type="text"
+          value={details.clientCity}
+          disabled={!canEdit}
+          onChange={(e) => handleChange("clientCity", e.target.value)}
+          onBlur={(e) => handleBlur(FIELD_IDS.CLIENT_CITY, e.target.value)}
+          style={{
+            width: "100%",
+            padding: "12px",
+            borderRadius: "8px",
+            border: "1px solid #444",
+            backgroundColor: "#1a1a1a",
+            color: "#e0e0e0",
+            fontSize: "14px",
+          }}
+          placeholder="City"
+        />
+      </div>
+
+      <div>
+        <label style={{ display: "block", fontSize: "11px", color: "#999", marginBottom: "6px", fontWeight: "600" }}>
+          Client State
+        </label>
+        <input
+          type="text"
+          value={details.clientState}
+          disabled={!canEdit}
+          onChange={(e) => handleChange("clientState", e.target.value)}
+          onBlur={(e) => handleBlur(FIELD_IDS.CLIENT_STATE, e.target.value)}
+          style={{
+            width: "100%",
+            padding: "12px",
+            borderRadius: "8px",
+            border: "1px solid #444",
+            backgroundColor: "#1a1a1a",
+            color: "#e0e0e0",
+            fontSize: "14px",
+          }}
+          placeholder="e.g. NJ"
+        />
+      </div>
+
+      <div>
+        <label style={{ display: "block", fontSize: "11px", color: "#999", marginBottom: "6px", fontWeight: "600" }}>
+          Client ZIP
+        </label>
+        <input
+          type="text"
+          value={details.clientZip}
+          disabled={!canEdit}
+          onChange={(e) => handleChange("clientZip", e.target.value)}
+          onBlur={(e) => handleBlur(FIELD_IDS.CLIENT_ZIP, e.target.value)}
+          style={{
+            width: "100%",
+            padding: "12px",
+            borderRadius: "8px",
+            border: "1px solid #444",
+            backgroundColor: "#1a1a1a",
+            color: "#e0e0e0",
+            fontSize: "14px",
+          }}
+          placeholder="e.g. 08001"
+        />
+      </div>
+
+      <div style={{ gridColumn: "1 / -1", fontSize: "10px", color: "#666", marginTop: "-8px" }}>
+        Used when venue is blank; venue address takes precedence for event location.
       </div>
     </FormSection>
   );

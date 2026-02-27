@@ -6,7 +6,9 @@ import { FormSection } from "./FormSection";
 
 const KITCHEN_OPTIONS = ["Yes", "No"];
 
-export const KitchenLogisticsSection = () => {
+type KitchenLogisticsSectionProps = { embedded?: boolean };
+
+export const KitchenLogisticsSection = ({ embedded = false }: KitchenLogisticsSectionProps) => {
   const { selectedEventId, selectedEventData, setFields } = useEventStore();
   const [kitchenOnSite, setKitchenOnSite] = useState("");
   const [foodMustGoHot, setFoodMustGoHot] = useState(false);
@@ -46,8 +48,8 @@ export const KitchenLogisticsSection = () => {
     fontWeight: "600",
   };
 
-  return (
-    <FormSection title="Kitchen & Hot Food Logic" icon="🔥">
+  const content = (
+    <>
       <div>
         <label style={labelStyle}>Kitchen On-Site?</label>
         <select
@@ -88,6 +90,12 @@ export const KitchenLogisticsSection = () => {
           </div>
         </div>
       )}
+    </>
+  );
+
+  return embedded ? content : (
+    <FormSection title="Kitchen & Hot Food Logic" icon="🔥">
+      {content}
     </FormSection>
   );
 };

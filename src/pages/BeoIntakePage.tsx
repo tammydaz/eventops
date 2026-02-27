@@ -2,25 +2,19 @@ import { useEffect } from "react";
 import { useEventStore } from "../state/eventStore";
 import { EventSelector } from "../components/EventSelector";
 import {
-  ClientDetailsSection,
-  PrimaryContactSection,
+  ClientAndContactSection,
   EventCoreSection,
   VenueDetailsSection,
   TimelineSection,
-  MenuSection,
-  BarServiceSection,
-  HydrationStationSection,
-  CoffeeTeaSection,
-  ServicewareSection,
-  DietaryNotesSection,
-  DesignerNotesSection,
-  LogisticsSection,
+  MenuAndBeveragesSection,
+  KitchenAndServicewareSection,
+  SiteVisitLogisticsSection,
 } from "../components/beo-intake";
 import { BeoIntakeActionBar } from "../components/beo-intake/BeoIntakeActionBar";
 import "./IntakePage.css";
 
 export const BeoIntakePage = () => {
-  const { loadEvents, selectedEventId, selectEvent, setSelectedEventId } = useEventStore();
+  const { loadEvents, selectedEventId, selectEvent, setSelectedEventId, eventDataLoading } = useEventStore();
 
   useEffect(() => {
     const pathname = window.location.pathname;
@@ -67,21 +61,22 @@ export const BeoIntakePage = () => {
           </div>
         </div>
         <div style={{ position: "relative", zIndex: 1, padding: "40px", minHeight: "calc(100vh - 100px)", paddingBottom: "140px", maxWidth: "1200px", margin: "0 auto" }}>
-          {selectedEventId ? (
+          {selectedEventId && eventDataLoading ? (
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "400px", textAlign: "center" }}>
+              <div>
+                <div style={{ fontSize: "32px", marginBottom: "16px" }}>⏳</div>
+                <h2 style={{ fontSize: "20px", fontWeight: 600, color: "#ff6b6b", marginBottom: "8px" }}>Loading event...</h2>
+              </div>
+            </div>
+          ) : selectedEventId ? (
             <>
-              <ClientDetailsSection />
-              <PrimaryContactSection />
+              <ClientAndContactSection />
               <EventCoreSection />
               <VenueDetailsSection />
+              <MenuAndBeveragesSection />
+              <KitchenAndServicewareSection />
               <TimelineSection />
-              <MenuSection />
-              <BarServiceSection />
-              <HydrationStationSection />
-              <CoffeeTeaSection />
-              <ServicewareSection />
-              <DietaryNotesSection />
-              <DesignerNotesSection />
-              <LogisticsSection />
+              <SiteVisitLogisticsSection />
             </>
           ) : (
             <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "400px", textAlign: "center" }}>

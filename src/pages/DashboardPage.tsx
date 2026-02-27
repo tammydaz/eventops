@@ -54,7 +54,8 @@ const CAT_COLORS: Record<string, string> = {
 /* ── Sidebar nav items ── */
 const NAV = [
   { label: "Dashboard", href: "/", active: true },
-  { label: "Intake", href: "/beo-intake" },
+  { label: "Open Event", href: "/beo-intake" },
+  { label: "Intake", href: "/invoice-intake" },
   { label: "Watchtower", href: "/watchtower" },
   { label: "Papa Chulo", href: "/papa-chulo" },
   { label: "Departments", href: "#departments" },
@@ -121,7 +122,7 @@ export default function DashboardPage() {
           <div className="dp-header-title">FoodWerx EventOps</div>
           <div className="dp-header-right">
             <div className="dp-notif" title="Notifications" />
-            <button className="dp-add-btn" type="button">+ Add Event</button>
+            <Link to="/invoice-intake" className="dp-add-btn" style={{ textDecoration: "none", color: "white" }}>+ Add Event</Link>
             <div className="dp-user">FWX</div>
           </div>
         </header>
@@ -221,6 +222,7 @@ export default function DashboardPage() {
                     {/* Kitchen submenu */}
                     {isKitchen && kitchenOpen && (
                       <div className="dp-submenu">
+                        <a href="/beo-intake" className="dp-submenu-item">📋 Open Event</a>
                         <a href="/kitchen-prep" className="dp-submenu-item">🔪 Kitchen Prep Timeline</a>
                         <div className="dp-submenu-item">📦 Pack-Out Checklist</div>
                         <div className="dp-submenu-item">🍽️ Menu Specs</div>
@@ -231,6 +233,7 @@ export default function DashboardPage() {
                     {/* Logistics submenu */}
                     {isLogistics && logisticsOpen && (
                       <div className="dp-submenu">
+                        <a href="/beo-intake" className="dp-submenu-item">📋 Open Event</a>
                         <a href="/delivery-command" className="dp-submenu-item">🚛 Delivery & Dispatch Command</a>
                         <div className="dp-submenu-item">🗺️ Route Planning</div>
                         <div className="dp-submenu-item">📍 Vehicle Tracking</div>
@@ -241,11 +244,12 @@ export default function DashboardPage() {
                     {/* Intake submenu / CENTRAL COMMAND CENTER */}
                     {isIntake && intakeOpen && (
                       <div className="dp-submenu">
+                        <a href="/beo-intake" className="dp-submenu-item">📋 Open Event</a>
                         <a href="/quick-intake" className="dp-submenu-item">Quick Client Intake</a>
-                        <a href="/beo-intake" className="dp-submenu-item">BEO Full Intake</a>
+                        <a href="/seed-demo" className="dp-submenu-item">🌱 Seed Demo Event</a>
                         <div className="dp-submenu-item">Rentals</div>
                         <div className="dp-submenu-item">Ops Vault</div>
-                        <a href="/foh" className="dp-submenu-item">Upload Invoice</a>
+                        <a href="/invoice-intake" className="dp-submenu-item">Upload Invoice</a>
                       </div>
                     )}
                   </div>
