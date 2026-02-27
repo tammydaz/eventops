@@ -78,7 +78,7 @@ export function parseInvoiceTextRuleBased(text: string): ParsedInvoice | null {
   }
 
   // Bill To block: name, address, city/state/zip (PDF may join with spaces or newlines)
-  const billToMatch = raw.match(/Bill\s*To\s*([\s\S]+?)(?=Phone|E-Mail|Total|PO\s*#|Terms|Due|Description|Quantity|Hospitality|foodwerx|$)/im);
+  const billToMatch = raw.match(/Bill\s*To\s*([\s\S]+?)(?=Phone|E-?Mail|Total|PO\s*#|Terms|Due|Description|Quantity|Rate|Amount|Hospitality|foodwerx|$)/im);
   const billToText = billToMatch ? billToMatch[1].trim() : "";
   const billToLines = billToText ? billToText.split(/\s{2,}|\n/).map((l) => l.trim()).filter((l) => l.length > 2) : [];
 
@@ -143,28 +143,46 @@ export function parseInvoiceTextRuleBased(text: string): ParsedInvoice | null {
     if (parts.length > 1) result.clientLastName = parts.slice(1).join(" ");
   }
 
-  // Guest count: prefer package line "Flirty Package 166 105.00" - take largest qty in 20-2000 range
+  // Guest count: prefer package line "Flirty Package 166 105.00" or dessert "25 6.00 150.00" - take largest qty in 20-2000 range
   const allQtyMatches = [...raw.matchAll(/(\d{2,4})\s+[\d.]+\s+[\d,]+\.?\d*T?/g)];
   let bestGuest = 0;
   for (const m of allQtyMatches) {
     const qty = parseInt(m[1], 10);
     if (qty >= 20 && qty <= 2000 && qty > bestGuest) bestGuest = qty;
   }
-  if (bestGuest) result.guestCount = bestGuest;
+  // Fallback: "Pricing is based on 25 guests" or dessert quantity 25
+  if (!bestGuest) {
+    const guestNote = raw.match(/Pricing is based on (\d+)\s+guests/i) || raw.match(/(\d+)\s+guests/i);
+    if (guestNote) {
+      const n = parseInt(guestNote[1], 10);
+      if (n >= 10 && n <= 2000) result.guestCount = n;
+    }
+  } else {
+    result.guestCount = bestGuest;
+  }
 
-  // Event times: "9am-4:30pm"
+  const to24 = (h: number, m: number, ampm: string) => {
+    if (/pm/i.test(ampm) && h !== 12) h += 12;
+    if (/am/i.test(ampm) && h === 12) h = 0;
+    return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+  };
+
+  // Event times: "Event Begins at 6:30pm" (Rhinchart format)
+  const eventBeginsMatch = raw.match(/Event\s+Begins?\s+at\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)/i);
+  if (eventBeginsMatch) {
+    const h = parseInt(eventBeginsMatch[1], 10);
+    const m = parseInt(eventBeginsMatch[2] || "0", 10);
+    result.eventStartTime = to24(h, m, eventBeginsMatch[3] || "pm");
+  }
+
+  // Event times: "9am-4:30pm" or "Chef on site from 5pm-10pm"
   const timeRange = raw.match(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\s*[-–]\s*(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/i);
   if (timeRange) {
-    const to24 = (h: number, m: number, ampm: string) => {
-      if (/pm/i.test(ampm) && h !== 12) h += 12;
-      if (/am/i.test(ampm) && h === 12) h = 0;
-      return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
-    };
     const h1 = parseInt(timeRange[1], 10);
     const m1 = parseInt(timeRange[2] || "0", 10);
     const h2 = parseInt(timeRange[4], 10);
     const m2 = parseInt(timeRange[5] || "0", 10);
-    result.eventStartTime = to24(h1, m1, timeRange[3] || "am");
+    if (!result.eventStartTime) result.eventStartTime = to24(h1, m1, timeRange[3] || "am");
     result.eventEndTime = to24(h2, m2, timeRange[6] || "pm");
   }
 
