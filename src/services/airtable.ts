@@ -11,6 +11,7 @@ const DESSERTS_FIELD_ID = "flddPGfYJQxixWRq9";
 const BEVERAGES_FIELD_ID = "fldRb454yd3EQhcbo";
 const MENU_ITEMS_FIELD_ID = "fld7n9gmBURwXzrnB";
 const MENU_ITEM_SPECS_FIELD_ID = "fldX9ayAyjMqYT2Oi";
+const COFFEE_SERVICE_NEEDED_FIELD_ID = "fldKlKX0HEGX3NTcR";
 
 export type ClientDetails = {
   clientFirstName: string;
@@ -321,8 +322,9 @@ export const getCoffeeServiceDetails = async (recordId: string): Promise<CoffeeS
   );
 
   const fields = data.fields;
+  const val = fields[COFFEE_SERVICE_NEEDED_FIELD_ID];
   return {
-    coffeeServiceNeeded: Boolean(fields[COFFEE_SERVICE_NEEDED_FIELD_ID] ?? false),
+    coffeeServiceNeeded: val === true || (typeof val === "string" && val === "Yes"),
   };
 };
 
@@ -336,7 +338,7 @@ export const updateCoffeeServiceDetails = async (
   const fields: Record<string, unknown> = {};
 
   if (update.coffeeServiceNeeded !== undefined)
-    fields[COFFEE_SERVICE_NEEDED_FIELD_ID] = update.coffeeServiceNeeded;
+    fields[COFFEE_SERVICE_NEEDED_FIELD_ID] = update.coffeeServiceNeeded ? "Yes" : "No";
 
   await airtableFetch(`/${table}`, {
     method: "PATCH",

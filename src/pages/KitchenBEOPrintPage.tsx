@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from "react";
 import { useEventStore } from "../state/eventStore";
 import { FIELD_IDS } from "../services/airtable/events";
-import { asString, asSingleSelectName, asBoolean, asLinkedRecordIds } from "../services/airtable/selectors";
+import { asString, asSingleSelectName, asBoolean, asStringArray } from "../services/airtable/selectors";
+import { calculateSpec } from "../services/airtable/specEngine";
 import { EventSelector } from "../components/EventSelector";
+import { secondsTo12HourString } from "../utils/timeHelpers";
 
 // ── Types ──
 type SubItem = {
@@ -73,6 +75,7 @@ type BEOData = {
   noKitchenOnSite?: boolean;
   isBuffet?: boolean;
   sections: MenuSection[];
+  eventOccasion?: string;
   beveragesClient?: string[];
   beveragesFoodwerx?: string[];
   serviceware?: ServicewareRow[];
@@ -82,6 +85,31 @@ type BEOData = {
   paperProductsIncluded?: boolean;
   deliveryBeverages?: BeverageItem[];
   deliveryBeveragesIncluded?: boolean;
+};
+
+// ── Helper: expand parent + linked Child Items into rows (parent first, each child on own line) ──
+const expandItemToRows = (
+  parentName: string,
+  childIds: string[],
+  menuItemData: Record<string, { name: string; childIds: string[] }>
+): { lineName: string; isChild: boolean }[] => {
+  const rows: { lineName: string; isChild: boolean }[] = [{ lineName: parentName, isChild: false }];
+  childIds.forEach((childId) => {
+    const childName = menuItemData[childId]?.name || "Loading...";
+    rows.push({ lineName: "  " + childName, isChild: true });
+  });
+  return rows;
+};
+
+const getVesselForSection = (title: string, isDelivery = false): string => {
+  if (isDelivery) return "DISPOSABLE";
+  if (title.includes("PASSED")) return "PASSED";
+  if (title.includes("PRESENTED")) return "METAL/CHINA";
+  if (title.includes("BUFFET")) return title.includes("METAL") ? "METAL" : "CHINA";
+  if (title.includes("DESSERT")) return "DESSERT";
+  if (title.includes("STATION")) return "STATION";
+  if (title.includes("ROOM TEMP")) return "DISPOSABLE";
+  return "METAL/CHINA";
 };
 
 // ── Sample Data — Full Service BEO ──
@@ -451,9 +479,10 @@ const print: Record<string, React.CSSProperties> = {
     textAlign: "center" as const,
   },
   noteItem: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: 700,
     padding: "2px 0",
+    lineHeight: 1.4,
     textTransform: "uppercase" as const,
   },
   noteItemHighlight: {
@@ -467,9 +496,10 @@ const print: Record<string, React.CSSProperties> = {
     gridTemplateColumns: "100px 1fr",
     padding: "2px 24px",
     alignItems: "flex-start",
+    lineHeight: 1.4,
   },
-  timelineTime: { fontWeight: 700, fontSize: 13 },
-  timelineAction: { fontWeight: 700, fontSize: 13, textTransform: "uppercase" as const },
+  timelineTime: { fontWeight: 700, fontSize: 12 },
+  timelineAction: { fontWeight: 700, fontSize: 12, textTransform: "uppercase" as const },
   paperTable: {
     width: "100%",
     borderCollapse: "collapse" as const,
@@ -484,18 +514,40 @@ const print: Record<string, React.CSSProperties> = {
   twoColTable: {
     width: "100%",
     borderCollapse: "collapse" as const,
+    border: "1px solid #000",
     fontSize: 12,
   },
   twoColCell: {
-    padding: "2px 16px",
+    padding: "4px 8px",
     verticalAlign: "top",
     width: "50%",
+    border: "1px solid #000",
+    lineHeight: 1.35,
   },
   twoColHeader: {
-    padding: "2px 16px",
+    padding: "4px 8px",
     fontWeight: 700,
     textAlign: "center" as const,
     width: "50%",
+    border: "1px solid #000",
+  },
+  beverageLine: {
+    lineHeight: 1.4,
+    margin: 0,
+    padding: "1px 0",
+    fontSize: 12,
+  },
+  notesLine: {
+    lineHeight: 1.4,
+    margin: 0,
+    padding: "2px 0",
+    fontSize: 12,
+  },
+  timelineLine: {
+    lineHeight: 1.4,
+    margin: 0,
+    padding: "2px 0",
+    fontSize: 12,
   },
   toolbar: {
     display: "flex",
@@ -504,6 +556,9 @@ const print: Record<string, React.CSSProperties> = {
     marginBottom: 16,
     padding: "8px 16px",
     borderBottom: "1px solid #ddd",
+    background: "#1a1a1a",
+    flexWrap: "wrap" as const,
+    gap: 12,
   },
   backBtn: {
     padding: "8px 20px",
@@ -533,11 +588,13 @@ const print: Record<string, React.CSSProperties> = {
     padding: "10px 24px",
     fontSize: 14,
     fontWeight: 700,
-    border: "none",
+    border: "2px solid #2e7d32",
     borderRadius: 4,
     cursor: "pointer",
     background: "#4caf50",
-    color: "#fff",
+    color: "#ffffff",
+    minWidth: 120,
+    flexShrink: 0,
   },
 };
 
@@ -592,8 +649,9 @@ const renderHeader = (beo: BEOData) => {
             </tr>
           </tbody>
         </table>
-        {(beo.invoice || beo.rentals) && (
+        {(beo.invoice || beo.rentals || beo.eventOccasion) && (
           <div style={{ display: "flex", gap: 32, padding: "4px 8px", fontSize: 12, borderBottom: "1px solid #000" }}>
+            {beo.eventOccasion && <span><strong>Occasion:</strong> {beo.eventOccasion}</span>}
             {beo.invoice && <span><strong>Invoice:</strong> {beo.invoice}</span>}
             {beo.rentals && <span><strong>Rentals:</strong> <span style={{ color: "#0000ff" }}>{beo.rentals}</span></span>}
             {beo.updatedBy && <span style={{ marginLeft: "auto" }}><strong>Updated:</strong> {beo.updatedBy}</span>}
@@ -700,7 +758,8 @@ const renderMenuItem = (item: MenuItem, idx: number) => {
           </div>
         </div>
       ))}
-      <div style={print.spacer} />
+      {/* Skip spacer for child rows (indented with "  ") so parent/child stay grouped */}
+      {!item.name.startsWith("  ") && <div style={print.spacer} />}
     </React.Fragment>
   );
 };
@@ -727,12 +786,16 @@ const renderPage2FullService = (beo: BEOData) => (
       <tbody>
         <tr>
           <td style={print.twoColCell}>
-            {beo.beveragesClient?.map((b, i) => <div key={i}>{b}</div>)}
-            {(!beo.beveragesClient || beo.beveragesClient.length === 0) && <div style={{ color: "#aaa" }}>—</div>}
+            {beo.beveragesClient?.map((b, i) => (
+              <div key={i} style={print.beverageLine}>{b}</div>
+            ))}
+            {(!beo.beveragesClient || beo.beveragesClient.length === 0) && <div style={{ ...print.beverageLine, color: "#999" }}>—</div>}
           </td>
           <td style={print.twoColCell}>
-            {beo.beveragesFoodwerx?.map((b, i) => <div key={i}>{b}</div>)}
-            {(!beo.beveragesFoodwerx || beo.beveragesFoodwerx.length === 0) && <div style={{ color: "#aaa" }}>—</div>}
+            {dedupeBeverageLines(beo.beveragesFoodwerx ?? []).map((b, i) => (
+              <div key={i} style={print.beverageLine}>{b}</div>
+            ))}
+            {(!beo.beveragesFoodwerx || beo.beveragesFoodwerx.length === 0) && <div style={{ ...print.beverageLine, color: "#999" }}>—</div>}
           </td>
         </tr>
       </tbody>
@@ -761,7 +824,7 @@ const renderPage2FullService = (beo: BEOData) => (
     </table>
 
     <div style={print.yellowSectionBanner}>NOTES</div>
-    <div style={print.notesSection}>
+    <div style={{ ...print.notesSection, border: "1px solid #000", borderTop: "none", padding: "8px 16px" }}>
       {beo.notes?.map((note, i) => (
         <div
           key={i}
@@ -773,6 +836,7 @@ const renderPage2FullService = (beo: BEOData) => (
     </div>
 
     <div style={print.blueSectionBanner}>TIMELINE</div>
+    <div style={{ border: "1px solid #000", borderTop: "none", padding: "4px 0" }}>
     {beo.timeline?.map((entry, i) => (
       <div key={i}>
         {entry.actions.map((action, aIdx) => (
@@ -783,6 +847,7 @@ const renderPage2FullService = (beo: BEOData) => (
         ))}
       </div>
     ))}
+    </div>
   </>
 );
 
@@ -828,62 +893,435 @@ const renderPaperProductsDelivery = (beo: BEOData) => (
   </>
 );
 
+// ── Section config for building from event data ──
+const MENU_SECTION_CONFIG: { title: string; fieldId: string }[] = [
+  { title: "PASSED APPETIZERS", fieldId: FIELD_IDS.PASSED_APPETIZERS },
+  { title: "PRESENTED APPETIZERS", fieldId: FIELD_IDS.PRESENTED_APPETIZERS },
+  { title: "BUFFET – METAL", fieldId: FIELD_IDS.BUFFET_METAL },
+  { title: "BUFFET – CHINA", fieldId: FIELD_IDS.BUFFET_CHINA },
+  { title: "DESSERTS", fieldId: FIELD_IDS.DESSERTS },
+  { title: "STATIONS", fieldId: FIELD_IDS.STATIONS },
+  { title: "ROOM TEMP/DISPLAYS", fieldId: FIELD_IDS.ROOM_TEMP_DISPLAY },
+];
+
+const MENU_TABLE = "tbl0aN33DGG6R1sPZ";
+const ITEM_NAME = FIELD_IDS.MENU_ITEM_NAME;
+const CHILD_ITEMS = FIELD_IDS.MENU_ITEM_CHILD_ITEMS;
+
+/** Remove consecutive duplicate lines (e.g. "COFFEE SERVICE" appearing twice) */
+function dedupeBeverageLines(lines: string[]): string[] {
+  return lines.filter((line, i) => {
+    const trimmed = line.trim();
+    if (!trimmed) return false;
+    const prev = lines[i - 1]?.trim();
+    return prev !== trimmed;
+  });
+}
+
+/** Format EVENT_DATE (YYYY-MM-DD) to "Saturday, March 15, 2025" or "3/15/2025" */
+function formatEventDate(dateStr: string | null | undefined): string {
+  if (!dateStr) return "";
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return dateStr;
+  return d.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" });
+}
+
+/** Parse serviceware list (• Item (Supplier) – qty) into { item, qty, supplier } */
+function parseServicewareLines(text: string): { item: string; qty: string; supplier: string }[] {
+  const lines = (text || "").split(/\n/).filter(Boolean);
+  const items: { item: string; qty: string; supplier: string }[] = [];
+  for (const line of lines) {
+    const bullet = (line.startsWith("•") ? line.slice(1) : line).trim();
+    if (!bullet) continue;
+    const parenStart = bullet.indexOf("(");
+    const parenEnd = bullet.indexOf(")");
+    let itemName = bullet;
+    let qty = "";
+    let supplier = "";
+    if (parenStart >= 0 && parenEnd > parenStart) {
+      itemName = bullet.slice(0, parenStart).trim();
+      supplier = bullet.slice(parenStart + 1, parenEnd).trim();
+      const rest = bullet.slice(parenEnd + 1).trim();
+      const dashMatch = rest.match(/[–\-]\s*(.+)/);
+      if (dashMatch) qty = dashMatch[1].replace("Provided by host", "").trim();
+    }
+    if (itemName) items.push({ item: itemName, qty, supplier });
+  }
+  return items;
+}
+
+/** Build delivery beverages from hydration/soda fields */
+function buildDeliveryBeveragesFromEvent(fields: Record<string, unknown> | null): BeverageItem[] {
+  if (!fields) return [];
+  const items: BeverageItem[] = [];
+  const soda = asStringArray(fields[FIELD_IDS.HYDRATION_SODA_SELECTION]);
+  if (soda.length > 0) items.push({ qty: "", item: soda.join(", ") });
+  const water = asSingleSelectName(fields[FIELD_IDS.HYDRATION_BOTTLED_WATER]);
+  if (water) items.push({ qty: "", item: `Bottled Water: ${water}` });
+  const other = asString(fields[FIELD_IDS.HYDRATION_OTHER]);
+  if (other?.trim()) items.push({ qty: "", item: other });
+  return items;
+}
+
+/** Build paper products from PLATES_LIST, CUTLERY_LIST, GLASSWARE_LIST (for delivery table) */
+function buildPaperProductsFromEvent(fields: Record<string, unknown> | null): PaperProduct[] {
+  if (!fields) return [];
+  const all: { item: string; qty: string }[] = [];
+  for (const fid of [FIELD_IDS.PLATES_LIST, FIELD_IDS.CUTLERY_LIST, FIELD_IDS.GLASSWARE_LIST]) {
+    parseServicewareLines(asString(fields[fid])).forEach((p) => all.push({ item: p.item, qty: p.qty }));
+  }
+  return all;
+}
+
+/** Build serviceware rows from event data (CLIENT | SERVICEWARE columns) */
+function buildServicewareFromEvent(fields: Record<string, unknown> | null): ServicewareRow[] {
+  if (!fields) return [];
+  const source = asSingleSelectName(fields[FIELD_IDS.SERVICEWARE_SOURCE])?.toLowerCase() || "";
+  const rows: ServicewareRow[] = [];
+  if (source.includes("client") || source.includes("mixed")) {
+    rows.push({ clientSide: "IN HOUSE", foodwerxSide: "" });
+  }
+  if (source.includes("foodwerx") || source.includes("mixed")) {
+    rows.push({ clientSide: "", foodwerxSide: "FOODWERX PACK OUT" });
+  }
+  for (const fid of [FIELD_IDS.PLATES_LIST, FIELD_IDS.CUTLERY_LIST, FIELD_IDS.GLASSWARE_LIST]) {
+    parseServicewareLines(asString(fields[fid])).forEach((p) => {
+      const display = p.qty ? `${p.qty} ${p.item}` : p.item;
+      const isClient = p.supplier.toLowerCase().includes("client");
+      rows.push({ clientSide: isClient ? display : "", foodwerxSide: isClient ? "" : display });
+    });
+  }
+  return rows.length > 0 ? rows : [{ clientSide: "IN HOUSE", foodwerxSide: "FOODWERX PACK OUT" }];
+}
+
+/** Parse BEO_TIMELINE long text into timeline entries. Expects lines like "10:30AM Staff arrival" or "10:30 AM - Action" */
+function parseBEOTimeline(text: string | null | undefined): TimelineEntry[] {
+  if (!text?.trim()) return [];
+  const entries: TimelineEntry[] = [];
+  const lines = text.split(/\n/).filter((l) => l.trim());
+  let currentTime = "";
+  for (const line of lines) {
+    const match = line.match(/^(\d{1,2}:?\d{0,2}\s*(?:AM|PM|am|pm)?)\s*[:\-–]\s*(.+)/i) || line.match(/^(\d{1,2}:?\d{0,2}\s*(?:AM|PM|am|pm)?)\s+(.+)/i);
+    if (match) {
+      currentTime = match[1].replace(/\s+/g, "").toUpperCase().replace(/(\d)(AM|PM)/i, "$1 $2");
+      entries.push({ time: currentTime, actions: [match[2].trim().toUpperCase()] });
+    } else if (currentTime && line.trim()) {
+      entries[entries.length - 1].actions.push(line.trim().toUpperCase());
+    }
+  }
+  return entries;
+}
+
 // ── Main Component ──
 const KitchenBEOPrintPage: React.FC = () => {
-  const { selectedEventId, selectedEventData, loadEvents, selectEvent } = useEventStore();
+  const { selectedEventId, selectedEventData, loadEvents, loadEventData, selectEvent } = useEventStore();
   const [loading, setLoading] = useState(true);
+  const [menuItemData, setMenuItemData] = useState<Record<string, { name: string; childIds: string[] }>>({});
 
   useEffect(() => {
     loadEvents().then(() => setLoading(false));
   }, [loadEvents]);
 
-  // Build BEO data from real event
+  // Parse event ID from URL: /kitchen-beo-print/recXXX
+  useEffect(() => {
+    const parts = window.location.pathname.split("/");
+    const idx = parts.indexOf("kitchen-beo-print");
+    const urlEventId = idx !== -1 && parts[idx + 1] ? parts[idx + 1] : null;
+    if (urlEventId && urlEventId !== selectedEventId) {
+      selectEvent(urlEventId).then(() => setLoading(false));
+    }
+  }, []);
+
+  // Load event data when we have selectedEventId (e.g. from EventSelector or URL)
+  useEffect(() => {
+    if (selectedEventId) {
+      loadEventData().then(() => setLoading(false));
+    }
+  }, [selectedEventId, loadEventData]);
+
+  // Fetch menu items with Item Name + Child Items (linked records)
+  useEffect(() => {
+    const parentIds = new Set<string>();
+    MENU_SECTION_CONFIG.forEach((c) => {
+      const val = selectedEventData[c.fieldId];
+      if (Array.isArray(val)) {
+        val.forEach((id: unknown) => {
+          if (typeof id === "string" && id.startsWith("rec")) parentIds.add(id);
+        });
+      }
+    });
+    if (parentIds.size === 0) return;
+
+    const apiKey = (import.meta.env.VITE_AIRTABLE_API_KEY as string)?.trim() || "";
+    const baseId = (import.meta.env.VITE_AIRTABLE_BASE_ID as string)?.trim() || "";
+    if (!apiKey || !baseId) return;
+
+    const fetchMenuItems = async () => {
+      const newData: Record<string, { name: string; childIds: string[] }> = {};
+      const toFetch = [...parentIds];
+
+      const fetchChunk = async (ids: string[]) => {
+        const formula = `OR(${ids.map((id) => `RECORD_ID()='${id}'`).join(",")})`;
+        const params = new URLSearchParams();
+        params.set("filterByFormula", formula);
+        params.set("returnFieldsByFieldId", "true");
+        params.append("fields[]", ITEM_NAME);
+        params.append("fields[]", CHILD_ITEMS);
+        const res = await fetch(
+          `https://api.airtable.com/v0/${baseId}/${MENU_TABLE}?${params.toString()}`,
+          { headers: { Authorization: `Bearer ${apiKey}` } }
+        );
+        const data = await res.json();
+        if (data.records) {
+          data.records.forEach((rec: { id: string; fields: Record<string, unknown> }) => {
+            const name = rec.fields[ITEM_NAME];
+            const childRaw = rec.fields[CHILD_ITEMS];
+            const childIds = Array.isArray(childRaw)
+              ? childRaw.filter((c): c is string => typeof c === "string" && c.startsWith("rec"))
+              : [];
+            newData[rec.id] = {
+              name: typeof name === "string" ? name : rec.id,
+              childIds,
+            };
+          });
+        }
+      };
+
+      try {
+        for (let i = 0; i < toFetch.length; i += 10) {
+          await fetchChunk(toFetch.slice(i, i + 10));
+        }
+        const childIdsToFetch = new Set<string>();
+        Object.values(newData).forEach((d) => {
+          d.childIds.forEach((cid) => {
+            if (!newData[cid]) childIdsToFetch.add(cid);
+          });
+        });
+        if (childIdsToFetch.size > 0) {
+          const childParams = new URLSearchParams();
+          childParams.set("filterByFormula", `OR(${[...childIdsToFetch].map((id) => `RECORD_ID()='${id}'`).join(",")})`);
+          childParams.set("returnFieldsByFieldId", "true");
+          childParams.append("fields[]", ITEM_NAME);
+          const res = await fetch(
+            `https://api.airtable.com/v0/${baseId}/${MENU_TABLE}?${childParams.toString()}`,
+            { headers: { Authorization: `Bearer ${apiKey}` } }
+          );
+          const childData = await res.json();
+          if (childData.records) {
+            childData.records.forEach((rec: { id: string; fields: Record<string, unknown> }) => {
+              const name = rec.fields[ITEM_NAME];
+              if (!newData[rec.id]) {
+                newData[rec.id] = { name: typeof name === "string" ? name : rec.id, childIds: [] };
+              } else {
+                newData[rec.id].name = typeof name === "string" ? name : rec.id;
+              }
+            });
+          }
+        }
+        setMenuItemData(newData);
+      } catch (e) {
+        console.error("Failed to fetch menu items:", e);
+      }
+    };
+    fetchMenuItems();
+  }, [selectedEventData]);
+
+  // Build sections from event data with parent/child from linked Child Items
+  const buildSectionsFromEvent = (isDelivery: boolean): MenuSection[] => {
+    const guestCount = parseInt(asString(selectedEventData[FIELD_IDS.GUEST_COUNT]) || "0", 10);
+    const sections: MenuSection[] = [];
+
+    for (const config of MENU_SECTION_CONFIG) {
+      const raw = selectedEventData[config.fieldId];
+      if (!raw || !Array.isArray(raw)) continue;
+
+      const items: MenuItem[] = [];
+      for (const item of raw) {
+        const id = typeof item === "string" ? item : (item && typeof item === "object" && "id" in item) ? (item as { id: string }).id : String(item);
+        const data = menuItemData[id];
+        const parentName = data?.name || "Loading...";
+        const childIds = data?.childIds ?? [];
+        const rows = expandItemToRows(parentName, childIds, menuItemData);
+        if (rows.length === 0) continue;
+        const spec = calculateSpec({
+          itemId: id,
+          itemName: parentName,
+          section: config.title,
+          guestCount,
+        });
+        items.push({
+          qty: spec,
+          name: parentName,
+          subItems: rows.length > 1
+            ? rows.slice(1).map((r) => ({ text: r.lineName }))
+            : undefined,
+        });
+      }
+      if (items.length > 0) {
+        sections.push({
+          title: config.title,
+          vessel: getVesselForSection(config.title, isDelivery),
+          items,
+        });
+      }
+    }
+    return sections;
+  };
+
+  // Detect service type: Full Service, Delivery, or Pick Up
+  const eventTypeRaw = asSingleSelectName(selectedEventData?.[FIELD_IDS.EVENT_TYPE])?.toLowerCase() ?? "";
+  const isPickUp = eventTypeRaw.includes("pick up") || eventTypeRaw.includes("pickup");
+  const isDelivery = eventTypeRaw.includes("delivery") || isPickUp;
+  const serviceType: "full-service" | "delivery" = isDelivery ? "delivery" : "full-service";
+
+  // Build BEO data from real event — use formula/print fields when available, fallback to source fields
+  const venueAddress = asString(selectedEventData?.[FIELD_IDS.PRINT_VENUE_ADDRESS]) || asString(selectedEventData?.[FIELD_IDS.VENUE_ADDRESS]);
+  const clientAddress = [asString(selectedEventData?.[FIELD_IDS.CLIENT_STREET]), asString(selectedEventData?.[FIELD_IDS.CLIENT_CITY]), asSingleSelectName(selectedEventData?.[FIELD_IDS.CLIENT_STATE]), asString(selectedEventData?.[FIELD_IDS.CLIENT_ZIP])].filter(Boolean).join(", ");
+  const venueCityState = [asString(selectedEventData?.[FIELD_IDS.VENUE_CITY]), asSingleSelectName(selectedEventData?.[FIELD_IDS.VENUE_STATE])].filter(Boolean).join(", ");
+  const clientCityState = [asString(selectedEventData?.[FIELD_IDS.CLIENT_CITY]), asSingleSelectName(selectedEventData?.[FIELD_IDS.CLIENT_STATE]), asString(selectedEventData?.[FIELD_IDS.CLIENT_ZIP])].filter(Boolean).join(", ");
+
   const beo: BEOData = selectedEventData ? {
-    serviceType: asSingleSelectName(selectedEventData[FIELD_IDS.EVENT_TYPE])?.toLowerCase().includes("delivery") ? "delivery" : "full-service",
-    client: (asString(selectedEventData[FIELD_IDS.CLIENT_FIRST_NAME]) + " " + asString(selectedEventData[FIELD_IDS.CLIENT_LAST_NAME])).trim() || "No Client",
+    serviceType,
+    client: (asString(selectedEventData[FIELD_IDS.CLIENT_FIRST_NAME]) + " " + asString(selectedEventData[FIELD_IDS.CLIENT_LAST_NAME])).trim() || asString(selectedEventData[FIELD_IDS.CLIENT_BUSINESS_NAME]) || "No Client",
     contact: asString(selectedEventData[FIELD_IDS.PRIMARY_CONTACT_NAME]),
-    phone: asString(selectedEventData[FIELD_IDS.CLIENT_PHONE]),
-    address: asString(selectedEventData[FIELD_IDS.VENUE_ADDRESS]),
-    cityState: (asString(selectedEventData[FIELD_IDS.VENUE_CITY]) + ", " + asSingleSelectName(selectedEventData[FIELD_IDS.VENUE_STATE])).trim(),
-    orderNumber: "", // Job # — can be auto-generated later
-    eventDate: asString(selectedEventData[FIELD_IDS.EVENT_DATE]),
+    phone: asString(selectedEventData[FIELD_IDS.CLIENT_PHONE]) || asString(selectedEventData[FIELD_IDS.PRIMARY_CONTACT_PHONE]),
+    address: isPickUp ? "PICK UP" : (venueAddress || asString(selectedEventData[FIELD_IDS.CLIENT_STREET]) || clientAddress),
+    cityState: isPickUp ? "" : (venueCityState || clientCityState),
+    orderNumber: "",
+    eventDate: formatEventDate(asString(selectedEventData[FIELD_IDS.EVENT_DATE])) || asString(selectedEventData[FIELD_IDS.EVENT_DATE]),
     guestCount: String(selectedEventData[FIELD_IDS.GUEST_COUNT] || ""),
-    eventStart: "", // Convert from seconds if needed
-    eventEnd: "",
-    allergyBanner: asString(selectedEventData[FIELD_IDS.DIETARY_NOTES]) || undefined,
+    eventStart: secondsTo12HourString(selectedEventData[FIELD_IDS.EVENT_START_TIME]) || "",
+    eventEnd: secondsTo12HourString(selectedEventData[FIELD_IDS.EVENT_END_TIME]) || "",
+    fwStaff: asString(selectedEventData[FIELD_IDS.CAPTAIN]) || asString(selectedEventData[FIELD_IDS.SERVERS]) || asString(selectedEventData[FIELD_IDS.STAFF]) || "",
+    staffArrival: secondsTo12HourString(selectedEventData[FIELD_IDS.FOODWERX_ARRIVAL]) || asString(selectedEventData[FIELD_IDS.VENUE_ARRIVAL_TIME]) || "",
+    deliveryTime: isPickUp ? "PICK UP" : (secondsTo12HourString(selectedEventData[FIELD_IDS.DISPATCH_TIME]) || asString(selectedEventData[FIELD_IDS.DISPATCH_TIME]) || ""),
+    deliveryNotes: asString(selectedEventData[FIELD_IDS.SPECIAL_NOTES]) || "",
+    employee: asString(selectedEventData[FIELD_IDS.CAPTAIN]) || "",
+    allergyBanner: asString(selectedEventData[FIELD_IDS.DIETARY_NOTES]) ? `ALLERGIES: ${asString(selectedEventData[FIELD_IDS.DIETARY_NOTES])}` : undefined,
     noKitchenOnSite: asSingleSelectName(selectedEventData[FIELD_IDS.KITCHEN_ON_SITE]) === "No",
     isBuffet: asSingleSelectName(selectedEventData[FIELD_IDS.SERVICE_STYLE])?.toLowerCase().includes("buffet") || false,
-    kitchenBanner: asSingleSelectName(selectedEventData[FIELD_IDS.KITCHEN_ON_SITE]) === "No" && asBoolean(selectedEventData[FIELD_IDS.FOOD_MUST_GO_HOT]) 
-      ? "NO KITCHEN ON SITE — ALL FOOD MUST GO HOT" 
+    kitchenBanner: asSingleSelectName(selectedEventData[FIELD_IDS.KITCHEN_ON_SITE]) === "No" && asBoolean(selectedEventData[FIELD_IDS.FOOD_MUST_GO_HOT])
+      ? "NO KITCHEN ON SITE — ALL FOOD MUST GO HOT"
       : undefined,
-    sections: [], // Build from linked menu items — simplified for now
-    notes: asString(selectedEventData[FIELD_IDS.BEO_NOTES]) ? asString(selectedEventData[FIELD_IDS.BEO_NOTES]).split("\n") : [],
-    timeline: [], // Parse from BEO_TIMELINE text — simplified for now
+    eventOccasion: asSingleSelectName(selectedEventData[FIELD_IDS.EVENT_OCCASION]) || undefined,
+    sections: buildSectionsFromEvent(isDelivery),
+    notes: asString(selectedEventData[FIELD_IDS.BEO_NOTES]) ? asString(selectedEventData[FIELD_IDS.BEO_NOTES]).split("\n").filter(Boolean) : [],
+    timeline: parseBEOTimeline(asString(selectedEventData[FIELD_IDS.BEO_TIMELINE])),
+    beveragesFoodwerx: asString(selectedEventData[FIELD_IDS.BAR_SERVICE_KITCHEN_BEO]) ? asString(selectedEventData[FIELD_IDS.BAR_SERVICE_KITCHEN_BEO]).split("\n").filter(Boolean) : undefined,
+    serviceware: buildServicewareFromEvent(selectedEventData),
+    paperProducts: buildPaperProductsFromEvent(selectedEventData),
+    paperProductsIncluded: buildPaperProductsFromEvent(selectedEventData).length > 0 || !!asSingleSelectName(selectedEventData[FIELD_IDS.SERVICEWARE_SOURCE]),
+    deliveryBeverages: buildDeliveryBeveragesFromEvent(selectedEventData),
+    deliveryBeveragesIncluded: buildDeliveryBeveragesFromEvent(selectedEventData).length > 0,
   } : FULL_SERVICE_SAMPLE;
 
   const handlePrint = () => {
-    window.print();
+    // Brief delay so layout is fully painted before print dialog opens
+    requestAnimationFrame(() => {
+      setTimeout(() => window.print(), 50);
+    });
   };
 
   return (
-    <div>
-      <div style={print.toolbar} className="no-print">
-        <button style={print.backBtn} onClick={() => window.history.back()}>
-          ← Back
-        </button>
-        <div style={{ flex: 1, maxWidth: "400px", margin: "0 20px" }}>
+    <div className="kitchen-beo-print-page">
+      <style>{`
+        .kitchen-beo-print-page .kitchen-beo-toolbar {
+          display: flex !important;
+          justify-content: space-between !important;
+          align-items: center !important;
+          flex-wrap: wrap !important;
+          gap: 12px !important;
+          padding: 8px 16px !important;
+          margin-bottom: 16px !important;
+          background: #1a1a1a !important;
+          border-bottom: 1px solid #ddd !important;
+        }
+        .kitchen-beo-print-page .kitchen-beo-print-btn {
+          display: inline-flex !important;
+          align-items: center !important;
+          justify-content: center !important;
+          padding: 10px 24px !important;
+          font-size: 14px !important;
+          font-weight: 700 !important;
+          background: #4caf50 !important;
+          color: #ffffff !important;
+          border: 2px solid #2e7d32 !important;
+          border-radius: 4px !important;
+          cursor: pointer !important;
+          min-width: 120px !important;
+          flex-shrink: 0 !important;
+        }
+        .kitchen-beo-print-page .kitchen-beo-print-btn:hover {
+          background: #43a047 !important;
+        }
+        @media print {
+          html, body {
+            background: #fff !important;
+            color: #000 !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
+          .kitchen-beo-print-page {
+            background: #fff !important;
+            color: #000 !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
+          .kitchen-beo-print-page .kitchen-beo-print-content {
+            background: #fff !important;
+            color: #000 !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
+          .kitchen-beo-print-page table,
+          .kitchen-beo-print-page td,
+          .kitchen-beo-print-page th {
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
+        }
+        @page {
+          size: 8.5in 11in;
+          margin: 0.5in;
+        }
+      `}</style>
+      <div style={print.toolbar} className="no-print kitchen-beo-toolbar">
+        <div style={{ display: "flex", gap: 8, flexShrink: 0, alignItems: "center" }}>
+          <button type="button" style={print.backBtn} onClick={() => window.history.back()}>
+            ← Back
+          </button>
+          {selectedEventId && (
+            <button
+              type="button"
+              style={{ ...print.backBtn, background: "#555" }}
+              onClick={() => { window.location.href = `/beo-print/${selectedEventId}`; }}
+            >
+              Full BEO (tabs & checklist)
+            </button>
+          )}
+          <button type="button" className="kitchen-beo-print-btn" style={print.printBtn} onClick={handlePrint} title="Print this BEO">
+            Print
+          </button>
+        </div>
+        <div style={{ flex: 1, minWidth: 0, maxWidth: "400px", margin: "0 20px" }}>
           <EventSelector variant="beo-header" />
         </div>
-        <button style={print.printBtn} onClick={handlePrint}>
-          🖨️ Print
-        </button>
       </div>
 
-      <div style={print.page}>
+      <div className="kitchen-beo-print-content" style={print.page}>
         {renderHeader(beo)}
 
         {beo.serviceType === "delivery" && (
-          <div style={print.specialNoteBanner}>SPECIAL NOTES</div>
+          <>
+            <div style={print.specialNoteBanner}>SPECIAL NOTES</div>
+            {beo.notes && beo.notes.length > 0 && (
+              <div style={{ padding: "8px 16px", fontSize: 12 }}>
+                {beo.notes.map((n, i) => (
+                  <div key={i} style={{ marginBottom: 4 }}>{n}</div>
+                ))}
+              </div>
+            )}
+          </>
         )}
 
         {beo.allergyBanner && (
@@ -894,9 +1332,15 @@ const KitchenBEOPrintPage: React.FC = () => {
           <div style={print.kitchenBanner}>{beo.kitchenBanner}</div>
         )}
 
+        {selectedEventData && beo.sections.length === 0 && (
+          <div style={{ padding: 24, textAlign: "center", color: "#666", fontSize: 14 }}>
+            No menu items assigned to this event yet. Select an event with menu items or add items in BEO Intake.
+          </div>
+        )}
+
         {beo.sections.map((section, idx) => renderSection(section, idx))}
 
-        {beo.serviceType === "delivery" && beo.paperProducts && renderPaperProductsDelivery(beo)}
+        {beo.serviceType === "delivery" && renderPaperProductsDelivery(beo)}
 
         {beo.serviceType === "full-service" && renderPage2FullService(beo)}
       </div>

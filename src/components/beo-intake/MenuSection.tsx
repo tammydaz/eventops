@@ -1,14 +1,215 @@
-import { useCallback, useEffect, useMemo, useState, useRef } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { FIELD_IDS } from "../../services/airtable/events";
-import { CATEGORY_MAP, type MenuCategoryKey, MENU_SECTIONS } from "../../constants/menuCategories";
+import { CATEGORY_MAP, type MenuCategoryKey } from "../../constants/menuCategories";
+import { STATION_TYPE_OPTIONS } from "../../constants/stations";
 import {
   loadMenuItems,
+  loadStationsByRecordIds,
+  createStation,
+  updateStationItems,
+  getStationTypeOptions,
   type LinkedRecordItem,
 } from "../../services/airtable/linkedRecords";
 import { asLinkedRecordIds, asString, isErrorResult } from "../../services/airtable/selectors";
 import { useEventStore } from "../../state/eventStore";
-import { FormSection } from "./FormSection";
+import { FormSection, CollapsibleSubsection } from "./FormSection";
+
+/** Picker to add a menu item to a station. */
+function StationItemPicker(props: {
+  stationId: string;
+  existingIds: string[];
+  menuItems: LinkedRecordItem[];
+  onSelect: (itemId: string) => void;
+  buttonStyle: React.CSSProperties;
+  labelStyle: React.CSSProperties;
+}) {
+  const { existingIds, menuItems, onSelect, buttonStyle } = props;
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const filtered = !search.trim()
+    ? menuItems.filter((m) => !existingIds.includes(m.id))
+    : menuItems.filter((m) => !existingIds.includes(m.id) && m.name.toLowerCase().includes(search.trim().toLowerCase()));
+  return (
+    <>
+      <button type="button" onClick={() => setOpen(true)} style={{ ...buttonStyle, padding: "6px 10px", fontSize: 12 }}>
+        + Add Item
+      </button>
+      {open &&
+        createPortal(
+          <div style={{ position: "fixed", inset: 0, zIndex: 99998, backgroundColor: "rgba(0,0,0,0.8)", display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }} onClick={() => setOpen(false)}>
+            <div style={{ backgroundColor: "#1a1a1a", borderRadius: 12, border: "2px solid #ff6b6b", maxWidth: 500, width: "100%", maxHeight: "80vh", overflow: "hidden" }} onClick={(e) => e.stopPropagation()}>
+              <div style={{ padding: 16, borderBottom: "1px solid #444" }}>
+                <h3 style={{ margin: "0 0 12px 0", fontSize: 16, color: "#e0e0e0" }}>Add menu item to station</h3>
+                <input
+                  type="text"
+                  placeholder="Search..."
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  style={{ width: "100%", padding: 10, borderRadius: 6, border: "1px solid #444", background: "#2a2a2a", color: "#e0e0e0", fontSize: 14 }}
+                  autoFocus
+                />
+              </div>
+              <div style={{ maxHeight: 300, overflowY: "auto", padding: 16 }}>
+                {filtered.map((item) => (
+                  <div
+                    key={item.id}
+                    onClick={() => {
+                      onSelect(item.id);
+                      setOpen(false);
+                    }}
+                    style={{ padding: 12, marginBottom: 8, fontSize: 14, color: "#e0e0e0", background: "#2a2a2a", borderRadius: 6, cursor: "pointer" }}
+                  >
+                    {item.name}
+                  </div>
+                ))}
+                {filtered.length === 0 && <div style={{ color: "#999", fontSize: 14 }}>No items found</div>}
+              </div>
+            </div>
+          </div>,
+          document.body
+        )}
+    </>
+  );
+}
+
+/** Creation Station subsection — Station Type, Station Items, Station Notes. */
+function CreationStationContent(props: {
+  selectedEventId: string | null;
+  canEdit: boolean;
+  menuItems: LinkedRecordItem[];
+  menuItemNames: Record<string, string>;
+  getItemName: (id: string) => string;
+  fetchItemNames: (recordIds: string[]) => void;
+  inputStyle: React.CSSProperties;
+  labelStyle: React.CSSProperties;
+  buttonStyle: React.CSSProperties;
+}) {
+  const { selectedEventId, canEdit, getItemName, fetchItemNames, inputStyle, labelStyle, buttonStyle } = props;
+  const { setFields, selectedEventData } = useEventStore();
+  const [stations, setStations] = useState<Array<{ id: string; stationType: string; stationItems: string[]; stationNotes: string }>>([]);
+  const [stationTypeOptions, setStationTypeOptions] = useState<string[]>([]);
+  const [newStationType, setNewStationType] = useState("");
+  const [newStationNotes, setNewStationNotes] = useState("");
+  const stationIds = asLinkedRecordIds(selectedEventData?.[FIELD_IDS.STATIONS]) ?? [];
+
+  useEffect(() => {
+    getStationTypeOptions().then((opts) => setStationTypeOptions(opts.length > 0 ? opts : [...STATION_TYPE_OPTIONS]));
+  }, []);
+
+  useEffect(() => {
+    if (!stationIds?.length) {
+      setStations([]);
+      return;
+    }
+    let active = true;
+    loadStationsByRecordIds(stationIds).then((result) => {
+      if (active && !isErrorResult(result)) {
+        setStations(result);
+        const allStationItemIds = result.flatMap((s) => s.stationItems).filter((id) => id.startsWith("rec"));
+        if (allStationItemIds.length > 0) {
+          fetchItemNames(allStationItemIds);
+        }
+      }
+    });
+    return () => { active = false; };
+  }, [stationIds?.join(","), fetchItemNames]);
+
+  const addStation = async () => {
+    if (!selectedEventId || !newStationType.trim()) return;
+    const result = await createStation({
+      stationType: newStationType.trim(),
+      stationItems: [],
+      stationNotes: newStationNotes.trim(),
+      eventId: selectedEventId,
+    });
+    if (isErrorResult(result)) {
+      console.error("Failed to create station:", result);
+      return;
+    }
+    setStations((prev) => [...prev, { id: result.id, stationType: newStationType.trim(), stationItems: [], stationNotes: newStationNotes.trim() }]);
+    setNewStationType("");
+    setNewStationNotes("");
+    const updatedIds = [...stationIds, result.id];
+    await setFields(selectedEventId, { [FIELD_IDS.STATIONS]: updatedIds });
+  };
+
+  const addStationItem = async (stationId: string, itemId: string) => {
+    const st = stations.find((s) => s.id === stationId);
+    if (!st || st.stationItems.includes(itemId)) return;
+    const newItems = [...st.stationItems, itemId];
+    const result = await updateStationItems(stationId, newItems);
+    if (isErrorResult(result)) {
+      console.error("Failed to update station items:", result);
+      return;
+    }
+    setStations((prev) => prev.map((s) => (s.id === stationId ? { ...s, stationItems: newItems } : s)));
+    fetchItemNames([itemId]);
+  };
+
+  const selectStyle = { ...inputStyle, cursor: canEdit ? "pointer" : "not-allowed" };
+
+  return (
+    <div style={{ gridColumn: "1 / -1" }}>
+      {stations.map((st) => (
+        <div key={st.id} style={{ marginBottom: 16, padding: 12, backgroundColor: "#1a1a1a", borderRadius: 8, border: "1px solid #444" }}>
+          <div style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))" }}>
+            <div>
+              <label style={labelStyle}>Station Type</label>
+              <div style={{ color: "#e0e0e0", fontSize: 14 }}>{st.stationType || "—"}</div>
+            </div>
+            <div>
+              <label style={labelStyle}>Station Items</label>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center" }}>
+                {st.stationItems.map((id) => (
+                  <span key={id} style={{ fontSize: 12, padding: "4px 8px", backgroundColor: "#2a2a2a", borderRadius: 4 }}>{getItemName(id)}</span>
+                ))}
+                {st.stationItems.length === 0 && <span style={{ color: "#666", fontSize: 12 }}>No items</span>}
+                {canEdit && (
+                  <StationItemPicker
+                    stationId={st.id}
+                    existingIds={st.stationItems}
+                    menuItems={props.menuItems}
+                    onSelect={(itemId) => addStationItem(st.id, itemId)}
+                    buttonStyle={buttonStyle}
+                    labelStyle={labelStyle}
+                  />
+                )}
+              </div>
+            </div>
+            <div style={{ gridColumn: "1 / -1" }}>
+              <label style={labelStyle}>Station Notes</label>
+              <div style={{ color: "#e0e0e0", fontSize: 13, whiteSpace: "pre-wrap" }}>{st.stationNotes || "—"}</div>
+            </div>
+          </div>
+        </div>
+      ))}
+      {canEdit && (
+        <div style={{ marginTop: 16, padding: 12, border: "2px dashed #444", borderRadius: 8 }}>
+          <label style={labelStyle}>Add Creation Station</label>
+          <div style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))" }}>
+            <div>
+              <label style={labelStyle}>Station Type</label>
+              <select value={newStationType} onChange={(e) => setNewStationType(e.target.value)} disabled={!canEdit} style={selectStyle}>
+                <option value="">Select type</option>
+                {(stationTypeOptions.length > 0 ? stationTypeOptions : STATION_TYPE_OPTIONS).map((opt) => (
+                  <option key={opt} value={opt}>{opt}</option>
+                ))}
+              </select>
+            </div>
+            <div style={{ gridColumn: "1 / -1" }}>
+              <label style={labelStyle}>Station Notes</label>
+              <textarea rows={2} value={newStationNotes} onChange={(e) => setNewStationNotes(e.target.value)} disabled={!canEdit} style={inputStyle} placeholder="Special instructions or notes..." />
+            </div>
+            <button type="button" disabled={!canEdit || !newStationType.trim()} onClick={addStation} style={buttonStyle}>
+              + Add Station
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 function norm(input: string | null | undefined): string {
   if (!input) return '';
@@ -55,7 +256,9 @@ type MenuItemRecord = {
 const MENU_TABLE_ID = "tbl0aN33DGG6R1sPZ";
 const MENU_NAME_FIELD_ID = "fldQ83gpgOmMxNMQw";
 
-export const MenuSection = () => {
+type MenuSectionProps = { embedded?: boolean };
+
+export const MenuSection = ({ embedded = false }: MenuSectionProps) => {
   const { selectedEventId, selectedEventData, setFields } = useEventStore();
   const [menuItems, setMenuItems] = useState<LinkedRecordItem[]>([]);
   const [menuItemNames, setMenuItemNames] = useState<Record<string, string>>({});
@@ -83,7 +286,6 @@ export const MenuSection = () => {
   const [pickerSearch, setPickerSearch] = useState("");
   const [showDressingPicker, setShowDressingPicker] = useState(false);
   const [dressingPickerSearch, setDressingPickerSearch] = useState("");
-  const lastEventIdRef = useRef<string | null>(null);
 
   // Load menu items on mount
   useEffect(() => {
@@ -138,57 +340,54 @@ export const MenuSection = () => {
     }
   }, []);
 
-  // Load selections from event data - only when event ID changes
+  // Load selections from event data whenever selectedEventData changes
+  // (e.g. after save, after navigating back from print, or when event loads)
   useEffect(() => {
-    if (selectedEventId !== lastEventIdRef.current) {
-      lastEventIdRef.current = selectedEventId;
-      
-      if (!selectedEventId || !selectedEventData) {
-        setSelections({
-          passedAppetizers: [],
-          presentedAppetizers: [],
-          buffetMetal: [],
-          buffetChina: [],
-          desserts: [],
-        });
-        setCustomFields({
-          customPassedApp: "",
-          customPresentedApp: "",
-          customBuffetMetal: "",
-          customBuffetChina: "",
-          customDessert: "",
-        });
-        return;
-      }
-
-      const newSelections = {
-        passedAppetizers: asLinkedRecordIds(selectedEventData[FIELD_IDS.PASSED_APPETIZERS]),
-        presentedAppetizers: asLinkedRecordIds(selectedEventData[FIELD_IDS.PRESENTED_APPETIZERS]),
-        buffetMetal: asLinkedRecordIds(selectedEventData[FIELD_IDS.BUFFET_METAL]),
-        buffetChina: asLinkedRecordIds(selectedEventData[FIELD_IDS.BUFFET_CHINA]),
-        desserts: asLinkedRecordIds(selectedEventData[FIELD_IDS.DESSERTS]),
-      };
-      setSelections(newSelections);
-
-      const allRecordIds: string[] = [
-        ...newSelections.passedAppetizers,
-        ...newSelections.presentedAppetizers,
-        ...newSelections.buffetMetal,
-        ...newSelections.buffetChina,
-        ...newSelections.desserts,
-      ];
-      if (allRecordIds.length > 0) {
-        fetchItemNames(allRecordIds);
-      }
-
-      setCustomFields({
-        customPassedApp: asString(selectedEventData[FIELD_IDS.CUSTOM_PASSED_APP]),
-        customPresentedApp: asString(selectedEventData[FIELD_IDS.CUSTOM_PRESENTED_APP]),
-        customBuffetMetal: asString(selectedEventData[FIELD_IDS.CUSTOM_BUFFET_METAL]),
-        customBuffetChina: asString(selectedEventData[FIELD_IDS.CUSTOM_BUFFET_CHINA]),
-        customDessert: asString(selectedEventData[FIELD_IDS.CUSTOM_DESSERTS]),
+    if (!selectedEventId || !selectedEventData) {
+      setSelections({
+        passedAppetizers: [],
+        presentedAppetizers: [],
+        buffetMetal: [],
+        buffetChina: [],
+        desserts: [],
       });
+      setCustomFields({
+        customPassedApp: "",
+        customPresentedApp: "",
+        customBuffetMetal: "",
+        customBuffetChina: "",
+        customDessert: "",
+      });
+      return;
     }
+
+    const newSelections = {
+      passedAppetizers: asLinkedRecordIds(selectedEventData[FIELD_IDS.PASSED_APPETIZERS]),
+      presentedAppetizers: asLinkedRecordIds(selectedEventData[FIELD_IDS.PRESENTED_APPETIZERS]),
+      buffetMetal: asLinkedRecordIds(selectedEventData[FIELD_IDS.BUFFET_METAL]),
+      buffetChina: asLinkedRecordIds(selectedEventData[FIELD_IDS.BUFFET_CHINA]),
+      desserts: asLinkedRecordIds(selectedEventData[FIELD_IDS.DESSERTS]),
+    };
+    setSelections(newSelections);
+
+    const allRecordIds: string[] = [
+      ...newSelections.passedAppetizers,
+      ...newSelections.presentedAppetizers,
+      ...newSelections.buffetMetal,
+      ...newSelections.buffetChina,
+      ...newSelections.desserts,
+    ];
+    if (allRecordIds.length > 0) {
+      fetchItemNames(allRecordIds);
+    }
+
+    setCustomFields({
+      customPassedApp: asString(selectedEventData[FIELD_IDS.CUSTOM_PASSED_APP]),
+      customPresentedApp: asString(selectedEventData[FIELD_IDS.CUSTOM_PRESENTED_APP]),
+      customBuffetMetal: asString(selectedEventData[FIELD_IDS.CUSTOM_BUFFET_METAL]),
+      customBuffetChina: asString(selectedEventData[FIELD_IDS.CUSTOM_BUFFET_CHINA]),
+      customDessert: asString(selectedEventData[FIELD_IDS.CUSTOM_DESSERTS]),
+    });
   }, [selectedEventId, selectedEventData, fetchItemNames]);
 
   const canEdit = Boolean(selectedEventId);
@@ -341,8 +540,8 @@ export const MenuSection = () => {
     transition: "all 0.2s",
   };
 
-  return (
-    <FormSection title="Menu Sections" icon="🍽️">
+  const content = (
+    <>
       {error && (
         <div style={{ gridColumn: "1 / -1", color: "#ff6b6b", fontSize: "14px", marginBottom: "12px" }}>
           {error}
@@ -350,6 +549,7 @@ export const MenuSection = () => {
       )}
 
       {/* Passed Appetizers */}
+      <CollapsibleSubsection title="Passed Appetizers" icon="▶" defaultOpen={false}>
       <div style={{ gridColumn: "1 / -1" }}>
         <label style={labelStyle}>Passed Appetizers</label>
         <div style={{ marginBottom: "8px" }}>
@@ -376,8 +576,10 @@ export const MenuSection = () => {
           />
         </div>
       </div>
+      </CollapsibleSubsection>
 
       {/* Presented Appetizers */}
+      <CollapsibleSubsection title="Presented Appetizers" icon="▶" defaultOpen={false}>
       <div style={{ gridColumn: "1 / -1" }}>
         <label style={labelStyle}>Presented Appetizers</label>
         <div style={{ marginBottom: "8px" }}>
@@ -404,8 +606,25 @@ export const MenuSection = () => {
           />
         </div>
       </div>
+      </CollapsibleSubsection>
+
+      {/* Creation Station */}
+      <CollapsibleSubsection title="Creation Station" icon="▶" defaultOpen={false}>
+        <CreationStationContent
+          selectedEventId={selectedEventId}
+          canEdit={canEdit}
+          menuItems={menuItems}
+          menuItemNames={menuItemNames}
+          getItemName={getItemName}
+          fetchItemNames={fetchItemNames}
+          inputStyle={inputStyle}
+          labelStyle={labelStyle}
+          buttonStyle={buttonStyle}
+        />
+      </CollapsibleSubsection>
 
       {/* Buffet - Metal */}
+      <CollapsibleSubsection title="Buffet – Metal" icon="▶" defaultOpen={false}>
       <div style={{ gridColumn: "1 / -1" }}>
         <label style={labelStyle}>Buffet – Metal</label>
         <div style={{ marginBottom: "8px" }}>
@@ -432,8 +651,10 @@ export const MenuSection = () => {
           />
         </div>
       </div>
+      </CollapsibleSubsection>
 
       {/* Buffet - China */}
+      <CollapsibleSubsection title="Buffet – China" icon="▶" defaultOpen={false}>
       <div style={{ gridColumn: "1 / -1" }}>
         <label style={labelStyle}>Buffet – China</label>
         <div style={{ marginBottom: "8px" }}>
@@ -460,8 +681,10 @@ export const MenuSection = () => {
           />
         </div>
       </div>
+      </CollapsibleSubsection>
 
       {/* Desserts */}
+      <CollapsibleSubsection title="Desserts" icon="▶" defaultOpen={false}>
       <div style={{ gridColumn: "1 / -1" }}>
         <label style={labelStyle}>Desserts</label>
         <div style={{ marginBottom: "8px" }}>
@@ -488,6 +711,7 @@ export const MenuSection = () => {
           />
         </div>
       </div>
+      </CollapsibleSubsection>
 
       {/* Picker Modal */}
       {pickerState.isOpen &&
@@ -685,6 +909,12 @@ export const MenuSection = () => {
           </div>,
           document.body
         )}
+    </>
+  );
+
+  return embedded ? content : (
+    <FormSection title="Menu Sections" icon="🍽️">
+      {content}
     </FormSection>
   );
 };

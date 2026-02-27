@@ -10,7 +10,6 @@ export const DietaryNotesSection = () => {
     dietaryNotes: "", 
     specialNotes: "", 
     beoNotes: "", 
-    beoTimeline: "" 
   });
   const lastEventIdRef = useRef<string | null>(null);
 
@@ -20,7 +19,7 @@ export const DietaryNotesSection = () => {
       lastEventIdRef.current = selectedEventId;
       
       if (!selectedEventId || !selectedEventData) {
-        setDetails({ dietaryNotes: "", specialNotes: "", beoNotes: "", beoTimeline: "" });
+        setDetails({ dietaryNotes: "", specialNotes: "", beoNotes: "" });
         return;
       }
       
@@ -28,7 +27,6 @@ export const DietaryNotesSection = () => {
         dietaryNotes: asString(selectedEventData[FIELD_IDS.DIETARY_NOTES]),
         specialNotes: asString(selectedEventData[FIELD_IDS.SPECIAL_NOTES]),
         beoNotes: asString(selectedEventData[FIELD_IDS.BEO_NOTES]),
-        beoTimeline: asString(selectedEventData[FIELD_IDS.BEO_TIMELINE]),
       });
     }
   }, [selectedEventId, selectedEventData]);
@@ -61,7 +59,7 @@ export const DietaryNotesSection = () => {
   };
 
   return (
-    <FormSection title="Dietary & Special Notes" icon="⚠️">
+    <FormSection title="Notes" dotColor="#eab308">
       <div style={{ gridColumn: "1 / -1" }}>
         <label style={labelStyle}>Dietary Notes</label>
         <textarea 
@@ -96,18 +94,6 @@ export const DietaryNotesSection = () => {
           onBlur={(e) => handleBlur(FIELD_IDS.BEO_NOTES, e.target.value)}
           style={inputStyle} 
           placeholder="Kitchen notes, special handling, venue setup instructions..." 
-        />
-      </div>
-      <div style={{ gridColumn: "1 / -1" }}>
-        <label style={labelStyle}>BEO Timeline</label>
-        <textarea 
-          rows={4} 
-          value={details.beoTimeline} 
-          disabled={!canEdit} 
-          onChange={(e) => setDetails(p => ({ ...p, beoTimeline: e.target.value }))} 
-          onBlur={(e) => handleBlur(FIELD_IDS.BEO_TIMELINE, e.target.value)}
-          style={inputStyle} 
-          placeholder="10:30AM Staff Arrival / 12:00PM Event Begins / 4:00PM Load Out..." 
         />
       </div>
     </FormSection>

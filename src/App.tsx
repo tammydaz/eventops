@@ -1,11 +1,12 @@
 import { useEffect } from "react";
+import { useLocation } from "react-router-dom";
 import { EventSelector } from "./components/intake/EventSelector";
 import { Router } from "./router";
 import { useEventStore } from "./state/eventStore";
 
 function App() {
   const { selectedEventId, loadEvents, saveError, selectEvent } = useEventStore();
-  const pathname = window.location.pathname;
+  const { pathname } = useLocation();
   const isPrintTest = pathname.startsWith("/print-test");
   const isHome = pathname === "/" || pathname.startsWith("/home");
   const isQuickIntake = pathname.startsWith("/quick-intake");
@@ -14,6 +15,9 @@ function App() {
   const isFOH = pathname.startsWith("/foh");
   const isDashboardOld = pathname.startsWith("/dashboard-old");
   const isBeoIntake = pathname.startsWith("/beo-intake");
+  const isBeoPrint = pathname.startsWith("/beo-print");
+  const isSeedDemo = pathname.startsWith("/seed-demo");
+  const isInvoiceIntake = pathname.startsWith("/invoice-intake");
 
   useEffect(() => {
     loadEvents();
@@ -29,7 +33,7 @@ function App() {
     }
   }, [pathname, selectedEventId, selectEvent]);
 
-  if (isPrintTest || isHome || isQuickIntake || isWatchtower || isPapaChulo || isFOH || isDashboardOld || isBeoIntake) {
+  if (isPrintTest || isHome || isQuickIntake || isWatchtower || isPapaChulo || isFOH || isDashboardOld || isBeoIntake || isBeoPrint || isSeedDemo || isInvoiceIntake) {
     console.log("APP RENDERED");
     return <Router selectedEventId={selectedEventId} />;
   }
