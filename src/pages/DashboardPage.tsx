@@ -1,13 +1,16 @@
-import { useState } from "react";
-import { Link } from "react-router-dom";
+import { useState, useEffect, useMemo, useRef } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import "./DashboardPage.css";
 import type { ViewMode, HealthStatus } from "../components/dashboard/EventCard";
+import { useEventStore } from "../state/eventStore";
+import type { EventListItem } from "../services/airtable/events";
 
 /* ═══════════════════════════════════════════
-   PLACEHOLDER DATA
+   EVENT DATA (from Airtable)
    ═══════════════════════════════════════════ */
 interface EventData {
   id: string;
+  eventDate?: string;
   name: string;
   time: string;
   client: string;
@@ -18,25 +21,36 @@ interface EventData {
   healthBOH: HealthStatus;
 }
 
-const TODAYS_EVENTS: EventData[] = [
-  { id: "evt-1", name: "Holloway Wedding",      time: "Saturday • 5:30 PM",  client: "Mia Holloway",   venue: "Magnolia Estate",   guests: 180, category: "Wedding",     healthFOH: "green",  healthBOH: "green" },
-  { id: "evt-2", name: "Laurel Corporate Gala",  time: "Friday • 7:00 PM",   client: "Laurel Tech",    venue: "Harbor Hall",        guests: 240, category: "Corporate",   healthFOH: "yellow", healthBOH: "green" },
-  { id: "evt-3", name: "Ava Bridal Shower",      time: "Sunday • 11:00 AM",  client: "Ava Daniels",    venue: "Rosewood Loft",      guests: 60,  category: "Social",      healthFOH: "green",  healthBOH: "yellow" },
-  { id: "evt-4", name: "Chef Preview Dinner",    time: "Thursday • 6:00 PM", client: "FoodWerx VIP",   venue: "FWX Studio",         guests: 40,  category: "Tasting",     healthFOH: "red",    healthBOH: "red" },
-  { id: "evt-5", name: "Donovan Anniversary",    time: "Saturday • 8:00 PM", client: "Donovan Family",  venue: "Skyline Terrace",   guests: 120, category: "Celebration", healthFOH: "green",  healthBOH: "yellow" },
-  { id: "evt-6", name: "Civic Fundraiser",       time: "Wednesday • 7:30 PM", client: "Civic Partners", venue: "Downtown Atrium",   guests: 300, category: "Fundraiser",  healthFOH: "yellow", healthBOH: "green" },
-];
+function formatEventDate(d?: string): string {
+  if (!d) return "—";
+  try {
+    const [y, m, day] = d.split("-").map(Number);
+    const date = new Date(y, m - 1, day);
+    const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+    const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    return `${days[date.getDay()]} ${months[date.getMonth()]} ${day}`;
+  } catch {
+    return d;
+  }
+}
 
-const UPCOMING_EVENTS: EventData[] = [
-  { id: "u1", name: "Henderson Rehearsal",   time: "Sat Feb 8 • 4:00 PM",  client: "Henderson Family", venue: "Riverside Chapel",  guests: 60,  category: "Wedding",     healthFOH: "green",  healthBOH: "green" },
-  { id: "u2", name: "Marcus Birthday Bash",  time: "Sun Feb 9 • 6:00 PM",  client: "Marcus Bell",      venue: "The Loft",          guests: 100, category: "Social",      healthFOH: "yellow", healthBOH: "green" },
-  { id: "u3", name: "Apex Tech Summit",      time: "Mon Feb 10 • 9:00 AM", client: "Apex Digital",     venue: "Convention Center", guests: 350, category: "Corporate",   healthFOH: "green",  healthBOH: "yellow" },
-  { id: "u4", name: "Rivera Quinceañera",    time: "Tue Feb 11 • 5:00 PM", client: "Rivera Family",    venue: "Bella Vista Hall",  guests: 200, category: "Celebration", healthFOH: "red",    healthBOH: "yellow" },
-  { id: "u5", name: "FWX Chef's Table",      time: "Wed Feb 12 • 7:00 PM", client: "FoodWerx VIP",     venue: "FWX Studio",        guests: 30,  category: "Tasting",     healthFOH: "green",  healthBOH: "green" },
-  { id: "u6", name: "Harvest Gala",          time: "Thu Feb 13 • 6:30 PM", client: "Harvest Foundation", venue: "Grand Pavilion",  guests: 280, category: "Fundraiser",  healthFOH: "yellow", healthBOH: "red" },
-  { id: "u7", name: "Clarke Anniversary",    time: "Fri Feb 14 • 7:00 PM", client: "Clarke Family",    venue: "Magnolia Estate",   guests: 150, category: "Celebration", healthFOH: "green",  healthBOH: "green" },
-  { id: "u8", name: "Park Wedding",          time: "Sat Feb 15 • 4:30 PM", client: "Sarah Park",       venue: "Lakeside Gardens",  guests: 220, category: "Wedding",     healthFOH: "yellow", healthBOH: "yellow" },
-];
+function listItemToEventData(e: EventListItem): EventData {
+  const parts = (e.eventName ?? "").split(/\s*[–—-]\s*/);
+  const client = parts[0]?.trim() || "—";
+  const venue = parts[1]?.trim() || "—";
+  return {
+    id: e.id,
+    eventDate: e.eventDate,
+    name: e.eventName ?? "Untitled",
+    time: formatEventDate(e.eventDate),
+    client,
+    venue,
+    guests: e.guestCount ?? 0,
+    category: e.eventType ?? e.eventOccasion ?? "—",
+    healthFOH: "green",
+    healthBOH: "green",
+  };
+}
 
 /* ── Health color map ── */
 const HEALTH = {
@@ -72,17 +86,75 @@ const DEPARTMENTS = [
 /* ═══════════════════════════════════════════
    MAIN DASHBOARD PAGE
    ═══════════════════════════════════════════ */
+const todayStr = () => new Date().toISOString().slice(0, 10);
+
 export default function DashboardPage() {
+  const navigate = useNavigate();
+  const { events: rawEvents, loadEvents, selectEvent } = useEventStore();
   const [activeTab, setActiveTab] = useState("Live Events");
   const viewMode: ViewMode = "owner";
   const [intakeOpen, setIntakeOpen] = useState(false);
   const [kitchenOpen, setKitchenOpen] = useState(false);
   const [logisticsOpen, setLogisticsOpen] = useState(false);
   const [vaultOpen, setVaultOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [addEventOpen, setAddEventOpen] = useState(false);
+  const searchWrapRef = useRef<HTMLDivElement>(null);
+  const addEventRef = useRef<HTMLDivElement>(null);
 
   const tabs = ["Live Events", "Upcoming", "Completed", "Archive"];
 
-  const events = activeTab === "Upcoming" ? UPCOMING_EVENTS : TODAYS_EVENTS;
+  useEffect(() => {
+    if (!addEventOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (addEventRef.current && !addEventRef.current.contains(e.target as Node)) {
+        setAddEventOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [addEventOpen]);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (searchQuery.trim() && searchWrapRef.current && !searchWrapRef.current.contains(e.target as Node)) {
+        setSearchQuery("");
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [searchQuery]);
+
+  useEffect(() => {
+    loadEvents();
+  }, [loadEvents]);
+
+  const eventDataList = useMemo(() => rawEvents.map(listItemToEventData), [rawEvents]);
+  const today = todayStr();
+  const events = useMemo(() => {
+    if (activeTab === "Live Events") return eventDataList.filter((e) => e.eventDate === today);
+    if (activeTab === "Upcoming") return eventDataList.filter((e) => (e.eventDate ?? "") >= today);
+    if (activeTab === "Completed" || activeTab === "Archive") return eventDataList.filter((e) => (e.eventDate ?? "") < today);
+    return eventDataList;
+  }, [eventDataList, activeTab, today]);
+
+  const searchResults = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return [];
+    return eventDataList.filter(
+      (e) =>
+        e.name.toLowerCase().includes(q) ||
+        e.client.toLowerCase().includes(q) ||
+        e.venue.toLowerCase().includes(q) ||
+        e.category.toLowerCase().includes(q)
+    );
+  }, [eventDataList, searchQuery]);
+
+  const handleSelectEvent = (id: string) => {
+    selectEvent(id);
+    setSearchQuery("");
+    navigate("/beo-intake");
+  };
 
   return (
     <div className="dp-container">
@@ -118,11 +190,65 @@ export default function DashboardPage() {
       <main className="dp-main">
         {/* ── Header ── */}
         <header className="dp-header">
-          <input className="dp-search" placeholder="Search events..." />
+          <div className="dp-search-wrap" ref={searchWrapRef}>
+            <input
+              className="dp-search"
+              placeholder="Search events..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+            {searchQuery.trim().length > 0 && (
+              <div className="dp-search-dropdown">
+                {searchResults.length === 0 ? (
+                  <div className="dp-search-item dp-search-empty">No events match</div>
+                ) : (
+                  searchResults.slice(0, 8).map((evt) => (
+                    <button
+                      key={evt.id}
+                      type="button"
+                      className="dp-search-item"
+                      onMouseDown={(e) => { e.preventDefault(); handleSelectEvent(evt.id); }}
+                    >
+                      <span className="dp-search-item-name">{evt.name}</span>
+                      <span className="dp-search-item-meta">{evt.time} · {evt.guests} guests</span>
+                    </button>
+                  ))
+                )}
+              </div>
+            )}
+          </div>
           <div className="dp-header-title">FoodWerx EventOps</div>
           <div className="dp-header-right">
             <div className="dp-notif" title="Notifications" />
-            <Link to="/invoice-intake" className="dp-add-btn" style={{ textDecoration: "none", color: "white" }}>+ Add Event</Link>
+            <div className="dp-add-event-wrap" ref={addEventRef}>
+              <button
+                type="button"
+                className="dp-add-btn"
+                onClick={() => setAddEventOpen(!addEventOpen)}
+                aria-expanded={addEventOpen}
+                aria-haspopup="true"
+              >
+                Add Event ▾
+              </button>
+              {addEventOpen && (
+                <div className="dp-add-event-dropdown">
+                  <Link
+                    to="/quick-intake"
+                    className="dp-add-event-item"
+                    onClick={() => setAddEventOpen(false)}
+                  >
+                    New Event (Quick Intake)
+                  </Link>
+                  <Link
+                    to="/invoice-intake"
+                    className="dp-add-event-item"
+                    onClick={() => setAddEventOpen(false)}
+                  >
+                    Upload Invoice PDF
+                  </Link>
+                </div>
+              )}
+            </div>
             <div className="dp-user">FWX</div>
           </div>
         </header>
@@ -150,7 +276,7 @@ export default function DashboardPage() {
         <div className="dp-events-area">
           <div className="dp-events-grid">
             {events.map((evt) => (
-              <PremiumCard key={evt.id} event={evt} viewMode={viewMode} />
+              <PremiumCard key={evt.id} event={evt} viewMode={viewMode} onSelect={() => handleSelectEvent(evt.id)} />
             ))}
           </div>
 
@@ -266,11 +392,17 @@ export default function DashboardPage() {
 /* ═══════════════════════════════════════════
    PREMIUM EVENT CARD (INLINE)
    ═══════════════════════════════════════════ */
-function PremiumCard({ event, viewMode }: { event: EventData; viewMode: ViewMode }) {
+function PremiumCard({ event, viewMode, onSelect }: { event: EventData; viewMode: ViewMode; onSelect?: () => void }) {
   const pillColor = CAT_COLORS[event.category] ?? "#ff9999";
 
   return (
-    <article className="dp-card">
+    <article
+      className={`dp-card ${onSelect ? "dp-card-clickable" : ""}`}
+      role={onSelect ? "button" : undefined}
+      tabIndex={onSelect ? 0 : undefined}
+      onClick={onSelect}
+      onKeyDown={(e) => onSelect && (e.key === "Enter" || e.key === " ") && onSelect()}
+    >
       {/* Top neon line */}
       <div className="dp-card-neon-top" />
 

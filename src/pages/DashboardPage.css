@@ -211,6 +211,10 @@
   position: relative;
 }
 
+.dp-search-wrap {
+  position: relative;
+}
+
 .dp-search {
   background: linear-gradient(135deg, rgba(40,20,20,0.8), rgba(30,15,20,0.6));
   border: 1px solid rgba(204,0,0,0.3);
@@ -221,6 +225,58 @@
   width: 200px;
   transition: all 0.3s ease;
   outline: none;
+}
+
+.dp-search-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  margin-top: 4px;
+  min-width: 280px;
+  max-height: 320px;
+  overflow-y: auto;
+  background: linear-gradient(180deg, rgba(25,15,15,0.98), rgba(20,10,12,0.98));
+  border: 1px solid rgba(204,0,0,0.35);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+  z-index: 100;
+}
+
+.dp-search-item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  width: 100%;
+  padding: 10px 14px;
+  background: none;
+  border: none;
+  color: #e0e0e0;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.dp-search-item:hover {
+  background: rgba(204,0,0,0.15);
+}
+
+.dp-search-item-name {
+  font-weight: 600;
+  color: #fff;
+}
+
+.dp-search-item-meta {
+  font-size: 11px;
+  color: #a0a0a0;
+  margin-top: 2px;
+}
+
+.dp-search-empty {
+  padding: 12px 14px;
+  color: #888;
+  font-style: italic;
+  cursor: default;
 }
 
 .dp-search:focus {
@@ -284,6 +340,40 @@
   background: linear-gradient(135deg, #ff3333, #ff6666);
   box-shadow: 0 6px 25px rgba(204,0,0,0.5);
   transform: translateY(-2px);
+}
+
+.dp-add-event-wrap {
+  position: relative;
+}
+
+.dp-add-event-dropdown {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 6px;
+  min-width: 220px;
+  background: linear-gradient(180deg, #1a0a0a, #0f0505);
+  border: 1px solid rgba(204, 0, 0, 0.4);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  padding: 6px 0;
+  z-index: 100;
+}
+
+.dp-add-event-item {
+  display: block;
+  width: 100%;
+  padding: 10px 16px;
+  color: #e0e0e0;
+  font-size: 13px;
+  text-align: left;
+  text-decoration: none;
+  transition: background 0.2s;
+}
+
+.dp-add-event-item:hover {
+  background: rgba(204, 0, 0, 0.2);
+  color: #fff;
 }
 
 .dp-user {
@@ -423,6 +513,8 @@
 
 .dp-card:hover::before,
 .dp-card:hover::after { opacity: 1; }
+
+.dp-card-clickable { cursor: pointer; }
 
 /* Card neon top line */
 .dp-card-neon-top {
