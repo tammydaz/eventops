@@ -55,6 +55,17 @@ export const AttachmentsPanel = () => {
     await setFields(selectedEventId, { [fieldId]: result.attachments });
   };
 
+  const removeAttachment = async (fieldId: string, itemToRemove: AttachmentItem) => {
+    if (!selectedEventId) return;
+    const raw = selectedEventData[fieldId];
+    const arr = Array.isArray(raw) ? raw : [];
+    const remaining = arr.filter(
+      (a: { url?: string; filename?: string }) =>
+        !(a?.url === itemToRemove.url && a?.filename === itemToRemove.filename)
+    );
+    await setFields(selectedEventId, { [fieldId]: remaining });
+  };
+
   return (
     <section className="bg-gray-900 border-2 border-gray-800 rounded-xl p-5 mb-3 hover:border-red-600 transition-all shadow-lg">
       <div className="flex items-center justify-between mb-4">
@@ -94,18 +105,36 @@ export const AttachmentsPanel = () => {
             ) : (
               <ul className="space-y-2">
                 {group.items.map((item, index) => (
-                  <li key={`${group.label}-${item.id ?? index}`}>
+                  <li key={`${group.label}-${item.id ?? index}`} className="flex items-center justify-between gap-2">
                     {item.url ? (
                       <a
                         href={item.url}
                         target="_blank"
                         rel="noreferrer"
-                        className="text-sm text-red-400 hover:text-red-300"
+                        className="text-sm text-red-400 hover:text-red-300 truncate"
                       >
                         {item.filename ?? item.url}
                       </a>
                     ) : (
-                      <span className="text-sm text-gray-400">{item.filename ?? "Attachment"}</span>
+                      <span className="text-sm text-gray-400 truncate">{item.filename ?? "Attachment"}</span>
+                    )}
+                    {selectedEventId && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const fieldId =
+                            group.label === "Event Documents"
+                              ? FIELD_IDS.EVENT_DOCUMENTS
+                              : group.label === "Invoice PDF"
+                              ? FIELD_IDS.INVOICE_PDF
+                              : FIELD_IDS.GENERATED_BEO_PDF;
+                          removeAttachment(fieldId, item);
+                        }}
+                        className="text-xs text-gray-500 hover:text-red-400 px-1"
+                        title="Remove attachment"
+                      >
+                        ✕
+                      </button>
                     )}
                   </li>
                 ))}

@@ -1,6 +1,11 @@
 import { FIELD_IDS } from "../services/airtable/events";
-import { timeStringToSeconds } from "./timeHelpers";
+import { timeStringToSeconds, secondsTo12HourString } from "./timeHelpers";
 import type { ParsedInvoice } from "../services/invoiceParser";
+
+function formatTimeForTimeline(hhmm: string): string {
+  const sec = timeStringToSeconds(hhmm);
+  return sec != null ? secondsTo12HourString(sec) : hhmm;
+}
 
 /** Map parsed invoice to Airtable event fields */
 export function parsedInvoiceToFields(parsed: ParsedInvoice): Record<string, unknown> {
@@ -30,11 +35,29 @@ export function parsedInvoiceToFields(parsed: ParsedInvoice): Record<string, unk
     const sec = timeStringToSeconds(parsed.eventEndTime);
     if (sec != null) fields[FIELD_IDS.EVENT_END_TIME] = sec;
   }
+  if (parsed.staffArrivalTime) {
+    const sec = timeStringToSeconds(parsed.staffArrivalTime);
+    if (sec != null) fields[FIELD_IDS.FOODWERX_ARRIVAL] = sec;
+  }
+  if (parsed.fwStaff) fields[FIELD_IDS.CAPTAIN] = parsed.fwStaff;
+  // Build BEO timeline from parsed times (e.g. "1:00 PM – Staff arrival\n2:00 PM – Event begins")
+  const timelineParts: string[] = [];
+  if (parsed.staffArrivalTime) timelineParts.push(`${formatTimeForTimeline(parsed.staffArrivalTime)} – Staff arrival`);
+  if (parsed.eventStartTime) timelineParts.push(`${formatTimeForTimeline(parsed.eventStartTime)} – Event begins`);
+  if (parsed.eventEndTime) timelineParts.push(`${formatTimeForTimeline(parsed.eventEndTime)} – Event end`);
+  if (timelineParts.length > 0) fields[FIELD_IDS.BEO_TIMELINE] = timelineParts.join("\n");
 
   const notesParts = [parsed.notes, parsed.menuText];
   if (parsed.invoiceNumber) notesParts.unshift(`Invoice #${parsed.invoiceNumber}`);
   const notes = notesParts.filter(Boolean).join("\n\n");
   if (notes) fields[FIELD_IDS.SPECIAL_NOTES] = notes;
+
+  // Parsed menu sections → BEO custom fields
+  if (parsed.customPassedApp) fields[FIELD_IDS.CUSTOM_PASSED_APP] = parsed.customPassedApp;
+  if (parsed.customPresentedApp) fields[FIELD_IDS.CUSTOM_PRESENTED_APP] = parsed.customPresentedApp;
+  if (parsed.customBuffetMetal) fields[FIELD_IDS.CUSTOM_BUFFET_METAL] = parsed.customBuffetMetal;
+  if (parsed.customBuffetChina) fields[FIELD_IDS.CUSTOM_BUFFET_CHINA] = parsed.customBuffetChina;
+  if (parsed.customDessert) fields[FIELD_IDS.CUSTOM_DESSERTS] = parsed.customDessert;
 
   return fields;
 }

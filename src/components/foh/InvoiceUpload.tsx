@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import { extractTextFromPdf, parseInvoiceText, type ParsedInvoice } from "../../services/invoiceParser";
 import { createEvent, FIELD_IDS, uploadAttachment } from "../../services/airtable/events";
+import { parsedInvoiceToFields } from "../../utils/invoiceToEventFields";
 import { isErrorResult } from "../../services/airtable/selectors";
 import { useEventStore } from "../../state/eventStore";
 
@@ -10,71 +11,27 @@ type Props = {
   onClose: () => void;
 };
 
-/** Parse military or common time string to HH:mm; returns null if unparseable. */
-function parseTimeString(s: string): { hours: number; minutes: number } | null {
-  const raw = String(s).trim();
-  if (!raw) return null;
-  // Military: "14:00", "14:30", "09:00", "9:00", or "1400", "0930"
-  const militaryMatch = raw.match(/^(\d{1,2}):?(\d{2})\s*$/);
-  if (militaryMatch) {
-    const hours = parseInt(militaryMatch[1], 10);
-    const minutes = parseInt(militaryMatch[2], 10);
-    if (hours >= 0 && hours <= 23 && minutes >= 0 && minutes <= 59) return { hours, minutes };
-  }
-  const fourDigit = raw.replace(/\D/g, "");
-  if (fourDigit.length >= 3) {
-    const h = fourDigit.length === 3 ? parseInt(fourDigit.slice(0, 1), 10) : parseInt(fourDigit.slice(0, 2), 10);
-    const m = parseInt(fourDigit.slice(-2), 10);
-    if (h >= 0 && h <= 23 && m >= 0 && m <= 59) return { hours: h, minutes: m };
-  }
-  // 12-hour: "2:00 PM", "9:00 AM"
-  const amPmMatch = raw.match(/^(\d{1,2}):?(\d{2})?\s*(AM|PM|am|pm)$/i);
-  if (amPmMatch) {
-    let hours = parseInt(amPmMatch[1], 10);
-    const minutes = amPmMatch[2] ? parseInt(amPmMatch[2], 10) : 0;
-    const pm = /pm/i.test(amPmMatch[3]);
-    if (pm && hours !== 12) hours += 12;
-    if (!pm && hours === 12) hours = 0;
-    if (hours >= 0 && hours <= 23 && minutes >= 0 && minutes <= 59) return { hours, minutes };
+type DuplicateEvent = { id: string; eventName: string; eventDate?: string };
+
+function findSimilarEvent(
+  events: { id: string; eventName: string; eventDate?: string }[],
+  parsed: ParsedInvoice
+): DuplicateEvent | null {
+  const date = parsed.eventDate?.trim();
+  const clientName = [parsed.clientFirstName, parsed.clientLastName].filter(Boolean).join(" ").toLowerCase();
+  const venue = (parsed.venueName ?? "").toLowerCase();
+  if (!date && !clientName && !venue) return null;
+
+  for (const ev of events) {
+    const evDate = ev.eventDate?.slice(0, 10);
+    const sameDate = date && evDate && evDate === date;
+    const evNameLower = (ev.eventName ?? "").toLowerCase();
+    const hasClient = clientName && evNameLower.includes(clientName.split(" ")[0] ?? "");
+    const hasVenue = venue && evNameLower.includes(venue.split(" ")[0] ?? "");
+    const similar = sameDate && (hasClient || hasVenue);
+    if (similar) return ev;
   }
   return null;
-}
-
-/** Build ISO 8601 dateTime for Airtable from date (YYYY-MM-DD) and time string (military or HH:mm). */
-function toAirtableDateTime(dateStr: string, timeStr: string): string | null {
-  const d = dateStr.trim();
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) return null;
-  const t = parseTimeString(timeStr);
-  if (!t) return null;
-  const { hours, minutes } = t;
-  const hh = String(hours).padStart(2, "0");
-  const mm = String(minutes).padStart(2, "0");
-  return `${d}T${hh}:${mm}:00.000Z`;
-}
-
-function parsedInvoiceToFields(parsed: ParsedInvoice): Record<string, unknown> {
-  // Event Name is computed in Airtable (formula) — do not set it here
-  const fields: Record<string, unknown> = {};
-  if (parsed.eventDate) fields[FIELD_IDS.EVENT_DATE] = parsed.eventDate;
-  if (parsed.guestCount != null) fields[FIELD_IDS.GUEST_COUNT] = parsed.guestCount;
-  if (parsed.clientFirstName) fields[FIELD_IDS.CLIENT_FIRST_NAME] = parsed.clientFirstName;
-  if (parsed.clientLastName) fields[FIELD_IDS.CLIENT_LAST_NAME] = parsed.clientLastName;
-  // Client Business Name is computed in Airtable — do not set it
-  if (parsed.clientEmail) fields[FIELD_IDS.CLIENT_EMAIL] = parsed.clientEmail;
-  if (parsed.clientPhone) fields[FIELD_IDS.CLIENT_PHONE] = parsed.clientPhone;
-  if (parsed.venueName) fields[FIELD_IDS.VENUE] = parsed.venueName;
-  const eventDate = parsed.eventDate?.trim() ?? "";
-  if (eventDate && parsed.eventStartTime) {
-    const startIso = toAirtableDateTime(eventDate, parsed.eventStartTime);
-    if (startIso) fields[FIELD_IDS.EVENT_START_TIME] = startIso;
-  }
-  if (eventDate && parsed.eventEndTime) {
-    const endIso = toAirtableDateTime(eventDate, parsed.eventEndTime);
-    if (endIso) fields[FIELD_IDS.EVENT_END_TIME] = endIso;
-  }
-  const notes = [parsed.notes, parsed.menuText].filter(Boolean).join("\n\n");
-  if (notes) fields[FIELD_IDS.SPECIAL_NOTES] = notes;
-  return fields;
 }
 
 export default function InvoiceUpload({ onClose }: Props) {
@@ -85,12 +42,35 @@ export default function InvoiceUpload({ onClose }: Props) {
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [preview, setPreview] = useState<ParsedInvoice | null>(null);
+  const [duplicateEvent, setDuplicateEvent] = useState<DuplicateEvent | null>(null);
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const next = event.target.files?.[0] || null;
     setFile(next);
     setPreview(null);
     setError(null);
+    setDuplicateEvent(null);
+  };
+
+  const handleOpenExisting = async () => {
+    if (!duplicateEvent || !file) return;
+    setCreating(true);
+    setError(null);
+    try {
+      await selectEvent(duplicateEvent.id);
+      const uploadResult = await uploadAttachment(duplicateEvent.id, FIELD_IDS.INVOICE_PDF, file);
+      if (isErrorResult(uploadResult)) {
+        console.warn("[InvoiceUpload] PDF attach failed:", uploadResult.message);
+      }
+      onClose();
+      navigate(`/beo-intake/${duplicateEvent.id}`);
+    } catch (err) {
+      console.error(err);
+      setError("Could not open event.");
+    } finally {
+      setCreating(false);
+      setDuplicateEvent(null);
+    }
   };
 
   const handleProcess = async () => {
@@ -123,10 +103,21 @@ export default function InvoiceUpload({ onClose }: Props) {
     }
   };
 
-  const handleCreateEvent = async () => {
+  const handleCreateEvent = async (forceCreate = false) => {
     if (!preview) return;
-    setCreating(true);
     setError(null);
+    setDuplicateEvent(null);
+
+    if (!forceCreate) {
+      const freshEvents = await loadEvents();
+      const similar = freshEvents ? findSimilarEvent(freshEvents, preview) : null;
+      if (similar) {
+        setDuplicateEvent(similar);
+        return;
+      }
+    }
+
+    setCreating(true);
     try {
       const fields = parsedInvoiceToFields(preview);
       const result = await createEvent(fields);
@@ -208,6 +199,31 @@ export default function InvoiceUpload({ onClose }: Props) {
             style={{ marginBottom: 12 }}
           />
 
+          {duplicateEvent && (
+            <div className="text-xs bg-amber-900/50 border border-amber-600/60 rounded px-3 py-2 mb-3" style={{ color: "#fcd34d" }}>
+              <strong>Similar event already exists:</strong> {duplicateEvent.eventName}
+              {duplicateEvent.eventDate ? ` (${duplicateEvent.eventDate})` : ""}
+              <div className="flex gap-2 mt-2">
+                <button
+                  type="button"
+                  onClick={handleOpenExisting}
+                  disabled={creating}
+                  className="px-2 py-1 rounded bg-amber-700/70 hover:bg-amber-600/80 text-white text-xs"
+                >
+                  Open existing & attach PDF
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleCreateEvent(true)}
+                  disabled={creating}
+                  className="px-2 py-1 rounded bg-gray-700/70 hover:bg-gray-600/80 text-gray-300 text-xs"
+                >
+                  Create new anyway
+                </button>
+              </div>
+            </div>
+          )}
+
           {error && (
             <div className="text-xs text-red-400 bg-red-900/40 border border-red-700/60 rounded px-3 py-2" style={{ marginBottom: 12 }}>
               {error}
@@ -245,7 +261,7 @@ export default function InvoiceUpload({ onClose }: Props) {
             <button
               type="button"
               disabled={!preview || creating}
-              onClick={handleCreateEvent}
+              onClick={() => handleCreateEvent(false)}
               className="dp-card-pill"
               style={{ borderColor: "rgba(34,197,94,0.5)", background: "rgba(34,197,94,0.2)", color: "#86efac", cursor: !preview || creating ? "not-allowed" : "pointer", opacity: !preview || creating ? 0.5 : 1 }}
             >

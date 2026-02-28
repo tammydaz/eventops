@@ -6,7 +6,29 @@ import { isErrorResult } from "../services/airtable/selectors";
 import { useEventStore } from "../state/eventStore";
 import { parsedInvoiceToFields } from "../utils/invoiceToEventFields";
 
-type Step = "idle" | "processing" | "creating" | "done" | "error";
+type Step = "idle" | "processing" | "creating" | "duplicate" | "done" | "error";
+type DuplicateEvent = { id: string; eventName: string; eventDate?: string };
+
+function findSimilarEvent(
+  events: { id: string; eventName: string; eventDate?: string }[],
+  parsed: ParsedInvoice
+): DuplicateEvent | null {
+  const date = parsed.eventDate?.trim();
+  const clientName = [parsed.clientFirstName, parsed.clientLastName].filter(Boolean).join(" ").toLowerCase();
+  const venue = (parsed.venueName ?? "").toLowerCase();
+  if (!date && !clientName && !venue) return null;
+
+  for (const ev of events) {
+    const evDate = ev.eventDate?.slice(0, 10);
+    const sameDate = date && evDate && evDate === date;
+    const evNameLower = (ev.eventName ?? "").toLowerCase();
+    const hasClient = clientName && evNameLower.includes(clientName.split(" ")[0] ?? "");
+    const hasVenue = venue && evNameLower.includes(venue.split(" ")[0] ?? "");
+    const similar = sameDate && (hasClient || hasVenue);
+    if (similar) return ev;
+  }
+  return null;
+}
 
 export default function InvoiceIntakePage() {
   const navigate = useNavigate();
@@ -15,24 +37,17 @@ export default function InvoiceIntakePage() {
   const [error, setError] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [lastEventName, setLastEventName] = useState<string | null>(null);
+  const [duplicateState, setDuplicateState] = useState<{
+    parsed: ParsedInvoice;
+    file: File;
+    duplicateEvent: DuplicateEvent;
+  } | null>(null);
 
-  const processFile = useCallback(
-    async (file: File) => {
-      if (!file || !file.name.toLowerCase().endsWith(".pdf")) {
-        setError("Please drop or select a PDF invoice.");
-        return;
-      }
-      setStep("processing");
+  const doCreateEvent = useCallback(
+    async (parsed: ParsedInvoice, file: File) => {
+      setStep("creating");
       setError(null);
       try {
-        const text = await extractTextFromPdf(file);
-        const parsed = await parseInvoiceText(text);
-        if (!parsed || (!parsed.clientEmail && !parsed.clientOrganization && !parsed.venueName && !parsed.eventDate)) {
-          setError("Could not extract enough data from this invoice. Try a different file or add details manually in BEO Intake.");
-          setStep("error");
-          return;
-        }
-        setStep("creating");
         const fields = parsedInvoiceToFields(parsed);
         const result = await createEvent(fields);
         if (isErrorResult(result)) {
@@ -57,6 +72,41 @@ export default function InvoiceIntakePage() {
       } catch (err) {
         console.error("[InvoiceIntake]", err);
         const msg = err instanceof Error ? err.message : String(err);
+        setError(msg.includes("OPENAI") || msg.includes("API key") ? "OpenAI key missing." : msg.slice(0, 150));
+        setStep("error");
+      }
+    },
+    [loadEvents, selectEvent, navigate]
+  );
+
+  const processFile = useCallback(
+    async (file: File) => {
+      if (!file || !file.name.toLowerCase().endsWith(".pdf")) {
+        setError("Please drop or select a PDF invoice.");
+        return;
+      }
+      setStep("processing");
+      setError(null);
+      setDuplicateState(null);
+      try {
+        const text = await extractTextFromPdf(file);
+        const parsed = await parseInvoiceText(text);
+        if (!parsed || (!parsed.clientEmail && !parsed.clientOrganization && !parsed.venueName && !parsed.eventDate)) {
+          setError("Could not extract enough data from this invoice. Try a different file or add details manually in BEO Intake.");
+          setStep("error");
+          return;
+        }
+        const freshEvents = await loadEvents();
+        const similar = freshEvents ? findSimilarEvent(freshEvents, parsed) : null;
+        if (similar) {
+          setDuplicateState({ parsed, file, duplicateEvent: similar });
+          setStep("duplicate");
+          return;
+        }
+        await doCreateEvent(parsed, file);
+      } catch (err) {
+        console.error("[InvoiceIntake]", err);
+        const msg = err instanceof Error ? err.message : String(err);
         if (msg.includes("OPENAI") || msg.includes("API key")) {
           setError("OpenAI key missing. Using rule-based parsing—if extraction failed, add VITE_OPENAI_API_KEY to .env for better results.");
         } else {
@@ -65,8 +115,35 @@ export default function InvoiceIntakePage() {
         setStep("error");
       }
     },
-    [loadEvents, selectEvent, navigate]
+    [loadEvents, doCreateEvent]
   );
+
+  const handleOpenExisting = useCallback(async () => {
+    if (!duplicateState) return;
+    setStep("creating");
+    setError(null);
+    const { duplicateEvent, file } = duplicateState;
+    try {
+      await selectEvent(duplicateEvent.id);
+      const uploadResult = await uploadAttachment(duplicateEvent.id, FIELD_IDS.INVOICE_PDF, file);
+      if (isErrorResult(uploadResult)) {
+        console.warn("[InvoiceIntake] PDF attach failed:", uploadResult.message);
+      }
+      setDuplicateState(null);
+      navigate(`/beo-intake/${duplicateEvent.id}`);
+    } catch (err) {
+      console.error("[InvoiceIntake]", err);
+      setError("Could not open event.");
+      setStep("duplicate");
+    }
+  }, [duplicateState, selectEvent, navigate]);
+
+  const handleCreateAnyway = useCallback(async () => {
+    if (!duplicateState) return;
+    const { parsed, file } = duplicateState;
+    setDuplicateState(null);
+    await doCreateEvent(parsed, file);
+  }, [duplicateState, doCreateEvent]);
 
   const handleDrop = useCallback(
     (e: React.DragEvent) => {
@@ -165,7 +242,7 @@ export default function InvoiceIntakePage() {
             borderRadius: 16,
             padding: "48px 24px",
             textAlign: "center",
-            cursor: step === "processing" || step === "creating" ? "wait" : "pointer",
+            cursor: step === "processing" || step === "creating" ? "wait" : step === "duplicate" ? "default" : "pointer",
             background: isDragging ? "rgba(255,107,107,0.08)" : "rgba(0,0,0,0.2)",
             transition: "all 0.2s ease",
           }}
@@ -193,6 +270,14 @@ export default function InvoiceIntakePage() {
               </div>
             </>
           )}
+          {step === "duplicate" && (
+            <>
+              <div style={{ fontSize: 48, marginBottom: 16 }}>⚠️</div>
+              <div style={{ fontSize: 16, fontWeight: 600, color: "#fcd34d" }}>
+                Similar event found — choose an option below
+              </div>
+            </>
+          )}
           {(step === "idle" || step === "error") && (
             <>
               <div style={{ fontSize: 64, marginBottom: 16, opacity: 0.9 }}>📥</div>
@@ -205,6 +290,59 @@ export default function InvoiceIntakePage() {
             </>
           )}
         </div>
+
+        {step === "duplicate" && duplicateState && (
+          <div
+            style={{
+              marginTop: 24,
+              padding: 20,
+              background: "rgba(251,191,36,0.15)",
+              border: "1px solid rgba(251,191,36,0.5)",
+              borderRadius: 12,
+              color: "#fcd34d",
+            }}
+          >
+            <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 8 }}>
+              ⚠️ Similar event already exists
+            </div>
+            <div style={{ fontSize: 14, marginBottom: 16 }}>
+              {duplicateState.duplicateEvent.eventName}
+              {duplicateState.duplicateEvent.eventDate ? ` (${duplicateState.duplicateEvent.eventDate})` : ""}
+            </div>
+            <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+              <button
+                type="button"
+                onClick={handleOpenExisting}
+                style={{
+                  padding: "10px 16px",
+                  borderRadius: 8,
+                  background: "rgba(251,191,36,0.3)",
+                  border: "1px solid rgba(251,191,36,0.6)",
+                  color: "#fcd34d",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                }}
+              >
+                Open existing & attach PDF
+              </button>
+              <button
+                type="button"
+                onClick={handleCreateAnyway}
+                style={{
+                  padding: "10px 16px",
+                  borderRadius: 8,
+                  background: "rgba(107,114,128,0.3)",
+                  border: "1px solid rgba(107,114,128,0.5)",
+                  color: "#d1d5db",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                }}
+              >
+                Create new anyway
+              </button>
+            </div>
+          </div>
+        )}
 
         {error && (
           <div
