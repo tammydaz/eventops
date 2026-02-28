@@ -42,6 +42,7 @@ export type ParsedInvoice = {
   eventDate?: string;
   eventStartTime?: string;
   eventEndTime?: string;
+  staffArrivalTime?: string;
   venueName?: string;
   venueAddress?: string;
   venueCity?: string;
@@ -51,7 +52,25 @@ export type ParsedInvoice = {
   primaryContactName?: string;
   notes?: string;
   menuText?: string;
+  /** Parsed menu sections for BEO custom fields */
+  customPassedApp?: string;
+  customPresentedApp?: string;
+  customBuffetMetal?: string;
+  customBuffetChina?: string;
+  customDessert?: string;
+  /** FW staff from invoice: e.g. "2 Server, 1 Bartender" */
+  fwStaff?: string;
 };
+
+/** Clean numbered list format: "1)C heesesteak" -> "Cheesesteak", fix OCR space-after-number */
+function cleanNumberedList(text: string): string {
+  return text
+    .replace(/\d+\)\s*/g, " ")           // Remove "1)", "2)", etc.
+    .replace(/\b([A-Z])\s+(?=[a-z])/g, "$1")  // Fix "C heesesteak" -> "Cheesesteak", "R aspberry" -> "Raspberry"
+    .replace(/\s+/g, " ")
+    .replace(/,\s*,/g, ",")
+    .trim();
+}
 
 /**
  * Rule-based parser for Hospitality Management Services / FoodWerx invoice format.
@@ -175,21 +194,58 @@ export function parseInvoiceTextRuleBased(text: string): ParsedInvoice | null {
     result.eventStartTime = to24(h, m, eventBeginsMatch[3] || "pm");
   }
 
-  // Event times: "9am-4:30pm" or "Chef on site from 5pm-10pm"
+  // Event times: "9am-4:30pm" or "Chef on site from 5pm-10pm" or "Staff on-site 1pm-6pm"
   const timeRange = raw.match(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\s*[-–]\s*(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/i);
   if (timeRange) {
     const h1 = parseInt(timeRange[1], 10);
     const m1 = parseInt(timeRange[2] || "0", 10);
     const h2 = parseInt(timeRange[4], 10);
     const m2 = parseInt(timeRange[5] || "0", 10);
-    if (!result.eventStartTime) result.eventStartTime = to24(h1, m1, timeRange[3] || "am");
-    result.eventEndTime = to24(h2, m2, timeRange[6] || "pm");
+    const ampm1 = timeRange[3] || "pm";
+    const ampm2 = timeRange[6] || "pm";
+    if (!result.eventStartTime) result.eventStartTime = to24(h1, m1, ampm1);
+    result.eventEndTime = to24(h2, m2, ampm2);
+    // "Staff on-site 1pm-6pm" or "Chef on site from 5pm-10pm" — first time is staff arrival
+    const staffMatch = raw.match(/(?:Staff\s+on-?site|Chef\s+on\s+site)\s+(?:from\s+)?(\d{1,2})(?::(\d{2}))?\s*(am|pm)/i);
+    if (staffMatch) {
+      const sh = parseInt(staffMatch[1], 10);
+      const sm = parseInt(staffMatch[2] || "0", 10);
+      result.staffArrivalTime = to24(sh, sm, staffMatch[3] || "pm");
+    } else {
+      result.staffArrivalTime = to24(h1, m1, ampm1);
+    }
   }
 
+  // FW staff: "2 Server (5 Hours of Service)", "1 Bartender (5 Hours of Service)" -> "2 Server, 1 Bartender"
+  const staffParts: string[] = [];
+  const serverMatch = raw.match(/(\d+)\s+Server(?:s)?\s*(?:\([^)]*\))?/i);
+  if (serverMatch) staffParts.push(`${serverMatch[1]} Server${parseInt(serverMatch[1], 10) !== 1 ? "s" : ""}`);
+  const bartenderMatch = raw.match(/(\d+)\s+Bartender(?:s)?\s*(?:\([^)]*\))?/i);
+  if (bartenderMatch) staffParts.push(`${bartenderMatch[1]} Bartender${parseInt(bartenderMatch[1], 10) !== 1 ? "s" : ""}`);
+  if (staffParts.length > 0) result.fwStaff = staffParts.join(", ");
+
   // Description block: menu items, dietary notes, venue
-  const descStart = raw.search(/(?:Description|Taking place|Retreat|Event)/i);
+  // Try multiple anchors — Rhinchart uses "Event Begins", table has "Description", "Quantity"
+  const descAnchors = [
+    /(?:Passed\s+Appetizers?|Presented\s+Appetizers?|Buffet|Dessert|Small\s+Plate|Grande\s+Display)/i,
+    /(?:Description|Quantity)\s+(?:Description|Rate|Amount)/i,
+    /(?:Taking place|Retreat|Event\s+Begins?|Event\s+Details?)/i,
+  ];
+  let descStart = -1;
+  for (const re of descAnchors) {
+    const m = raw.match(re);
+    if (m && m.index != null) {
+      descStart = m.index;
+      break;
+    }
+  }
+  if (descStart < 0) descStart = raw.search(/(?:Description|Event)/i);
+
   if (descStart >= 0) {
-    const descBlock = raw.slice(descStart, descStart + 2000);
+    // Take a larger block — stop at Total, Sales Tax, Payment, or Balance
+    const stopMatch = raw.slice(descStart).match(/(?:Total|Sales\s+Tax|Payment|Balance\s+Due|Please\s+make\s+checks)/i);
+    const endOffset = stopMatch ? stopMatch.index! + descStart : descStart + 3500;
+    const descBlock = raw.slice(descStart, endOffset);
     const dietary = descBlock.match(/\*([^*]+)\*/g);
     const notes: string[] = [];
     if (result.invoiceNumber) notes.push(`Invoice #${result.invoiceNumber}`);
@@ -197,7 +253,68 @@ export function parseInvoiceTextRuleBased(text: string): ParsedInvoice | null {
     const timeline = descBlock.match(/(?:Breakfast|Lunch|Dinner|served)\s+(?:at\s+)?(\d{1,2}(?::\d{2})?\s*(?:am|pm))/gi);
     if (timeline?.length) notes.push(...timeline);
     if (notes.length) result.notes = notes.join("\n");
-    result.menuText = descBlock.replace(/\s+/g, " ").slice(0, 1500).trim();
+    const menuCleaned = descBlock.replace(/\s{2,}/g, " ").trim();
+    result.menuText = menuCleaned.slice(0, 2500);
+
+    // Parse menu sections for BEO custom fields (Rhinchart / Hospitality format)
+    const extractSection = (sectionName: string, altNames?: string[]): string => {
+      const names = [sectionName, ...(altNames || [])];
+      for (const name of names) {
+        const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        // Prefer content in parens: "Passed Appetizers (Quilted Franks, Cheesesteak...)"
+        const parenRe = new RegExp(`${escaped}\\s*\\(([^)]+)\\)`, "is");
+        const parenM = descBlock.match(parenRe);
+        if (parenM && parenM[1]) {
+          const c = parenM[1].replace(/\s+/g, " ").trim();
+          if (c.length > 2) return c.slice(0, 500);
+        }
+        // Fallback: content after section name until numbers or next section
+        const fallbackRe = new RegExp(
+          `${escaped}\\s*[:]?\\s*([\\s\\S]+?)(?=\\s+\\d{2,}\\s+[\\d.]+\\s+[\\d,]+|Presented|Buffet|Dessert|Small Plate|Grande|Chef|Full Service|Sales Tax|Total|Cocktail Display|All American Station|Entree Options|Starch|Vegetable|Salad|upcharge|$)`,
+          "i"
+        );
+        const fallbackM = descBlock.match(fallbackRe);
+        if (fallbackM && fallbackM[1]) {
+          let c = fallbackM[1].replace(/\s+/g, " ").trim();
+          c = cleanNumberedList(c);
+          if (c.length > 2) return c.slice(0, 800);
+        }
+      }
+      return "";
+    };
+    result.customPassedApp = extractSection("Passed Appetizers", ["Passed App"]);
+    result.customPresentedApp = extractSection("Presented Appetizers", ["Presented App", "Room Temp Display", "Cocktail Display"]);
+    result.customBuffetMetal = extractSection("Small Plate Buffet", ["Buffet Metal", "Buffet – Hot", "Buffet Presentation", "Buffet", "All American Station", "Entree Options"]);
+    result.customBuffetChina = extractSection("Buffet China");
+    result.customDessert = extractSection("Grande Display of Decadent Desserts", ["Desserts", "Dessert"]);
+
+    // Hospitality/FoodWerx format: items listed after package line (e.g. "166 Flirty Package") with no section headers
+    // Extract lines before first "Display:", "Station:", "Options:", "upcharge" as passed apps
+    if (!result.customPassedApp && /Flirty Package|Quantity\s+Description|Taking place at/i.test(descBlock)) {
+      const packageMatch = descBlock.match(/\d{2,4}\s+(?:Flirty|[\w\s]+)\s+Package\s+[\d.]+\s+[\d,]+\.?\d*T?/i);
+      const packageEnd = packageMatch ? (packageMatch.index ?? 0) + packageMatch[0].length : 0;
+      const blockAfterPackage = descBlock.slice(packageEnd);
+      const firstLabel = blockAfterPackage.search(/(?:Cocktail\s+Display|All American\s+Station|Entree\s+Options|upcharge|Starch|Vegetable|Salad)\s*:/i);
+      const itemsBlock = firstLabel >= 0 ? blockAfterPackage.slice(0, firstLabel) : blockAfterPackage;
+      const lines = itemsBlock.split(/[\n]+/).map((l) => l.replace(/\s{2,}/g, " ").trim()).filter(Boolean);
+      const foodLines: string[] = [];
+      for (const line of lines) {
+        const clean = line.replace(/^\d+\s+/, "").replace(/\s+[\d.]+\s+[\d,]+\.?\d*T?\s*$/, "").trim();
+        if (clean.length > 3 && !/^[\d.,\s$]+$/.test(clean) && !/^(Quantity|Description|Rate|Amount)$/i.test(clean)) {
+          foodLines.push(clean);
+        }
+      }
+      if (foodLines.length > 0) result.customPassedApp = foodLines.join(", ");
+    }
+
+    // Starch/Vegetable/Salad sections (Hospitality format) -> combine into customBuffetChina
+    if (!result.customBuffetChina) {
+      const starch = extractSection("Starch");
+      const veg = extractSection("Vegetable");
+      const salad = extractSection("Salad");
+      const parts = [starch, veg, salad].filter(Boolean);
+      if (parts.length > 0) result.customBuffetChina = parts.join(", ");
+    }
   }
 
   if (Object.keys(result).length === 0) return null;
@@ -234,12 +351,26 @@ JSON shape:
   "eventEndTime": string | null,
   "venueName": string | null,
   "notes": string | null,
-  "menuText": string | null
+  "menuText": string | null,
+  "customPassedApp": string | null,
+  "customPresentedApp": string | null,
+  "customBuffetMetal": string | null,
+  "customBuffetChina": string | null,
+  "customDessert": string | null,
+  "fwStaff": string | null,
+  "staffArrivalTime": string | null
 }
 
 Rules:
 - If you are unsure about a field, use null.
 - "menuText" should be a single multi-line string that contains the human-readable menu / service description.
+- "customPassedApp": items from Passed Appetizers section (e.g. "Quilted Franks, Cheesesteak Dumplings, Jumbo Lump Crab Cakes").
+- "customPresentedApp": items from Presented Appetizers.
+- "customBuffetMetal": items from Small Plate Buffet or Buffet Metal.
+- "customBuffetChina": items from Buffet China.
+- "customDessert": items from Desserts section.
+- "fwStaff": staff counts from line items, e.g. "2 Server, 1 Bartender" from "2 Server (5 Hours of Service)" and "1 Bartender (5 Hours of Service)".
+- "staffArrivalTime": time staff arrives, e.g. "13:00" for 1pm from "Staff on-site 1pm-6pm".
 - Do NOT include any extra keys.
 - Respond with JSON ONLY, no explanation.
 

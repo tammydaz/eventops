@@ -58,7 +58,7 @@ function HeaderField({ label, value, highlight }: { label: string; value: string
   );
 }
 
-// ── Header field with vertical divider after label (for grid cells) ──
+// ── Header field with vertical divider (used in Server BEO / other views) ──
 function HeaderFieldWithDivider({ label, value, highlight }: { label: string; value: string; highlight?: boolean }) {
   return (
     <div style={{
@@ -83,6 +83,11 @@ function HeaderFieldWithDivider({ label, value, highlight }: { label: string; va
     </div>
   );
 }
+
+// ── BEO header table: label (light bg) | data (white bg) per first-screenshot style ──
+const LABEL_BG = "#f5f5f0";
+const LABEL_CELL = { fontSize: 11, fontWeight: 700, color: "#000", padding: "4px 10px", border: "1px solid #000", verticalAlign: "middle" as const, background: LABEL_BG, lineHeight: 1.2 };
+const DATA_CELL = { fontSize: 12, fontWeight: 400, color: "#000", padding: "4px 10px", border: "1px solid #000", background: "#fff", verticalAlign: "middle" as const, lineHeight: 1.2 };
 
 // ── Extract eventId from URL ──
 const getEventIdFromUrl = (): string | null => {
@@ -192,9 +197,15 @@ const printStyles = `
     .beo-footer-block {
       break-inside: avoid !important;
       page-break-inside: avoid !important;
+      break-before: avoid !important;
+      page-break-before: avoid !important;
+    }
+    .beo-print-content {
+      orphans: 2 !important;
+      widows: 2 !important;
     }
     .beo-section-header {
-      font-size: 18pt !important;
+      font-size: 12pt !important;
       font-weight: 700 !important;
     }
     .beo-line-item {
@@ -217,8 +228,8 @@ const printStyles = `
   }
   @page {
     size: 8.5in 11in;
-    margin: 0.5in;
-    margin-top: 1.5in;
+    margin: 0.4in;
+    margin-top: 0.5in;
     @top-center {
       font-size: 18pt;
       font-weight: 800;
@@ -227,7 +238,7 @@ const printStyles = `
     }
   }
   @page :first {
-    margin-top: 0.5in;
+    margin-top: 0.35in;
     @top-center {
       content: none;
     }
@@ -443,11 +454,11 @@ const styles: Record<string, React.CSSProperties> = {
   allergyBanner: {
     background: "#ffe5e5",
     color: "#c41e3a",
-    padding: "10px 16px",
+    padding: "4px 12px",
     fontSize: 13,
     fontWeight: 700,
     textAlign: "center" as const,
-    marginBottom: 12,
+    marginBottom: 6,
     border: "2px solid #ff0000",
     borderRadius: 6,
     letterSpacing: 0.5,
@@ -455,11 +466,11 @@ const styles: Record<string, React.CSSProperties> = {
   notBuffetBanner: {
     background: "#e0f2fe",
     color: "#0369a1",
-    padding: "10px 16px",
+    padding: "4px 12px",
     fontSize: 13,
     fontWeight: 700,
     textAlign: "center" as const,
-    marginBottom: 12,
+    marginBottom: 6,
     border: "2px solid #0284c7",
     borderRadius: 6,
     letterSpacing: 0.5,
@@ -468,29 +479,30 @@ const styles: Record<string, React.CSSProperties> = {
     background: "transparent",
     border: "3px solid #000",
     borderRadius: 8,
-    marginBottom: 12,
+    marginBottom: 6,
     overflow: "hidden" as const,
   },
   sectionHeader: {
     background: "transparent",
     color: "#000",
-    padding: "10px 16px",
-    fontSize: 18,
+    padding: "4px 12px",
+    fontSize: 12,
     fontWeight: 700,
-    fontFamily: SECTION_HEADER_FONT,
+    fontFamily: "'Segoe UI', Arial, sans-serif",
     textAlign: "center" as const,
-    marginTop: 16,
-    marginBottom: 8,
+    marginTop: 6,
+    marginBottom: 2,
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    gap: "10px",
+    gap: "8px",
   },
   lineItem: {
     display: "grid",
-    padding: "8px 16px",
+    padding: "2px 12px",
     borderBottom: "1px solid #eee",
-    fontSize: 13,
+    fontSize: 12,
+    lineHeight: 1.2,
     alignItems: "center" as const,
   },
   specCol: { fontWeight: 700, color: "#555", fontSize: 12 },
@@ -562,6 +574,7 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: "center",
     gap: 8,
     transition: "all 0.15s",
+    outline: "none",
   },
   leftBoxActive: {
     borderColor: "#ff6b6b",
@@ -850,14 +863,15 @@ const SERVER_BEO_SECTION_COLORS = {
 const serverBeoTable = {
   width: "100%",
   borderCollapse: "collapse" as const,
-  fontSize: 12,
+  fontSize: 11,
   border: "1px solid #000",
 };
 const serverBeoCell = {
-  padding: "4px 8px",
+  padding: "3px 6px",
   border: "1px solid #000",
   verticalAlign: "top" as const,
-  lineHeight: 1.35,
+  lineHeight: 1.2,
+  fontSize: 11,
 };
 const serverBeoHeader = {
   ...serverBeoCell,
@@ -908,9 +922,9 @@ function BeoSectionPill({
           gap: 10,
         }}
       >
-        <span style={{ color: dotColor, fontSize: "28px", lineHeight: 0 }}>●</span>
+        <span style={{ color: dotColor, fontSize: "22px", lineHeight: 0 }}>●</span>
         <span>{title}</span>
-        <span style={{ color: dotColor, fontSize: "28px", lineHeight: 0 }}>●</span>
+        <span style={{ color: dotColor, fontSize: "22px", lineHeight: 0 }}>●</span>
       </div>
       <div style={{ padding: "0 16px 16px" }}>{children}</div>
     </div>
@@ -967,16 +981,15 @@ function SpeckItemTableWithRightCol(props: {
             className="beo-line-item"
             style={{ ...styles.lineItem, borderBottom: "none", gridTemplateColumns, padding: "1px 12px", lineHeight: 1, minHeight: "unset", alignItems: "flex-start" }}
           >
-            {/* Spec column (left): auto spec on screen; effective (override or auto) when printing */}
+            {/* Spec column (left): show override when present, else auto spec; same on screen and print */}
             <div className="beo-spec-col" style={{ ...styles.specCol, lineHeight: 1 }}>
-              <span className="no-print">{r.speck || "—"}</span>
-              <span className="print-only">{specOverrides[overrideKey]?.trim() || r.speck || "—"}</span>
+              <span>{specOverrides[overrideKey]?.trim() || r.speck || "—"}</span>
             </div>
             {/* Item column (middle) */}
             <div className="beo-item-col" style={{ ...styles.itemCol, lineHeight: 1 }}>{r.item}</div>
             {/* Right column: override input (spec mode) / checkbox / packout */}
             {leftCheck === "spec" && (
-              <div className="beo-spec-col" style={{ ...styles.specCol, display: "flex", flexDirection: "column", gap: 2 }} onClick={(e) => e.stopPropagation()}>
+              <div className="beo-spec-col" style={{ ...styles.specCol, display: "flex", flexDirection: "column", gap: 2 }} onClick={(e) => { e.stopPropagation(); if (document.activeElement instanceof HTMLButtonElement) document.activeElement.blur(); }}>
                 <span style={{ fontSize: 10, color: "#666", lineHeight: 1 }} className="no-print">Override</span>
                 <input
                   type="text"
@@ -999,7 +1012,7 @@ function SpeckItemTableWithRightCol(props: {
               </div>
             )}
             {(leftCheck === "kitchen" || leftCheck === "expeditor" || leftCheck === "server") && (
-              <div style={styles.checkboxCol} onClick={(e) => e.stopPropagation()}>
+              <div style={styles.checkboxCol} onClick={(e) => { e.stopPropagation(); if (document.activeElement instanceof HTMLButtonElement) document.activeElement.blur(); }}>
                 <input
                   type="checkbox"
                   checked={checkState[checkKey] ?? false}
@@ -1009,7 +1022,7 @@ function SpeckItemTableWithRightCol(props: {
               </div>
             )}
             {leftCheck === "packout" && (
-              <div style={styles.packOutCol} onClick={(e) => e.stopPropagation()}>
+              <div style={styles.packOutCol} onClick={(e) => { e.stopPropagation(); if (document.activeElement instanceof HTMLButtonElement) document.activeElement.blur(); }}>
                 <input
                   type="text"
                   placeholder="equipment..."
@@ -1195,6 +1208,8 @@ function FullBeoPacketBeveragesContent(props: {
 function ServerBeo2ndPageContent(props: {
   eventDate: string;
   clientName: string;
+  contactName: string;
+  cityState: string;
   jobNumberDisplay: string;
   dispatchTime: string;
   eventArrival: string;
@@ -1365,42 +1380,81 @@ function ServerBeo2ndPageContent(props: {
     if (chinaPaperGlassware) paperRows.push(...parseLines(chinaPaperGlassware));
   }
 
+  const phoneStr = asString(props.eventData[FIELD_IDS.CONTACT_PHONE]) || asString(props.eventData[FIELD_IDS.CLIENT_PHONE]) || "";
+
   return (
     <div className="beo-print-content" style={{ ...styles.page, maxWidth: 900, margin: "0 auto" }}>
-      {/* Excel-style header: straight, aligned table */}
-      <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 4 }}>{props.eventDate || "—"}</div>
-      <table style={{ ...serverBeoTable, marginBottom: 12 }}>
-        <tbody>
-          <tr>
-            <td style={{ ...serverBeoCell, width: "10%", fontWeight: 700 }}>CLIENT</td>
-            <td style={{ ...serverBeoCell, width: "23%" }}>{props.clientName}</td>
-            <td style={{ ...serverBeoCell, width: "10%", fontWeight: 700 }}>ORDER #</td>
-            <td style={{ ...serverBeoCell, width: "14%" }}>{props.jobNumberDisplay}</td>
-            <td style={{ ...serverBeoCell, width: "10%", fontWeight: 700 }}>DISPATCH</td>
-            <td style={{ ...serverBeoCell, width: "18%" }}>{props.dispatchTime}</td>
-          </tr>
-          <tr>
-            <td style={{ ...serverBeoCell, fontWeight: 700 }}>EVENT ARRIVAL</td>
-            <td style={serverBeoCell}>{props.eventArrival}</td>
-            <td style={{ ...serverBeoCell, fontWeight: 700 }}>GUESTS</td>
-            <td style={serverBeoCell}>{props.guestCount}</td>
-            <td style={{ ...serverBeoCell, fontWeight: 700 }}>EVENT START</td>
-            <td style={serverBeoCell}>{props.eventStart}</td>
-          </tr>
-          <tr>
-            <td style={{ ...serverBeoCell, fontWeight: 700 }}>VENUE</td>
-            <td style={serverBeoCell}>{props.eventLocation}</td>
-            <td style={{ ...serverBeoCell, fontWeight: 700 }}>EVENT END</td>
-            <td style={serverBeoCell}>{props.eventEnd}</td>
-            <td style={{ ...serverBeoCell, fontWeight: 700 }}>FW STAFF</td>
-            <td style={serverBeoCell}>{props.fwStaff}</td>
-          </tr>
-          <tr>
-            <td style={{ ...serverBeoCell, fontWeight: 700 }}>VENUE ADDRESS</td>
-            <td style={{ ...serverBeoCell, colSpan: 5 }}>{props.venueAddress}</td>
-          </tr>
-        </tbody>
-      </table>
+      {/* Same header as Kitchen BEO: grey banner + event details table */}
+      <div className="beo-event-header-block" style={{ marginBottom: 6 }}>
+        <div style={{ fontSize: 12, fontWeight: 600, color: "#111", marginBottom: 4 }}>{props.eventDate || "—"}</div>
+        <div className="beo-letterhead-bar" style={{
+          background: "#6b7280", color: "#fff", padding: "8px 14px",
+          display: "flex", alignItems: "center", justifyContent: "space-between",
+          fontSize: 13, fontWeight: 700, border: "2px solid #374151",
+        }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <div style={{ width: 22, height: 22, background: "#dc2626", display: "flex", alignItems: "center", justifyContent: "center", transform: "rotate(45deg)", flexShrink: 0 }}>
+              <span style={{ transform: "rotate(-45deg)", fontSize: 11, fontWeight: 800, color: "#fff" }}>f</span>
+            </div>
+            <span>BEO</span>
+          </div>
+          <span>JOB#: {props.jobNumberDisplay} — DISPATCH TIME {props.dispatchTime}</span>
+        </div>
+        <div className="beo-event-details-table" style={{ marginTop: 6, overflow: "hidden", border: "1px solid #000" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+            <colgroup>
+              <col style={{ width: "12%" }} />
+              <col style={{ width: "38%" }} />
+              <col style={{ width: "12%" }} />
+              <col style={{ width: "38%" }} />
+            </colgroup>
+            <tbody>
+              <tr>
+                <td style={{ ...LABEL_CELL, whiteSpace: "nowrap" }}>CLIENT</td>
+                <td style={{ ...DATA_CELL }}>{props.clientName || "—"}</td>
+                <td style={{ ...LABEL_CELL, whiteSpace: "nowrap" }}>ORDER #</td>
+                <td style={{ ...DATA_CELL, whiteSpace: "nowrap" }}>{props.jobNumberDisplay || "—"}</td>
+              </tr>
+              <tr>
+                <td style={{ ...LABEL_CELL, whiteSpace: "nowrap" }}>CONTACT</td>
+                <td style={{ ...DATA_CELL }}>{props.contactName || "—"}</td>
+                <td style={{ ...LABEL_CELL, whiteSpace: "nowrap" }}>EVENT DATE</td>
+                <td style={{ ...DATA_CELL }}>{props.eventDate || "—"}</td>
+              </tr>
+              <tr>
+                <td style={{ ...LABEL_CELL, whiteSpace: "nowrap" }}>PHONE</td>
+                <td style={{ ...DATA_CELL }}>{phoneStr || "—"}</td>
+                <td style={{ ...LABEL_CELL, whiteSpace: "nowrap" }}>GUESTS</td>
+                <td style={{ ...DATA_CELL, color: "#c00", fontWeight: 600, whiteSpace: "nowrap" }}>{props.guestCount || "—"}</td>
+              </tr>
+              <tr>
+                <td style={{ ...LABEL_CELL, whiteSpace: "nowrap" }}>ADDRESS</td>
+                <td style={{ ...DATA_CELL }}>{props.venueAddress || "—"}</td>
+                <td style={{ ...LABEL_CELL, whiteSpace: "nowrap" }}>EVENT START</td>
+                <td style={{ ...DATA_CELL, color: "#c00", fontWeight: 600, whiteSpace: "nowrap" }}>{props.eventStart || "—"}</td>
+              </tr>
+              <tr>
+                <td style={{ ...LABEL_CELL, whiteSpace: "nowrap" }}>CITY, ST</td>
+                <td style={{ ...DATA_CELL }}>{props.cityState || "—"}</td>
+                <td style={{ ...LABEL_CELL, whiteSpace: "nowrap" }}>EVENT END</td>
+                <td style={{ ...DATA_CELL, color: "#c00", fontWeight: 600, whiteSpace: "nowrap" }}>{props.eventEnd || "—"}</td>
+              </tr>
+              <tr>
+                <td style={{ ...LABEL_CELL, whiteSpace: "nowrap" }}>VENUE</td>
+                <td style={{ ...DATA_CELL }}>{props.eventLocation || "—"}</td>
+                <td style={{ ...LABEL_CELL, whiteSpace: "nowrap" }}>EVENT ARRIVAL</td>
+                <td style={{ ...DATA_CELL, color: "#c00", fontWeight: 600, whiteSpace: "nowrap" }}>{props.eventArrival || "—"}</td>
+              </tr>
+              <tr>
+                <td style={{ ...LABEL_CELL }} />
+                <td style={{ ...DATA_CELL }} />
+                <td style={{ ...LABEL_CELL, whiteSpace: "nowrap" }}>FW STAFF</td>
+                <td style={{ ...DATA_CELL }}>{props.fwStaff || "—"}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
 
       {/* BEVERAGES — red banner, 3-column table */}
       <div style={{ background: "#ff0000", color: "#fff", textAlign: "center", fontWeight: 700, fontSize: 13, padding: "4px 0", marginBottom: 0, border: "1px solid #000", borderBottom: "none" }}>
@@ -1426,10 +1480,10 @@ function ServerBeo2ndPageContent(props: {
       </table>
 
       {/* PAPER PRODUCTS — yellow banner, 3-column table */}
-      <div style={{ background: "#ffff00", color: "#000", textAlign: "center", fontWeight: 700, fontSize: 13, padding: "4px 0", marginBottom: 0, border: "1px solid #000", borderBottom: "none" }}>
+      <div style={{ background: "#ffff00", color: "#000", textAlign: "center", fontWeight: 700, fontSize: 12, padding: "3px 0", marginBottom: 0, border: "1px solid #000", borderBottom: "none" }}>
         PAPER PRODUCTS / CHINA — CUTLERY — GLASSWARE
       </div>
-      <table style={{ ...serverBeoTable, marginBottom: 12 }}>
+      <table style={{ ...serverBeoTable, marginBottom: 6 }}>
         <thead>
           <tr>
             <td style={{ ...serverBeoHeader, width: "33%", color: "#c00" }}>CLIENT</td>
@@ -1449,10 +1503,10 @@ function ServerBeo2ndPageContent(props: {
       </table>
 
       {/* NOTES — yellow banner */}
-      <div style={{ background: "#ffff00", color: "#000", textAlign: "center", fontWeight: 700, fontSize: 13, padding: "4px 0", marginBottom: 0, border: "1px solid #000", borderBottom: "none" }}>
+      <div style={{ background: "#ffff00", color: "#000", textAlign: "center", fontWeight: 700, fontSize: 12, padding: "3px 0", marginBottom: 0, border: "1px solid #000", borderBottom: "none" }}>
         NOTES
       </div>
-      <div style={{ border: "1px solid #000", borderTop: "none", padding: "8px 16px", minHeight: 60, marginBottom: 12 }}>
+      <div style={{ border: "1px solid #000", borderTop: "none", padding: "6px 12px", minHeight: 40, marginBottom: 6 }}>
         {[
           { label: "PARKING", val: parkingNotes },
           { label: "LOAD-IN", val: loadInNotes },
@@ -1475,7 +1529,7 @@ function ServerBeo2ndPageContent(props: {
         ]
           .filter((x) => x.val?.trim())
           .map((x, i) => (
-            <div key={i} style={{ fontSize: 12, marginBottom: 4, lineHeight: 1.35 }}>
+            <div key={i} style={{ fontSize: 11, marginBottom: 2, lineHeight: 1.2 }}>
               <strong>{x.label}:</strong> {x.val}
             </div>
           ))}
@@ -1485,10 +1539,10 @@ function ServerBeo2ndPageContent(props: {
       </div>
 
       {/* TIMELINE — blue banner */}
-      <div style={{ background: "#87ceeb", color: "#000", textAlign: "center", fontWeight: 700, fontSize: 13, padding: "4px 0", marginBottom: 0, border: "1px solid #000", borderBottom: "none" }}>
+      <div style={{ background: "#87ceeb", color: "#000", textAlign: "center", fontWeight: 700, fontSize: 12, padding: "3px 0", marginBottom: 0, border: "1px solid #000", borderBottom: "none" }}>
         TIMELINE
       </div>
-      <div style={{ border: "1px solid #000", borderTop: "none", padding: "8px 16px", minHeight: 40 }}>
+      <div style={{ border: "1px solid #000", borderTop: "none", padding: "6px 12px", minHeight: 32 }}>
         {hasTimeline ? (
           beoTimeline.split(/\n/).filter(Boolean).map((line, i) => {
             const dashIdx = line.indexOf(" - ");
@@ -1505,7 +1559,7 @@ function ServerBeo2ndPageContent(props: {
         )}
       </div>
 
-      <div style={{ marginTop: 20, fontSize: 12, fontWeight: 700, marginBottom: 8 }}>***end of server BEO***</div>
+      <div style={{ marginTop: 12, fontSize: 11, fontWeight: 700, marginBottom: 4 }}>***end of server BEO***</div>
     </div>
   );
 }
@@ -1603,9 +1657,9 @@ function MeetingBeoNotesContent(props: {
         {activeSections.map((section) => (
           <div key={section.fieldId} className="beo-section-card" style={styles.sectionCard}>
             <div className="beo-section-header" style={styles.sectionHeader}>
-              <span style={{ color: getSectionColor(section.title), fontSize: "28px", lineHeight: 0 }}>●</span>
+              <span style={{ color: getSectionColor(section.title), fontSize: "22px", lineHeight: 0 }}>●</span>
               <span>{section.title}</span>
-              <span style={{ color: getSectionColor(section.title), fontSize: "28px", lineHeight: 0 }}>●</span>
+              <span style={{ color: getSectionColor(section.title), fontSize: "22px", lineHeight: 0 }}>●</span>
             </div>
             {section.items.map((item, itemIdx) => {
               const rows = expandItemToRows(item);
@@ -1879,8 +1933,17 @@ const BeoPrintPage: React.FC = () => {
   const clientPhone = f(FIELD_IDS.CLIENT_PHONE);
   const contactPhone = f(FIELD_IDS.CONTACT_PHONE);
 
-  const eventLocation = f(FIELD_IDS.EVENT_LOCATION_FINAL_PRINT);
-  const venueAddress = f(FIELD_IDS.PRINT_VENUE_ADDRESS);
+  // Venue name: VenuePrint formula (falls back to "Residence") or VENUE
+  const eventLocation = f(FIELD_IDS.VENUE_PRINT) || f(FIELD_IDS.VENUE);
+  // Venue address: Print – Event Address (BEO canonical) → Venue Full Address → build from components → client fallback
+  const venueAddress =
+    f(FIELD_IDS.PRINT_EVENT_ADDRESS) ||
+    f(FIELD_IDS.VENUE_FULL_ADDRESS) ||
+    [f(FIELD_IDS.VENUE_ADDRESS), f(FIELD_IDS.VENUE_CITY), asSingleSelectName(eventData[FIELD_IDS.VENUE_STATE]), f(FIELD_IDS.VENUE_ZIP)].filter(Boolean).join(", ") ||
+    [f(FIELD_IDS.CLIENT_STREET), f(FIELD_IDS.CLIENT_CITY), f(FIELD_IDS.CLIENT_STATE), f(FIELD_IDS.CLIENT_ZIP)].filter(Boolean).join(", ");
+  const cityState =
+    [f(FIELD_IDS.VENUE_CITY), asSingleSelectName(eventData[FIELD_IDS.VENUE_STATE]), f(FIELD_IDS.VENUE_ZIP)].filter(Boolean).join(", ") ||
+    [f(FIELD_IDS.CLIENT_CITY), f(FIELD_IDS.CLIENT_STATE), f(FIELD_IDS.CLIENT_ZIP)].filter(Boolean).join(", ");
   const eventDateRaw = f(FIELD_IDS.EVENT_DATE);
   const eventDate = eventDateRaw
     ? (() => {
@@ -1897,7 +1960,9 @@ const BeoPrintPage: React.FC = () => {
   const guestCount = f(FIELD_IDS.GUEST_COUNT);
   const dispatchTime = secondsTo12HourString(eventData[FIELD_IDS.DISPATCH_TIME]) || f(FIELD_IDS.DISPATCH_TIME) || "TBD";
   const fwStaff = f(FIELD_IDS.CAPTAIN);
-  const eventArrival = secondsTo12HourString(eventData[FIELD_IDS.FOODWERX_ARRIVAL]);
+  const eventArrival =
+    secondsTo12HourString(eventData[FIELD_IDS.FOODWERX_ARRIVAL]) ||
+    f(FIELD_IDS.VENUE_ARRIVAL_TIME);
   const allergies = f(FIELD_IDS.DIETARY_NOTES);
   const serviceStyle = asSingleSelectName(eventData[FIELD_IDS.SERVICE_STYLE]).trim();
   const notBuffetBanner = serviceStyle && !serviceStyle.toLowerCase().includes("buffet")
@@ -1937,39 +2002,31 @@ const BeoPrintPage: React.FC = () => {
     });
   };
 
-  // ── Menu Sections ──
-  const menuSections: SectionData[] = [
-    {
-      title: "PASSED APPETIZERS",
-      fieldId: FIELD_IDS.PASSED_APPETIZERS,
-      items: parseMenuItems(FIELD_IDS.PASSED_APPETIZERS),
-    },
-    {
-      title: "PRESENTED APPETIZERS",
-      fieldId: FIELD_IDS.PRESENTED_APPETIZERS,
-      items: parseMenuItems(FIELD_IDS.PRESENTED_APPETIZERS),
-    },
-    {
-      title: "BUFFET – METAL",
-      fieldId: FIELD_IDS.BUFFET_METAL,
-      items: parseMenuItems(FIELD_IDS.BUFFET_METAL),
-    },
-    {
-      title: "BUFFET – CHINA",
-      fieldId: FIELD_IDS.BUFFET_CHINA,
-      items: parseMenuItems(FIELD_IDS.BUFFET_CHINA),
-    },
-    {
-      title: "DESSERTS",
-      fieldId: FIELD_IDS.DESSERTS,
-      items: parseMenuItems(FIELD_IDS.DESSERTS),
-    },
-    {
-      title: "STATIONS",
-      fieldId: FIELD_IDS.STATIONS,
-      items: parseMenuItems(FIELD_IDS.STATIONS),
-    },
+  // ── Custom text → menu items (each item + sauce on its own line; split by newline, comma, or semicolon)
+  const customTextToItems = (text: string, prefix: string): MenuLineItem[] => {
+    const t = (text || "").trim();
+    if (!t) return [];
+    return t.split(/[\n,;]+/).map((s) => s.trim()).filter(Boolean).map((name, i) => ({
+      id: `${prefix}-${i}`,
+      name,
+    }));
+  };
+
+  // ── Menu Sections (linked items, or fallback to custom text from invoice)
+  const sectionDefs: { title: string; fieldId: string; linkedFieldId: string; customFieldId: string }[] = [
+    { title: "PASSED APPETIZERS", fieldId: FIELD_IDS.PASSED_APPETIZERS, linkedFieldId: FIELD_IDS.PASSED_APPETIZERS, customFieldId: FIELD_IDS.CUSTOM_PASSED_APP },
+    { title: "PRESENTED APPETIZERS", fieldId: FIELD_IDS.PRESENTED_APPETIZERS, linkedFieldId: FIELD_IDS.PRESENTED_APPETIZERS, customFieldId: FIELD_IDS.CUSTOM_PRESENTED_APP },
+    { title: "BUFFET – METAL", fieldId: FIELD_IDS.BUFFET_METAL, linkedFieldId: FIELD_IDS.BUFFET_METAL, customFieldId: FIELD_IDS.CUSTOM_BUFFET_METAL },
+    { title: "BUFFET – CHINA", fieldId: FIELD_IDS.BUFFET_CHINA, linkedFieldId: FIELD_IDS.BUFFET_CHINA, customFieldId: FIELD_IDS.CUSTOM_BUFFET_CHINA },
+    { title: "DESSERTS", fieldId: FIELD_IDS.DESSERTS, linkedFieldId: FIELD_IDS.DESSERTS, customFieldId: FIELD_IDS.CUSTOM_DESSERTS },
+    { title: "STATIONS", fieldId: FIELD_IDS.STATIONS, linkedFieldId: FIELD_IDS.STATIONS, customFieldId: "" },
   ];
+  const menuSections: SectionData[] = sectionDefs.map((def) => {
+    const linked = parseMenuItems(def.linkedFieldId);
+    const custom = def.customFieldId ? customTextToItems(asString(eventData[def.customFieldId]), `custom-${def.fieldId}`) : [];
+    const items = linked.length > 0 ? linked : custom;
+    return { title: def.title, fieldId: def.fieldId, items };
+  });
 
   const barFid = barServiceFieldId ?? FIELD_IDS.BAR_SERVICE;
   const barService = asSingleSelectName(eventData[barFid]);
@@ -2034,9 +2091,9 @@ const BeoPrintPage: React.FC = () => {
 
   // ── Kitchen BEO pagination: page 1 has less room (header/banners), pages 2+ have full height ──
   // Sections are never split across pages — each pill stays whole.
-  const LINES_PER_PAGE_FIRST = 16;  // page 1: event header + banners take ~16 lines
-  const LINES_PER_PAGE = 32;        // pages 2+: full page for menu
-  const SECTION_HEADER_LINES = 3;
+  const LINES_PER_PAGE_FIRST = 22;  // page 1: event header + banners — increased to fit more
+  const LINES_PER_PAGE = 38;        // pages 2+: full page for menu
+  const SECTION_HEADER_LINES = 2;
   type KitchenPage = { pageNum: number; sections: Array<{ section: SectionData; items: MenuLineItem[] }> };
   const kitchenPages: KitchenPage[] = (() => {
     const pages: KitchenPage[] = [];
@@ -2337,7 +2394,12 @@ const BeoPrintPage: React.FC = () => {
 
           {/* ── Content (based on top tab) ── */}
           {topTab === "kitchenBEO" && (
-      <div key={`kitchen-${leftCheck}`} className="beo-print-content" style={styles.page}>
+      <div
+        key={`kitchen-${leftCheck}`}
+        className="beo-print-content"
+        style={styles.page}
+        onClick={() => { if (document.activeElement instanceof HTMLButtonElement) document.activeElement.blur(); }}
+      >
         {kitchenPages.length === 0 || (kitchenPages.length === 1 && kitchenPages[0].sections.length === 0) ? (
           <div style={{ padding: 32, textAlign: "center", color: "#999", fontSize: 16 }}>
             No menu items assigned to this event yet.
@@ -2353,12 +2415,12 @@ const BeoPrintPage: React.FC = () => {
 
             {/* Page 1 only: Event header */}
             {page.pageNum === 1 && (
-              <div className="beo-event-header-block" style={{ marginBottom: 16 }}>
-                <div style={{ fontSize: 13, fontWeight: 600, color: "#111", marginBottom: 6 }}>{eventDate || "—"}</div>
+              <div className="beo-event-header-block" style={{ marginBottom: 8 }}>
+                <div style={{ fontSize: 12, fontWeight: 600, color: "#111", marginBottom: 4 }}>{eventDate || "—"}</div>
                 <div className="beo-letterhead-bar" style={{
-                  background: "#9ca3af", color: "#111", padding: "8px 16px",
+                  background: "#6b7280", color: "#fff", padding: "10px 16px",
                   display: "flex", alignItems: "center", justifyContent: "space-between",
-                  fontSize: 13, fontWeight: 600, border: "3px double #374151",
+                  fontSize: 14, fontWeight: 700, border: "2px solid #374151",
                 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                     <div style={{ width: 24, height: 24, background: "#dc2626", display: "flex", alignItems: "center", justifyContent: "center", transform: "rotate(45deg)", flexShrink: 0 }}>
@@ -2368,50 +2430,56 @@ const BeoPrintPage: React.FC = () => {
                   </div>
                   <span>JOB#: {jobNumberDisplay}-----------------DISPATCH TIME {dispatchTime}</span>
                 </div>
-                <div className="beo-event-details-table" style={{ background: "#e5e7eb", border: "3px double #374151", borderRadius: 8, marginTop: 12, overflow: "hidden" }}>
-                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, background: "#e5e7eb" }}>
+                <div className="beo-event-details-table" style={{ marginTop: 6, overflow: "hidden", border: "1px solid #000" }}>
+                  <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                    <colgroup>
+                      <col style={{ width: "12%" }} />
+                      <col style={{ width: "38%" }} />
+                      <col style={{ width: "12%" }} />
+                      <col style={{ width: "38%" }} />
+                    </colgroup>
                     <tbody>
                       <tr>
-                        <td style={{ padding: "10px 16px", borderRight: "1px solid #374151", borderBottom: "1px solid #374151", background: "#e5e7eb" }}>
-                          <HeaderFieldWithDivider label="Client" value={clientName} />
-                        </td>
-                        <td style={{ padding: "10px 16px", borderRight: "1px solid #374151", borderBottom: "1px solid #374151", background: "#e5e7eb" }}>
-                          <HeaderFieldWithDivider label="Event Arrival" value={eventArrival} highlight />
-                        </td>
-                        <td style={{ padding: "10px 16px", borderBottom: "1px solid #374151", background: "#e5e7eb" }}>
-                          <HeaderFieldWithDivider label="Guest Count" value={guestCount} />
-                        </td>
+                        <td style={{ ...LABEL_CELL }}>CLIENT</td>
+                        <td style={{ ...DATA_CELL }}>{clientName || "—"}</td>
+                        <td style={{ ...LABEL_CELL, whiteSpace: "nowrap" }}>ORDER #</td>
+                        <td style={{ ...DATA_CELL, whiteSpace: "nowrap" }}>{jobNumberDisplay || "—"}</td>
                       </tr>
                       <tr>
-                        <td style={{ padding: "10px 16px", borderRight: "1px solid #374151", borderBottom: "1px solid #374151", background: "#e5e7eb" }}>
-                          <HeaderFieldWithDivider label="Phone" value={phone} />
-                        </td>
-                        <td style={{ padding: "10px 16px", borderRight: "1px solid #374151", borderBottom: "1px solid #374151", background: "#e5e7eb" }}>
-                          <HeaderFieldWithDivider label="Event Start" value={eventStart} highlight />
-                        </td>
-                        <td style={{ padding: "10px 16px", borderBottom: "1px solid #374151", background: "#e5e7eb" }}>
-                          <HeaderFieldWithDivider label="Event Date" value={eventDate} />
-                        </td>
+                        <td style={{ ...LABEL_CELL }}>CONTACT</td>
+                        <td style={{ ...DATA_CELL }}>{contactName || "—"}</td>
+                        <td style={{ ...LABEL_CELL }}>EVENT DATE</td>
+                        <td style={{ ...DATA_CELL }}>{eventDate || "—"}</td>
                       </tr>
                       <tr>
-                        <td style={{ padding: "10px 16px", borderRight: "1px solid #374151", borderBottom: "1px solid #374151", background: "#e5e7eb" }}>
-                          <HeaderFieldWithDivider label="Venue" value={eventLocation} />
-                        </td>
-                        <td style={{ padding: "10px 16px", borderRight: "1px solid #374151", borderBottom: "1px solid #374151", background: "#e5e7eb" }}>
-                          <HeaderFieldWithDivider label="Event End" value={eventEnd} highlight />
-                        </td>
-                        <td style={{ padding: "10px 16px", borderBottom: "1px solid #374151", background: "#e5e7eb" }}>
-                          <HeaderFieldWithDivider label="FW Staff" value={fwStaff} />
-                        </td>
+                        <td style={{ ...LABEL_CELL }}>PHONE</td>
+                        <td style={{ ...DATA_CELL }}>{phone || "—"}</td>
+                        <td style={{ ...LABEL_CELL }}>GUESTS</td>
+                        <td style={{ ...DATA_CELL, color: "#c00", fontWeight: 600 }}>{guestCount || "—"}</td>
                       </tr>
                       <tr>
-                        <td style={{ padding: "10px 16px", borderRight: "1px solid #374151", background: "#e5e7eb" }}>
-                          <HeaderFieldWithDivider label="Venue Address" value={venueAddress} />
-                        </td>
-                        <td style={{ padding: "10px 16px", borderRight: "1px solid #374151", background: "#e5e7eb" }}>
-                          <HeaderFieldWithDivider label="Rentals" value="" />
-                        </td>
-                        <td style={{ padding: "10px 16px", background: "#e5e7eb" }} />
+                        <td style={{ ...LABEL_CELL }}>ADDRESS</td>
+                        <td style={{ ...DATA_CELL }}>{(f(FIELD_IDS.VENUE_ADDRESS) || f(FIELD_IDS.CLIENT_STREET) || venueAddress) || "—"}</td>
+                        <td style={{ ...LABEL_CELL, whiteSpace: "nowrap" }}>EVENT START</td>
+                        <td style={{ ...DATA_CELL, color: "#c00", fontWeight: 600, whiteSpace: "nowrap" }}>{eventStart || "—"}</td>
+                      </tr>
+                      <tr>
+                        <td style={{ ...LABEL_CELL }}>CITY, ST</td>
+                        <td style={{ ...DATA_CELL }}>{cityState || "—"}</td>
+                        <td style={{ ...LABEL_CELL, whiteSpace: "nowrap" }}>EVENT END</td>
+                        <td style={{ ...DATA_CELL, color: "#c00", fontWeight: 600, whiteSpace: "nowrap" }}>{eventEnd || "—"}</td>
+                      </tr>
+                      <tr>
+                        <td style={{ ...LABEL_CELL }}>VENUE</td>
+                        <td style={{ ...DATA_CELL }}>{eventLocation || "—"}</td>
+                        <td style={{ ...LABEL_CELL, whiteSpace: "nowrap" }}>EVENT ARRIVAL</td>
+                        <td style={{ ...DATA_CELL, color: "#c00", fontWeight: 600, whiteSpace: "nowrap" }}>{eventArrival || "—"}</td>
+                      </tr>
+                      <tr>
+                        <td style={{ ...LABEL_CELL }} />
+                        <td style={{ ...DATA_CELL }} />
+                        <td style={{ ...LABEL_CELL }}>FW STAFF</td>
+                        <td style={{ ...DATA_CELL }}>{fwStaff || "—"}</td>
                       </tr>
                     </tbody>
                   </table>
@@ -2431,19 +2499,19 @@ const BeoPrintPage: React.FC = () => {
             {page.sections.map(({ section, items: sectionItems }) => (
           <div key={`${section.fieldId}-${page.pageNum}`} className="beo-section-card" style={styles.sectionCard}>
             <div className="beo-section-header" style={styles.sectionHeader}>
-              <span style={{ color: getSectionColor(section.title), fontSize: "28px", lineHeight: 0 }}>●</span>
+              <span style={{ color: getSectionColor(section.title), fontSize: "22px", lineHeight: 0 }}>●</span>
               <span>{section.title}</span>
-              <span style={{ color: getSectionColor(section.title), fontSize: "28px", lineHeight: 0 }}>●</span>
+              <span style={{ color: getSectionColor(section.title), fontSize: "22px", lineHeight: 0 }}>●</span>
             </div>
             {sectionItems.map((item, itemIdx) => {
               const rows = expandItemToRows(item);
               return (
-              <div key={`${item.id}-${itemIdx}`} className="beo-menu-item-block" style={{ borderBottom: "1px solid #eee", marginTop: itemIdx > 0 ? 16 : 0 }}>
+              <div key={`${item.id}-${itemIdx}`} className="beo-menu-item-block" style={{ borderBottom: "1px solid #eee", marginTop: itemIdx > 0 ? 2 : 0 }}>
               {rows.map((row, rowIdx) => (
-              <div key={rowIdx} className="beo-line-item" style={{ ...styles.lineItem, borderBottom: "none", gridTemplateColumns, padding: "4px 16px", lineHeight: 1.25, minHeight: "unset", alignItems: "flex-start", ...(row.isChild ? { marginTop: -4 } : {}) }}>
-                {/* SPEC / PACK-OUT / EXPEDITOR / KITCHEN / SERVER: Spec Column (left) — always auto spec on screen; effective (override or auto) when printing */}
+              <div key={rowIdx} className="beo-line-item" style={{ ...styles.lineItem, borderBottom: "none", gridTemplateColumns, padding: "2px 12px", lineHeight: 1.2, minHeight: "unset", alignItems: "flex-start", ...(row.isChild ? { marginTop: -2 } : {}) }}>
+                {/* SPEC / PACK-OUT / EXPEDITOR / KITCHEN / SERVER: Spec Column (left) — show override when present, else auto spec */}
                 {(leftCheck === "spec" || leftCheck === "packout" || leftCheck === "expeditor" || leftCheck === "kitchen" || leftCheck === "server") && (
-                  <div className="beo-spec-col" style={{ ...styles.specCol, lineHeight: 1.25 }}>
+                  <div className="beo-spec-col" style={{ ...styles.specCol, lineHeight: 1.2 }}>
                     {(() => {
                       const overrideKey = `${section.fieldId}:${item.id}:${rowIdx}`;
                       const overrideKeyLegacy = `${section.fieldId}:${item.id}`;
@@ -2456,12 +2524,7 @@ const BeoPrintPage: React.FC = () => {
                         nickQtyOverride: undefined,
                       });
                       const effectiveSpec = overrideVal.trim() ? overrideVal.trim() : autoSpec;
-                      return (
-                        <>
-                          <span className="no-print">{autoSpec}</span>
-                          <span className="print-only">{effectiveSpec}</span>
-                        </>
-                      );
+                      return <span>{effectiveSpec}</span>;
                     })()}
                   </div>
                 )}
@@ -2473,7 +2536,7 @@ const BeoPrintPage: React.FC = () => {
 
                 {/* SPEC VIEW: Override input/button (right) */}
                 {leftCheck === "spec" && (
-                  <div className="beo-spec-col" style={{ ...styles.specCol, display: "flex", flexDirection: "column", gap: 2 }} onClick={(e) => e.stopPropagation()}>
+                  <div className="beo-spec-col" style={{ ...styles.specCol, display: "flex", flexDirection: "column", gap: 2 }} onClick={(e) => { e.stopPropagation(); if (document.activeElement instanceof HTMLButtonElement) document.activeElement.blur(); }}>
                     <span style={{ fontSize: 10, color: "#666", lineHeight: 1 }}>Override</span>
                     <input
                       type="text"
@@ -2499,7 +2562,7 @@ const BeoPrintPage: React.FC = () => {
 
                 {/* KITCHEN / EXPEDITOR / SERVER: Checkbox (right) — each mode has its own state */}
                 {(leftCheck === "kitchen" || leftCheck === "expeditor" || leftCheck === "server") && (
-                  <div style={styles.checkboxCol} onClick={(e) => e.stopPropagation()}>
+                  <div style={styles.checkboxCol} onClick={(e) => { e.stopPropagation(); if (document.activeElement instanceof HTMLButtonElement) document.activeElement.blur(); }}>
                     <input
                       type="checkbox"
                       checked={checkState[`${leftCheck}:${section.fieldId}:${item.id}:${rowIdx}`] ?? item.loaded ?? false}
@@ -2514,7 +2577,7 @@ const BeoPrintPage: React.FC = () => {
 
                 {/* PACK-OUT: Editable equipment list (right) — per item, only on parent row */}
                 {leftCheck === "packout" && (
-                  <div style={styles.packOutCol} onClick={(e) => e.stopPropagation()}>
+                  <div style={styles.packOutCol} onClick={(e) => { e.stopPropagation(); if (document.activeElement instanceof HTMLButtonElement) document.activeElement.blur(); }}>
                     {rowIdx === 0 ? (
                       <textarea
                         placeholder="equipment..."
@@ -2558,7 +2621,7 @@ const BeoPrintPage: React.FC = () => {
                     ⚠️ ALLERGIES / DIETARY RESTRICTIONS: {allergies.toUpperCase()}
                   </div>
                 )}
-                <div className="beo-footer-block" style={{ marginTop: 24 }}>
+                <div className="beo-footer-block" style={{ marginTop: 12, breakInside: "avoid", pageBreakInside: "avoid", breakBefore: "avoid", pageBreakBefore: "avoid" }}>
                   <div style={{ border: "2px solid #333", borderRadius: 6, padding: "12px 20px", background: "#9ca3af" }}>
                     <div style={{ display: "flex", justifyContent: "center", alignItems: "center", flexWrap: "wrap", gap: 8, fontSize: 13, fontWeight: 600, color: "#111" }}>
                       <span>Client: {clientName || "—"}</span>
@@ -2582,10 +2645,12 @@ const BeoPrintPage: React.FC = () => {
         )))}
         {/* When packout/expeditor/server: append Server BEO 2nd page (beverage, hydration, paper, notes, timeline) so it appears in those checks */}
         {(leftCheck === "packout" || leftCheck === "expeditor" || leftCheck === "server") && (
-          <div style={{ pageBreakBefore: "always", marginTop: 24 }}>
+          <div style={{ pageBreakBefore: "always", marginTop: 12 }}>
             <ServerBeo2ndPageContent
               eventDate={eventDate}
               clientName={clientName}
+              contactName={contactName}
+              cityState={cityState}
               jobNumberDisplay={jobNumberDisplay}
               dispatchTime={dispatchTime}
               eventArrival={eventArrival}
@@ -2658,6 +2723,8 @@ const BeoPrintPage: React.FC = () => {
             <ServerBeo2ndPageContent
               eventDate={eventDate}
               clientName={clientName}
+              contactName={contactName}
+              cityState={cityState}
               jobNumberDisplay={jobNumberDisplay}
               dispatchTime={dispatchTime}
               eventArrival={eventArrival}

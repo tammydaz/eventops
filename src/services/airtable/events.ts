@@ -45,15 +45,17 @@ export const FIELD_IDS = {
   GUEST_COUNT: "fldjgqDUxVxaJ7Y9V",
   STATUS: "fldwdqfHaKXmqObE2",
 
-  // ── Venue & Address (per Omni field logic) ──
+  // ── Venue & Address (per BEO print guidelines) ──
   VENUE: "fldtCOxi4Axjfjt0V",                     // Main venue name (single line text)
-  VENUE_ADDRESS: "fldJsajSl1l6marzw",             // Venue street address
+  VENUE_ADDRESS: "fldJsajSl1l6marzw",            // Venue Address (street)
   VENUE_CITY: "fldNToCnV799eggiD",
   VENUE_STATE: "fldxCz5cPLwCetb0C",
-  VENUE_FULL_ADDRESS: "fld0oRsZp6YCUsOki",        // Venue Full Address (composite)
+  VENUE_ZIP: "fldWehIaLQd5sHDts",                 // Venue ZIP
+  VENUE_FULL_ADDRESS: "fld0oRsZp6YCUsOki",        // Venue Full Address (single line text)
   VENUE_NAME_PRINT: "fldbglrqpkwjFon2w",          // Formula: "VENUE: [Venue Name]" - READ ONLY
-  EVENT_LOCATION_FINAL_PRINT: "flddestyZNoX9sKGE", // Formula: Event Location (Final Print) - READ ONLY
-  PRINT_VENUE_ADDRESS: "fld0oRsZp6YCUsOki",       // Use Venue Full Address for print (or formula if exists)
+  VENUE_PRINT: "fldfQoT3yhCBXzHWT",               // VenuePrint formula: IF(VENUE,VENUE,"Residence")
+  PRINT_EVENT_ADDRESS: "fld01jca9w70MIZeb",       // Print – Event Address (formula, BEO canonical)
+  PRINT_VENUE_ADDRESS: "fld0oRsZp6YCUsOki",       // Alias for VENUE_FULL_ADDRESS (legacy)
 
   // ── Client ──
   CLIENT: "fldRYDTj6V7L1xRP3",                   // Linked record
@@ -180,7 +182,7 @@ export const FIELD_IDS = {
   DISPATCH_TIME: "fldbbHmaWqOBNUlJP",  // was wrong: flddmE3MvGNzCbt8K doesn't exist in Events
   EVENT_START_TIME: "fldDwDE87M9kFAIDn",  // duration (seconds) - was wrong ID
   EVENT_END_TIME: "fld7xeCnV751pxmWz",     // duration (seconds) - was wrong ID
-  FOODWERX_ARRIVAL: "fldMYjGf8dQPNiY4Y",
+  FOODWERX_ARRIVAL: "fld598p",  // FoodWerx Staff Arrival / FW Arrival Time
   VENUE_ARRIVAL_TIME: "fld807MPvraEV8QvN",
   // PARKING_LOAD_IN_NOTES deprecated — use LOAD_IN_NOTES (fldc75GFDDO1vv5rK)
 
@@ -489,6 +491,7 @@ const SAVE_WHITELIST = new Set([
   "fldJsajSl1l6marzw",   // VENUE_ADDRESS (venue street address)
   "fldNToCnV799eggiD",   // VENUE_CITY
   "fldxCz5cPLwCetb0C",   // VENUE_STATE
+  "fldWehIaLQd5sHDts",   // VENUE_ZIP
   "fldFAspB1ds9Yn0Kl",   // CLIENT_FIRST_NAME
   "fldeciZmsIY3c2T1v",   // CLIENT_LAST_NAME
   "fldT5lcdCL5ndh84D",   // CLIENT_EMAIL
@@ -505,7 +508,7 @@ const SAVE_WHITELIST = new Set([
   "fldDwDE87M9kFAIDn",   // EVENT_START_TIME
   "fld7xeCnV751pxmWz",   // EVENT_END_TIME
   "fld807MPvraEV8QvN",   // VENUE_ARRIVAL_TIME
-  "fldMYjGf8dQPNiY4Y",   // FOODWERX_ARRIVAL (Event Arrival Time)
+  "fld598p",   // FOODWERX_ARRIVAL (FoodWerx Staff Arrival / FW Arrival Time)
   "fldc75GFDDO1vv5rK",   // LOAD_IN_NOTES
   "fldCGIJmP74Vk8ViQ",   // TIMELINE
   "fldkmY1Y9b5ToJFsg",   // PARKING_NOTES
@@ -539,6 +542,7 @@ const SAVE_WHITELIST = new Set([
   "fldKlKX0HEGX3NTcR",   // COFFEE_SERVICE_NEEDED
   "fldCoffeeMugTypeTODO",   // COFFEE_MUG_TYPE
   "fldWkHPhynjxyecq7",   // STAFF
+  "fldN2W8ITqFotKUF4",   // CAPTAIN (FW staff from invoice: "2 Server, 1 Bartender")
   "fld4QUBWxoSu6o29l",   // SERVERS
   "fldox9emNqGoemhz0",   // UTILITY
   "flddTPAvICJSztxrj",   // STATION_CREW
@@ -590,6 +594,9 @@ const SAVE_WHITELIST = new Set([
   "fldTApRuNzh7uNWi2",   // SERVICEWARE_SOURCE
   "fldorT4tCcxnBXxgj",   // SERVICEWARE_PAPER_TYPE
   // CARAFES_PER_TABLE: add real field ID here and to SAVE_WHITELIST when created in Airtable
+  "fld8C7fjOqVtYmnCi",   // EVENT_DOCUMENTS (attachments)
+  "fld5cENFzJ2DkL3yk",   // INVOICE_PDF (attachments)
+  "fldi3Q1KcYTMoDDxr",   // GENERATED_BEO_PDF (attachments)
   "fldC1hp7tQH1AXLpr",   // BBS
   "fldm4fQK7mV5WuPZg",   // LARGE_PLATES
   "fld7Jk0HF0P1uqVmk",   // SALAD_PLATES
@@ -680,8 +687,10 @@ export const updateEventMultiple = async (
       blockedFields.push(key);
       continue;
     }
-    // Skip attachment fields — they need special handling and can cause PATCH to fail
-    if (Array.isArray(value) && value.length > 0 && typeof value[0] === "object" && value[0] !== null && "url" in (value[0] as object)) {
+    // Skip non-whitelisted attachment-like arrays (attachment fields are whitelisted for remove/update)
+    const isAttachmentArray = Array.isArray(value) && value.length > 0 && typeof value[0] === "object" && value[0] !== null && "url" in (value[0] as object);
+    const isAttachmentField = key === FIELD_IDS.EVENT_DOCUMENTS || key === FIELD_IDS.INVOICE_PDF || key === FIELD_IDS.GENERATED_BEO_PDF;
+    if (isAttachmentArray && !isAttachmentField) {
       blockedFields.push(key);
       continue;
     }
@@ -725,12 +734,28 @@ export const updateEventMultiple = async (
   return { success: true };
 };
 
+/** Prepare fields for create: convert dateTime fields (seconds) → ISO strings */
+function prepareFieldsForCreate(fields: Record<string, unknown>): Record<string, unknown> {
+  const eventDate = asString(fields[FIELD_IDS.EVENT_DATE]) || "";
+  const result: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(fields)) {
+    if (value === undefined) continue;
+    if (DATE_TIME_FIELD_IDS.has(key) && typeof value === "number" && !isNaN(value)) {
+      result[key] = secondsAndDateToIso(value, eventDate);
+    } else {
+      result[key] = value;
+    }
+  }
+  return result;
+}
+
 export const createEvent = async (
   fields: Record<string, unknown>
 ): Promise<{ id: string; fields: Record<string, unknown> } | AirtableErrorResult> => {
   const table = getEventsTable();
   if (typeof table !== "string") return table;
 
+  const prepared = prepareFieldsForCreate(fields);
   const params = getReturnFieldsParams();
   const data = await airtableFetch<AirtableListResponse<Record<string, unknown>>>(
     `/${table}?${params.toString()}`,
@@ -739,7 +764,7 @@ export const createEvent = async (
       body: JSON.stringify({
         records: [
           {
-            fields,
+            fields: prepared,
           },
         ],
       }),
@@ -754,6 +779,18 @@ export const createEvent = async (
   }
 
   return { id: record.id, fields: record.fields ?? {} };
+};
+
+export const deleteEvent = async (recordId: string): Promise<{ success: true } | AirtableErrorResult> => {
+  const table = getEventsTable();
+  if (typeof table !== "string") return table;
+
+  const data = await airtableFetch<{ deleted: boolean }>(`/${table}/${recordId}`, {
+    method: "DELETE",
+  });
+
+  if (isErrorResult(data)) return data;
+  return { success: true };
 };
 
 export const updateEventField = async (

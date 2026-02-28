@@ -1176,7 +1176,10 @@ const KitchenBEOPrintPage: React.FC = () => {
   const serviceType: "full-service" | "delivery" = isDelivery ? "delivery" : "full-service";
 
   // Build BEO data from real event — use formula/print fields when available, fallback to source fields
-  const venueAddress = asString(selectedEventData?.[FIELD_IDS.PRINT_VENUE_ADDRESS]) || asString(selectedEventData?.[FIELD_IDS.VENUE_ADDRESS]);
+  const venueAddress =
+    asString(selectedEventData?.[FIELD_IDS.PRINT_EVENT_ADDRESS]) ||
+    asString(selectedEventData?.[FIELD_IDS.VENUE_FULL_ADDRESS]) ||
+    asString(selectedEventData?.[FIELD_IDS.VENUE_ADDRESS]);
   const clientAddress = [asString(selectedEventData?.[FIELD_IDS.CLIENT_STREET]), asString(selectedEventData?.[FIELD_IDS.CLIENT_CITY]), asSingleSelectName(selectedEventData?.[FIELD_IDS.CLIENT_STATE]), asString(selectedEventData?.[FIELD_IDS.CLIENT_ZIP])].filter(Boolean).join(", ");
   const venueCityState = [asString(selectedEventData?.[FIELD_IDS.VENUE_CITY]), asSingleSelectName(selectedEventData?.[FIELD_IDS.VENUE_STATE])].filter(Boolean).join(", ");
   const clientCityState = [asString(selectedEventData?.[FIELD_IDS.CLIENT_CITY]), asSingleSelectName(selectedEventData?.[FIELD_IDS.CLIENT_STATE]), asString(selectedEventData?.[FIELD_IDS.CLIENT_ZIP])].filter(Boolean).join(", ");

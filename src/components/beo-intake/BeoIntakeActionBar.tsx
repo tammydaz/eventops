@@ -7,7 +7,7 @@ type BeoIntakeActionBarProps = {
 };
 
 export const BeoIntakeActionBar = ({ eventId }: BeoIntakeActionBarProps) => {
-  const { setFields, saveError: storeSaveError, setSaveError: clearStoreError } = useEventStore();
+  const { setFields, deleteEvent, saveError: storeSaveError, setSaveError: clearStoreError } = useEventStore();
   const [isSaving, setIsSaving] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -87,6 +87,18 @@ export const BeoIntakeActionBar = ({ eventId }: BeoIntakeActionBarProps) => {
     window.location.href = "/";
   };
 
+  const handleDelete = async () => {
+    if (!eventId) return;
+    if (!window.confirm("Delete this event? This cannot be undone.")) return;
+    const ok = await deleteEvent(eventId);
+    if (ok) {
+      window.location.href = "/";
+    } else {
+      const err = useEventStore.getState().saveError;
+      setSaveError(err ?? "Failed to delete");
+    }
+  };
+
   if (!eventId) return null;
 
   return (
@@ -149,6 +161,18 @@ export const BeoIntakeActionBar = ({ eventId }: BeoIntakeActionBarProps) => {
           onClick={handleReturnToDashboard}
         >
           Return to Dashboard
+        </button>
+
+        <button
+          style={{
+            ...styles.button,
+            background: "transparent",
+            color: "#ef4444",
+            border: "2px solid #ef4444",
+          }}
+          onClick={handleDelete}
+        >
+          Delete Event
         </button>
       </div>
     </div>

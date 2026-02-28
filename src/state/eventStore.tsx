@@ -3,6 +3,7 @@ import {
   loadEvents as fetchEventsList,
   loadEvent as fetchEventById,
   updateEventMultiple,
+  deleteEvent as deleteEventApi,
   filterToEditableOnly,
   FIELD_IDS,
   type EventListItem,
@@ -15,7 +16,7 @@ export type EventStore = {
   events: EventListItem[];
   eventsLoading: boolean;
   eventsError: string | null;
-  loadEvents: () => Promise<void>;
+  loadEvents: () => Promise<EventListItem[] | null>;
 
   selectedEventId: string | null;
   setSelectedEventId: (id: string | null) => void;
@@ -29,6 +30,7 @@ export type EventStore = {
   updateEvent: (eventId: string, patch: Fields) => Promise<boolean>;
   setField: (eventId: string, fieldId: string, value: unknown) => Promise<boolean>;
   setFields: (eventId: string, patch: Fields) => Promise<boolean>;
+  deleteEvent: (eventId: string) => Promise<boolean>;
 
   saveError: string | null;
   setSaveError: (error: string | null) => void;
@@ -53,9 +55,10 @@ export const useEventStore = create<EventStore>((set, get) => ({
         eventsLoading: false,
         eventsError: result.message ?? "Failed to load events",
       });
-      return;
+      return null;
     }
     set({ events: result, eventsLoading: false, eventsError: null });
+    return result;
   },
 
   selectedEventId: null,
@@ -118,6 +121,21 @@ export const useEventStore = create<EventStore>((set, get) => ({
 
   setFields: async (eventId, patch) => {
     return get().updateEvent(eventId, patch);
+  },
+
+  deleteEvent: async (eventId) => {
+    const result = await deleteEventApi(eventId);
+    if (isErrorResult(result)) {
+      set({ saveError: result.message ?? "Failed to delete event" });
+      return false;
+    }
+    set({ saveError: null });
+    const { selectedEventId, events } = get();
+    if (selectedEventId === eventId) {
+      set({ selectedEventId: null, selectedEventData: emptyFields, eventData: emptyFields });
+    }
+    set({ events: events.filter((e) => e.id !== eventId) });
+    return true;
   },
 
   saveError: null,
