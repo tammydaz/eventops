@@ -182,7 +182,7 @@ export const FIELD_IDS = {
   DISPATCH_TIME: "fldbbHmaWqOBNUlJP",  // was wrong: flddmE3MvGNzCbt8K doesn't exist in Events
   EVENT_START_TIME: "fldDwDE87M9kFAIDn",  // duration (seconds) - was wrong ID
   EVENT_END_TIME: "fld7xeCnV751pxmWz",     // duration (seconds) - was wrong ID
-  FOODWERX_ARRIVAL: "fld598p",  // FoodWerx Staff Arrival / FW Arrival Time
+  FOODWERX_ARRIVAL: "fldFoodwerxArrivalResolved",  // Resolved at runtime via getFoodwerxArrivalFieldId(); fld598p was invalid
   VENUE_ARRIVAL_TIME: "fld807MPvraEV8QvN",
   // PARKING_LOAD_IN_NOTES deprecated — use LOAD_IN_NOTES (fldc75GFDDO1vv5rK)
 
@@ -313,6 +313,36 @@ async function getCreatedTimeFieldId(): Promise<string | null> {
   return cachedCreatedTimeFieldId;
 }
 
+let cachedFoodwerxArrivalFieldId: string | null | undefined = undefined;
+
+/** Resolve "FoodWerx Staff Arrival" / "FW Arrival Time" field ID from Airtable Meta API by name (cached). */
+export async function getFoodwerxArrivalFieldId(): Promise<string | null> {
+  if (cachedFoodwerxArrivalFieldId !== undefined) return cachedFoodwerxArrivalFieldId;
+  const tableKey = getEventsTable();
+  if (typeof tableKey !== "string") {
+    cachedFoodwerxArrivalFieldId = null;
+    return null;
+  }
+  const data = await airtableMetaFetch<AirtableTablesResponse>("/tables");
+  if (isErrorResult(data)) {
+    cachedFoodwerxArrivalFieldId = null;
+    return null;
+  }
+  const table = data.tables.find((t) => t.id === tableKey || t.name === tableKey);
+  const arrivalFields = table?.fields.filter(
+    (f) => /foodwerx|fw\s*arrival|staff\s*arrival/i.test(f.name) && (f.type === "dateTime" || f.type === "date")
+  ) ?? [];
+  const field = arrivalFields.find((f) => /arrival/i.test(f.name)) ?? arrivalFields[0];
+  cachedFoodwerxArrivalFieldId = field?.id ?? null;
+  if (cachedFoodwerxArrivalFieldId) {
+    additionalAllowedFieldIds.add(cachedFoodwerxArrivalFieldId);
+    console.log("✅ FoodWerx Arrival field resolved:", cachedFoodwerxArrivalFieldId, field?.name);
+  } else {
+    console.warn("⚠️ FoodWerx Staff Arrival field not found. Run logEventsTableFieldsForTimeline() in console to find the correct field ID.");
+  }
+  return cachedFoodwerxArrivalFieldId;
+}
+
 let cachedBarServiceFieldId: string | null | undefined = undefined;
 
 /** Resolve "Bar Service Needed" field ID from Airtable Meta API by name (cached). */
@@ -345,7 +375,9 @@ export async function getBarServiceFieldId(): Promise<string | null> {
 }
 
 /** Field IDs resolved at runtime (e.g. Bar Service by name) — allowed in PATCH */
-const additionalAllowedFieldIds = new Set<string>();
+const additionalAllowedFieldIds = new Set<string>([
+  FIELD_IDS.FOODWERX_ARRIVAL,  // Placeholder; updateEventMultiple/createEvent replace with resolved ID
+]);
 
 export const loadEvent = async (recordId: string): Promise<EventRecordData | AirtableErrorResult> => {
   const table = getEventsTable();
@@ -358,9 +390,16 @@ export const loadEvent = async (recordId: string): Promise<EventRecordData | Air
 
   if (isErrorResult(data)) return data;
 
+  const fields = data.fields ?? {};
+  // Alias resolved FoodWerx Arrival field so UI can use FIELD_IDS.FOODWERX_ARRIVAL
+  const foodwerxArrivalId = await getFoodwerxArrivalFieldId();
+  if (foodwerxArrivalId && fields[foodwerxArrivalId] !== undefined) {
+    fields[FIELD_IDS.FOODWERX_ARRIVAL] = fields[foodwerxArrivalId];
+  }
+
   return {
     id: data.id,
-    fields: data.fields ?? {},
+    fields,
   };
 };
 
@@ -453,6 +492,29 @@ export const loadSingleSelectOptions = async (
   return optionsMap;
 };
 
+/** Call from browser console to find FoodWerx Arrival / timeline field IDs */
+export async function logEventsTableFieldsForTimeline(): Promise<void> {
+  const tableKey = getEventsTable();
+  if (typeof tableKey !== "string") {
+    console.error("No Events table configured");
+    return;
+  }
+  const data = await airtableMetaFetch<AirtableTablesResponse>("/tables");
+  if (isErrorResult(data)) {
+    console.error("Failed to fetch schema:", data);
+    return;
+  }
+  const table = data.tables.find((t) => t.id === tableKey || t.name === tableKey);
+  if (!table) {
+    console.error("Events table not found. Tables:", data.tables.map((t) => ({ id: t.id, name: t.name })));
+    return;
+  }
+  const timelineFields = table.fields.filter(
+    (f) => /arrival|dispatch|timeline|foodwerx|staff|fw/i.test(f.name)
+  );
+  console.log("📋 Timeline/arrival fields (use 'id' for FOODWERX_ARRIVAL):", timelineFields.map((f) => ({ id: f.id, name: f.name, type: f.type })));
+}
+
 /** Call from browser console to find Bar Service field ID: window.__logBarServiceFieldId?.() */
 export async function logEventsTableFieldsForBarService(): Promise<void> {
   const tableKey = getEventsTable();
@@ -508,7 +570,7 @@ const SAVE_WHITELIST = new Set([
   "fldDwDE87M9kFAIDn",   // EVENT_START_TIME
   "fld7xeCnV751pxmWz",   // EVENT_END_TIME
   "fld807MPvraEV8QvN",   // VENUE_ARRIVAL_TIME
-  "fld598p",   // FOODWERX_ARRIVAL (FoodWerx Staff Arrival / FW Arrival Time)
+  // FOODWERX_ARRIVAL resolved dynamically via getFoodwerxArrivalFieldId() — not in whitelist
   "fldc75GFDDO1vv5rK",   // LOAD_IN_NOTES
   "fldCGIJmP74Vk8ViQ",   // TIMELINE
   "fldkmY1Y9b5ToJFsg",   // PARKING_NOTES
@@ -634,7 +696,6 @@ export function filterToEditableOnly(fields: Record<string, unknown>): Record<st
 
 // dateTime fields: convert seconds → ISO. (Event Start/End are duration—send seconds as-is.)
 const DATE_TIME_FIELD_IDS = new Set([
-  FIELD_IDS.FOODWERX_ARRIVAL,
   FIELD_IDS.DISPATCH_TIME,
   FIELD_IDS.VENUE_ARRIVAL_TIME,
 ]);
@@ -674,11 +735,22 @@ export const updateEventMultiple = async (
   const table = getEventsTable();
   if (typeof table !== "string") return table;
 
+  // Resolve FOODWERX_ARRIVAL: replace placeholder with real field ID (fld598p was invalid)
+  const obj = { ...updatesObject };
+  if (obj[FIELD_IDS.FOODWERX_ARRIVAL] !== undefined) {
+    const resolvedId = await getFoodwerxArrivalFieldId();
+    if (resolvedId) {
+      obj[resolvedId] = obj[FIELD_IDS.FOODWERX_ARRIVAL];
+    }
+    delete obj[FIELD_IDS.FOODWERX_ARRIVAL];
+  }
+
   const filteredFields: Record<string, unknown> = {};
   const blockedFields: string[] = [];
-  const eventDate = asString(updatesObject[FIELD_IDS.EVENT_DATE]) || "";
+  const eventDate = asString(obj[FIELD_IDS.EVENT_DATE]) || "";
+  const foodwerxArrivalFieldId = await getFoodwerxArrivalFieldId();
 
-  for (const [key, value] of Object.entries(updatesObject)) {
+  for (const [key, value] of Object.entries(obj)) {
     if (STRIP_FIELD_IDS.has(key)) {
       blockedFields.push(key);
       continue;
@@ -696,8 +768,9 @@ export const updateEventMultiple = async (
     }
     if (value === undefined) continue;
 
-    // dateTime fields: convert seconds (number) → ISO string for Airtable
-    if (DATE_TIME_FIELD_IDS.has(key) && typeof value === "number" && !isNaN(value)) {
+    // dateTime fields: convert seconds (number) → ISO string for Airtable (incl. resolved FOODWERX_ARRIVAL)
+    const isDateTimeField = DATE_TIME_FIELD_IDS.has(key) || (foodwerxArrivalFieldId && key === foodwerxArrivalFieldId);
+    if (isDateTimeField && typeof value === "number" && !isNaN(value)) {
       filteredFields[key] = secondsAndDateToIso(value, eventDate);
     } else if (SINGLE_SELECT_FIELD_IDS.has(key) && (value === null || value === "")) {
       filteredFields[key] = null;
@@ -734,13 +807,25 @@ export const updateEventMultiple = async (
   return { success: true };
 };
 
-/** Prepare fields for create: convert dateTime fields (seconds) → ISO strings */
-function prepareFieldsForCreate(fields: Record<string, unknown>): Record<string, unknown> {
-  const eventDate = asString(fields[FIELD_IDS.EVENT_DATE]) || "";
+/** Prepare fields for create: resolve FOODWERX_ARRIVAL, convert dateTime fields (seconds) → ISO strings */
+async function prepareFieldsForCreate(fields: Record<string, unknown>): Promise<Record<string, unknown>> {
+  const obj = { ...fields };
+  // Resolve FOODWERX_ARRIVAL: replace placeholder with real field ID (fld598p was invalid)
+  if (obj[FIELD_IDS.FOODWERX_ARRIVAL] !== undefined) {
+    const resolvedId = await getFoodwerxArrivalFieldId();
+    if (resolvedId) {
+      obj[resolvedId] = obj[FIELD_IDS.FOODWERX_ARRIVAL];
+    }
+    delete obj[FIELD_IDS.FOODWERX_ARRIVAL];
+  }
+
+  const eventDate = asString(obj[FIELD_IDS.EVENT_DATE]) || "";
+  const foodwerxArrivalFieldId = await getFoodwerxArrivalFieldId();
   const result: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(fields)) {
+  for (const [key, value] of Object.entries(obj)) {
     if (value === undefined) continue;
-    if (DATE_TIME_FIELD_IDS.has(key) && typeof value === "number" && !isNaN(value)) {
+    const isDateTimeField = DATE_TIME_FIELD_IDS.has(key) || (foodwerxArrivalFieldId && key === foodwerxArrivalFieldId);
+    if (isDateTimeField && typeof value === "number" && !isNaN(value)) {
       result[key] = secondsAndDateToIso(value, eventDate);
     } else {
       result[key] = value;
@@ -755,7 +840,7 @@ export const createEvent = async (
   const table = getEventsTable();
   if (typeof table !== "string") return table;
 
-  const prepared = prepareFieldsForCreate(fields);
+  const prepared = await prepareFieldsForCreate(fields);
   const params = getReturnFieldsParams();
   const data = await airtableFetch<AirtableListResponse<Record<string, unknown>>>(
     `/${table}?${params.toString()}`,
