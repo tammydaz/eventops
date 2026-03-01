@@ -14,10 +14,53 @@ export default function LoginPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [needsPasswordSetup, setNeedsPasswordSetup] = useState(false);
+  const [hasPassword, setHasPassword] = useState(false);
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
 
   const base = import.meta.env.VITE_APP_URL || "";
+
+  const handleEmailSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+    if (!email.trim()) {
+      setError("Email required");
+      return;
+    }
+    setLoading(true);
+    try {
+      const res = await fetch(`${base}/api/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: email.trim(), password: "" }),
+      });
+      let data: { error?: string; needsPasswordSetup?: boolean; user?: unknown; token?: string };
+      try {
+        data = await res.json();
+      } catch {
+        setError(res.status === 404 ? "Login API not found. Check deployment." : `Server error (${res.status}). Try again.`);
+        return;
+      }
+      if (data.needsPasswordSetup) {
+        setNeedsPasswordSetup(true);
+        return;
+      }
+      if (!res.ok) {
+        if (data.error === "Password required") {
+          setHasPassword(true);
+          return;
+        }
+        setError(data.error || "Login failed");
+        return;
+      }
+      setHasPassword(true);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "";
+      setError(msg?.includes("fetch") ? "Network error. Try again." : (msg || "Network error. Try again."));
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -110,10 +153,15 @@ export default function LoginPage() {
 
   const handleBack = () => {
     setNeedsPasswordSetup(false);
+    setHasPassword(false);
     setNewPassword("");
     setConfirmPassword("");
     setError("");
   };
+
+  const showSetPassword = needsPasswordSetup;
+  const showPasswordField = hasPassword;
+  const showEmailOnly = !showSetPassword && !showPasswordField;
 
   return (
     <div className="login-page">
@@ -124,11 +172,11 @@ export default function LoginPage() {
           </div>
           <h1>FOODWERX EVENTOPS</h1>
           <p className="login-subtitle">
-            {needsPasswordSetup ? "Set your password" : "Sign in with your email"}
+            {showSetPassword ? "Set your password" : showPasswordField ? "Enter your password" : "Sign in with your email"}
           </p>
         </div>
 
-        {needsPasswordSetup ? (
+        {showSetPassword ? (
           <form onSubmit={handleSetPasswordSubmit} className="login-form">
             <div className="login-field">
               <label>Email</label>
@@ -166,19 +214,11 @@ export default function LoginPage() {
               Back
             </button>
           </form>
-        ) : (
+        ) : showPasswordField ? (
           <form onSubmit={handleLoginSubmit} className="login-form">
             <div className="login-field">
-              <label htmlFor="email">Email</label>
-              <input
-                id="email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="you@foodwerx.com"
-                className="login-input"
-                autoComplete="email"
-              />
+              <label>Email</label>
+              <div className="login-email-readonly">{email}</div>
             </div>
             <div className="login-field">
               <label htmlFor="password">Password</label>
@@ -195,6 +235,28 @@ export default function LoginPage() {
             {error && <p className="login-error">{error}</p>}
             <button type="submit" className="login-btn" disabled={loading}>
               {loading ? "Signing in…" : "Sign In"}
+            </button>
+            <button type="button" className="login-back" onClick={handleBack}>
+              Back
+            </button>
+          </form>
+        ) : (
+          <form onSubmit={handleEmailSubmit} className="login-form">
+            <div className="login-field">
+              <label htmlFor="email">Email</label>
+              <input
+                id="email"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="you@foodwerx.com"
+                className="login-input"
+                autoComplete="email"
+              />
+            </div>
+            {error && <p className="login-error">{error}</p>}
+            <button type="submit" className="login-btn" disabled={loading}>
+              {loading ? "Checking…" : "Continue"}
             </button>
           </form>
         )}
