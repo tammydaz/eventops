@@ -2,7 +2,8 @@ import React, { useState, useEffect } from "react";
 import { useEventStore } from "../state/eventStore";
 import { FIELD_IDS } from "../services/airtable/events";
 import { asString, asSingleSelectName, asBoolean, asStringArray } from "../services/airtable/selectors";
-import { calculateSpec } from "../services/airtable/specEngine";
+import { useSpecsForEvent } from "../hooks/useSpecsForEvent";
+import { SpecBlock } from "../components/beo/SpecBlock";
 import { EventSelector } from "../components/EventSelector";
 import { secondsTo12HourString } from "../utils/timeHelpers";
 import { sanitizeForHeader } from "../utils/httpHeaders";
@@ -21,6 +22,7 @@ type MenuItem = {
   breadVessel?: string;
   groupHeader?: string;
   isCallout?: boolean;
+  specData?: import("../hooks/useSpecsForEvent").SpecItemData;
 };
 
 type MenuSection = {
@@ -728,7 +730,13 @@ const renderMenuItem = (item: MenuItem, idx: number) => {
   return (
     <React.Fragment key={idx}>
       <div style={print.itemRow}>
-        <div style={print.itemQty}>{item.qty}</div>
+        <div style={print.itemQty}>
+          {item.specData ? (
+            <SpecBlock spec={item.specData} variant="full" showVesselQuantities />
+          ) : (
+            item.qty
+          )}
+        </div>
         <div style={print.itemName}>
           {item.name}
           {item.customSpec && (
@@ -1018,6 +1026,7 @@ const KitchenBEOPrintPage: React.FC = () => {
   const { selectedEventId, selectedEventData, loadEvents, loadEventData, selectEvent } = useEventStore();
   const [loading, setLoading] = useState(true);
   const [menuItemData, setMenuItemData] = useState<Record<string, { name: string; childIds: string[] }>>({});
+  const { specMap } = useSpecsForEvent(selectedEventId);
 
   useEffect(() => {
     loadEvents().then(() => setLoading(false));
@@ -1144,18 +1153,15 @@ const KitchenBEOPrintPage: React.FC = () => {
         const childIds = data?.childIds ?? [];
         const rows = expandItemToRows(parentName, childIds, menuItemData);
         if (rows.length === 0) continue;
-        const spec = calculateSpec({
-          itemId: id,
-          itemName: parentName,
-          section: config.title,
-          guestCount,
-        });
+        const specData = specMap[id];
+        const spec = specData ? specData.display : "—";
         items.push({
           qty: spec,
           name: parentName,
           subItems: rows.length > 1
             ? rows.slice(1).map((r) => ({ text: r.lineName }))
             : undefined,
+          specData,
         });
       }
       if (items.length > 0) {

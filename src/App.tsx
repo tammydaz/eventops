@@ -3,6 +3,7 @@ import { useLocation } from "react-router-dom";
 import { EventSelector } from "./components/intake/EventSelector";
 import { Router } from "./router";
 import { useEventStore } from "./state/eventStore";
+import { AuthGuard } from "./components/AuthGuard";
 
 function App() {
   const { selectedEventId, loadEvents, saveError, selectEvent } = useEventStore();
@@ -34,12 +35,15 @@ function App() {
   }, [pathname, selectedEventId, selectEvent]);
 
   if (isPrintTest || isHome || isQuickIntake || isWatchtower || isPapaChulo || isFOH || isDashboardOld || isBeoIntake || isBeoPrint || isSeedDemo || isInvoiceIntake) {
-    console.log("APP RENDERED");
-    return <Router selectedEventId={selectedEventId} />;
+    return (
+      <AuthGuard>
+        <Router selectedEventId={selectedEventId} />
+      </AuthGuard>
+    );
   }
 
-  console.log("APP RENDERED");
   return (
+    <AuthGuard>
     <div className="min-h-screen text-gray-100">
       <div className="fwx-shell">
         {saveError ? (
@@ -65,6 +69,7 @@ function App() {
         <Router selectedEventId={selectedEventId} />
       </div>
     </div>
+    </AuthGuard>
   );
 }
 

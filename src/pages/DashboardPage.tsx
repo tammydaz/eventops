@@ -3,6 +3,8 @@ import { Link, useNavigate } from "react-router-dom";
 import "./DashboardPage.css";
 import type { ViewMode, HealthStatus } from "../components/dashboard/EventCard";
 import { useEventStore } from "../state/eventStore";
+import { useAuthStore } from "../state/authStore";
+import { canAccessRoute, ROLE_DEPARTMENTS } from "../lib/auth";
 import type { EventListItem } from "../services/airtable/events";
 
 /* ═══════════════════════════════════════════
@@ -81,6 +83,7 @@ const DEPARTMENTS = [
   { id: "kitchen",   label: "Kitchen",                icon: "🍳", cls: "bubble-1", hasSubmenu: true },
   { id: "logistics", label: "Delivery/Fleet Command Center", icon: "🚚", cls: "bubble-5", hasSubmenu: true },
   { id: "intake",    label: "CENTRAL COMMAND CENTER", icon: "📝", cls: "bubble-2", hasSubmenu: true },
+  { id: "flair",     label: "Flair/Equipment Command Center", icon: "✨", cls: "bubble-3", hasSubmenu: true },
 ];
 
 /* ═══════════════════════════════════════════
@@ -90,12 +93,18 @@ const todayStr = () => new Date().toISOString().slice(0, 10);
 
 export default function DashboardPage() {
   const navigate = useNavigate();
-  const { events: rawEvents, loadEvents, selectEvent } = useEventStore();
-  const [activeTab, setActiveTab] = useState("Live Events");
+  const { user, logout } = useAuthStore();
+  const { events: rawEvents, loadEvents, selectEvent, eventsLoading, eventsError } = useEventStore();
+  const role = user?.role ?? "ops_admin";
+  const allowedDepts = ROLE_DEPARTMENTS[role] ?? [];
+  const visibleDepartments = DEPARTMENTS.filter((d) => allowedDepts.includes(d.id));
+  const visibleNav = NAV.filter((item) => item.href.startsWith("#") || canAccessRoute(role, item.href));
+  const [activeTab, setActiveTab] = useState("Upcoming");
   const viewMode: ViewMode = "owner";
   const [intakeOpen, setIntakeOpen] = useState(false);
   const [kitchenOpen, setKitchenOpen] = useState(false);
   const [logisticsOpen, setLogisticsOpen] = useState(false);
+  const [flairOpen, setFlairOpen] = useState(false);
   const [vaultOpen, setVaultOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [addEventOpen, setAddEventOpen] = useState(false);
@@ -171,7 +180,7 @@ export default function DashboardPage() {
         </div>
 
         <ul className="dp-nav">
-          {NAV.map((item) => (
+          {visibleNav.map((item) => (
             <li key={item.label}>
               <Link
                 to={item.href}
@@ -184,6 +193,14 @@ export default function DashboardPage() {
           ))}
         </ul>
 
+        {user && (
+          <div className="dp-user-section">
+            <span className="dp-user-role">{user.name}</span>
+            <button type="button" onClick={() => { logout(); window.location.href = "/login"; }} className="dp-signout">
+              Sign out
+            </button>
+          </div>
+        )}
       </aside>
 
       {/* ═══ MAIN AREA ═══ */}
@@ -220,6 +237,8 @@ export default function DashboardPage() {
           <div className="dp-header-title">FoodWerx EventOps</div>
           <div className="dp-header-right">
             <div className="dp-notif" title="Notifications" />
+            <div className="dp-header-right-inner">
+            {(canAccessRoute(role, "/quick-intake") || canAccessRoute(role, "/invoice-intake")) && (
             <div className="dp-add-event-wrap" ref={addEventRef}>
               <button
                 type="button"
@@ -232,24 +251,33 @@ export default function DashboardPage() {
               </button>
               {addEventOpen && (
                 <div className="dp-add-event-dropdown">
-                  <Link
-                    to="/quick-intake"
-                    className="dp-add-event-item"
-                    onClick={() => setAddEventOpen(false)}
-                  >
-                    New Event (Quick Intake)
-                  </Link>
-                  <Link
-                    to="/invoice-intake"
-                    className="dp-add-event-item"
-                    onClick={() => setAddEventOpen(false)}
-                  >
-                    Upload Invoice PDF
-                  </Link>
+                  {canAccessRoute(role, "/quick-intake") && (
+                    <Link
+                      to="/quick-intake"
+                      className="dp-add-event-item"
+                      onClick={() => setAddEventOpen(false)}
+                    >
+                      New Event (Quick Intake)
+                    </Link>
+                  )}
+                  {canAccessRoute(role, "/invoice-intake") && (
+                    <Link
+                      to="/invoice-intake"
+                      className="dp-add-event-item"
+                      onClick={() => setAddEventOpen(false)}
+                    >
+                      Upload Invoice PDF
+                    </Link>
+                  )}
                 </div>
               )}
             </div>
+            )}
+            {user && (
+              <span className="dp-user-badge">{user.name}</span>
+            )}
             <div className="dp-user">FWX</div>
+            </div>
           </div>
         </header>
 
@@ -274,11 +302,35 @@ export default function DashboardPage() {
 
         {/* ── Events Grid ── */}
         <div className="dp-events-area">
-          <div className="dp-events-grid">
-            {events.map((evt) => (
-              <PremiumCard key={evt.id} event={evt} viewMode={viewMode} onSelect={() => handleSelectEvent(evt.id)} />
-            ))}
-          </div>
+          {eventsError && (
+            <div className="dp-events-error">
+              <span>{eventsError}</span>
+              <button type="button" className="dp-events-retry" onClick={() => loadEvents()}>
+                Retry
+              </button>
+            </div>
+          )}
+          {eventsLoading && (
+            <div className="dp-events-loading">Loading events…</div>
+          )}
+          {!eventsLoading && !eventsError && (
+            <div className="dp-events-grid">
+              {events.length === 0 ? (
+                <div className="dp-events-empty">
+                  <p>No events in &quot;{activeTab}&quot;</p>
+                  <p className="dp-events-empty-hint">
+                    {activeTab === "Live Events" && "Try the Upcoming tab, or add an event."}
+                    {activeTab === "Upcoming" && "Add an event via Quick Intake or Upload Invoice."}
+                    {(activeTab === "Completed" || activeTab === "Archive") && "Past events will appear here."}
+                  </p>
+                </div>
+              ) : (
+                events.map((evt) => (
+                  <PremiumCard key={evt.id} event={evt} viewMode={viewMode} onSelect={() => handleSelectEvent(evt.id)} />
+                ))
+              )}
+            </div>
+          )}
 
           {/* ── Department Command Ring ── */}
           <section
@@ -288,6 +340,7 @@ export default function DashboardPage() {
               setIntakeOpen(false);
               setKitchenOpen(false);
               setLogisticsOpen(false);
+              setFlairOpen(false);
             }}
           >
             {/* Diamond: Ops Chief */}
@@ -314,10 +367,11 @@ export default function DashboardPage() {
             <h2 className="dp-dept-title">Department Command Ring</h2>
 
             <div className="dp-dept-grid">
-              {DEPARTMENTS.map((dept) => {
+              {visibleDepartments.map((dept) => {
                 const isIntake = dept.id === "intake";
                 const isKitchen = dept.id === "kitchen";
                 const isLogistics = dept.id === "logistics";
+                const isFlair = dept.id === "flair";
                 const isVault = false;
                 return (
                   <div key={dept.id} className="dp-dept-wrap">
@@ -330,6 +384,7 @@ export default function DashboardPage() {
                         if (isIntake) setIntakeOpen(!intakeOpen);
                         if (isKitchen) setKitchenOpen(!kitchenOpen);
                         if (isLogistics) setLogisticsOpen(!logisticsOpen);
+                        if (isFlair) setFlairOpen(!flairOpen);
                         if (isVault) setVaultOpen(!vaultOpen);
                       }}
                       onKeyDown={(e) => {
@@ -337,6 +392,7 @@ export default function DashboardPage() {
                           if (isIntake) setIntakeOpen(!intakeOpen);
                           if (isKitchen) setKitchenOpen(!kitchenOpen);
                           if (isLogistics) setLogisticsOpen(!logisticsOpen);
+                          if (isFlair) setFlairOpen(!flairOpen);
                           if (isVault) setVaultOpen(!vaultOpen);
                         }
                       }}
@@ -376,6 +432,16 @@ export default function DashboardPage() {
                         <div className="dp-submenu-item">Rentals</div>
                         <div className="dp-submenu-item">Ops Vault</div>
                         <a href="/invoice-intake" className="dp-submenu-item">Upload Invoice</a>
+                      </div>
+                    )}
+
+                    {/* Flair/Equipment submenu */}
+                    {isFlair && flairOpen && (
+                      <div className="dp-submenu">
+                        <a href="/beo-intake" className="dp-submenu-item">📋 Open Event</a>
+                        <div className="dp-submenu-item">✨ Flair Inventory</div>
+                        <div className="dp-submenu-item">🔧 Equipment Tracking</div>
+                        <div className="dp-submenu-item">📦 Pack-Out</div>
                       </div>
                     )}
                   </div>

@@ -11,7 +11,7 @@ let cachedStationsFieldIds: StationsFieldIds | null | undefined = undefined;
 async function getStationsFieldIds(): Promise<StationsFieldIds | null> {
   if (cachedStationsFieldIds) return cachedStationsFieldIds;
   const tableId = getStationsTable();
-  const data = await airtableMetaFetch<{ tables: Array<{ id: string; name: string; fields: Array<{ id: string; name: string; type: string }> }> }>("/tables");
+  const data = await airtableMetaFetch<{ tables: Array<{ id: string; name: string; fields: Array<{ id: string; name: string; type: string }> }> }>("");
   if (isErrorResult(data)) {
     cachedStationsFieldIds = null;
     return null;
@@ -35,7 +35,7 @@ async function getStationsFieldIds(): Promise<StationsFieldIds | null> {
 export async function getStationTypeOptions(): Promise<string[]> {
   const fieldIds = await getStationsFieldIds();
   if (!fieldIds?.stationType) return [];
-  const data = await airtableMetaFetch<{ tables: Array<{ id: string; name: string; fields: Array<{ id: string; name: string; type: string; options?: { choices?: Array<{ id: string; name: string }> } }> }> }>("/tables");
+  const data = await airtableMetaFetch<{ tables: Array<{ id: string; name: string; fields: Array<{ id: string; name: string; type: string; options?: { choices?: Array<{ id: string; name: string }> } }> }> }>("");
   if (isErrorResult(data)) return [];
   const table = data.tables.find((t) => t.id === getStationsTable() || t.name === getStationsTable());
   const field = table?.fields.find((f) => f.id === fieldIds.stationType);

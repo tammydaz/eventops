@@ -121,6 +121,43 @@
   border-left-color: rgba(204,0,0,0.5);
 }
 
+.dp-user-section {
+  margin-top: auto;
+  padding-top: 16px;
+  border-top: 1px solid rgba(204,0,0,0.2);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.dp-user-role {
+  font-size: 11px;
+  color: #888;
+}
+
+.dp-signout {
+  padding: 6px 12px;
+  background: transparent;
+  border: 1px solid rgba(204,0,0,0.3);
+  border-radius: 6px;
+  color: #a0a0a0;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.dp-signout:hover {
+  background: rgba(204,0,0,0.15);
+  color: #fff;
+}
+
+.dp-user-badge {
+  font-size: 11px;
+  color: #888;
+  padding: 2px 8px;
+  background: rgba(0,0,0,0.3);
+  border-radius: 4px;
+}
+
 .dp-nav-link.active {
   background: linear-gradient(90deg, rgba(204,0,0,0.3), transparent);
   color: #ff6666;
@@ -446,6 +483,53 @@
 .dp-events-area::-webkit-scrollbar-track { background: transparent; }
 .dp-events-area::-webkit-scrollbar-thumb { background: rgba(204,0,0,0.3); border-radius: 4px; }
 .dp-events-area::-webkit-scrollbar-thumb:hover { background: rgba(204,0,0,0.5); }
+
+/* ── Loading / Error / Empty states ── */
+.dp-events-error {
+  padding: 16px 20px;
+  margin-bottom: 20px;
+  background: rgba(239, 68, 68, 0.15);
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  border-radius: 8px;
+  color: #fca5a5;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.dp-events-retry {
+  padding: 6px 14px;
+  background: rgba(239, 68, 68, 0.3);
+  border: 1px solid rgba(239, 68, 68, 0.5);
+  border-radius: 6px;
+  color: #fff;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.dp-events-retry:hover {
+  background: rgba(239, 68, 68, 0.5);
+}
+
+.dp-events-loading {
+  padding: 24px;
+  font-size: 14px;
+  color: #a0a0a0;
+}
+
+.dp-events-empty {
+  padding: 40px 24px;
+  text-align: center;
+  color: #888;
+  font-size: 14px;
+}
+
+.dp-events-empty-hint {
+  margin-top: 8px;
+  font-size: 12px;
+  color: #666;
+}
 
 /* ═══ EVENT CARD ═══ */
 .dp-events-grid {

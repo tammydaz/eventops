@@ -24,6 +24,8 @@ const AIRTABLE_API_KEY = (import.meta.env.VITE_AIRTABLE_API_KEY as string | unde
 const AIRTABLE_BASE_ID = (import.meta.env.VITE_AIRTABLE_BASE_ID as string | undefined)?.trim();
 const AIRTABLE_EVENTS_TABLE = (import.meta.env.VITE_AIRTABLE_EVENTS_TABLE as string | undefined)?.trim();
 const AIRTABLE_STATIONS_TABLE = (import.meta.env.VITE_AIRTABLE_STATIONS_TABLE as string | undefined)?.trim() || "Stations";
+const AIRTABLE_MASTER_MENU_SPECS_TABLE = (import.meta.env.VITE_AIRTABLE_MASTER_MENU_SPECS_TABLE as string | undefined)?.trim();
+const AIRTABLE_MENU_ITEMS_TABLE = (import.meta.env.VITE_AIRTABLE_MENU_ITEMS_TABLE as string | undefined)?.trim();
 
 const getEnvValue = (value: string | undefined, name: string): string | AirtableErrorResult => {
   if (!value) {
@@ -46,6 +48,12 @@ export const getEventsTable = (): string | AirtableErrorResult =>
 
 export const getStationsTable = (): string =>
   AIRTABLE_STATIONS_TABLE || "Stations";
+
+export const getMasterMenuSpecsTable = (): string =>
+  AIRTABLE_MASTER_MENU_SPECS_TABLE || "tblGeCmzJscnocs1T";
+
+export const getMenuItemsTable = (): string =>
+  AIRTABLE_MENU_ITEMS_TABLE || "tbl0aN33DGG6R1sPZ";
 
 export const getBaseId = (): string | AirtableErrorResult =>
   getEnvValue(AIRTABLE_BASE_ID, "VITE_AIRTABLE_BASE_ID");

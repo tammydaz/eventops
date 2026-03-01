@@ -302,7 +302,7 @@ async function getCreatedTimeFieldId(): Promise<string | null> {
     cachedCreatedTimeFieldId = null;
     return null;
   }
-  const data = await airtableMetaFetch<AirtableTablesResponse>("/tables");
+  const data = await airtableMetaFetch<AirtableTablesResponse>("");
   if (isErrorResult(data)) {
     cachedCreatedTimeFieldId = null;
     return null;
@@ -323,7 +323,7 @@ export async function getFoodwerxArrivalFieldId(): Promise<string | null> {
     cachedFoodwerxArrivalFieldId = null;
     return null;
   }
-  const data = await airtableMetaFetch<AirtableTablesResponse>("/tables");
+  const data = await airtableMetaFetch<AirtableTablesResponse>("");
   if (isErrorResult(data)) {
     cachedFoodwerxArrivalFieldId = null;
     return null;
@@ -353,7 +353,7 @@ export async function getBarServiceFieldId(): Promise<string | null> {
     cachedBarServiceFieldId = null;
     return null;
   }
-  const data = await airtableMetaFetch<AirtableTablesResponse>("/tables");
+  const data = await airtableMetaFetch<AirtableTablesResponse>("");
   if (isErrorResult(data)) {
     cachedBarServiceFieldId = null;
     return null;
@@ -471,7 +471,7 @@ export const loadSingleSelectOptions = async (
   const tableKey = getEventsTable();
   if (typeof tableKey !== "string") return tableKey;
 
-  const data = await airtableMetaFetch<AirtableTablesResponse>("/tables");
+  const data = await airtableMetaFetch<AirtableTablesResponse>("");
   if (isErrorResult(data)) return data;
 
   const table = data.tables.find((item) => item.id === tableKey || item.name === tableKey);
@@ -499,7 +499,7 @@ export async function logEventsTableFieldsForTimeline(): Promise<void> {
     console.error("No Events table configured");
     return;
   }
-  const data = await airtableMetaFetch<AirtableTablesResponse>("/tables");
+  const data = await airtableMetaFetch<AirtableTablesResponse>("");
   if (isErrorResult(data)) {
     console.error("Failed to fetch schema:", data);
     return;
@@ -522,7 +522,7 @@ export async function logEventsTableFieldsForBarService(): Promise<void> {
     console.error("No Events table configured");
     return;
   }
-  const data = await airtableMetaFetch<AirtableTablesResponse>("/tables");
+  const data = await airtableMetaFetch<AirtableTablesResponse>("");
   if (isErrorResult(data)) {
     console.error("Failed to fetch schema:", data);
     return;
