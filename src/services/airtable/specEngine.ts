@@ -4,6 +4,8 @@ export interface SpecParams {
   section: string;
   guestCount: number;
   nickQtyOverride?: string;
+  /** When provided (from Master Menu Specs), use this instead of heuristic */
+  specFromEngine?: { fwxSpecValue: number; unitType: string; display: string };
 }
 
 const TIER_BANDS = [
@@ -21,7 +23,12 @@ export function calculateSpec(params: SpecParams): string {
     return params.nickQtyOverride;
   }
 
-  // Rule 2: Route by section
+  // Rule 2: Use Master Menu Specs when available
+  if (params.specFromEngine) {
+    return params.specFromEngine.display;
+  }
+
+  // Rule 3: Fallback — route by section (heuristic)
   if (params.section.includes('PASSED')) {
     return calculatePassedAppSpec(params);
   }

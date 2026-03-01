@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
+import { useAuthStore } from "../state/authStore";
 import EventTicketCard from "../components/foh/EventTicketCard";
 import DepartmentRing from "../components/foh/DepartmentRing";
 import type { TicketProps } from "../components/foh/EventTicketCard";
@@ -98,6 +99,8 @@ function getStats(tickets: TicketProps[]) {
    FOH LANDING PAGE
    ═══════════════════════════════════════════ */
 export default function FOHLandingPage() {
+  const navigate = useNavigate();
+  const { user, logout } = useAuthStore();
   const [showTenDay, setShowTenDay] = useState(false);
   const stats = getStats(TICKETS);
 
@@ -174,8 +177,22 @@ export default function FOHLandingPage() {
           </div>
         </div>
 
-        {/* Right: Upload Invoice + 10-Day */}
+        {/* Right: Upload Invoice + 10-Day + Sign out */}
         <div className="flex items-center gap-3">
+          {user && (
+            <button
+              type="button"
+              onClick={() => { logout(); window.location.href = "/login"; }}
+              className="px-4 py-2.5 rounded-lg text-xs font-bold uppercase tracking-wide transition-all duration-300"
+              style={{
+                background: "rgba(239,68,68,0.15)",
+                border: "1px solid rgba(239,68,68,0.4)",
+                color: "#f87171",
+              }}
+            >
+              Sign out
+            </button>
+          )}
           <Link
             to="/invoice-intake"
             className="px-4 py-2.5 rounded-lg text-xs font-bold uppercase tracking-wide transition-all duration-300"

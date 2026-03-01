@@ -24,8 +24,11 @@ export function secondsTo12HourString(seconds: number | string | null | undefine
   } else if (typeof seconds === "number" && !isNaN(seconds)) {
     totalSeconds = seconds;
   } else return "—";
-  const h = Math.floor(totalSeconds / 3600);
-  const m = Math.floor((totalSeconds % 3600) / 60);
+  let h = Math.floor(totalSeconds / 3600);
+  let m = Math.floor((totalSeconds % 3600) / 60);
+  // Clamp invalid hours (e.g. 31, 88 from bad data) to valid range
+  if (h >= 24) h = h % 24;
+  if (m >= 60) m = 59;
   const hour12 = h === 0 ? 12 : h > 12 ? h - 12 : h;
   const ampm = h < 12 ? "AM" : "PM";
   return `${hour12}:${String(m).padStart(2, "0")} ${ampm}`;
@@ -53,8 +56,11 @@ export function secondsToTimeString(seconds: number | string | null | undefined)
   }
 
   const rounded = roundToNearest15(totalSeconds);
-  const h = Math.floor(rounded / 3600);
-  const m = Math.floor((rounded % 3600) / 60);
+  let h = Math.floor(rounded / 3600);
+  let m = Math.floor((rounded % 3600) / 60);
+  // Clamp invalid hours (e.g. 31, 88 from bad data) to valid range
+  if (h >= 24) h = h % 24;
+  if (m >= 60) m = 59;
   return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
 }
 

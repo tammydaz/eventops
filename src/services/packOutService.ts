@@ -1,13 +1,7 @@
 import { FIELD_IDS } from "./airtable/events";
 import { loadEvent, updateEventField } from "./airtable/events";
 import { isErrorResult } from "./airtable/selectors";
-import { MenuSpecEngine, type SpecEngineInput, type MenuItem } from "./menuSpecEngine";
-
-type MenuSpec = {
-  itemName: string;
-  quantity: number;
-  category: string;
-};
+import { calculateSpecsForEvent, formatSpecForDisplay } from "../lib/specs/calculateSpecs";
 
 type PackOutData = {
   equipment: string[];
@@ -18,122 +12,53 @@ type PackOutData = {
   generatedAt: string;
 };
 
-function mapEventToSpecEngineInput(eventData: Record<string, unknown>): SpecEngineInput {
-  const guestCount = typeof eventData[FIELD_IDS.GUEST_COUNT] === "number" 
-    ? eventData[FIELD_IDS.GUEST_COUNT] as number 
-    : 0;
-  
-  const serviceStyle = typeof eventData[FIELD_IDS.SERVICE_STYLE] === "string" 
-    ? eventData[FIELD_IDS.SERVICE_STYLE] as string 
-    : "Full Service";
-  
-  const menuItems: MenuItem[] = [];
-  
-  const passedApps = eventData[FIELD_IDS.PASSED_APPETIZERS];
-  if (Array.isArray(passedApps)) {
-    passedApps.forEach((item: any, idx: number) => {
-      const itemName = typeof item === "string" ? item : `Passed App ${idx + 1}`;
-      menuItems.push({
-        itemId: `passed-${idx}`,
-        itemName: itemName,
-        placement: "Passed App",
-      });
-    });
-  }
-  
-  const presentedApps = eventData[FIELD_IDS.PRESENTED_APPETIZERS];
-  if (Array.isArray(presentedApps)) {
-    presentedApps.forEach((item: any, idx: number) => {
-      const itemName = typeof item === "string" ? item : `Presented App ${idx + 1}`;
-      menuItems.push({
-        itemId: `stationed-${idx}`,
-        itemName: itemName,
-        placement: "Presented App",
-      });
-    });
-  }
-  
-  const buffetMetalItems = eventData[FIELD_IDS.BUFFET_METAL];
-  if (Array.isArray(buffetMetalItems)) {
-    buffetMetalItems.forEach((item: any, idx: number) => {
-      const itemName = typeof item === "string" ? item : `Buffet Metal Item ${idx + 1}`;
-      menuItems.push({
-        itemId: `buffet-metal-${idx}`,
-        itemName: itemName,
-        placement: "Buffet – Metal",
-      });
-    });
-  }
-  
-  const buffetChinaItems = eventData[FIELD_IDS.BUFFET_CHINA];
-  if (Array.isArray(buffetChinaItems)) {
-    buffetChinaItems.forEach((item: any, idx: number) => {
-      const itemName = typeof item === "string" ? item : `Buffet China Item ${idx + 1}`;
-      menuItems.push({
-        itemId: `buffet-china-${idx}`,
-        itemName: itemName,
-        placement: "Buffet – China",
-      });
-    });
-  }
-  
-  const desserts = eventData[FIELD_IDS.DESSERTS];
-  if (Array.isArray(desserts)) {
-    desserts.forEach((item: any, idx: number) => {
-      const itemName = typeof item === "string" ? item : `Dessert ${idx + 1}`;
-      menuItems.push({
-        itemId: `dessert-${idx}`,
-        itemName: itemName,
-        placement: "Dessert",
-      });
-    });
-  }
-  
-  const eventTypeRaw = eventData[FIELD_IDS.EVENT_TYPE];
-  const eventType = typeof eventTypeRaw === "object" && eventTypeRaw != null && "name" in eventTypeRaw
-    ? String((eventTypeRaw as { name?: string }).name ?? "").toLowerCase()
-    : typeof eventTypeRaw === "string" ? eventTypeRaw.toLowerCase() : "";
-
-  return {
-    guestCount,
-    menuItems,
-    serviceStyle,
-    eventType: eventType || "other",
-  };
-}
-
-function BuildPackOutFromSpecs(specs: MenuSpec[]): PackOutData {
-  return {
-    equipment: [],
-    glassware: [],
-    serviceware: [],
-    barSetup: [],
-    flair: [],
-    generatedAt: new Date().toISOString(),
-  };
-}
-
 export type PackOutLine = { id: string; label: string; category: string; checked?: boolean };
 
-/** Build pack-out list from event data for display. Uses latest eventData (e.g. from store). */
-export function buildPackOutList(eventData: Record<string, unknown>): PackOutLine[] {
-  const specInput = mapEventToSpecEngineInput(eventData);
-  const specOutput = MenuSpecEngine(specInput);
-  const lines: PackOutLine[] = [];
-  (specOutput.items || []).forEach((r, i) => {
-    lines.push({
-      id: `item-${i}`,
-      label: `${r.itemName} — ${r.totalPortions} portions (${r.category})`,
-      category: r.category,
-    });
-  });
-  if (specOutput.equipment) {
-    if (specOutput.equipment.chafersTotal) lines.push({ id: "eq-chafers", label: `Chafers: ${specOutput.equipment.chafersTotal}`, category: "Equipment" });
-    if (specOutput.equipment.halfPansTotal) lines.push({ id: "eq-halfpans", label: `Half pans: ${specOutput.equipment.halfPansTotal}`, category: "Equipment" });
-    if (specOutput.equipment.fullPansTotal) lines.push({ id: "eq-fullpans", label: `Full pans: ${specOutput.equipment.fullPansTotal}`, category: "Equipment" });
-    if (specOutput.equipment.roundChafersTotal) lines.push({ id: "eq-round", label: `Round chafers: ${specOutput.equipment.roundChafersTotal}`, category: "Equipment" });
+/** Build pack-out list from event data. Uses Spec Engine (Master Menu Specs) when available. */
+export async function buildPackOutList(eventId: string | null): Promise<PackOutLine[]>;
+export function buildPackOutList(eventData: Record<string, unknown>): PackOutLine[];
+
+export function buildPackOutList(
+  eventIdOrData: string | null | Record<string, unknown>
+): PackOutLine[] | Promise<PackOutLine[]> {
+  if (typeof eventIdOrData === "string" && eventIdOrData) {
+    return buildPackOutListAsync(eventIdOrData);
   }
+  if (eventIdOrData && typeof eventIdOrData === "object" && "id" in eventIdOrData) {
+    return buildPackOutListSync(eventIdOrData as Record<string, unknown>);
+  }
+  return [];
+}
+
+async function buildPackOutListAsync(eventId: string): Promise<PackOutLine[]> {
+  const result = await calculateSpecsForEvent(eventId);
+  if ("error" in result) return [];
+
+  const lines: PackOutLine[] = result.items.map((r, i) => ({
+    id: r.itemId || `item-${i}`,
+    label: `${r.itemName} — ${formatSpecForDisplay(r.fwxSpecValue, r.unitType)}`,
+    category: r.unitType,
+  }));
+
+  const totalChafers = result.items.reduce((sum, r) => sum + r.chaferCount, 0);
+  const fullPans = result.items.filter((r) => r.unitType === "Full Pan").reduce((sum, r) => sum + r.fwxSpecValue, 0);
+  const halfPans = result.items.filter((r) => r.unitType === "Half Pan").reduce((sum, r) => sum + r.fwxSpecValue, 0);
+  const roundPans = result.items.filter((r) => r.unitType === "Round Pan").reduce((sum, r) => sum + r.fwxSpecValue, 0);
+  const quarts = result.items.filter((r) => r.unitType === "Quart").reduce((sum, r) => sum + r.fwxSpecValue, 0);
+
+  if (totalChafers > 0) lines.push({ id: "eq-chafers", label: `Chafers: ${totalChafers}`, category: "Equipment" });
+  if (fullPans > 0) lines.push({ id: "eq-fullpans", label: `Full Pans: ${fullPans}`, category: "Equipment" });
+  if (halfPans > 0) lines.push({ id: "eq-halfpans", label: `Half Pans: ${halfPans}`, category: "Equipment" });
+  if (roundPans > 0) lines.push({ id: "eq-roundpans", label: `Round Pans: ${roundPans}`, category: "Equipment" });
+  if (quarts > 0) lines.push({ id: "eq-quarts", label: `Quarts: ${quarts}`, category: "Equipment" });
+
   return lines;
+}
+
+function buildPackOutListSync(eventData: Record<string, unknown>): PackOutLine[] {
+  const eventId = eventData.id as string | undefined;
+  if (!eventId) return [];
+  return [];
 }
 
 export async function generateAndWritePackOut(eventId: string): Promise<void> {
@@ -145,11 +70,19 @@ export async function generateAndWritePackOut(eventId: string): Promise<void> {
     return;
   }
 
-  const specInput = mapEventToSpecEngineInput(eventData);
-  const specOutput = MenuSpecEngine(specInput);
-  const specs: MenuSpec[] = (specOutput.items || []).map((i) => ({ itemName: i.itemName, quantity: i.totalPortions, category: i.category }));
-  const packOutData = BuildPackOutFromSpecs(specs);
-  const packOutJson = JSON.stringify(packOutData);
+  const result = await calculateSpecsForEvent(eventId);
+  if ("error" in result) return;
 
+  const packOutData: PackOutData = {
+    equipment: result.items
+      .filter((i) => i.chaferCount > 0)
+      .map((i) => `${i.itemName}: ${i.chaferCount} chafer(s)`),
+    glassware: [],
+    serviceware: [],
+    barSetup: [],
+    flair: [],
+    generatedAt: new Date().toISOString(),
+  };
+  const packOutJson = JSON.stringify(packOutData);
   await updateEventField(eventId, FIELD_IDS.PACK_OUT_JSON, packOutJson);
 }

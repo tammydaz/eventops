@@ -8,6 +8,7 @@ import DashboardPage from "./pages/DashboardPage";
 import FOHLandingPage from "./pages/FOHLandingPage";
 import Watchtower from "./pages/Watchtower";
 import SpecEngine from "./pages/spec-engine";
+import SpecEngineTestPage from "./pages/SpecEngineTestPage";
 import BeoPrintPage from "./pages/BeoPrintPage";
 import Profit from "./pages/profit";
 import Health from "./pages/health";
@@ -66,6 +67,10 @@ export const Router = ({ selectedEventId }: { selectedEventId: string | null }) 
 
   if (pathname.startsWith("/ops-chief")) {
     return <OpsChiefDashboard />;
+  }
+
+  if (pathname.startsWith("/spec-engine-test")) {
+    return <SpecEngineTestPage />;
   }
 
   if (pathname.startsWith("/spec-engine/")) {
