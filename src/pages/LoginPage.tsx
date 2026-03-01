@@ -33,7 +33,13 @@ export default function LoginPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: email.trim(), password }),
       });
-      const data = await res.json();
+      let data: { error?: string; needsPasswordSetup?: boolean; user?: unknown; token?: string };
+      try {
+        data = await res.json();
+      } catch {
+        setError(res.status === 404 ? "Login API not found. Check deployment." : `Server error (${res.status}). Try again.`);
+        return;
+      }
       if (!res.ok) {
         setError(data.error || "Login failed");
         return;
@@ -50,8 +56,9 @@ export default function LoginPage() {
       );
       const target = redirect && canAccessRoute(user.role, redirect) ? redirect : getLandingForRole(user.role);
       navigate(target, { replace: true });
-    } catch {
-      setError("Network error. Try again.");
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "";
+      setError(msg?.includes("fetch") ? "Network error. Try again." : (msg || "Network error. Try again."));
     } finally {
       setLoading(false);
     }
@@ -75,7 +82,13 @@ export default function LoginPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: email.trim(), password: newPassword }),
       });
-      const data = await res.json();
+      let data: { error?: string; user?: unknown; token?: string };
+      try {
+        data = await res.json();
+      } catch {
+        setError(res.status === 404 ? "API not found. Check deployment." : `Server error (${res.status}). Try again.`);
+        return;
+      }
       if (!res.ok) {
         setError(data.error || "Failed to set password");
         return;
@@ -87,8 +100,9 @@ export default function LoginPage() {
       );
       const target = redirect && canAccessRoute(user.role, redirect) ? redirect : getLandingForRole(user.role);
       navigate(target, { replace: true });
-    } catch {
-      setError("Network error. Try again.");
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "";
+      setError(msg?.includes("fetch") ? "Network error. Try again." : (msg || "Network error. Try again."));
     } finally {
       setLoading(false);
     }
