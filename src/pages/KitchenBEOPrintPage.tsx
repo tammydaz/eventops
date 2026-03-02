@@ -770,7 +770,7 @@ const renderMenuItem = (item: MenuItem, idx: number) => {
 };
 
 const renderSection = (section: MenuSection, idx: number, isDelivery = false) => (
-  <div key={idx}>
+  <div key={idx} className="kitchen-beo-section">
     <div style={isDelivery ? { ...print.sectionBanner, background: "#dcfce7", color: "#166534", borderColor: "#16a34a" } : print.sectionBanner}>
       {section.title} {section.vessel ? `- ${section.vessel}` : ""}
     </div>
@@ -901,15 +901,15 @@ const renderPaperProductsDelivery = (beo: BEOData) => (
   </>
 );
 
-// ── Section config for building from event data ──
-const MENU_SECTION_CONFIG: { title: string; fieldId: string }[] = [
-  { title: "PASSED APPETIZERS", fieldId: FIELD_IDS.PASSED_APPETIZERS },
-  { title: "PRESENTED APPETIZERS", fieldId: FIELD_IDS.PRESENTED_APPETIZERS },
-  { title: "BUFFET – METAL", fieldId: FIELD_IDS.BUFFET_METAL },
-  { title: "BUFFET – CHINA", fieldId: FIELD_IDS.BUFFET_CHINA },
-  { title: "DESSERTS", fieldId: FIELD_IDS.DESSERTS },
-  { title: "STATIONS", fieldId: FIELD_IDS.STATIONS },
-  { title: "ROOM TEMP/DISPLAYS", fieldId: FIELD_IDS.ROOM_TEMP_DISPLAY },
+// ── Section config for building from event data (with custom text fields) ──
+const MENU_SECTION_CONFIG: { title: string; fieldId: string; customFieldId: string }[] = [
+  { title: "PASSED APPETIZERS", fieldId: FIELD_IDS.PASSED_APPETIZERS, customFieldId: FIELD_IDS.CUSTOM_PASSED_APP },
+  { title: "PRESENTED APPETIZERS", fieldId: FIELD_IDS.PRESENTED_APPETIZERS, customFieldId: FIELD_IDS.CUSTOM_PRESENTED_APP },
+  { title: "BUFFET – METAL", fieldId: FIELD_IDS.BUFFET_METAL, customFieldId: FIELD_IDS.CUSTOM_BUFFET_METAL },
+  { title: "BUFFET – CHINA", fieldId: FIELD_IDS.BUFFET_CHINA, customFieldId: FIELD_IDS.CUSTOM_BUFFET_CHINA },
+  { title: "DESSERTS", fieldId: FIELD_IDS.DESSERTS, customFieldId: FIELD_IDS.CUSTOM_DESSERTS },
+  { title: "STATIONS", fieldId: FIELD_IDS.STATIONS, customFieldId: "" },
+  { title: "ROOM TEMP/DISPLAYS", fieldId: FIELD_IDS.ROOM_TEMP_DISPLAY, customFieldId: FIELD_IDS.CUSTOM_ROOM_TEMP_DISPLAY },
 ];
 
 /** Delivery BEO section config — delivery-only fields (no metal/china/appetizer lanes; all disposable)
@@ -918,17 +918,28 @@ const MENU_SECTION_CONFIG: { title: string; fieldId: string }[] = [
  * SALADS/DISPLAYS = room temp + displays
  * DELI = sandwiches, wraps, etc. (Deli field)
  */
-const DELIVERY_MENU_SECTION_CONFIG: { title: string; fieldIds: string[] }[] = [
-  { title: "HOT - DISPOSABLE", fieldIds: [FIELD_IDS.BUFFET_METAL, FIELD_IDS.PASSED_APPETIZERS, FIELD_IDS.PRESENTED_APPETIZERS] },
-  { title: "DELI - DISPOSABLE", fieldIds: [FIELD_IDS.DELIVERY_DELI] },
-  { title: "KITCHEN - DISPOSABLE", fieldIds: [FIELD_IDS.BUFFET_CHINA] },
-  { title: "SALADS - DISPOSABLE", fieldIds: [FIELD_IDS.ROOM_TEMP_DISPLAY] },
-  { title: "DESSERTS - DISPOSABLE", fieldIds: [FIELD_IDS.DESSERTS] },
+const DELIVERY_MENU_SECTION_CONFIG: { title: string; fieldIds: string[]; customFieldIds: string[] }[] = [
+  { title: "HOT - DISPOSABLE", fieldIds: [FIELD_IDS.BUFFET_METAL, FIELD_IDS.PASSED_APPETIZERS, FIELD_IDS.PRESENTED_APPETIZERS], customFieldIds: [FIELD_IDS.CUSTOM_BUFFET_METAL, FIELD_IDS.CUSTOM_PASSED_APP, FIELD_IDS.CUSTOM_PRESENTED_APP] },
+  { title: "DELI - DISPOSABLE", fieldIds: [FIELD_IDS.DELIVERY_DELI], customFieldIds: [FIELD_IDS.CUSTOM_DELIVERY_DELI] },
+  { title: "KITCHEN - DISPOSABLE", fieldIds: [FIELD_IDS.BUFFET_CHINA], customFieldIds: [FIELD_IDS.CUSTOM_BUFFET_CHINA] },
+  { title: "SALADS - DISPOSABLE", fieldIds: [FIELD_IDS.ROOM_TEMP_DISPLAY], customFieldIds: [FIELD_IDS.CUSTOM_ROOM_TEMP_DISPLAY] },
+  { title: "DESSERTS - DISPOSABLE", fieldIds: [FIELD_IDS.DESSERTS], customFieldIds: [FIELD_IDS.CUSTOM_DESSERTS] },
 ];
 
 const MENU_TABLE = "tbl0aN33DGG6R1sPZ";
 const ITEM_NAME = FIELD_IDS.MENU_ITEM_NAME;
 const CHILD_ITEMS = FIELD_IDS.MENU_ITEM_CHILD_ITEMS;
+
+/** Parse custom text (newline/comma/semicolon separated) into menu items */
+function customTextToItems(text: string | null | undefined): MenuItem[] {
+  const t = (text || "").trim();
+  if (!t) return [];
+  return t.split(/[\n,;]+/).map((s) => s.trim()).filter(Boolean).map((name) => ({
+    qty: "—",
+    name,
+    subItems: undefined,
+  }));
+}
 
 /** Remove consecutive duplicate lines (e.g. "COFFEE SERVICE" appearing twice) */
 function dedupeBeverageLines(lines: string[]): string[] {
@@ -1106,13 +1117,14 @@ const KitchenBEOPrintPage: React.FC = () => {
         const data = await res.json();
         if (data.records) {
           data.records.forEach((rec: { id: string; fields: Record<string, unknown> }) => {
-            const name = rec.fields[ITEM_NAME];
+            const nameRaw = rec.fields[ITEM_NAME];
+            const name = typeof nameRaw === "string" && nameRaw.trim() ? nameRaw.trim() : "—";
             const childRaw = rec.fields[CHILD_ITEMS];
             const childIds = Array.isArray(childRaw)
               ? childRaw.filter((c): c is string => typeof c === "string" && c.startsWith("rec"))
               : [];
             newData[rec.id] = {
-              name: typeof name === "string" ? name : rec.id,
+              name,
               childIds,
             };
           });
@@ -1141,11 +1153,12 @@ const KitchenBEOPrintPage: React.FC = () => {
           const childData = await res.json();
           if (childData.records) {
             childData.records.forEach((rec: { id: string; fields: Record<string, unknown> }) => {
-              const name = rec.fields[ITEM_NAME];
+              const nameRaw = rec.fields[ITEM_NAME];
+              const name = typeof nameRaw === "string" && nameRaw.trim() ? nameRaw.trim() : "—";
               if (!newData[rec.id]) {
-                newData[rec.id] = { name: typeof name === "string" ? name : rec.id, childIds: [] };
+                newData[rec.id] = { name, childIds: [] };
               } else {
-                newData[rec.id].name = typeof name === "string" ? name : rec.id;
+                newData[rec.id].name = name;
               }
             });
           }
@@ -1169,8 +1182,10 @@ const KitchenBEOPrintPage: React.FC = () => {
       const items: MenuItem[] = [];
       for (const item of raw) {
         const id = typeof item === "string" ? item : (item && typeof item === "object" && "id" in item) ? (item as { id: string }).id : String(item);
+        if (!id || !String(id).startsWith("rec")) continue;
         const data = menuItemData[id];
-        const parentName = data?.name || "Loading...";
+        const parentName = data?.name ?? "Loading...";
+        if (parentName === "—") continue;
         const childIds = data?.childIds ?? [];
         const rows = expandItemToRows(parentName, childIds, menuItemData);
         if (rows.length === 0) continue;
@@ -1188,8 +1203,22 @@ const KitchenBEOPrintPage: React.FC = () => {
     if (isDelivery) {
       for (const config of DELIVERY_MENU_SECTION_CONFIG) {
         const allItems: MenuItem[] = [];
+        const seenNames = new Set<string>();
         for (const fid of config.fieldIds) {
-          allItems.push(...processField(fid));
+          processField(fid).forEach((it) => {
+            if (!seenNames.has(it.name)) {
+              seenNames.add(it.name);
+              allItems.push(it);
+            }
+          });
+        }
+        for (const customFid of config.customFieldIds || []) {
+          customTextToItems(asString(selectedEventData[customFid])).forEach((it) => {
+            if (!seenNames.has(it.name)) {
+              seenNames.add(it.name);
+              allItems.push(it);
+            }
+          });
         }
         if (allItems.length > 0) {
           sections.push({
@@ -1202,11 +1231,22 @@ const KitchenBEOPrintPage: React.FC = () => {
     } else {
       for (const config of MENU_SECTION_CONFIG) {
         const items = processField(config.fieldId);
-        if (items.length > 0) {
+        const customItems = config.customFieldId
+          ? customTextToItems(asString(selectedEventData[config.customFieldId]))
+          : [];
+        const combined = [...items];
+        const seenNames = new Set(items.map((i) => i.name));
+        customItems.forEach((it) => {
+          if (!seenNames.has(it.name)) {
+            seenNames.add(it.name);
+            combined.push(it);
+          }
+        });
+        if (combined.length > 0) {
           sections.push({
             title: config.title,
             vessel: getVesselForSection(config.title, false),
-            items,
+            items: combined,
           });
         }
       }
@@ -1351,6 +1391,11 @@ const KitchenBEOPrintPage: React.FC = () => {
           .kitchen-beo-print-page th {
             -webkit-print-color-adjust: exact !important;
             print-color-adjust: exact !important;
+          }
+          /* Keep each menu section (including DESSERTS) from splitting across pages */
+          .kitchen-beo-print-page .kitchen-beo-section {
+            break-inside: avoid !important;
+            page-break-inside: avoid !important;
           }
         }
         @page {

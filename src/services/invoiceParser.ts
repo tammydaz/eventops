@@ -60,6 +60,8 @@ export type ParsedInvoice = {
   customDessert?: string;
   /** FW staff from invoice: e.g. "2 Server, 1 Bartender" */
   fwStaff?: string;
+  /** Event type: "Delivery", "Pickup", "Full Service" */
+  eventType?: string;
 };
 
 /**

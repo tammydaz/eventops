@@ -175,7 +175,7 @@ export const BeverageServicesSection = ({ embedded = false }: BeverageServicesSe
         title="Bar Service"
         icon="🍹"
         summary={hasBarService ? bar.barService : undefined}
-        defaultOpen={hasBarService}
+        defaultOpen={true}
       >
         <div style={{ gridColumn: "1 / -1", maxWidth: 400 }}>
           <label style={labelStyle}>Bar Service Needed</label>

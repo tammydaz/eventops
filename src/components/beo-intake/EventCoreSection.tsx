@@ -288,24 +288,30 @@ export const EventCoreSection = ({ isDelivery = false }: { isDelivery?: boolean 
             <label style={labelStyle}>{labelMap[key]}{isDispatchTime && !isAdmin ? " (read-only)" : ""}</label>
             <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
               <select
-                value={hour12}
+                value={String(hour12)}
                 disabled={!fieldCanEdit}
-                onChange={(e) => handleHourChange(Number(e.target.value), isPM)}
+                onChange={(e) => {
+                  const newHour12 = Number(e.target.value);
+                  if (!Number.isNaN(newHour12)) handleHourChange(newHour12, isPM);
+                }}
                 style={{ ...inputStyle, flex: 1, minWidth: 70 }}
               >
                 {[12, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].map((i) => (
-                  <option key={i} value={i}>{i}</option>
+                  <option key={i} value={String(i)}>{i}</option>
                 ))}
               </select>
               <span style={{ color: "#999", fontSize: 14 }}>:</span>
               <select
-                value={minute}
+                value={String(minute)}
                 disabled={!fieldCanEdit}
-                onChange={(e) => handleMinuteChange(Number(e.target.value))}
+                onChange={(e) => {
+                  const newMinute = Number(e.target.value);
+                  if (!Number.isNaN(newMinute)) handleMinuteChange(newMinute);
+                }}
                 style={{ ...inputStyle, flex: 1, minWidth: 70 }}
               >
                 {MINUTE_INCREMENTS.map((m) => (
-                  <option key={m} value={m}>{String(m).padStart(2, "0")}</option>
+                  <option key={m} value={String(m)}>{String(m).padStart(2, "0")}</option>
                 ))}
               </select>
               <select
