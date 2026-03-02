@@ -28,7 +28,7 @@ export const QuickIntake = () => {
   const [error, setError] = useState<string | null>(null);
   const [submitMessage, setSubmitMessage] = useState<string | null>(null);
   const [createdId, setCreatedId] = useState<string | null>(null);
-  const [eventTypeOptions, setEventTypeOptions] = useState<SingleSelectOption[]>([]);
+  const [eventTypeOptions, setEventTypeOptions] = useState<SingleSelectOption[]>(FALLBACK_EVENT_TYPES);
   const [optionsError, setOptionsError] = useState<string | null>(null);
 
   useEffect(() => {
