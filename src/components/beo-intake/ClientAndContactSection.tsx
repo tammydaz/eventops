@@ -3,7 +3,7 @@ import { useEventStore } from "../../state/eventStore";
 import { FIELD_IDS, loadSingleSelectOptions, type SingleSelectOption } from "../../services/airtable/events";
 import { asString, asSingleSelectName } from "../../services/airtable/selectors";
 import { isDeliveryOrPickup } from "../../lib/deliveryHelpers";
-import { FormSection } from "./FormSection";
+import { FormSection, Helper } from "./FormSection";
 import type { ClientDetails, PrimaryContact } from "./types";
 
 const ROLE_OPTIONS_FALLBACK = ["Planner", "Venue Manager", "Mother of Bride", "Father of Groom", "Client Rep", "Other"];
@@ -194,6 +194,7 @@ export const ClientAndContactSection = () => {
           style={inputStyle}
           placeholder="Contact person name"
         />
+        <Helper>Person on-site day-of (planner, venue manager, client rep). Used for BEO and day-of contact.</Helper>
       </div>
       <div>
         <label style={labelStyle}>Primary Contact Phone</label>
@@ -227,6 +228,7 @@ export const ClientAndContactSection = () => {
               </option>
             ))}
           </select>
+          <Helper>Who is this person to the event? (e.g. Mother of Bride, Venue Manager)</Helper>
         </div>
       )}
 
@@ -242,6 +244,7 @@ export const ClientAndContactSection = () => {
             style={inputStyle}
             placeholder="e.g. ABC Corporation"
           />
+          <Helper>For delivery to a business: company or location name. Leave blank for delivery to client residence.</Helper>
         </div>
       )}
 
@@ -294,8 +297,8 @@ export const ClientAndContactSection = () => {
         />
       </div>
 
-      <div style={{ gridColumn: "1 / -1", fontSize: "10px", color: "#666", marginTop: "-8px" }}>
-        Client address used when venue is blank; venue address takes precedence for event location.
+      <div style={{ gridColumn: "1 / -1" }}>
+        <Helper>Client address used when venue is blank; venue address takes precedence for event location.</Helper>
       </div>
     </FormSection>
   );

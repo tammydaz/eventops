@@ -86,10 +86,13 @@ function HeaderFieldWithDivider({ label, value, highlight }: { label: string; va
   );
 }
 
-// ── BEO header table: label (light bg) | data (white bg) per first-screenshot style ──
+// ── BEO header table: Kitchen BEO style (7 rows, 15/35/15/35 cols, uniform cells) ──
 const LABEL_BG = "#f5f5f0";
 const LABEL_CELL = { fontSize: 11, fontWeight: 700, color: "#000", padding: "4px 10px", border: "1px solid #000", verticalAlign: "middle" as const, background: LABEL_BG, lineHeight: 1.2 };
 const DATA_CELL = { fontSize: 12, fontWeight: 400, color: "#000", padding: "4px 10px", border: "1px solid #000", background: "#fff", verticalAlign: "middle" as const, lineHeight: 1.2 };
+// Kitchen BEO header style: 2px table border, single-spaced, 15/35/15/35 cols
+const KITCHEN_HEADER_TABLE = { width: "100%", borderCollapse: "collapse" as const, border: "2px solid #000", marginBottom: 0 };
+const KITCHEN_HEADER_CELL = { padding: "2px 8px", fontSize: 12, border: "1px solid #000", verticalAlign: "top" as const, background: "#fff", lineHeight: 1 };
 
 // ── Extract eventId from URL ──
 const getEventIdFromUrl = (): string | null => {
@@ -118,6 +121,11 @@ const themeLabelToSlug = (label: string): string =>
 const printStyles = `
   @import url('https://fonts.googleapis.com/css2?family=Dancing+Script:wght@700&display=swap');
   .print-only { display: none !important; }
+  @media screen {
+    .beo-print-content {
+      box-shadow: 0 2px 12px rgba(0,0,0,0.12);
+    }
+  }
   @media print {
     html {
       color-scheme: light !important;
@@ -415,11 +423,14 @@ const getClientMenuPageStyles = (printMode: "menu" | "tent") => `
 const styles: Record<string, React.CSSProperties> = {
   page: {
     fontFamily: "'Segoe UI', Arial, sans-serif",
-    maxWidth: 900,
+    width: "8.5in",
+    maxWidth: "8.5in",
+    minHeight: "11in",
     margin: "0 auto",
-    padding: "12px 24px",
+    padding: "0.5in",
     background: "#fff",
     color: "#000",
+    boxSizing: "border-box" as const,
   },
   header: {
     display: "grid",
@@ -476,6 +487,31 @@ const styles: Record<string, React.CSSProperties> = {
     border: "2px solid #0284c7",
     borderRadius: 6,
     letterSpacing: 0.5,
+  },
+  religiousBanner: {
+    background: "#fef3c7",
+    color: "#92400e",
+    padding: "4px 12px",
+    fontSize: 13,
+    fontWeight: 700,
+    textAlign: "center" as const,
+    marginBottom: 6,
+    border: "2px solid #d97706",
+    borderRadius: 6,
+    letterSpacing: 0.5,
+  },
+  beoNotesBanner: {
+    background: "#fef9c3",
+    color: "#854d0e",
+    padding: "6px 12px",
+    fontSize: 13,
+    fontWeight: 700,
+    textAlign: "center" as const,
+    marginBottom: 6,
+    border: "2px solid #ca8a04",
+    borderRadius: 6,
+    letterSpacing: 0.5,
+    whiteSpace: "pre-wrap" as const,
   },
   sectionCard: {
     background: "transparent",
@@ -861,7 +897,7 @@ const SERVER_BEO_SECTION_COLORS = {
   timeline: "#3b82f6",
 } as const;
 
-// ── Excel-style table styles for Server 2nd page (tight, aligned) ──
+// ── Server 2nd page table styles (single-spaced) ──
 const serverBeoTable = {
   width: "100%",
   borderCollapse: "collapse" as const,
@@ -872,7 +908,7 @@ const serverBeoCell = {
   padding: "3px 6px",
   border: "1px solid #000",
   verticalAlign: "top" as const,
-  lineHeight: 1.2,
+  lineHeight: 1,
   fontSize: 11,
 };
 const serverBeoHeader = {
@@ -1076,6 +1112,8 @@ function FullBeoPacketBeveragesContent(props: {
   fwStaff: string;
   allergies: string;
   notBuffetBanner: string;
+  religiousRestrictions?: string;
+  beoNotes?: string;
   eventData: Record<string, unknown>;
   barServiceFieldId?: string | null;
 }) {
@@ -1151,11 +1189,17 @@ function FullBeoPacketBeveragesContent(props: {
           </table>
         </div>
       </div>
+      {props.beoNotes?.trim() && (
+        <div className="beo-banner-block" style={styles.beoNotesBanner}>📋 BEO NOTES: {props.beoNotes.trim()}</div>
+      )}
       {props.notBuffetBanner && (
         <div className="beo-banner-block" style={styles.notBuffetBanner}>{props.notBuffetBanner}</div>
       )}
       {props.allergies && (
         <div className="beo-banner-block" style={styles.allergyBanner}>⚠️ ALLERGIES: {props.allergies.toUpperCase()}</div>
+      )}
+      {props.religiousRestrictions?.trim() && (
+        <div className="beo-banner-block" style={styles.religiousBanner}>🕎 RELIGIOUS / DIETARY: {props.religiousRestrictions.trim().toUpperCase()}</div>
       )}
 
       <div style={{ fontSize: 18, fontWeight: 700, marginTop: 24, marginBottom: 12, color: "#dc2626", textAlign: "center" }}>BEVERAGES</div>
@@ -1223,6 +1267,8 @@ function ServerBeo2ndPageContent(props: {
   fwStaff: string;
   allergies: string;
   notBuffetBanner: string;
+  religiousRestrictions?: string;
+  beoNotes?: string;
   eventData: Record<string, unknown>;
   barServiceFieldId?: string | null;
   leftCheck: string;
@@ -1315,27 +1361,28 @@ function ServerBeo2ndPageContent(props: {
   const eventOccasion = asSingleSelectName(eventData[FIELD_IDS.EVENT_OCCASION]) ?? "";
   const isWeddingOrMitzvah = eventOccasion === "Wedding" || eventOccasion === "Bar/Bat Mitzvah";
 
-  // Build 3-column rows: CLIENT | RENTALS | FOODWERX (Excel-style, tight layout)
+  // Beverages: 2-column rows (CLIENT | FOODWERX) — Rentals column removed
+  type TwoColRow = { client: string; foodwerx: string };
   type ThreeColRow = { client: string; rentals: string; foodwerx: string };
-  const beverageRows: ThreeColRow[] = [];
+  const beverageRows: TwoColRow[] = [];
   const paperRows: ThreeColRow[] = [];
   const rentalsDisplay = f(FIELD_IDS.RENTALS) || "";
   const source = asSingleSelectName(eventData[FIELD_IDS.SERVICEWARE_SOURCE])?.toLowerCase() || "";
 
-  // ── Beverage rows ──
-  if (isClientSupplyingBar) beverageRows.push({ client: "Mixers", rentals: "", foodwerx: "" });
+  // ── Beverage rows (no Rentals column) ──
+  if (isClientSupplyingBar) beverageRows.push({ client: "Mixers", foodwerx: "" });
   if (!isFullBarPackage) {
     const barLabel = barService === "None" || !barService ? "None" : /foodwerx bartender only/i.test(barService || "") ? "Foodwerx bartender, client supplying mixers" : barService;
-    beverageRows.push({ client: "", rentals: "", foodwerx: barLabel });
+    beverageRows.push({ client: "", foodwerx: barLabel });
   } else {
-    beverageRows.push({ client: "", rentals: "", foodwerx: "Bars: 1" });
-    FULL_BAR_PACKAGE_SPECK_ROWS.forEach((r) => beverageRows.push({ client: "", rentals: "", foodwerx: r.item }));
+    beverageRows.push({ client: "", foodwerx: "Bars: 1" });
+    FULL_BAR_PACKAGE_SPECK_ROWS.forEach((r) => beverageRows.push({ client: "", foodwerx: r.item }));
     if (hasSignatureDrink) {
-      beverageRows.push({ client: "", rentals: "", foodwerx: getSignatureCocktailGreeting(signatureDrinkName).toUpperCase() });
-      if (isClientSupplyingBar) beverageRows.push({ client: "Mixers/Garnishes", rentals: "", foodwerx: "" });
+      beverageRows.push({ client: "", foodwerx: getSignatureCocktailGreeting(signatureDrinkName).toUpperCase() });
+      if (isClientSupplyingBar) beverageRows.push({ client: "Mixers/Garnishes", foodwerx: "" });
       else if (signatureDrinkMixers.trim() || signatureDrinkGarnishes.trim()) {
-        if (signatureDrinkMixers.trim()) beverageRows.push({ client: "", rentals: "", foodwerx: `SIGNATURE MIXERS: ${signatureDrinkMixers.toUpperCase()}` });
-        if (signatureDrinkGarnishes.trim()) beverageRows.push({ client: "", rentals: "", foodwerx: `SIGNATURE GARNISHES: ${signatureDrinkGarnishes.toUpperCase()}` });
+        if (signatureDrinkMixers.trim()) beverageRows.push({ client: "", foodwerx: `SIGNATURE MIXERS: ${signatureDrinkMixers.toUpperCase()}` });
+        if (signatureDrinkGarnishes.trim()) beverageRows.push({ client: "", foodwerx: `SIGNATURE GARNISHES: ${signatureDrinkGarnishes.toUpperCase()}` });
       }
     }
   }
@@ -1343,18 +1390,18 @@ function ServerBeo2ndPageContent(props: {
     const parts: string[] = [];
     if (hydrationDrinkOptions.length > 0) parts.push(hydrationDrinkOptions.join(", ").toUpperCase());
     if (hydrationNotes.trim()) parts.push(hydrationNotes.trim().toUpperCase());
-    beverageRows.push({ client: "", rentals: "", foodwerx: `HYDRATION STATION: ${parts.join(" — ")}` });
+    beverageRows.push({ client: "", foodwerx: `HYDRATION STATION: ${parts.join(" — ")}` });
   }
   if (hasCoffeeTea) {
-    beverageRows.push({ client: "", rentals: "", foodwerx: "COFFEE/TEA SERVICE REQUESTED" });
+    beverageRows.push({ client: "", foodwerx: "COFFEE/TEA SERVICE REQUESTED" });
     const coffeeMugType = f(FIELD_IDS.COFFEE_MUG_TYPE);
-    if (coffeeMugType.trim()) beverageRows.push({ client: "", rentals: "", foodwerx: `${coffeeMugType.toUpperCase()} MUGS` });
-    beverageRows.push({ client: "", rentals: "", foodwerx: "• Full Coffee Station Setup" });
-    beverageRows.push({ client: "", rentals: "", foodwerx: "• Regular + Decaf Urns" });
-    beverageRows.push({ client: "", rentals: "", foodwerx: "• Cups, Lids, Stirrers" });
-    beverageRows.push({ client: "", rentals: "", foodwerx: "• Creamers + Sugar" });
+    if (coffeeMugType.trim()) beverageRows.push({ client: "", foodwerx: `${coffeeMugType.toUpperCase()} MUGS` });
+    beverageRows.push({ client: "", foodwerx: "• Full Coffee Station Setup" });
+    beverageRows.push({ client: "", foodwerx: "• Regular + Decaf Urns" });
+    beverageRows.push({ client: "", foodwerx: "• Cups, Lids, Stirrers" });
+    beverageRows.push({ client: "", foodwerx: "• Creamers + Sugar" });
   }
-  if (hasIce) beverageRows.push({ client: "", rentals: "", foodwerx: `ICE: ${iceProvidedBy.toUpperCase()} — Ice Quantity: 1` });
+  if (hasIce) beverageRows.push({ client: "", foodwerx: `ICE: ${iceProvidedBy.toUpperCase()} — Ice Quantity: 1` });
 
   // ── Paper product rows (CLIENT | RENTALS | FOODWERX) ──
   const hasNewLists = platesList.trim() || cutleryList.trim() || glasswareList.trim();
@@ -1385,7 +1432,7 @@ function ServerBeo2ndPageContent(props: {
   const phoneStr = asString(props.eventData[FIELD_IDS.CONTACT_PHONE]) || asString(props.eventData[FIELD_IDS.CLIENT_PHONE]) || "";
 
   return (
-    <div className="beo-print-content" style={{ ...styles.page, maxWidth: 900, margin: "0 auto" }}>
+    <div className="beo-print-content" style={styles.page}>
       {/* Same header as Kitchen BEO: grey banner + event details table */}
       <div className="beo-event-header-block" style={{ marginBottom: 6 }}>
         <div style={{ fontSize: 12, fontWeight: 600, color: "#111", marginBottom: 4 }}>{props.eventDate || "—"}</div>
@@ -1402,113 +1449,107 @@ function ServerBeo2ndPageContent(props: {
           </div>
           <span>JOB#: {props.jobNumberDisplay} — DISPATCH TIME {props.dispatchTime}</span>
         </div>
-        <div className="beo-event-details-table" style={{ marginTop: 6, overflow: "hidden", border: "1px solid #000" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+        <div className="beo-event-details-table" style={{ marginTop: 6, overflow: "hidden" }}>
+          <table style={KITCHEN_HEADER_TABLE}>
             <colgroup>
-              <col style={{ width: "12%" }} />
-              <col style={{ width: "38%" }} />
-              <col style={{ width: "12%" }} />
-              <col style={{ width: "38%" }} />
+              <col style={{ width: "15%" }} />
+              <col style={{ width: "35%" }} />
+              <col style={{ width: "15%" }} />
+              <col style={{ width: "35%" }} />
             </colgroup>
             <tbody>
               <tr>
-                <td style={{ ...LABEL_CELL, whiteSpace: "nowrap" }}>CLIENT</td>
-                <td style={{ ...DATA_CELL }}>{props.clientName || "—"}</td>
-                <td style={{ ...LABEL_CELL, whiteSpace: "nowrap" }}>ORDER #</td>
-                <td style={{ ...DATA_CELL, whiteSpace: "nowrap" }}>{props.jobNumberDisplay || "—"}</td>
+                <td style={{ ...KITCHEN_HEADER_CELL, fontWeight: 700 }}>CLIENT</td>
+                <td style={KITCHEN_HEADER_CELL}>{props.clientName || "—"}</td>
+                <td style={{ ...KITCHEN_HEADER_CELL, fontWeight: 700 }}>ORDER #</td>
+                <td style={{ ...KITCHEN_HEADER_CELL, color: "#c00", fontWeight: 700 }}>{props.jobNumberDisplay || "—"}</td>
               </tr>
               <tr>
-                <td style={{ ...LABEL_CELL, whiteSpace: "nowrap" }}>CONTACT</td>
-                <td style={{ ...DATA_CELL }}>{props.contactName || "—"}</td>
-                <td style={{ ...LABEL_CELL, whiteSpace: "nowrap" }}>EVENT DATE</td>
-                <td style={{ ...DATA_CELL }}>{props.eventDate || "—"}</td>
+                <td style={{ ...KITCHEN_HEADER_CELL, fontWeight: 700 }}>CONTACT</td>
+                <td style={KITCHEN_HEADER_CELL}>{props.contactName || "—"}</td>
+                <td style={{ ...KITCHEN_HEADER_CELL, fontWeight: 700 }}>EVENT DATE</td>
+                <td style={KITCHEN_HEADER_CELL}>{props.eventDate || "—"}</td>
               </tr>
               <tr>
-                <td style={{ ...LABEL_CELL, whiteSpace: "nowrap" }}>PHONE</td>
-                <td style={{ ...DATA_CELL }}>{phoneStr || "—"}</td>
-                <td style={{ ...LABEL_CELL, whiteSpace: "nowrap" }}>GUESTS</td>
-                <td style={{ ...DATA_CELL, color: "#c00", fontWeight: 600, whiteSpace: "nowrap" }}>{props.guestCount || "—"}</td>
+                <td style={{ ...KITCHEN_HEADER_CELL, fontWeight: 700 }}>PHONE</td>
+                <td style={KITCHEN_HEADER_CELL}>{phoneStr || "—"}</td>
+                <td style={{ ...KITCHEN_HEADER_CELL, fontWeight: 700 }}>GUESTS</td>
+                <td style={{ ...KITCHEN_HEADER_CELL, color: "#c00", fontWeight: 700 }}>{props.guestCount || "—"}</td>
               </tr>
               <tr>
-                <td style={{ ...LABEL_CELL, whiteSpace: "nowrap" }}>ADDRESS</td>
-                <td style={{ ...DATA_CELL }}>{props.venueAddress || "—"}</td>
-                <td style={{ ...LABEL_CELL, whiteSpace: "nowrap" }}>EVENT START</td>
-                <td style={{ ...DATA_CELL, color: "#c00", fontWeight: 600, whiteSpace: "nowrap" }}>{props.eventStart || "—"}</td>
+                <td style={{ ...KITCHEN_HEADER_CELL, fontWeight: 700 }}>ADDRESS</td>
+                <td style={KITCHEN_HEADER_CELL}>{props.venueAddress || "—"}</td>
+                <td style={{ ...KITCHEN_HEADER_CELL, fontWeight: 700 }}>EVENT START</td>
+                <td style={{ ...KITCHEN_HEADER_CELL, color: "#c00", fontWeight: 700 }}>{props.eventStart || "—"}</td>
               </tr>
               <tr>
-                <td style={{ ...LABEL_CELL, whiteSpace: "nowrap" }}>CITY, ST</td>
-                <td style={{ ...DATA_CELL }}>{props.cityState || "—"}</td>
-                <td style={{ ...LABEL_CELL, whiteSpace: "nowrap" }}>EVENT END</td>
-                <td style={{ ...DATA_CELL, color: "#c00", fontWeight: 600, whiteSpace: "nowrap" }}>{props.eventEnd || "—"}</td>
+                <td style={{ ...KITCHEN_HEADER_CELL, fontWeight: 700 }}>CITY, ST</td>
+                <td style={KITCHEN_HEADER_CELL}>{props.cityState || "—"}</td>
+                <td style={{ ...KITCHEN_HEADER_CELL, fontWeight: 700 }}>EVENT END</td>
+                <td style={{ ...KITCHEN_HEADER_CELL, color: "#c00", fontWeight: 700 }}>{props.eventEnd || "—"}</td>
               </tr>
               <tr>
-                <td style={{ ...LABEL_CELL, whiteSpace: "nowrap" }}>VENUE</td>
-                <td style={{ ...DATA_CELL }}>{props.eventLocation || "—"}</td>
-                <td style={{ ...LABEL_CELL, whiteSpace: "nowrap" }}>EVENT ARRIVAL</td>
-                <td style={{ ...DATA_CELL, color: "#c00", fontWeight: 600, whiteSpace: "nowrap" }}>{props.eventArrival || "—"}</td>
+                <td style={{ ...KITCHEN_HEADER_CELL, fontWeight: 700 }}>VENUE</td>
+                <td style={KITCHEN_HEADER_CELL}>{props.eventLocation || "—"}</td>
+                <td style={{ ...KITCHEN_HEADER_CELL, fontWeight: 700 }}>EVENT ARRIVAL</td>
+                <td style={{ ...KITCHEN_HEADER_CELL, color: "#c00", fontWeight: 700 }}>{props.eventArrival || "—"}</td>
               </tr>
               <tr>
-                <td style={{ ...LABEL_CELL }} />
-                <td style={{ ...DATA_CELL }} />
-                <td style={{ ...LABEL_CELL, whiteSpace: "nowrap" }}>FW STAFF</td>
-                <td style={{ ...DATA_CELL }}>{props.fwStaff || "—"}</td>
+                <td style={KITCHEN_HEADER_CELL} />
+                <td style={KITCHEN_HEADER_CELL} />
+                <td style={{ ...KITCHEN_HEADER_CELL, fontWeight: 700 }}>FW STAFF</td>
+                <td style={KITCHEN_HEADER_CELL}>{props.fwStaff || "—"}</td>
               </tr>
             </tbody>
           </table>
         </div>
       </div>
 
-      {/* BEVERAGES — red banner, 3-column table */}
-      <div style={{ background: "#ff0000", color: "#fff", textAlign: "center", fontWeight: 700, fontSize: 13, padding: "4px 0", marginBottom: 0, border: "1px solid #000", borderBottom: "none" }}>
-        BEVERAGES
-      </div>
-      <table style={{ ...serverBeoTable, marginBottom: 12 }}>
-        <thead>
-          <tr>
-            <td style={{ ...serverBeoHeader, width: "33%", color: "#c00" }}>CLIENT</td>
-            <td style={{ ...serverBeoHeader, width: "33%", color: "#00a" }}>RENTALS</td>
-            <td style={{ ...serverBeoHeader, width: "34%", color: "#00a" }}>FOODWERX</td>
-          </tr>
-        </thead>
-        <tbody>
-          {(beverageRows.length > 0 ? beverageRows : [{ client: "", rentals: "", foodwerx: "No beverage service specified" }]).map((r, i) => (
-            <tr key={i}>
-              <td style={serverBeoCell}>{r.client || "—"}</td>
-              <td style={serverBeoCell}>{r.rentals || "—"}</td>
-              <td style={serverBeoCell}>{r.foodwerx || "—"}</td>
+      {/* BEVERAGES — pill section (2 columns: CLIENT | FOODWERX, no Rentals) */}
+      <BeoSectionPill title="BEVERAGES" dotColor={SERVER_BEO_SECTION_COLORS.beverage}>
+        <table style={{ ...serverBeoTable, marginBottom: 0 }}>
+          <thead>
+            <tr>
+              <td style={{ ...serverBeoHeader, width: "50%", color: "#c00" }}>CLIENT</td>
+              <td style={{ ...serverBeoHeader, width: "50%", color: "#00a" }}>FOODWERX</td>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {(beverageRows.length > 0 ? beverageRows : [{ client: "", foodwerx: "No beverage service specified" }]).map((r, i) => (
+              <tr key={i}>
+                <td style={serverBeoCell}>{r.client || "—"}</td>
+                <td style={serverBeoCell}>{r.foodwerx || "—"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </BeoSectionPill>
 
-      {/* PAPER PRODUCTS — yellow banner, 3-column table */}
-      <div style={{ background: "#ffff00", color: "#000", textAlign: "center", fontWeight: 700, fontSize: 12, padding: "3px 0", marginBottom: 0, border: "1px solid #000", borderBottom: "none" }}>
-        PAPER PRODUCTS / CHINA — CUTLERY — GLASSWARE
-      </div>
-      <table style={{ ...serverBeoTable, marginBottom: 6 }}>
-        <thead>
-          <tr>
-            <td style={{ ...serverBeoHeader, width: "33%", color: "#c00" }}>CLIENT</td>
-            <td style={{ ...serverBeoHeader, width: "33%", color: "#00a" }}>RENTALS</td>
-            <td style={{ ...serverBeoHeader, width: "34%", color: "#00a" }}>FOODWERX</td>
-          </tr>
-        </thead>
-        <tbody>
-          {(paperRows.length > 0 ? paperRows : [{ client: "", rentals: "", foodwerx: "—" }]).map((r, i) => (
-            <tr key={i}>
-              <td style={serverBeoCell}>{r.client || "—"}</td>
-              <td style={serverBeoCell}>{r.rentals || "—"}</td>
-              <td style={serverBeoCell}>{r.foodwerx || "—"}</td>
+      {/* PAPER PRODUCTS — pill section (3 columns: CLIENT | RENTALS | FOODWERX) */}
+      <BeoSectionPill title="PAPER PRODUCTS / CHINA — CUTLERY — GLASSWARE" dotColor={SERVER_BEO_SECTION_COLORS.paperProducts}>
+        <table style={{ ...serverBeoTable, marginBottom: 0 }}>
+          <thead>
+            <tr>
+              <td style={{ ...serverBeoHeader, width: "33%", color: "#c00" }}>CLIENT</td>
+              <td style={{ ...serverBeoHeader, width: "33%", color: "#00a" }}>RENTALS</td>
+              <td style={{ ...serverBeoHeader, width: "34%", color: "#00a" }}>FOODWERX</td>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {(paperRows.length > 0 ? paperRows : [{ client: "", rentals: "", foodwerx: "—" }]).map((r, i) => (
+              <tr key={i}>
+                <td style={serverBeoCell}>{r.client || "—"}</td>
+                <td style={serverBeoCell}>{r.rentals || "—"}</td>
+                <td style={serverBeoCell}>{r.foodwerx || "—"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </BeoSectionPill>
 
-      {/* NOTES — yellow banner */}
-      <div style={{ background: "#ffff00", color: "#000", textAlign: "center", fontWeight: 700, fontSize: 12, padding: "3px 0", marginBottom: 0, border: "1px solid #000", borderBottom: "none" }}>
-        NOTES
-      </div>
-      <div style={{ border: "1px solid #000", borderTop: "none", padding: "6px 12px", minHeight: 40, marginBottom: 6 }}>
+      {/* NOTES — pill section */}
+      <BeoSectionPill title="NOTES" dotColor={SERVER_BEO_SECTION_COLORS.notes}>
+        <div style={{ border: "1px solid #000", padding: "6px 12px", minHeight: 40, borderRadius: 4 }}>
         {[
           { label: "PARKING", val: parkingNotes },
           { label: "LOAD-IN", val: loadInNotes },
@@ -1531,26 +1572,25 @@ function ServerBeo2ndPageContent(props: {
         ]
           .filter((x) => x.val?.trim())
           .map((x, i) => (
-            <div key={i} style={{ fontSize: 11, marginBottom: 2, lineHeight: 1.2 }}>
+            <div key={i} style={{ fontSize: 11, marginBottom: 2, lineHeight: 1 }}>
               <strong>{x.label}:</strong> {x.val}
             </div>
           ))}
         {!parkingNotes && !loadInNotes && !stairsSteps && !elevatorsAvailable && !venueNotes && !kitchenAccessNotes && !foodSetupLocation && !powerNotes && !animalsPets && !eventPurpose && !foodServiceFlow && !timelineNotes && !clientSuppliedFood && !equipmentNotes && !dietaryNotes && !religiousRestrictions && !specialNotes && !beoNotes && (
           <div style={{ color: "#999", fontSize: 12 }}>—</div>
         )}
-      </div>
+        </div>
+      </BeoSectionPill>
 
-      {/* TIMELINE — blue banner */}
-      <div style={{ background: "#87ceeb", color: "#000", textAlign: "center", fontWeight: 700, fontSize: 12, padding: "3px 0", marginBottom: 0, border: "1px solid #000", borderBottom: "none" }}>
-        TIMELINE
-      </div>
-      <div style={{ border: "1px solid #000", borderTop: "none", padding: "6px 12px", minHeight: 32 }}>
+      {/* TIMELINE — pill section */}
+      <BeoSectionPill title="TIMELINE" dotColor={SERVER_BEO_SECTION_COLORS.timeline}>
+        <div style={{ border: "1px solid #000", padding: "6px 12px", minHeight: 32, borderRadius: 4 }}>
         {hasTimeline ? (
           beoTimeline.split(/\n/).filter(Boolean).map((line, i) => {
             const dashIdx = line.indexOf(" - ");
             const [time, action] = dashIdx >= 0 ? [line.slice(0, dashIdx).trim(), line.slice(dashIdx + 3).trim()] : ["", line.trim()];
             return (
-              <div key={i} style={{ display: "flex", gap: 16, fontSize: 12, marginBottom: 4 }}>
+              <div key={i} style={{ display: "flex", gap: 16, fontSize: 12, marginBottom: 4, lineHeight: 1 }}>
                 {time && <span style={{ fontWeight: 700, minWidth: 80 }}>{time}</span>}
                 <span>{action}</span>
               </div>
@@ -1559,7 +1599,8 @@ function ServerBeo2ndPageContent(props: {
         ) : (
           <div style={{ color: "#999", fontSize: 12 }}>No timeline specified</div>
         )}
-      </div>
+        </div>
+      </BeoSectionPill>
 
       <div style={{ marginTop: 12, fontSize: 11, fontWeight: 700, marginBottom: 4 }}>***end of server BEO***</div>
     </div>
@@ -1582,6 +1623,8 @@ function MeetingBeoNotesContent(props: {
   fwStaff: string;
   allergies: string;
   notBuffetBanner: string;
+  religiousRestrictions?: string;
+  beoNotes?: string;
   activeSections: SectionData[];
   expandItemToRows: (item: MenuLineItem) => { lineName: string; isChild: boolean; itemId?: string }[];
   meetingNotes: Record<string, { itemName: string; sectionTitle: string; notes: string[] }>;
@@ -1647,11 +1690,17 @@ function MeetingBeoNotesContent(props: {
             </table>
           </div>
         </div>
+        {props.beoNotes?.trim() && (
+          <div className="beo-banner-block" style={styles.beoNotesBanner}>📋 BEO NOTES: {props.beoNotes.trim()}</div>
+        )}
         {props.notBuffetBanner && (
           <div className="beo-banner-block" style={styles.notBuffetBanner}>{props.notBuffetBanner}</div>
         )}
         {props.allergies && (
           <div className="beo-banner-block" style={styles.allergyBanner}>⚠️ ALLERGIES: {props.allergies.toUpperCase()}</div>
+        )}
+        {props.religiousRestrictions?.trim() && (
+          <div className="beo-banner-block" style={styles.religiousBanner}>🕎 RELIGIOUS / DIETARY: {props.religiousRestrictions.trim().toUpperCase()}</div>
         )}
         {activeSections.length === 0 && (
           <div style={{ padding: 32, textAlign: "center", color: "#999", fontSize: 16 }}>No menu items assigned.</div>
@@ -1974,6 +2023,8 @@ const BeoPrintPage: React.FC = () => {
     secondsTo12HourString(eventData[FIELD_IDS.FOODWERX_ARRIVAL]) ||
     f(FIELD_IDS.VENUE_ARRIVAL_TIME);
   const allergies = f(FIELD_IDS.DIETARY_NOTES);
+  const religiousRestrictions = f(FIELD_IDS.RELIGIOUS_RESTRICTIONS);
+  const beoNotes = f(FIELD_IDS.BEO_NOTES);
   const serviceStyle = asSingleSelectName(eventData[FIELD_IDS.SERVICE_STYLE]).trim();
   const notBuffetBanner = serviceStyle && !serviceStyle.toLowerCase().includes("buffet")
     ? `NOT BUFFET – ${serviceStyle.toUpperCase()}`
@@ -2104,8 +2155,13 @@ const BeoPrintPage: React.FC = () => {
       }
     : null;
 
-  // Kitchen BEO: hard stop after desserts + footer — never includes Staff BEO 2nd page content (beverages/mixers)
-  const activeSections = menuSections.filter((s) => s.items.length > 0);
+  // Kitchen BEO: hard stop after desserts — never include STATIONS or anything after DESSERTS
+  const sectionsUpToDessert = menuSections.filter((s) => {
+    const idx = menuSections.indexOf(s);
+    const dessertIdx = menuSections.findIndex((m) => m.title === "DESSERTS");
+    return dessertIdx === -1 || idx <= dessertIdx;
+  });
+  const activeSections = [...sectionsUpToDessert.filter((s) => s.items.length > 0)];
   const visibleSections = activeSections.map((s) => ({
     ...s,
     items: s.items.filter((item) => !hiddenMenuItems.has(item.id)),
@@ -2127,41 +2183,68 @@ const BeoPrintPage: React.FC = () => {
 
   // ── Kitchen BEO pagination: page 1 has less room (header/banners), pages 2+ have full height ──
   // Sections are never split across pages — each pill stays whole.
-  const LINES_PER_PAGE_FIRST = 22;  // page 1: event header + banners — increased to fit more
+  // Never let last page have only 1–3 lines; avoid breaking if next section would create tiny last page.
+  const LINES_PER_PAGE_FIRST = 22;  // page 1: event header + banners
   const LINES_PER_PAGE = 38;        // pages 2+: full page for menu
   const SECTION_HEADER_LINES = 2;
+  const MIN_LINES_ON_LAST_PAGE = 4;  // avoid orphan 1–3 lines on last page
   type KitchenPage = { pageNum: number; sections: Array<{ section: SectionData; items: MenuLineItem[] }> };
   const kitchenPages: KitchenPage[] = (() => {
     const pages: KitchenPage[] = [];
     let current: KitchenPage = { pageNum: 1, sections: [] };
     let linesUsed = 0;
-    const getMaxLines = () => (current.pageNum === 1 ? LINES_PER_PAGE_FIRST : LINES_PER_PAGE);
-    activeSections.forEach((section) => {
-      const sectionItemLines = section.items.reduce((sum, item) => sum + expandItemToRows(item).length, 0);
-      const sectionLines = SECTION_HEADER_LINES + sectionItemLines;
-      const wouldExceed = linesUsed + sectionLines > getMaxLines();
-      if (wouldExceed && current.sections.length > 0) {
-        pages.push(current);
-        current = { pageNum: pages.length + 1, sections: [] };
-        linesUsed = 0;
-      }
-      current.sections.push({ section, items: section.items });
-      linesUsed += sectionLines;
-      if (linesUsed >= getMaxLines()) {
-        pages.push(current);
-        current = { pageNum: pages.length + 1, sections: [] };
-        linesUsed = 0;
-      }
+    const getMaxLines = (pageNum: number) => (pageNum === 1 ? LINES_PER_PAGE_FIRST : LINES_PER_PAGE);
+    const sectionsWithLines = activeSections.map((section) => {
+      const itemLines = section.items.reduce((sum, item) => sum + expandItemToRows(item).length, 0);
+      return { section, items: section.items, sectionLines: SECTION_HEADER_LINES + itemLines };
     });
+    for (let i = 0; i < sectionsWithLines.length; i++) {
+      const { section, items, sectionLines } = sectionsWithLines[i];
+      const wouldExceed = linesUsed + sectionLines > getMaxLines(current.pageNum);
+      const wouldCreateTinyLastPage = wouldExceed && sectionLines < MIN_LINES_ON_LAST_PAGE;
+      // Don't break if it would create a new page with only 1–3 lines; fit on current instead
+      if (wouldExceed && current.sections.length > 0 && !wouldCreateTinyLastPage) {
+        pages.push(current);
+        current = { pageNum: pages.length + 1, sections: [] };
+        linesUsed = 0;
+      }
+      current.sections.push({ section, items });
+      linesUsed += sectionLines;
+      if (linesUsed >= getMaxLines(current.pageNum) && !wouldCreateTinyLastPage) {
+        pages.push(current);
+        current = { pageNum: pages.length + 1, sections: [] };
+        linesUsed = 0;
+      }
+    }
     if (current.sections.length > 0) pages.push(current);
-    return pages.length > 0 ? pages : [{ pageNum: 1, sections: [] }];
+    let result = pages.length > 0 ? pages : [{ pageNum: 1, sections: [] }];
+    // Merge last page into previous if it has fewer than MIN_LINES_ON_LAST_PAGE lines
+    while (result.length >= 2) {
+      const last = result[result.length - 1];
+      const lastLines = last.sections.reduce(
+        (sum, { section, items }) => sum + SECTION_HEADER_LINES + items.reduce((s, item) => s + expandItemToRows(item).length, 0),
+        0
+      );
+      if (lastLines >= MIN_LINES_ON_LAST_PAGE) break;
+      const prev = result[result.length - 2];
+      const prevLines = prev.sections.reduce(
+        (sum, { section, items }) => sum + SECTION_HEADER_LINES + items.reduce((s, item) => s + expandItemToRows(item).length, 0),
+        0
+      );
+      const prevMax = getMaxLines(prev.pageNum);
+      if (prevLines + lastLines <= prevMax) {
+        prev.sections.push(...last.sections);
+        result = result.slice(0, -1);
+      } else break;
+    }
+    return result;
   })();
 
-  // Grid columns: spec (left), item (middle), right column (override / equipment / checkbox)
+  // Grid columns: item (left), spec (right), optional right column (override / equipment / checkbox)
   const gridTemplateColumns =
-    leftCheck === "spec" ? "140px 1fr 200px" :
-    leftCheck === "packout" ? "140px 1fr 250px" :
-    leftCheck === "kitchen" || leftCheck === "expeditor" || leftCheck === "server" ? "140px 1fr 40px" :
+    leftCheck === "spec" ? "1fr 140px 200px" :
+    leftCheck === "packout" ? "1fr 140px 250px" :
+    leftCheck === "kitchen" || leftCheck === "expeditor" || leftCheck === "server" ? "1fr 140px 40px" :
     "1fr";
 
   const handleSaveNote = () => {
@@ -2247,7 +2330,10 @@ const BeoPrintPage: React.FC = () => {
               <button style={{ ...styles.addNoteBtn, background: "#555" }} onClick={() => setPrintModalOpen(false)}>Cancel</button>
               <button style={styles.addNoteBtn} onClick={async () => {
                 if (selectedEventId) {
-                  await updateEvent(selectedEventId, { [FIELD_IDS.MENU_PRINT_THEME]: printModalTheme });
+                  const saved = await updateEvent(selectedEventId, { [FIELD_IDS.MENU_PRINT_THEME]: printModalTheme });
+                  if (!saved) {
+                    console.warn("Could not save menu theme (e.g. insufficient permissions to create select option). Proceeding with print.");
+                  }
                   setMenuTheme(printModalTheme);
                   setPrintMode(printModalFormat);
                   setPrintModalOpen(false);
@@ -2488,28 +2574,10 @@ const BeoPrintPage: React.FC = () => {
                         <td style={{ ...DATA_CELL }}>{eventDate || "—"}</td>
                       </tr>
                       <tr>
-                        <td style={{ ...LABEL_CELL }}>PHONE</td>
-                        <td style={{ ...DATA_CELL }}>{phone || "—"}</td>
-                        <td style={{ ...LABEL_CELL }}>GUESTS</td>
-                        <td style={{ ...DATA_CELL, color: "#c00", fontWeight: 600 }}>{guestCount || "—"}</td>
-                      </tr>
-                      <tr>
-                        <td style={{ ...LABEL_CELL }}>ADDRESS</td>
-                        <td style={{ ...DATA_CELL }}>{(f(FIELD_IDS.VENUE_ADDRESS) || f(FIELD_IDS.CLIENT_STREET) || venueAddress) || "—"}</td>
-                        <td style={{ ...LABEL_CELL, whiteSpace: "nowrap" }}>EVENT START</td>
-                        <td style={{ ...DATA_CELL, color: "#c00", fontWeight: 600, whiteSpace: "nowrap" }}>{eventStart || "—"}</td>
-                      </tr>
-                      <tr>
-                        <td style={{ ...LABEL_CELL }}>CITY, ST</td>
-                        <td style={{ ...DATA_CELL }}>{cityState || "—"}</td>
-                        <td style={{ ...LABEL_CELL, whiteSpace: "nowrap" }}>EVENT END</td>
-                        <td style={{ ...DATA_CELL, color: "#c00", fontWeight: 600, whiteSpace: "nowrap" }}>{eventEnd || "—"}</td>
-                      </tr>
-                      <tr>
                         <td style={{ ...LABEL_CELL }}>VENUE</td>
                         <td style={{ ...DATA_CELL }}>{eventLocation || "—"}</td>
-                        <td style={{ ...LABEL_CELL, whiteSpace: "nowrap" }}>EVENT ARRIVAL</td>
-                        <td style={{ ...DATA_CELL, color: "#c00", fontWeight: 600, whiteSpace: "nowrap" }}>{eventArrival || "—"}</td>
+                        <td style={{ ...LABEL_CELL }}>GUESTS</td>
+                        <td style={{ ...DATA_CELL, color: "#c00", fontWeight: 600 }}>{guestCount || "—"}</td>
                       </tr>
                       <tr>
                         <td style={{ ...LABEL_CELL }} />
@@ -2523,12 +2591,18 @@ const BeoPrintPage: React.FC = () => {
               </div>
             )}
 
-            {/* Page 1 only: Not Buffet + Allergy banners */}
+            {/* Page 1 only: Banners under header */}
+            {page.pageNum === 1 && beoNotes.trim() && (
+              <div className="beo-banner-block" style={styles.beoNotesBanner}>📋 BEO NOTES: {beoNotes.trim()}</div>
+            )}
             {page.pageNum === 1 && notBuffetBanner && (
               <div className="beo-banner-block" style={styles.notBuffetBanner}>{notBuffetBanner}</div>
             )}
             {page.pageNum === 1 && allergies && (
               <div className="beo-banner-block" style={styles.allergyBanner}>⚠️ ALLERGIES / DIETARY RESTRICTIONS: {allergies.toUpperCase()}</div>
+            )}
+            {page.pageNum === 1 && religiousRestrictions.trim() && (
+              <div className="beo-banner-block" style={styles.religiousBanner}>🕎 RELIGIOUS / DIETARY: {religiousRestrictions.trim().toUpperCase()}</div>
             )}
 
             {/* ── Menu Sections for this page ── */}
@@ -2544,8 +2618,13 @@ const BeoPrintPage: React.FC = () => {
               return (
               <div key={`${item.id}-${itemIdx}`} className="beo-menu-item-block" style={{ borderBottom: "1px solid #eee", marginTop: itemIdx > 0 ? 2 : 0 }}>
               {rows.map((row, rowIdx) => (
-              <div key={rowIdx} className="beo-line-item" style={{ ...styles.lineItem, borderBottom: "none", gridTemplateColumns, padding: "2px 12px", lineHeight: 1.2, minHeight: "unset", alignItems: "flex-start", ...(row.isChild ? { marginTop: -2 } : {}) }}>
-                {/* SPEC / PACK-OUT / EXPEDITOR / KITCHEN / SERVER: Spec Column (left) — override only (auto spec disabled) */}
+              <div key={rowIdx} className="beo-line-item" style={{ ...styles.lineItem, borderBottom: "none", gridTemplateColumns, padding: "2px 12px", lineHeight: 1.2, minHeight: "unset", alignItems: "flex-start", ...(row.isChild ? {} : {}) }}>
+                {/* ALL MODES: Item Name (left column — what is written) */}
+                <div className="beo-item-col" style={{ ...styles.itemCol, lineHeight: 1.25 }}>
+                  {row.isChild ? `  ${row.lineName}` : row.lineName}
+                </div>
+
+                {/* SPEC / PACK-OUT / EXPEDITOR / KITCHEN / SERVER: Spec Column (right) — override only */}
                 {(leftCheck === "spec" || leftCheck === "packout" || leftCheck === "expeditor" || leftCheck === "kitchen" || leftCheck === "server") && (
                   <div className="beo-spec-col" style={{ ...styles.specCol, lineHeight: 1.2 }}>
                     {(() => {
@@ -2557,39 +2636,28 @@ const BeoPrintPage: React.FC = () => {
                   </div>
                 )}
 
-                {/* ALL MODES: Item Name (children indented 2 spaces) */}
-                <div className="beo-item-col" style={{ ...styles.itemCol, lineHeight: 1.25 }}>
-                  {row.lineName}
-                </div>
-
-                {/* SPEC VIEW: Override input (auto spec disabled) — parent row only */}
+                {/* SPEC VIEW: Override input — every row (including children) for spec reasons */}
                 {leftCheck === "spec" && (
                   <div className="beo-spec-col" style={{ ...styles.specCol, display: "flex", flexDirection: "column", gap: 2 }} onClick={(e) => { e.stopPropagation(); if (document.activeElement instanceof HTMLButtonElement) document.activeElement.blur(); }}>
-                    {rowIdx === 0 ? (
-                      <>
-                        <input
-                          type="text"
-                          placeholder="Override..."
-                          value={specOverrides[`${section.fieldId}:${item.id}:${rowIdx}`] ?? (rowIdx === 0 ? specOverrides[`${section.fieldId}:${item.id}`] : undefined) ?? ""}
-                          onChange={(e) => {
-                            const key = `${section.fieldId}:${item.id}:${rowIdx}`;
-                            setSpecOverrides((prev) => ({ ...prev, [key]: e.target.value }));
-                          }}
-                          style={{
-                            width: "100%",
-                            padding: "2px 6px",
-                            fontSize: 11,
-                            lineHeight: 1,
-                            background: "#f9f9f9",
-                            border: "1px solid #ddd",
-                            borderRadius: 2,
-                          }}
-                          className="no-print"
-                        />
-                      </>
-                    ) : (
-                      <span style={{ fontSize: 10, color: "#999" }}>—</span>
-                    )}
+                    <input
+                      type="text"
+                      placeholder="spec..."
+                      value={specOverrides[`${section.fieldId}:${item.id}:${rowIdx}`] ?? (rowIdx === 0 ? specOverrides[`${section.fieldId}:${item.id}`] : undefined) ?? ""}
+                      onChange={(e) => {
+                        const key = `${section.fieldId}:${item.id}:${rowIdx}`;
+                        setSpecOverrides((prev) => ({ ...prev, [key]: e.target.value }));
+                      }}
+                      style={{
+                        width: "100%",
+                        padding: "2px 6px",
+                        fontSize: 11,
+                        lineHeight: 1,
+                        background: "#f9f9f9",
+                        border: "1px solid #ddd",
+                        borderRadius: 2,
+                      }}
+                      className="no-print"
+                    />
                   </div>
                 )}
 
@@ -2655,17 +2723,17 @@ const BeoPrintPage: React.FC = () => {
                   </div>
                 )}
                 <div className="beo-footer-block" style={{ marginTop: 12, breakInside: "avoid", pageBreakInside: "avoid", breakBefore: "avoid", pageBreakBefore: "avoid" }}>
-                  <div style={{ border: "2px solid #333", borderRadius: 6, padding: "12px 20px", background: "#9ca3af" }}>
-                    <div style={{ display: "flex", justifyContent: "center", alignItems: "center", flexWrap: "wrap", gap: 8, fontSize: 13, fontWeight: 600, color: "#111" }}>
+                  <div style={{ border: "2px solid #333", borderRadius: 6, padding: "10px 16px", background: "#374151" }}>
+                    <div style={{ display: "flex", justifyContent: "center", alignItems: "center", flexWrap: "nowrap", gap: 10, fontSize: 12, fontWeight: 600, color: "#fff", whiteSpace: "nowrap" }}>
                       <span>Client: {clientName || "—"}</span>
-                      <span style={{ color: "#374151", fontSize: 10 }}>|</span>
+                      <span style={{ color: "rgba(255,255,255,0.6)", fontSize: 10 }}>|</span>
                       <span>Venue: {eventLocation || "—"}</span>
-                      <span style={{ color: "#374151", fontSize: 10 }}>|</span>
-                      <span>Dispatch: {dispatchTime || "—"}</span>
-                      <span style={{ color: "#374151", fontSize: 10 }}>|</span>
+                      <span style={{ color: "rgba(255,255,255,0.6)", fontSize: 10 }}>|</span>
+                      <span style={{ fontSize: 15, fontWeight: 700 }}>Job #: {jobNumberDisplay}</span>
+                      <span style={{ color: "rgba(255,255,255,0.6)", fontSize: 10 }}>|</span>
+                      <span style={{ fontSize: 15, fontWeight: 700 }}>Dispatch: {dispatchTime || "—"}</span>
+                      <span style={{ color: "rgba(255,255,255,0.6)", fontSize: 10 }}>|</span>
                       <span>Guests: {guestCount || "—"}</span>
-                      <span style={{ color: "#374151", fontSize: 10 }}>|</span>
-                      <span>Job #: {jobNumberDisplay}</span>
                     </div>
                   </div>
                   <div style={{ textAlign: "center" as const, marginTop: 8, fontSize: 12, fontWeight: 700, letterSpacing: 2, color: "#333" }}>
@@ -2725,6 +2793,8 @@ const BeoPrintPage: React.FC = () => {
               fwStaff={fwStaff}
               allergies={allergies}
               notBuffetBanner={notBuffetBanner}
+              religiousRestrictions={religiousRestrictions}
+              beoNotes={beoNotes}
               activeSections={activeSections}
               expandItemToRows={expandItemToRows}
               meetingNotes={meetingNotes}
@@ -2748,6 +2818,8 @@ const BeoPrintPage: React.FC = () => {
               fwStaff={fwStaff}
               allergies={allergies}
               notBuffetBanner={notBuffetBanner}
+              religiousRestrictions={religiousRestrictions}
+              beoNotes={beoNotes}
               eventData={eventData}
               barServiceFieldId={barServiceFieldId}
             />
@@ -2769,6 +2841,8 @@ const BeoPrintPage: React.FC = () => {
               fwStaff={fwStaff}
               allergies={allergies}
               notBuffetBanner={notBuffetBanner}
+              religiousRestrictions={religiousRestrictions}
+              beoNotes={beoNotes}
               eventData={eventData}
               barServiceFieldId={barServiceFieldId}
               leftCheck={leftCheck}

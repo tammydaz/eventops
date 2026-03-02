@@ -14,6 +14,7 @@ import {
 import { asLinkedRecordIds, asString, isErrorResult } from "../../services/airtable/selectors";
 import { useEventStore } from "../../state/eventStore";
 import { FormSection, CollapsibleSubsection } from "./FormSection";
+import { CustomFoodItemsBlock } from "./CustomFoodItemsBlock";
 import { sanitizeForHeader } from "../../utils/httpHeaders";
 
 /** Picker to add a menu item to a station. */
@@ -240,6 +241,8 @@ type CustomFields = {
   customBuffetMetal: string;
   customBuffetChina: string;
   customDessert: string;
+  customDeli: string;
+  customRoomTemp: string;
 };
 
 type PickerState = {
@@ -282,6 +285,8 @@ export const MenuSection = ({ embedded = false, isDelivery = false }: MenuSectio
     customBuffetMetal: "",
     customBuffetChina: "",
     customDessert: "",
+    customDeli: "",
+    customRoomTemp: "",
   });
   const [error, setError] = useState<string | null>(null);
   const [pickerState, setPickerState] = useState<PickerState>({
@@ -403,6 +408,8 @@ export const MenuSection = ({ embedded = false, isDelivery = false }: MenuSectio
       customBuffetMetal: asString(selectedEventData[FIELD_IDS.CUSTOM_BUFFET_METAL]),
       customBuffetChina: asString(selectedEventData[FIELD_IDS.CUSTOM_BUFFET_CHINA]),
       customDessert: asString(selectedEventData[FIELD_IDS.CUSTOM_DESSERTS]),
+      customDeli: asString(selectedEventData[FIELD_IDS.CUSTOM_DELIVERY_DELI]),
+      customRoomTemp: asString(selectedEventData[FIELD_IDS.CUSTOM_ROOM_TEMP_DISPLAY]),
     });
   }, [selectedEventId, selectedEventData, fetchItemNames]);
 
@@ -593,6 +600,18 @@ export const MenuSection = ({ embedded = false, isDelivery = false }: MenuSectio
                 ))}
               </div>
               <button type="button" disabled={!canEdit} onClick={() => openPicker("passed", "passedAppetizers", "Select Passed Appetizers")} style={deliveryButtonStyle}>+ Add Passed Appetizer</button>
+              <CustomFoodItemsBlock
+                value={customFields.customPassedApp}
+                fieldId={FIELD_IDS.CUSTOM_PASSED_APP}
+                placeholder="Item name"
+                notesPlaceholder="Notes (optional)"
+                canEdit={canEdit}
+                onSave={saveCustomField}
+                label="Custom (not in menu)"
+                inputStyle={inputStyle}
+                labelStyle={labelStyle}
+                buttonStyle={deliveryButtonStyle}
+              />
               <div style={{ marginTop: "12px" }}>
                 <label style={labelStyle}>Presented Appetizers</label>
                 <div style={{ marginBottom: "8px" }}>
@@ -604,6 +623,18 @@ export const MenuSection = ({ embedded = false, isDelivery = false }: MenuSectio
                   ))}
                 </div>
                 <button type="button" disabled={!canEdit} onClick={() => openPicker("presented", "presentedAppetizers", "Select Presented Appetizers")} style={deliveryButtonStyle}>+ Add Presented Appetizer</button>
+                <CustomFoodItemsBlock
+                  value={customFields.customPresentedApp}
+                  fieldId={FIELD_IDS.CUSTOM_PRESENTED_APP}
+                  placeholder="Item name"
+                  notesPlaceholder="Notes (optional)"
+                  canEdit={canEdit}
+                  onSave={saveCustomField}
+                  label="Custom (not in menu)"
+                  inputStyle={inputStyle}
+                  labelStyle={labelStyle}
+                  buttonStyle={deliveryButtonStyle}
+                />
               </div>
               <div style={{ marginTop: "12px" }}>
                 <label style={labelStyle}>Buffet – Metal (hot items)</label>
@@ -632,6 +663,18 @@ export const MenuSection = ({ embedded = false, isDelivery = false }: MenuSectio
                 ))}
               </div>
               <button type="button" disabled={!canEdit} onClick={() => openPicker("deli", "deliveryDeli", "Select Deli Items (Sandwiches & Wraps)")} style={deliveryButtonStyle}>+ Add Deli Item</button>
+              <CustomFoodItemsBlock
+                value={customFields.customDeli}
+                fieldId={FIELD_IDS.CUSTOM_DELIVERY_DELI}
+                placeholder="Sandwich or wrap name"
+                notesPlaceholder="Notes (optional)"
+                canEdit={canEdit}
+                onSave={saveCustomField}
+                label="+ Add Custom (not in menu)"
+                inputStyle={inputStyle}
+                labelStyle={labelStyle}
+                buttonStyle={deliveryButtonStyle}
+              />
             </div>
           </CollapsibleSubsection>
 
@@ -647,6 +690,18 @@ export const MenuSection = ({ embedded = false, isDelivery = false }: MenuSectio
                 ))}
               </div>
               <button type="button" disabled={!canEdit} onClick={() => openPicker("buffet_china", "buffetChina", "Select Kitchen Items")} style={deliveryButtonStyle}>+ Add Kitchen Item</button>
+              <CustomFoodItemsBlock
+                value={customFields.customBuffetChina}
+                fieldId={FIELD_IDS.CUSTOM_BUFFET_CHINA}
+                placeholder="Item name"
+                notesPlaceholder="Notes (optional)"
+                canEdit={canEdit}
+                onSave={saveCustomField}
+                label="+ Add Custom (not in menu)"
+                inputStyle={inputStyle}
+                labelStyle={labelStyle}
+                buttonStyle={deliveryButtonStyle}
+              />
             </div>
           </CollapsibleSubsection>
 
@@ -662,6 +717,18 @@ export const MenuSection = ({ embedded = false, isDelivery = false }: MenuSectio
                 ))}
               </div>
               <button type="button" disabled={!canEdit} onClick={() => openPicker("room_temp", "roomTempDisplay", "Select Room Temp / Salad Items")} style={deliveryButtonStyle}>+ Add Salad Item</button>
+              <CustomFoodItemsBlock
+                value={customFields.customRoomTemp}
+                fieldId={FIELD_IDS.CUSTOM_ROOM_TEMP_DISPLAY}
+                placeholder="Salad or display item"
+                notesPlaceholder="Notes (optional)"
+                canEdit={canEdit}
+                onSave={saveCustomField}
+                label="+ Add Custom (not in menu)"
+                inputStyle={inputStyle}
+                labelStyle={labelStyle}
+                buttonStyle={deliveryButtonStyle}
+              />
             </div>
           </CollapsibleSubsection>
 
@@ -677,10 +744,18 @@ export const MenuSection = ({ embedded = false, isDelivery = false }: MenuSectio
                 ))}
               </div>
               <button type="button" disabled={!canEdit} onClick={() => openPicker("desserts", "desserts", "Select Desserts")} style={deliveryButtonStyle}>+ Add Dessert</button>
-              <div style={{ marginTop: "12px" }}>
-                <label style={labelStyle}>Custom Desserts (free text)</label>
-                <textarea rows={2} value={customFields.customDessert} disabled={!canEdit} onChange={(e) => setCustomFields((p) => ({ ...p, customDessert: e.target.value }))} onBlur={(e) => saveCustomField(FIELD_IDS.CUSTOM_DESSERTS, e.target.value)} style={inputStyle} placeholder="Enter custom desserts..." />
-              </div>
+              <CustomFoodItemsBlock
+                value={customFields.customDessert}
+                fieldId={FIELD_IDS.CUSTOM_DESSERTS}
+                placeholder="Dessert name"
+                notesPlaceholder="Notes (optional)"
+                canEdit={canEdit}
+                onSave={saveCustomField}
+                label="Custom Desserts (not in menu)"
+                inputStyle={inputStyle}
+                labelStyle={labelStyle}
+                buttonStyle={deliveryButtonStyle}
+              />
             </div>
           </CollapsibleSubsection>
         </>
@@ -702,18 +777,18 @@ export const MenuSection = ({ embedded = false, isDelivery = false }: MenuSectio
         <button type="button" disabled={!canEdit} onClick={() => openPicker("passed", "passedAppetizers", "Select Passed Appetizers")} style={buttonStyle}>
           + Add Passed Appetizer
         </button>
-        <div style={{ marginTop: "12px" }}>
-          <label style={labelStyle}>Custom Passed Appetizers (free text)</label>
-          <textarea 
-            rows={2} 
-            value={customFields.customPassedApp} 
-            disabled={!canEdit} 
-            onChange={(e) => setCustomFields((p) => ({ ...p, customPassedApp: e.target.value }))} 
-            onBlur={(e) => saveCustomField(FIELD_IDS.CUSTOM_PASSED_APP, e.target.value)}
-            style={inputStyle} 
-            placeholder="Enter custom passed appetizers..." 
-          />
-        </div>
+        <CustomFoodItemsBlock
+          value={customFields.customPassedApp}
+          fieldId={FIELD_IDS.CUSTOM_PASSED_APP}
+          placeholder="Item name"
+          notesPlaceholder="Notes (optional)"
+          canEdit={canEdit}
+          onSave={saveCustomField}
+          label="Custom Passed Appetizers (not in menu)"
+          inputStyle={inputStyle}
+          labelStyle={labelStyle}
+          buttonStyle={buttonStyle}
+        />
       </div>
       </CollapsibleSubsection>
 
@@ -732,18 +807,18 @@ export const MenuSection = ({ embedded = false, isDelivery = false }: MenuSectio
         <button type="button" disabled={!canEdit} onClick={() => openPicker("presented", "presentedAppetizers", "Select Presented Appetizers")} style={buttonStyle}>
           + Add Presented Appetizer
         </button>
-        <div style={{ marginTop: "12px" }}>
-          <label style={labelStyle}>Custom Presented Appetizers (free text)</label>
-          <textarea 
-            rows={2} 
-            value={customFields.customPresentedApp} 
-            disabled={!canEdit} 
-            onChange={(e) => setCustomFields((p) => ({ ...p, customPresentedApp: e.target.value }))} 
-            onBlur={(e) => saveCustomField(FIELD_IDS.CUSTOM_PRESENTED_APP, e.target.value)}
-            style={inputStyle} 
-            placeholder="Enter custom presented appetizers..." 
-          />
-        </div>
+        <CustomFoodItemsBlock
+          value={customFields.customPresentedApp}
+          fieldId={FIELD_IDS.CUSTOM_PRESENTED_APP}
+          placeholder="Item name"
+          notesPlaceholder="Notes (optional)"
+          canEdit={canEdit}
+          onSave={saveCustomField}
+          label="Custom Presented Appetizers (not in menu)"
+          inputStyle={inputStyle}
+          labelStyle={labelStyle}
+          buttonStyle={buttonStyle}
+        />
       </div>
       </CollapsibleSubsection>
 
@@ -777,18 +852,18 @@ export const MenuSection = ({ embedded = false, isDelivery = false }: MenuSectio
         <button type="button" disabled={!canEdit} onClick={() => openPicker("buffet_metal", "buffetMetal", "Select Buffet Items (Metal)")} style={buttonStyle}>
           + Add Buffet Item (Metal)
         </button>
-        <div style={{ marginTop: "12px" }}>
-          <label style={labelStyle}>Custom Buffet Metal (free text)</label>
-          <textarea 
-            rows={2} 
-            value={customFields.customBuffetMetal} 
-            disabled={!canEdit} 
-            onChange={(e) => setCustomFields((p) => ({ ...p, customBuffetMetal: e.target.value }))} 
-            onBlur={(e) => saveCustomField(FIELD_IDS.CUSTOM_BUFFET_METAL, e.target.value)}
-            style={inputStyle} 
-            placeholder="Enter custom buffet metal items..." 
-          />
-        </div>
+        <CustomFoodItemsBlock
+          value={customFields.customBuffetMetal}
+          fieldId={FIELD_IDS.CUSTOM_BUFFET_METAL}
+          placeholder="Item name"
+          notesPlaceholder="Notes (optional)"
+          canEdit={canEdit}
+          onSave={saveCustomField}
+          label="Custom Buffet Metal (not in menu)"
+          inputStyle={inputStyle}
+          labelStyle={labelStyle}
+          buttonStyle={buttonStyle}
+        />
       </div>
       </CollapsibleSubsection>
 
@@ -807,18 +882,18 @@ export const MenuSection = ({ embedded = false, isDelivery = false }: MenuSectio
         <button type="button" disabled={!canEdit} onClick={() => openPicker("buffet_china", "buffetChina", "Select Buffet Items (China)")} style={buttonStyle}>
           + Add Buffet Item (China)
         </button>
-        <div style={{ marginTop: "12px" }}>
-          <label style={labelStyle}>Custom Buffet China (free text)</label>
-          <textarea 
-            rows={2} 
-            value={customFields.customBuffetChina} 
-            disabled={!canEdit} 
-            onChange={(e) => setCustomFields((p) => ({ ...p, customBuffetChina: e.target.value }))} 
-            onBlur={(e) => saveCustomField(FIELD_IDS.CUSTOM_BUFFET_CHINA, e.target.value)}
-            style={inputStyle} 
-            placeholder="Enter custom buffet china items..." 
-          />
-        </div>
+        <CustomFoodItemsBlock
+          value={customFields.customBuffetChina}
+          fieldId={FIELD_IDS.CUSTOM_BUFFET_CHINA}
+          placeholder="Item name"
+          notesPlaceholder="Notes (optional)"
+          canEdit={canEdit}
+          onSave={saveCustomField}
+          label="Custom Buffet China (not in menu)"
+          inputStyle={inputStyle}
+          labelStyle={labelStyle}
+          buttonStyle={buttonStyle}
+        />
       </div>
       </CollapsibleSubsection>
 
@@ -837,18 +912,18 @@ export const MenuSection = ({ embedded = false, isDelivery = false }: MenuSectio
         <button type="button" disabled={!canEdit} onClick={() => openPicker("desserts", "desserts", "Select Desserts")} style={buttonStyle}>
           + Add Dessert
         </button>
-        <div style={{ marginTop: "12px" }}>
-          <label style={labelStyle}>Custom Desserts (free text)</label>
-          <textarea 
-            rows={2} 
-            value={customFields.customDessert} 
-            disabled={!canEdit} 
-            onChange={(e) => setCustomFields((p) => ({ ...p, customDessert: e.target.value }))} 
-            onBlur={(e) => saveCustomField(FIELD_IDS.CUSTOM_DESSERTS, e.target.value)}
-            style={inputStyle} 
-            placeholder="Enter custom desserts..." 
-          />
-        </div>
+        <CustomFoodItemsBlock
+          value={customFields.customDessert}
+          fieldId={FIELD_IDS.CUSTOM_DESSERTS}
+          placeholder="Dessert name"
+          notesPlaceholder="Notes (optional)"
+          canEdit={canEdit}
+          onSave={saveCustomField}
+          label="Custom Desserts (not in menu)"
+          inputStyle={inputStyle}
+          labelStyle={labelStyle}
+          buttonStyle={buttonStyle}
+        />
       </div>
       </CollapsibleSubsection>
 

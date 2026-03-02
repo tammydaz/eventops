@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { useEventStore } from "../../state/eventStore";
+import { useAuthStore } from "../../state/authStore";
 import { FIELD_IDS, getFoodwerxArrivalFieldId } from "../../services/airtable/events";
 import { asSingleSelectName, asString } from "../../services/airtable/selectors";
-import { FormSection } from "./FormSection";
+import { FormSection, Helper } from "./FormSection";
 import type { EventCore } from "./types";
 import { secondsToTimeString, MINUTE_INCREMENTS } from "../../utils/timeHelpers";
 
@@ -33,6 +34,7 @@ const SERVICE_STYLE_OPTIONS = [
 
 export const EventCoreSection = ({ isDelivery = false }: { isDelivery?: boolean }) => {
   const { selectedEventId, selectedEventData, setFields } = useEventStore();
+  const { user } = useAuthStore();
   const isUpdatingRef = useRef(false);
   const [fwArrivalFieldId, setFwArrivalFieldId] = useState<string | null>(null);
   const [details, setDetails] = useState<EventCore>({
@@ -45,7 +47,6 @@ export const EventCoreSection = ({ isDelivery = false }: { isDelivery?: boolean 
     eventStartTime: "",
     eventEndTime: "",
     eventArrivalTime: "",
-    opsExceptions: "",
   });
 
   useEffect(() => {
@@ -65,7 +66,6 @@ export const EventCoreSection = ({ isDelivery = false }: { isDelivery?: boolean 
         eventStartTime: "",
         eventEndTime: "",
         eventArrivalTime: "",
-        opsExceptions: "",
       });
       return;
     }
@@ -83,11 +83,12 @@ export const EventCoreSection = ({ isDelivery = false }: { isDelivery?: boolean 
       eventStartTime: secondsToTimeString(selectedEventData[FIELD_IDS.EVENT_START_TIME]),
       eventEndTime: secondsToTimeString(selectedEventData[FIELD_IDS.EVENT_END_TIME]),
       eventArrivalTime: secondsToTimeString(arrivalRaw),
-      opsExceptions: asString(selectedEventData[FIELD_IDS.OPS_EXCEPTIONS_SPECIAL_HANDLING]),
     });
   }, [selectedEventId, selectedEventData, fwArrivalFieldId]);
 
   const canEdit = Boolean(selectedEventId);
+  const isAdmin = user?.role === "ops_admin";
+  const canEditDispatchTime = canEdit && isAdmin;
 
   const handleTimeChange = (stateKey: keyof EventCore, timeValue: string) => {
     setDetails(prev => ({ ...prev, [stateKey]: timeValue }));
@@ -169,6 +170,7 @@ export const EventCoreSection = ({ isDelivery = false }: { isDelivery?: boolean 
           placeholder="Number of guests"
           min="0"
         />
+        <Helper>Total expected guests. Used for quantities, pack-out, and staffing.</Helper>
       </div>
 
       <div>
@@ -192,6 +194,7 @@ export const EventCoreSection = ({ isDelivery = false }: { isDelivery?: boolean 
             </option>
           ))}
         </select>
+        <Helper>Full Service = on-site catering. Delivery/Pickup = off-site.</Helper>
       </div>
 
       {!isDelivery && (
@@ -217,9 +220,7 @@ export const EventCoreSection = ({ isDelivery = false }: { isDelivery?: boolean 
                 </option>
               ))}
             </select>
-            <div style={{ fontSize: "11px", color: "#666", marginTop: "6px", lineHeight: 1.4 }}>
-              Wedding & Bar/Bat Mitzvah show extra timeline prompts below.
-            </div>
+            <Helper>Wedding & Bar/Bat Mitzvah show extra timeline prompts below.</Helper>
           </div>
 
           <div>
@@ -243,9 +244,7 @@ export const EventCoreSection = ({ isDelivery = false }: { isDelivery?: boolean 
                 </option>
               ))}
             </select>
-            <div style={{ fontSize: "11px", color: "#666", marginTop: "6px", lineHeight: 1.4 }}>
-              Buffet vs plated/cocktail/etc. When not buffet, a banner warns the kitchen. (Different from Food Service Flow in Site Visit—that one is for servers.)
-            </div>
+            <Helper>Buffet vs plated/cocktail/etc. When not buffet, a banner warns the kitchen.</Helper>
           </div>
         </>
       )}
@@ -282,13 +281,15 @@ export const EventCoreSection = ({ isDelivery = false }: { isDelivery?: boolean 
         const handleMinuteChange = (newMinute: number) => {
           handleTimeSelectChange(key, fieldIdMap[key], hour24, newMinute);
         };
+        const isDispatchTime = key === "dispatchTime";
+        const fieldCanEdit = isDispatchTime ? canEditDispatchTime : canEdit;
         return (
           <div key={key}>
-            <label style={labelStyle}>{labelMap[key]}</label>
+            <label style={labelStyle}>{labelMap[key]}{isDispatchTime && !isAdmin ? " (read-only)" : ""}</label>
             <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
               <select
                 value={hour12}
-                disabled={!canEdit}
+                disabled={!fieldCanEdit}
                 onChange={(e) => handleHourChange(Number(e.target.value), isPM)}
                 style={{ ...inputStyle, flex: 1, minWidth: 70 }}
               >
@@ -299,7 +300,7 @@ export const EventCoreSection = ({ isDelivery = false }: { isDelivery?: boolean 
               <span style={{ color: "#999", fontSize: 14 }}>:</span>
               <select
                 value={minute}
-                disabled={!canEdit}
+                disabled={!fieldCanEdit}
                 onChange={(e) => handleMinuteChange(Number(e.target.value))}
                 style={{ ...inputStyle, flex: 1, minWidth: 70 }}
               >
@@ -309,7 +310,7 @@ export const EventCoreSection = ({ isDelivery = false }: { isDelivery?: boolean 
               </select>
               <select
                 value={isPM ? "PM" : "AM"}
-                disabled={!canEdit}
+                disabled={!fieldCanEdit}
                 onChange={(e) => handleHourChange(hour12, e.target.value === "PM")}
                 style={{ ...inputStyle, flex: 1, minWidth: 60 }}
               >
@@ -321,26 +322,6 @@ export const EventCoreSection = ({ isDelivery = false }: { isDelivery?: boolean 
         );
       })}
 
-      <div style={{ gridColumn: "1 / -1" }}>
-        <label style={labelStyle}>Kitchen Notes / Ops Exceptions</label>
-        <textarea
-          rows={3}
-          value={details.opsExceptions}
-          disabled={!canEdit}
-          onChange={(e) => setDetails(prev => ({ ...prev, opsExceptions: e.target.value }))}
-          onBlur={async (e) => {
-            if (selectedEventId) {
-              await saveField(FIELD_IDS.OPS_EXCEPTIONS_SPECIAL_HANDLING, e.target.value);
-            }
-          }}
-          style={{
-            ...inputStyle,
-            resize: "vertical",
-            fontFamily: "inherit",
-          }}
-          placeholder="Special instructions, exceptions..."
-        />
-      </div>
     </FormSection>
   );
 };

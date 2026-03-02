@@ -191,10 +191,8 @@ export default function LoginPage() {
     <div className="login-page">
       <div className="login-card">
         <div className="login-logo">
-          <div className="login-diamond">
-            <span>F</span>
-          </div>
-          <h1>FOODWERX EVENTOPS</h1>
+          <h1 className="login-werx">Werx</h1>
+          <p className="login-tagline">The engine behind the excellence!!</p>
           <p className="login-subtitle">
             {showSetPassword ? "Set your password" : showPasswordField ? "Enter your password" : "Sign in with your email"}
           </p>
@@ -265,7 +263,6 @@ export default function LoginPage() {
               className="login-forgot"
               onClick={handleForgotPassword}
               disabled={loading}
-              style={{ marginTop: 8, background: "none", border: "none", color: "#888", cursor: "pointer", fontSize: 13 }}
             >
               First time or forgot? Set your password here
             </button>

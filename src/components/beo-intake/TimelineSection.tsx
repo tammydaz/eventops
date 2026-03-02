@@ -23,12 +23,7 @@ const BAR_MITZVAH_KEY_MOMENTS = [
   "Cake Cutting",
 ];
 
-const helperStyle = {
-  fontSize: "11px",
-  color: "#666",
-  marginTop: "6px",
-  lineHeight: 1.4,
-} as const;
+import { Helper } from "./FormSection";
 
 export const TimelineSection = () => {
   const { selectedEventId, selectedEventData, setFields } = useEventStore();
@@ -116,11 +111,11 @@ export const TimelineSection = () => {
               : "10:30AM Staff Arrival / 12:00PM Event Begins / 4:00PM Load Out..."
           }
         />
-        <div style={helperStyle}>
+        <Helper>
           {showKeyMoments
             ? "For events with a strict schedule. This appears on the printed BEO. Include all key moments above."
             : "For events with a strict schedule (bar/bat mitzvahs, weddings, large corporate). Leave blank if no formal timeline."}
-        </div>
+        </Helper>
       </div>
     </FormSection>
   );

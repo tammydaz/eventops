@@ -21,6 +21,7 @@ import PostEventDebriefPage from "./pages/PostEventDebriefPage";
 import KitchenBEOPrintPage from "./pages/KitchenBEOPrintPage";
 import SiteVisitPage from "./pages/SiteVisitPage";
 import InvoiceIntakePage from "./pages/InvoiceIntakePage";
+import FeedbackIssuesPage from "./pages/FeedbackIssuesPage";
 
 export const Router = ({ selectedEventId }: { selectedEventId: string | null }) => {
 	const { pathname } = useLocation();
@@ -111,6 +112,10 @@ export const Router = ({ selectedEventId }: { selectedEventId: string | null }) 
 
   if (pathname.startsWith("/post-event-debrief")) {
     return <PostEventDebriefPage />;
+  }
+
+  if (pathname.startsWith("/feedback-issues")) {
+    return <FeedbackIssuesPage />;
   }
 
 	return <DashboardPage />;

@@ -19,6 +19,7 @@ function App() {
   const isBeoPrint = pathname.startsWith("/beo-print");
   const isSeedDemo = pathname.startsWith("/seed-demo");
   const isInvoiceIntake = pathname.startsWith("/invoice-intake");
+  const isFeedbackIssues = pathname.startsWith("/feedback-issues");
 
   useEffect(() => {
     loadEvents();
@@ -34,7 +35,7 @@ function App() {
     }
   }, [pathname, selectedEventId, selectEvent]);
 
-  if (isPrintTest || isHome || isQuickIntake || isWatchtower || isPapaChulo || isFOH || isDashboardOld || isBeoIntake || isBeoPrint || isSeedDemo || isInvoiceIntake) {
+  if (isPrintTest || isHome || isQuickIntake || isWatchtower || isPapaChulo || isFOH || isDashboardOld || isBeoIntake || isBeoPrint || isSeedDemo || isInvoiceIntake || isFeedbackIssues) {
     return (
       <AuthGuard>
         <Router selectedEventId={selectedEventId} />

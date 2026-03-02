@@ -3,7 +3,7 @@ import { useEventStore } from "../../state/eventStore";
 import { FIELD_IDS } from "../../services/airtable/events";
 import { asSingleSelectName, asString } from "../../services/airtable/selectors";
 import { isDeliveryOrPickup } from "../../lib/deliveryHelpers";
-import { FormSection } from "./FormSection";
+import { FormSection, Helper } from "./FormSection";
 import type { VenueDetails } from "./types";
 
 const VENUE_STATE_OPTIONS = ["NJ", "PA", "DE", "NY"];
@@ -119,12 +119,12 @@ export const VenueDetailsSection = () => {
           style={inputStyle}
           placeholder={isDelivery ? "e.g. ABC Corporation or The Merion" : "e.g. The Merion – Palazzo Room"}
         />
-        <div style={{ fontSize: "10px", color: "#888", marginTop: "4px" }}>
+        <Helper>
           {isDelivery 
-            ? "💡 Leave blank if delivering to client's home; otherwise enter business or venue name"
-            : "💡 Only fill this if the event is at a venue different from the client's residence"
+            ? "Leave blank if delivering to client's home; otherwise enter business or venue name."
+            : "Only fill this if the event is at a venue different from the client's residence."
           }
-        </div>
+        </Helper>
       </div>
 
       <div style={{ gridColumn: "1 / -1" }}>
@@ -141,6 +141,7 @@ export const VenueDetailsSection = () => {
           style={inputStyle}
           placeholder={isDelivery ? "e.g. 456 Business Blvd — leave blank if client residence" : "e.g. 123 Main St"}
         />
+        <Helper>Street address for delivery or venue. Leave blank for delivery if using client residence.</Helper>
       </div>
 
       <div>
@@ -196,9 +197,7 @@ export const VenueDetailsSection = () => {
           }}
           placeholder="Auto-computed from venue or client address"
         />
-        <div style={{ fontSize: "10px", color: "#666", marginTop: "4px" }}>
-          ⚙️ This field is automatically computed by Airtable and cannot be edited
-        </div>
+        <Helper>This field is automatically computed by Airtable and cannot be edited.</Helper>
       </div>
 
       {isDelivery && (
@@ -217,6 +216,7 @@ export const VenueDetailsSection = () => {
             }}
             placeholder="Loading dock, call upon arrival, leave at front desk, etc."
           />
+          <Helper>Load-in instructions: dock location, call-on-arrival, leave at front desk, etc.</Helper>
         </div>
       )}
     </FormSection>

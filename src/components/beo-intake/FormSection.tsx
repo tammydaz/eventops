@@ -1,5 +1,18 @@
 import { useState, useRef, useEffect, type ReactNode } from "react";
 
+/** Helper text below form fields — prominent and readable on dark backgrounds */
+export const helperStyle = {
+  fontSize: "13px",
+  color: "#c4b5fd",
+  marginTop: "8px",
+  lineHeight: 1.5,
+  fontWeight: 500,
+} as const;
+
+export function Helper({ children }: { children: React.ReactNode }) {
+  return <div style={helperStyle}>{children}</div>;
+}
+
 type CollapsibleSubsectionProps = {
   title: string;
   icon?: string;
@@ -137,18 +150,12 @@ export const FormSection = ({
           padding: 0,
         }}
       >
-        {dotColor && (
-          <>
-            <span style={{ color: dotColor, fontSize: "20px", lineHeight: 0 }}>●</span>
-            <span style={{ color: dotColor, fontSize: "20px", lineHeight: 0 }}>●</span>
-          </>
-        )}
-        {!dotColor && <span style={{ fontSize: "20px" }}>{icon}</span>}
+        {!dotColor && <span style={{ fontSize: "20px", color: "#dc2626" }}>{icon}</span>}
         <h2
           style={{
             fontSize: "13px",
             fontWeight: "bold",
-            color: dotColor || "#ff6b6b",
+            color: "#dc2626",
             textTransform: "uppercase",
             letterSpacing: "1px",
             flex: 1,
@@ -160,7 +167,7 @@ export const FormSection = ({
         </h2>
         <span
           style={{
-            color: borderColor,
+            color: "#dc2626",
             fontSize: "12px",
             transform: isOpen ? "rotate(90deg)" : "rotate(0deg)",
             transition: "transform 0.3s ease",

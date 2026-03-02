@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { useEventStore } from "../../state/eventStore";
 import { FIELD_IDS, getBarServiceFieldId, loadSingleSelectOptions, type SingleSelectOption } from "../../services/airtable/events";
 import { asSingleSelectName, asString, asStringArray } from "../../services/airtable/selectors";
-import { FormSection, CollapsibleSubsection } from "./FormSection";
+import { FormSection, CollapsibleSubsection, Helper } from "./FormSection";
 import { HydrationStationModal } from "./HydrationStationModal";
 
 const BAR_SERVICE_FALLBACK_OPTIONS = ["None", "Full Bar Package", "FoodWerx Bartender Only", "FoodWerx Mixers Only"];
@@ -194,6 +194,7 @@ export const BeverageServicesSection = ({ embedded = false }: BeverageServicesSe
               <option key={opt} value={opt}>{opt}</option>
             ))}
           </select>
+          <Helper>Full Bar = bartender + mixers. Bartender only = client supplies alcohol. Mixers only = client has bartender.</Helper>
         </div>
 
         {isFullBarPackage && (
@@ -230,6 +231,7 @@ export const BeverageServicesSection = ({ embedded = false }: BeverageServicesSe
                     <option value="Foodwerx">Foodwerx</option>
                     <option value="Client">Client</option>
                   </select>
+                  <Helper>Who brings the mixers and garnishes for the signature drink?</Helper>
                 </div>
 
                 {bar.signatureDrinkMixersSupplier && (

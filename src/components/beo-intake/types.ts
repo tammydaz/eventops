@@ -31,7 +31,6 @@ export type EventCore = {
   eventStartTime: string;
   eventEndTime: string;
   eventArrivalTime: string;
-  opsExceptions: string;
 };
 
 export type VenueDetails = {
@@ -47,7 +46,6 @@ export type Timeline = {
   eventStartTime: string;
   eventEndTime: string;
   foodwerxArrival: string;
-  opsExceptions: string;
 };
 
 export type TimelineFields = {
@@ -55,7 +53,6 @@ export type TimelineFields = {
   eventStartTime: string;
   eventEndTime: string;
   eventArrivalTime: string;
-  opsExceptions: string;
 };
 
 export type BarService = {
