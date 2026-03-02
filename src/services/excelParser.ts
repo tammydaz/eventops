@@ -4,7 +4,7 @@
  * EVENT DATE, GUESTS, DELIVERY TIME, DELIVERY NOTES, etc.
  */
 import * as XLSX from "xlsx";
-import type { ParsedInvoice } from "./invoiceParser";
+import { isVendorOrPlaceholderName, type ParsedInvoice } from "./invoiceParser";
 
 /** Convert Excel serial date (days since 1900-01-01) to YYYY-MM-DD */
 function excelDateToIso(serial: number): string | undefined {
@@ -101,15 +101,17 @@ export async function parseDeliveryExcel(file: File): Promise<ParsedInvoice | nu
 
   const result: ParsedInvoice & { eventType?: string } = {};
 
-  // Client name: "Stephano Slack (Gold Gerstein)" -> first/last or org
+  // Client name: "Stephano Slack (Gold Gerstein)" -> first/last or org. Skip vendor words (info, infor, etc.)
   if (clientRaw) {
     const paren = clientRaw.indexOf("(");
     const main = paren >= 0 ? clientRaw.slice(0, paren).trim() : clientRaw;
     const parts = main.split(/\s+/);
     if (parts.length >= 2) {
-      result.clientFirstName = parts[0];
-      result.clientLastName = parts.slice(1).join(" ");
-    } else {
+      const fn = parts[0];
+      const ln = parts.slice(1).join(" ");
+      if (!isVendorOrPlaceholderName(fn)) result.clientFirstName = fn;
+      if (!isVendorOrPlaceholderName(ln)) result.clientLastName = ln;
+    } else if (!isVendorOrPlaceholderName(main)) {
       result.clientOrganization = main;
     }
   }

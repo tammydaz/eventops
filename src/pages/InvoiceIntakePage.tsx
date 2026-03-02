@@ -103,7 +103,11 @@ export default function InvoiceIntakePage() {
               const text = await extractTextFromPdf(file);
               return parseInvoiceText(text);
             })();
-        if (!parsed || (!parsed.clientEmail && !parsed.clientOrganization && !parsed.venueName && !parsed.eventDate && !parsed.clientFirstName)) {
+        const hasAnyData = parsed && (
+          parsed.clientEmail || parsed.clientOrganization || parsed.venueName || parsed.eventDate ||
+          parsed.clientFirstName || parsed.clientLastName || parsed.clientPhone || parsed.guestCount || parsed.invoiceNumber
+        );
+        if (!hasAnyData) {
           setError("Could not extract enough data from this invoice. Try a different file or add details manually in BEO Intake.");
           setStep("error");
           return;

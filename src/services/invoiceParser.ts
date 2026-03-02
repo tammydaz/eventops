@@ -1,5 +1,21 @@
 const OPENAI_API_KEY = (import.meta.env.VITE_OPENAI_API_KEY as string)?.replace(/[^\x00-\x7F]/g, "").trim() ?? "";
 
+/** Exclude vendor/caterer emails (info@, sales@, @foodwerx) from being used as client email */
+function isVendorEmail(email: string): boolean {
+  const lower = email.toLowerCase().trim();
+  if (/@foodwerx/i.test(lower) || /@hospitality/i.test(lower)) return true;
+  if (/^info@|^sales@|^hello@|^contact@|^admin@|^support@/i.test(lower)) return true;
+  return false;
+}
+
+/** Exclude vendor/placeholder words from being used as client first or last name. Exported for use in excelParser and invoiceToEventFields. */
+export function isVendorOrPlaceholderName(name: string): boolean {
+  const lower = (name || "").toLowerCase().trim();
+  if (!lower || lower.length < 2) return true;
+  const vendorWords = ["info", "infor", "information", "contact", "bill", "sales", "support", "admin", "foodwerx", "hospitality"];
+  return vendorWords.includes(lower) || vendorWords.some((w) => lower.startsWith(w + " ") || lower === w);
+}
+
 if (!OPENAI_API_KEY) {
   console.warn("[invoiceParser] VITE_OPENAI_API_KEY is not set. Invoice parsing will be disabled.");
 }
@@ -102,8 +118,10 @@ export function parseInvoiceTextRuleBased(text: string): ParsedInvoice | null {
       const firstPart = parts[0] || "";
       const secondPart = parts[1] || "";
       const nameParts = firstPart.split(/\s+/);
-      result.clientFirstName = nameParts[0] || firstPart;
-      result.clientLastName = nameParts.length > 1 ? nameParts.slice(1).join(" ") : secondPart;
+      const fn = nameParts[0] || firstPart;
+      const ln = nameParts.length > 1 ? nameParts.slice(1).join(" ") : secondPart;
+      if (!isVendorOrPlaceholderName(fn)) result.clientFirstName = fn;
+      if (ln && !isVendorOrPlaceholderName(ln)) result.clientLastName = ln;
       if (secondPart) result.primaryContactName = secondPart;
     } else if (firstLine.includes("@")) {
       const [before, after] = firstLine.split("@").map((s) => s.trim());
@@ -111,14 +129,18 @@ export function parseInvoiceTextRuleBased(text: string): ParsedInvoice | null {
       result.venueName = after || billToLines[1] || before;
     } else if (firstLine && /^\d+/.test(billToText.slice(firstLine.length).trim())) {
       const nameParts = firstLine.split(/\s+/);
-      result.clientFirstName = nameParts[0] || firstLine;
-      result.clientLastName = nameParts.slice(1).join(" ") || undefined;
+      const fn = nameParts[0] || firstLine;
+      const ln = nameParts.slice(1).join(" ") || undefined;
+      if (!isVendorOrPlaceholderName(fn)) result.clientFirstName = fn;
+      if (ln && !isVendorOrPlaceholderName(ln)) result.clientLastName = ln;
     } else if (firstLine) {
       result.clientOrganization = firstLine;
       const nameParts = firstLine.split(/\s+/);
       if (nameParts.length >= 2) {
-        result.clientFirstName = nameParts[0];
-        result.clientLastName = nameParts.slice(1).join(" ");
+        const fn = nameParts[0];
+        const ln = nameParts.slice(1).join(" ");
+        if (!isVendorOrPlaceholderName(fn)) result.clientFirstName = fn;
+        if (!isVendorOrPlaceholderName(ln)) result.clientLastName = ln;
       }
     }
 
@@ -141,17 +163,23 @@ export function parseInvoiceTextRuleBased(text: string): ParsedInvoice | null {
   const phoneMatch = raw.match(/Phone\s*\n?\s*([\d\-\.\(\)\s]{10,20})/im) || raw.match(/(\d{3}[-.\s]?\d{3}[-.\s]?\d{4})/);
   if (phoneMatch) result.clientPhone = phoneMatch[1].replace(/\s+/g, " ").trim();
 
-  // E-Mail: "E-Mail elseac23@gmail.com"
-  const emailMatch = raw.match(/E-?Mail\s*\n?\s*([\w._%+-]+@[\w.-]+\.\w+)/im) || raw.match(/([\w._%+-]+@[\w.-]+\.\w+)/);
-  if (emailMatch) result.clientEmail = emailMatch[1].trim();
+  // E-Mail: "E-Mail elseac23@gmail.com" — prefer labeled email; when using generic match, skip vendor emails (info@, @foodwerx)
+  const labeledEmail = raw.match(/E-?Mail\s*\n?\s*([\w._%+-]+@[\w.-]+\.\w+)/im);
+  if (labeledEmail && !isVendorEmail(labeledEmail[1])) {
+    result.clientEmail = labeledEmail[1].trim();
+  } else {
+    const allEmails = [...raw.matchAll(/([\w._%+-]+@[\w.-]+\.\w+)/g)];
+    const clientEmail = allEmails.map((m) => m[1].trim()).find((e) => !isVendorEmail(e));
+    if (clientEmail) result.clientEmail = clientEmail;
+  }
 
-  // Client name fallback from email: "elseac23" -> Elsea
-  if (result.clientEmail && !result.clientFirstName) {
+  // Client name fallback from email: "elseac23" -> Elsea — only when email is not vendor (info@, @foodwerx)
+  if (result.clientEmail && !result.clientFirstName && !isVendorEmail(result.clientEmail)) {
     const local = result.clientEmail.split("@")[0] || "";
     const name = local.replace(/[._\d]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()).trim();
     const parts = name.split(/\s+/).filter(Boolean);
-    if (parts[0]) result.clientFirstName = parts[0];
-    if (parts.length > 1) result.clientLastName = parts.slice(1).join(" ");
+    if (parts[0] && !isVendorOrPlaceholderName(parts[0])) result.clientFirstName = parts[0];
+    if (parts.length > 1 && !isVendorOrPlaceholderName(parts.slice(1).join(" "))) result.clientLastName = parts.slice(1).join(" ");
   }
 
   // Guest count: prefer package line "Flirty Package 166 105.00" or dessert "25 6.00 150.00" - take largest qty in 20-2000 range
@@ -252,12 +280,37 @@ export function parseInvoiceTextRuleBased(text: string): ParsedInvoice | null {
   return result;
 }
 
+/** Minimal fallback for regular PDFs that don't match FoodWerx format. Extracts date, email, phone from any text. */
+function parseInvoiceTextMinimal(text: string): ParsedInvoice | null {
+  const raw = text.trim();
+  if (!raw || raw.length < 10) return null;
+  const result: ParsedInvoice = {};
+  const dateMatch = raw.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+  if (dateMatch) {
+    const [, m, d, y] = dateMatch;
+    if (m && d && y) result.eventDate = `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+  }
+  const allEmails = [...raw.matchAll(/([\w._%+-]+@[\w.-]+\.\w+)/g)];
+  const clientEmail = allEmails.map((m) => m[1].trim()).find((e) => !isVendorEmail(e));
+  if (clientEmail) result.clientEmail = clientEmail;
+  const phoneMatch = raw.match(/(\d{3}[-.\s]?\d{3}[-.\s]?\d{4})/);
+  if (phoneMatch) result.clientPhone = phoneMatch[1].replace(/\s+/g, " ").trim();
+  if (Object.keys(result).length === 0) return null;
+  return result;
+}
+
 export async function parseInvoiceText(text: string): Promise<ParsedInvoice | null> {
   // Try rule-based first (works without API key)
   const ruleBased = parseInvoiceTextRuleBased(text);
-  if (ruleBased && (ruleBased.clientEmail || ruleBased.clientOrganization || ruleBased.venueName || ruleBased.eventDate)) {
-    return ruleBased;
-  }
+  const hasEnough = ruleBased && (
+    ruleBased.clientEmail || ruleBased.clientOrganization || ruleBased.venueName || ruleBased.eventDate ||
+    ruleBased.clientFirstName || ruleBased.clientPhone || ruleBased.clientLastName || ruleBased.guestCount
+  );
+  if (hasEnough) return ruleBased;
+
+  // Minimal fallback for regular PDFs: extract date, email, phone from any text (no menu items)
+  const minimal = parseInvoiceTextMinimal(text);
+  if (minimal) return minimal;
 
   // Fall back to OpenAI if available
   if (!OPENAI_API_KEY || OPENAI_API_KEY === "sk-your-openai-key-here") {

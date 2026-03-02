@@ -1,6 +1,6 @@
 import { FIELD_IDS } from "../services/airtable/events";
 import { timeStringToSeconds, secondsTo12HourString } from "./timeHelpers";
-import type { ParsedInvoice } from "../services/invoiceParser";
+import { isVendorOrPlaceholderName, type ParsedInvoice } from "../services/invoiceParser";
 
 function formatTimeForTimeline(hhmm: string): string {
   const sec = timeStringToSeconds(hhmm);
@@ -12,8 +12,8 @@ export function parsedInvoiceToFields(parsed: ParsedInvoice): Record<string, unk
   const fields: Record<string, unknown> = {};
   if (parsed.eventDate) fields[FIELD_IDS.EVENT_DATE] = parsed.eventDate;
   if (parsed.guestCount != null) fields[FIELD_IDS.GUEST_COUNT] = parsed.guestCount;
-  if (parsed.clientFirstName) fields[FIELD_IDS.CLIENT_FIRST_NAME] = parsed.clientFirstName;
-  if (parsed.clientLastName) fields[FIELD_IDS.CLIENT_LAST_NAME] = parsed.clientLastName;
+  if (parsed.clientFirstName && !isVendorOrPlaceholderName(parsed.clientFirstName)) fields[FIELD_IDS.CLIENT_FIRST_NAME] = parsed.clientFirstName;
+  if (parsed.clientLastName && !isVendorOrPlaceholderName(parsed.clientLastName)) fields[FIELD_IDS.CLIENT_LAST_NAME] = parsed.clientLastName;
   if (parsed.clientEmail) fields[FIELD_IDS.CLIENT_EMAIL] = parsed.clientEmail;
   if (parsed.clientPhone) fields[FIELD_IDS.CLIENT_PHONE] = parsed.clientPhone;
   if (parsed.clientStreet) fields[FIELD_IDS.CLIENT_STREET] = parsed.clientStreet;
