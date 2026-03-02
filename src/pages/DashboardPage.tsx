@@ -344,26 +344,28 @@ export default function DashboardPage() {
               setFlairOpen(false);
             }}
           >
-            {/* Diamond: Ops Chief */}
-            <div
-              className="dp-diamond dp-diamond-left"
-              role="button"
-              tabIndex={0}
-              onClick={() => (window.location.href = "/ops-chief")}
-              onKeyDown={(e) => { if (e.key === "Enter") window.location.href = "/ops-chief"; }}
-            >
-              <span>Ops Chief<br />Command Post</span>
-            </div>
-            {/* Diamond: Papa Chulo */}
-            <div
-              className="dp-diamond dp-diamond-right"
-              role="button"
-              tabIndex={0}
-              onClick={() => (window.location.href = "/watchtower")}
-              onKeyDown={(e) => { if (e.key === "Enter") window.location.href = "/watchtower"; }}
-            >
-              <span>Papa Chulo<br />Watchtower</span>
-            </div>
+            {role === "ops_admin" && (
+              <>
+                <div
+                  className="dp-diamond dp-diamond-left"
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => (window.location.href = "/ops-chief")}
+                  onKeyDown={(e) => { if (e.key === "Enter") window.location.href = "/ops-chief"; }}
+                >
+                  <span>Ops Chief<br />Command Post</span>
+                </div>
+                <div
+                  className="dp-diamond dp-diamond-right"
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => (window.location.href = "/watchtower")}
+                  onKeyDown={(e) => { if (e.key === "Enter") window.location.href = "/watchtower"; }}
+                >
+                  <span>Papa Chulo<br />Watchtower</span>
+                </div>
+              </>
+            )}
 
             <h2 className="dp-dept-title">Department Command Ring</h2>
 
@@ -402,47 +404,64 @@ export default function DashboardPage() {
                       <div className="dp-bubble-label">{dept.label}</div>
                     </div>
 
-                    {/* Kitchen submenu */}
+                    {/* Submenus: ops_admin sees full options; employees see only Add Event + Open BEO Full Intake */}
                     {isKitchen && kitchenOpen && (
                       <div className="dp-submenu">
-                        <a href="/beo-intake" className="dp-submenu-item">📋 Open Event</a>
-                        <a href="/kitchen-prep" className="dp-submenu-item">🔪 Kitchen Prep Timeline</a>
-                        <div className="dp-submenu-item">📦 Pack-Out Checklist</div>
-                        <div className="dp-submenu-item">🍽️ Menu Specs</div>
-                        <div className="dp-submenu-item">🧊 Inventory</div>
+                        <a href="/quick-intake" className="dp-submenu-item">➕ Add Event</a>
+                        <a href="/beo-intake" className="dp-submenu-item">📋 Open BEO Full Intake</a>
+                        {role === "ops_admin" && (
+                          <>
+                            <a href="/kitchen-prep" className="dp-submenu-item">🔪 Kitchen Prep Timeline</a>
+                            <div className="dp-submenu-item">📦 Pack-Out Checklist</div>
+                            <div className="dp-submenu-item">🍽️ Menu Specs</div>
+                            <div className="dp-submenu-item">🧊 Inventory</div>
+                          </>
+                        )}
                       </div>
                     )}
 
-                    {/* Logistics submenu */}
                     {isLogistics && logisticsOpen && (
                       <div className="dp-submenu">
-                        <a href="/beo-intake" className="dp-submenu-item">📋 Open Event</a>
-                        <a href="/delivery-command" className="dp-submenu-item">🚛 Delivery & Dispatch Command</a>
-                        <div className="dp-submenu-item">🗺️ Route Planning</div>
-                        <div className="dp-submenu-item">📍 Vehicle Tracking</div>
-                        <div className="dp-submenu-item">⚙️ Fleet Management</div>
+                        <a href="/quick-intake" className="dp-submenu-item">➕ Add Event</a>
+                        <a href="/beo-intake" className="dp-submenu-item">📋 Open BEO Full Intake</a>
+                        {role === "ops_admin" && (
+                          <>
+                            <a href="/delivery-command" className="dp-submenu-item">🚛 Delivery & Dispatch Command</a>
+                            <div className="dp-submenu-item">🗺️ Route Planning</div>
+                            <div className="dp-submenu-item">📍 Vehicle Tracking</div>
+                            <div className="dp-submenu-item">⚙️ Fleet Management</div>
+                          </>
+                        )}
                       </div>
                     )}
 
-                    {/* Intake submenu / CENTRAL COMMAND CENTER */}
                     {isIntake && intakeOpen && (
                       <div className="dp-submenu">
-                        <a href="/beo-intake" className="dp-submenu-item">📋 Open Event</a>
-                        <a href="/quick-intake" className="dp-submenu-item">Quick Client Intake</a>
-                        <a href="/seed-demo" className="dp-submenu-item">🌱 Seed Demo Event</a>
-                        <div className="dp-submenu-item">Rentals</div>
-                        <div className="dp-submenu-item">Ops Vault</div>
-                        <a href="/invoice-intake" className="dp-submenu-item">Upload Invoice</a>
+                        <a href="/quick-intake" className="dp-submenu-item">➕ Add Event</a>
+                        <a href="/beo-intake" className="dp-submenu-item">📋 Open BEO Full Intake</a>
+                        {role === "ops_admin" && (
+                          <>
+                            <a href="/quick-intake" className="dp-submenu-item">Quick Client Intake</a>
+                            <a href="/seed-demo" className="dp-submenu-item">🌱 Seed Demo Event</a>
+                            <div className="dp-submenu-item">Rentals</div>
+                            <div className="dp-submenu-item">Ops Vault</div>
+                            <a href="/invoice-intake" className="dp-submenu-item">Upload Invoice</a>
+                          </>
+                        )}
                       </div>
                     )}
 
-                    {/* Flair/Equipment submenu */}
                     {isFlair && flairOpen && (
                       <div className="dp-submenu">
-                        <a href="/beo-intake" className="dp-submenu-item">📋 Open Event</a>
-                        <div className="dp-submenu-item">✨ Flair Inventory</div>
-                        <div className="dp-submenu-item">🔧 Equipment Tracking</div>
-                        <div className="dp-submenu-item">📦 Pack-Out</div>
+                        <a href="/quick-intake" className="dp-submenu-item">➕ Add Event</a>
+                        <a href="/beo-intake" className="dp-submenu-item">📋 Open BEO Full Intake</a>
+                        {role === "ops_admin" && (
+                          <>
+                            <div className="dp-submenu-item">✨ Flair Inventory</div>
+                            <div className="dp-submenu-item">🔧 Equipment Tracking</div>
+                            <div className="dp-submenu-item">📦 Pack-Out</div>
+                          </>
+                        )}
                       </div>
                     )}
                   </div>

@@ -47,17 +47,12 @@ export function parsedInvoiceToFields(parsed: ParsedInvoice): Record<string, unk
   if (parsed.eventEndTime) timelineParts.push(`${formatTimeForTimeline(parsed.eventEndTime)} – Event end`);
   if (timelineParts.length > 0) fields[FIELD_IDS.BEO_TIMELINE] = timelineParts.join("\n");
 
-  const notesParts = [parsed.notes, parsed.menuText];
+  const notesParts = [parsed.notes];
   if (parsed.invoiceNumber) notesParts.unshift(`Invoice #${parsed.invoiceNumber}`);
   const notes = notesParts.filter(Boolean).join("\n\n");
   if (notes) fields[FIELD_IDS.SPECIAL_NOTES] = notes;
 
-  // Parsed menu sections → BEO custom fields
-  if (parsed.customPassedApp) fields[FIELD_IDS.CUSTOM_PASSED_APP] = parsed.customPassedApp;
-  if (parsed.customPresentedApp) fields[FIELD_IDS.CUSTOM_PRESENTED_APP] = parsed.customPresentedApp;
-  if (parsed.customBuffetMetal) fields[FIELD_IDS.CUSTOM_BUFFET_METAL] = parsed.customBuffetMetal;
-  if (parsed.customBuffetChina) fields[FIELD_IDS.CUSTOM_BUFFET_CHINA] = parsed.customBuffetChina;
-  if (parsed.customDessert) fields[FIELD_IDS.CUSTOM_DESSERTS] = parsed.customDessert;
+  // Food items parsing disabled — user adds menu items manually in BEO Intake
 
   return fields;
 }
