@@ -20,6 +20,30 @@ export default function LoginPage() {
 
   const base = import.meta.env.VITE_APP_URL || "";
 
+  const handleForgotPassword = async () => {
+    setError("");
+    setLoading(true);
+    try {
+      const res = await fetch(`${base}/api/auth/clear-password`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: email.trim() }),
+      });
+      const data = (await res.json()) as { error?: string };
+      if (!res.ok) {
+        setError(data.error || "Failed to reset");
+        return;
+      }
+      setNeedsPasswordSetup(true);
+      setHasPassword(false);
+      setPassword("");
+    } catch {
+      setError("Network error. Try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleEmailSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
@@ -236,6 +260,15 @@ export default function LoginPage() {
             <button type="submit" className="login-btn" disabled={loading}>
               {loading ? "Signing in…" : "Sign In"}
             </button>
+            <button
+              type="button"
+              className="login-forgot"
+              onClick={handleForgotPassword}
+              disabled={loading}
+              style={{ marginTop: 8, background: "none", border: "none", color: "#888", cursor: "pointer", fontSize: 13 }}
+            >
+              Forgot password? Set a new one
+            </button>
             <button type="button" className="login-back" onClick={handleBack}>
               Back
             </button>
@@ -261,7 +294,9 @@ export default function LoginPage() {
           </form>
         )}
 
-        <p className="login-hint">Contact your admin for access.</p>
+        {error && (
+          <p className="login-hint">Don&apos;t have access? Ask your manager to add you.</p>
+        )}
       </div>
     </div>
   );
