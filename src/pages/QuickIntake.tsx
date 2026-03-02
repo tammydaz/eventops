@@ -46,8 +46,12 @@ export const QuickIntake = () => {
   }, []);
 
   const canSubmit = useMemo(
-    () => form.clientFirstName.trim().length > 0 && form.clientLastName.trim().length > 0 && form.clientPhone.trim().length > 0,
-    [form.clientFirstName, form.clientLastName, form.clientPhone]
+    () =>
+      form.clientFirstName.trim().length > 0 &&
+      form.clientLastName.trim().length > 0 &&
+      form.clientPhone.trim().length > 0 &&
+      form.eventTypeId.trim().length > 0,
+    [form.clientFirstName, form.clientLastName, form.clientPhone, form.eventTypeId]
   );
 
 
@@ -71,6 +75,10 @@ export const QuickIntake = () => {
       setError("Client Phone is required");
       return false;
     }
+    if (!form.eventTypeId.trim()) {
+      setError("Event Type is required. Please select an event type.");
+      return false;
+    }
     return true;
   };
 
@@ -82,6 +90,12 @@ export const QuickIntake = () => {
 
     if (!validateForm()) return;
 
+    const selectedOption = eventTypeOptions.find((opt) => opt.id === form.eventTypeId);
+    if (!selectedOption || !form.eventTypeId?.trim()) {
+      setError("Event Type is required. You must select an event type before creating the event.");
+      return;
+    }
+
     setIsSubmitting(true);
 
     const fields: Record<string, unknown> = {};
@@ -90,18 +104,11 @@ export const QuickIntake = () => {
     fields[FIELD_IDS.CLIENT_FIRST_NAME] = form.clientFirstName.trim();
     fields[FIELD_IDS.CLIENT_LAST_NAME] = form.clientLastName.trim();
     fields[FIELD_IDS.CLIENT_PHONE] = form.clientPhone.trim();
+    fields[FIELD_IDS.EVENT_TYPE] = selectedOption.name;
 
-    // Optional fields - only include if they have values
+    // Optional fields
     if (form.eventDate && form.eventDate.trim()) {
       fields[FIELD_IDS.EVENT_DATE] = form.eventDate;
-    }
-    
-    // Convert eventTypeId to the actual name string
-    if (form.eventTypeId && form.eventTypeId.trim()) {
-      const selectedOption = eventTypeOptions.find(opt => opt.id === form.eventTypeId);
-      if (selectedOption) {
-        fields[FIELD_IDS.EVENT_TYPE] = selectedOption.name;
-      }
     }
 
     console.log("📤 Fields being sent to Airtable:", JSON.stringify(fields, null, 2));
@@ -361,7 +368,7 @@ export const QuickIntake = () => {
             >
               <h3
                 style={{
-                  color: "#d4a574",
+                  color: "#ff6b6b",
                   fontSize: "14px",
                   fontWeight: "700",
                   textTransform: "uppercase",
@@ -369,10 +376,53 @@ export const QuickIntake = () => {
                   margin: "0 0 16px 0",
                 }}
               >
-                🎉 Event Details (Optional)
+                🎉 Event Type (Required – must be filled out)
               </h3>
 
               <div style={{ marginBottom: "16px" }}>
+                <label
+                  style={{
+                    fontSize: "13px",
+                    fontWeight: "600",
+                    color: "#ff6b6b",
+                    display: "block",
+                    marginBottom: "6px",
+                  }}
+                >
+                  Event Type *
+                </label>
+                <p style={{ color: "#888", fontSize: "12px", margin: "0 0 8px 0" }}>
+                  This field must be filled out before creating the event.
+                </p>
+                <select
+                  value={form.eventTypeId}
+                  onChange={handleChange("eventTypeId")}
+                  required
+                  style={{
+                    width: "100%",
+                    padding: "12px",
+                    borderRadius: "6px",
+                    border: "2px solid #ff6b6b",
+                    backgroundColor: "#1a1a1a",
+                    color: "#fff",
+                    fontSize: "14px",
+                    outline: "none",
+                    cursor: "pointer",
+                    boxSizing: "border-box",
+                  }}
+                >
+                  <option value="" style={{ backgroundColor: "#2d2d2d", color: "#fff" }}>
+                    Select event type (required)...
+                  </option>
+                  {eventTypeOptions.map((option) => (
+                    <option key={option.id} value={option.id} style={{ backgroundColor: "#2d2d2d", color: "#fff" }}>
+                      {option.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div style={{ marginBottom: "0" }}>
                 <label
                   style={{
                     fontSize: "13px",
@@ -382,7 +432,7 @@ export const QuickIntake = () => {
                     marginBottom: "6px",
                   }}
                 >
-                  Event Date
+                  Event Date (optional)
                 </label>
                 <input
                   type="date"
@@ -400,45 +450,6 @@ export const QuickIntake = () => {
                     boxSizing: "border-box",
                   }}
                 />
-              </div>
-
-              <div style={{ marginBottom: "0" }}>
-                <label
-                  style={{
-                    fontSize: "13px",
-                    fontWeight: "600",
-                    color: "#d4a574",
-                    display: "block",
-                    marginBottom: "6px",
-                  }}
-                >
-                  Event Type
-                </label>
-                <select
-                  value={form.eventTypeId}
-                  onChange={handleChange("eventTypeId")}
-                  style={{
-                    width: "100%",
-                    padding: "12px",
-                    borderRadius: "6px",
-                    border: "2px solid #d4a574",
-                    backgroundColor: "#1a1a1a",
-                    color: "#fff",
-                    fontSize: "14px",
-                    outline: "none",
-                    cursor: "pointer",
-                    boxSizing: "border-box",
-                  }}
-                >
-                  <option value="" style={{ backgroundColor: "#2d2d2d", color: "#fff" }}>
-                    Select event type...
-                  </option>
-                  {eventTypeOptions.map((option) => (
-                    <option key={option.id} value={option.id} style={{ backgroundColor: "#2d2d2d", color: "#fff" }}>
-                      {option.name}
-                    </option>
-                  ))}
-                </select>
               </div>
             </div>
 
@@ -512,7 +523,7 @@ export const QuickIntake = () => {
               margin: "16px 0 0 0",
             }}
           >
-            * = Required field | All other fields optional
+            * = Required field (Client Name, Phone, and Event Type must be filled out)
           </p>
         </div>
       </div>
