@@ -72,7 +72,11 @@ export default function InvoiceIntakePage() {
       } catch (err) {
         console.error("[InvoiceIntake]", err);
         const msg = err instanceof Error ? err.message : String(err);
-        setError(msg.includes("OPENAI") || msg.includes("API key") ? "OpenAI key missing." : msg.slice(0, 150));
+        if (msg.includes("OPENAI") || msg.includes("API key") || msg.includes("model") || msg.includes("permissions")) {
+          setError("Invoice parsing fell back to rule-based extraction. Remove or fix VITE_OPENAI_API_KEY in .env if you see this.");
+        } else {
+          setError(msg.slice(0, 150));
+        }
         setStep("error");
       }
     },
@@ -107,8 +111,8 @@ export default function InvoiceIntakePage() {
       } catch (err) {
         console.error("[InvoiceIntake]", err);
         const msg = err instanceof Error ? err.message : String(err);
-        if (msg.includes("OPENAI") || msg.includes("API key")) {
-          setError("OpenAI key missing. Using rule-based parsing—if extraction failed, add VITE_OPENAI_API_KEY to .env for better results.");
+        if (msg.includes("OPENAI") || msg.includes("API key") || msg.includes("model") || msg.includes("permissions")) {
+          setError("Invoice parsing fell back to rule-based extraction. Remove or fix VITE_OPENAI_API_KEY in .env if you see this—or try a different invoice.");
         } else {
           setError(msg.slice(0, 150));
         }

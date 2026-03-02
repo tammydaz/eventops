@@ -34,7 +34,7 @@ export default function LoginPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: email.trim(), password: "" }),
       });
-      let data: { error?: string; needsPasswordSetup?: boolean; user?: unknown; token?: string };
+      let data: { error?: string; details?: string; needsPasswordSetup?: boolean; user?: unknown; token?: string };
       try {
         data = await res.json();
       } catch {
@@ -50,7 +50,7 @@ export default function LoginPage() {
           setHasPassword(true);
           return;
         }
-        setError(data.error || "Login failed");
+        setError(data.details || data.error || "Login failed");
         return;
       }
       setHasPassword(true);
@@ -76,7 +76,7 @@ export default function LoginPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: email.trim(), password }),
       });
-      let data: { error?: string; needsPasswordSetup?: boolean; user?: unknown; token?: string };
+      let data: { error?: string; details?: string; needsPasswordSetup?: boolean; user?: unknown; token?: string };
       try {
         data = await res.json();
       } catch {
@@ -84,7 +84,7 @@ export default function LoginPage() {
         return;
       }
       if (!res.ok) {
-        setError(data.error || "Login failed");
+        setError(data.details || data.error || "Login failed");
         return;
       }
       if (data.needsPasswordSetup) {
@@ -125,7 +125,7 @@ export default function LoginPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: email.trim(), password: newPassword }),
       });
-      let data: { error?: string; user?: unknown; token?: string };
+      let data: { error?: string; details?: string; user?: unknown; token?: string };
       try {
         data = await res.json();
       } catch {
@@ -133,7 +133,7 @@ export default function LoginPage() {
         return;
       }
       if (!res.ok) {
-        setError(data.error || "Failed to set password");
+        setError(data.details || data.error || "Failed to set password");
         return;
       }
       const { user, token } = data;
