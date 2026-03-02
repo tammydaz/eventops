@@ -76,6 +76,7 @@ const NAV = [
   { label: "Papa Chulo", href: "/papa-chulo" },
   { label: "Departments", href: "#departments" },
   { label: "Print Engine", href: "/print-test" },
+  { label: "My Issues", href: "/feedback-issues" },
 ];
 
 /* ── Department circles data ── */

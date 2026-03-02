@@ -90,6 +90,8 @@ export const FIELD_IDS = {
   CUSTOM_BUFFET_CHINA: "fldtquSPyLWUEYX6P",
   DESSERTS: "flddPGfYJQxixWRq9",
   CUSTOM_DESSERTS: "fld95NEZsIfHpVvAk",
+  CUSTOM_DELIVERY_DELI: "fldCustomDeliTODO",      // Create Long Text in Airtable, replace with real ID
+  CUSTOM_ROOM_TEMP_DISPLAY: "fldCustomRoomTempTODO", // Create Long Text in Airtable, replace with real ID
   ROOM_TEMP_DISPLAY: "fld1373dtkeXhufoL",
   DISPLAYS: "fld9Yesa5cazu27W2",           // Display items (linked to Menu Items)
   STATIONS: "fldbbDlpheiUGQbKu",
@@ -691,6 +693,8 @@ export const EDITABLE_FIELD_IDS = SAVE_WHITELIST;
 const PLACEHOLDER_FIELD_IDS = new Set([
   "fldCarafesPerTableTODO",
   "fldCoffeeMugTypeTODO",
+  "fldCustomDeliTODO",
+  "fldCustomRoomTempTODO",
 ]);
 
 export function filterToEditableOnly(fields: Record<string, unknown>): Record<string, unknown> {
@@ -725,7 +729,6 @@ const SINGLE_SELECT_FIELD_IDS = new Set([
   FIELD_IDS.SERVICE_WARE_SOURCE,
   FIELD_IDS.STAIRS_STEPS,
   FIELD_IDS.ELEVATORS_AVAILABLE,
-  FIELD_IDS.FOOD_SERVICE_FLOW,
 ]);
 
 /** Convert seconds (from midnight) + date string → ISO datetime for Airtable */

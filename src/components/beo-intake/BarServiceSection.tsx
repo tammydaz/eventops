@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useEventStore } from "../../state/eventStore";
 import { FIELD_IDS } from "../../services/airtable/events";
 import { asSingleSelectName, asString } from "../../services/airtable/selectors";
-import { FormSection } from "./FormSection";
+import { FormSection, Helper } from "./FormSection";
 
 export const BarServiceSection = () => {
   const { selectedEventId, selectedEventData, setFields } = useEventStore();
@@ -75,6 +75,7 @@ export const BarServiceSection = () => {
           <option value="Foodwerx bartender only">Foodwerx bartender only</option>
           <option value="Foodwerx Mixers Only">Foodwerx Mixers Only</option>
         </select>
+        <Helper>Full Bar = bartender + mixers. Bartender only = client supplies alcohol. Mixers only = client has bartender.</Helper>
       </div>
       <div>
         <label style={labelStyle}>Signature Drink</label>
@@ -101,6 +102,7 @@ export const BarServiceSection = () => {
               <option value="Foodwerx">Foodwerx</option>
               <option value="Client">Client</option>
             </select>
+            <Helper>Who brings the mixers (tonic, soda) and garnishes (limes, mint)?</Helper>
           </div>
           {details.whoSupplies === "Foodwerx" && (
             <>

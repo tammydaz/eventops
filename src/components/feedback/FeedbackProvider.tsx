@@ -1,8 +1,7 @@
 import { useState, useCallback, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { useLocation } from "react-router-dom";
-
-export type FeedbackType = "issue" | "idea" | "bug" | "recommendation";
+import { createFeedback, type FeedbackType } from "../../services/feedbackApi";
 
 const SCREEN_NAMES: Record<string, string> = {
   "/": "Dashboard",
@@ -46,9 +45,6 @@ const FEEDBACK_LABELS: Record<FeedbackType, string> = {
   recommendation: "Recommendation",
 };
 
-const FEEDBACK_EMAIL =
-  (import.meta.env.VITE_FEEDBACK_EMAIL as string | undefined)?.trim() || "feedback@foodwerx.com";
-
 interface FeedbackProviderProps {
   children: React.ReactNode;
 }
@@ -60,12 +56,15 @@ export function FeedbackProvider({ children }: FeedbackProviderProps) {
   const [modalOpen, setModalOpen] = useState(false);
   const [feedbackType, setFeedbackType] = useState<FeedbackType>("issue");
   const [message, setMessage] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   const screenName = getScreenName(pathname);
 
   const openModal = useCallback((type: FeedbackType) => {
     setFeedbackType(type);
     setMessage("");
+    setSubmitError(null);
     setModalOpen(true);
     setMenuOpen(false);
   }, []);
@@ -92,19 +91,20 @@ export function FeedbackProvider({ children }: FeedbackProviderProps) {
     };
   }, [menuOpen]);
 
-  const handleSubmit = useCallback(() => {
-    const subject = `[EventOps ${FEEDBACK_LABELS[feedbackType]}] ${screenName}`;
-    const body = [
-      `Screen: ${screenName}`,
-      `Type: ${FEEDBACK_LABELS[feedbackType]}`,
-      `URL: ${window.location.href}`,
-      "",
-      "Message:",
-      message.trim() || "(No message provided)",
-    ].join("\n");
-
-    const mailto = `mailto:${FEEDBACK_EMAIL}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-    window.open(mailto, "_blank", "noopener,noreferrer");
+  const handleSubmit = useCallback(async () => {
+    setSubmitting(true);
+    setSubmitError(null);
+    const result = await createFeedback({
+      type: feedbackType,
+      screen: screenName,
+      url: window.location.href,
+      message: message.trim() || "(No message provided)",
+    });
+    setSubmitting(false);
+    if (result.error) {
+      setSubmitError(result.error + (result.details ? ` — ${result.details}` : ""));
+      return;
+    }
     setModalOpen(false);
   }, [feedbackType, screenName, message]);
 
@@ -144,12 +144,17 @@ export function FeedbackProvider({ children }: FeedbackProviderProps) {
           rows={4}
           autoFocus
         />
+        {submitError && (
+          <p className="feedback-modal-error" style={{ color: "#f87171", fontSize: 12, marginBottom: 8 }}>
+            {submitError}
+          </p>
+        )}
         <div className="feedback-modal-actions">
-          <button type="button" className="feedback-modal-cancel" onClick={() => setModalOpen(false)}>
+          <button type="button" className="feedback-modal-cancel" onClick={() => setModalOpen(false)} disabled={submitting}>
             Cancel
           </button>
-          <button type="button" className="feedback-modal-submit" onClick={handleSubmit}>
-            Open Email to Send
+          <button type="button" className="feedback-modal-submit" onClick={() => handleSubmit()} disabled={submitting}>
+            {submitting ? "Saving…" : "Submit"}
           </button>
         </div>
       </div>

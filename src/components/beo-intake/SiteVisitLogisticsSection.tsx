@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback } from "react";
 import { useEventStore } from "../../state/eventStore";
 import { FIELD_IDS, loadSingleSelectOptions, type SingleSelectOption } from "../../services/airtable/events";
 import { asString, asSingleSelectName } from "../../services/airtable/selectors";
-import { FormSection, CollapsibleSubsection } from "./FormSection";
+import { FormSection, CollapsibleSubsection, Helper } from "./FormSection";
 
 const inputStyle = {
   width: "100%",
@@ -22,26 +22,16 @@ const labelStyle = {
   fontWeight: "600" as const,
 };
 
-const helperStyle = {
-  fontSize: "11px",
-  color: "#666",
-  marginTop: "6px",
-  lineHeight: 1.4,
-} as const;
-
-function Helper({ children }: { children: React.ReactNode }) {
-  return <div style={helperStyle}>{children}</div>;
-}
+const STAIRS_FALLBACK = ["None", "1–2 steps", "3–5 steps", "Full flight", "Multiple floors"];
+const ELEVATORS_FALLBACK = ["Yes", "No", "Freight elevator only"];
 
 export const SiteVisitLogisticsSection = () => {
   const { selectedEventId, selectedEventData, setFields } = useEventStore();
 
   const [stairsSteps, setStairsSteps] = useState("");
   const [elevatorsAvailable, setElevatorsAvailable] = useState("");
-  const [foodServiceFlow, setFoodServiceFlow] = useState("");
   const [stairsOptions, setStairsOptions] = useState<string[]>([]);
   const [elevatorsOptions, setElevatorsOptions] = useState<string[]>([]);
-  const [foodServiceFlowOptions, setFoodServiceFlowOptions] = useState<string[]>([]);
 
   const [notes, setNotes] = useState({
     parkingNotes: "",
@@ -64,11 +54,17 @@ export const SiteVisitLogisticsSection = () => {
 
   useEffect(() => {
     let cancelled = false;
-    loadSingleSelectOptions([FIELD_IDS.STAIRS_STEPS, FIELD_IDS.ELEVATORS_AVAILABLE, FIELD_IDS.FOOD_SERVICE_FLOW]).then((result) => {
-      if (cancelled || "error" in result) return;
-      setStairsOptions((result[FIELD_IDS.STAIRS_STEPS] ?? []).map((o: SingleSelectOption) => o.name));
-      setElevatorsOptions((result[FIELD_IDS.ELEVATORS_AVAILABLE] ?? []).map((o: SingleSelectOption) => o.name));
-      setFoodServiceFlowOptions((result[FIELD_IDS.FOOD_SERVICE_FLOW] ?? []).map((o: SingleSelectOption) => o.name));
+    loadSingleSelectOptions([FIELD_IDS.STAIRS_STEPS, FIELD_IDS.ELEVATORS_AVAILABLE]).then((result) => {
+      if (cancelled) return;
+      if ("error" in result) {
+        setStairsOptions(STAIRS_FALLBACK);
+        setElevatorsOptions(ELEVATORS_FALLBACK);
+        return;
+      }
+      const stairs = (result[FIELD_IDS.STAIRS_STEPS] ?? []).map((o: SingleSelectOption) => o.name);
+      const elevators = (result[FIELD_IDS.ELEVATORS_AVAILABLE] ?? []).map((o: SingleSelectOption) => o.name);
+      setStairsOptions(stairs.length > 0 ? stairs : STAIRS_FALLBACK);
+      setElevatorsOptions(elevators.length > 0 ? elevators : ELEVATORS_FALLBACK);
     });
     return () => { cancelled = true; };
   }, []);
@@ -95,7 +91,6 @@ export const SiteVisitLogisticsSection = () => {
       });
       setStairsSteps("");
       setElevatorsAvailable("");
-      setFoodServiceFlow("");
       return;
     }
     const d = selectedEventData;
@@ -119,7 +114,6 @@ export const SiteVisitLogisticsSection = () => {
     });
     setStairsSteps(asSingleSelectName(d[FIELD_IDS.STAIRS_STEPS]));
     setElevatorsAvailable(asSingleSelectName(d[FIELD_IDS.ELEVATORS_AVAILABLE]));
-    setFoodServiceFlow(asSingleSelectName(d[FIELD_IDS.FOOD_SERVICE_FLOW]));
   }, [selectedEventId, selectedEventData]);
 
   useEffect(() => {
@@ -280,38 +274,6 @@ export const SiteVisitLogisticsSection = () => {
           />
           <Helper>What is the event for? Helps crew understand context and tone.</Helper>
         </div>
-        <div>
-          <label style={labelStyle}>Food Service Flow (for servers)</label>
-          <select
-            value={foodServiceFlow}
-            disabled={!canEdit}
-            onChange={(e) => {
-              const v = e.target.value;
-              setFoodServiceFlow(v);
-              handleBlur(FIELD_IDS.FOOD_SERVICE_FLOW, v || null);
-            }}
-            style={inputStyle}
-          >
-            <option value="">Select...</option>
-            {[...new Set([...foodServiceFlowOptions, foodServiceFlow].filter(Boolean))].map((opt) => (
-              <option key={opt} value={opt}>{opt}</option>
-            ))}
-          </select>
-          <Helper>For servers at home parties or social events: how will food flow? (e.g. all at once, coursed, passed). Different from Service Style above—that one drives the kitchen banner.</Helper>
-        </div>
-        <div style={{ gridColumn: "1 / -1" }}>
-          <label style={labelStyle}>Timeline / Flow Notes</label>
-          <textarea
-            rows={4}
-            value={notes.timelineNotes}
-            disabled={!canEdit}
-            onChange={(e) => setNotes((p) => ({ ...p, timelineNotes: e.target.value }))}
-            onBlur={(e) => handleBlur(FIELD_IDS.TIMELINE_NOTES, e.target.value)}
-            style={textareaStyle}
-            placeholder="e.g. Apps first, dinner buffet-style whenever ready, dessert after"
-          />
-          <Helper>For smaller events: capture the client's expectations so nothing is missed. Not always printed as a formal schedule—different from BEO Timeline above.</Helper>
-        </div>
         <div style={{ gridColumn: "1 / -1" }}>
           <label style={labelStyle}>Client-Supplied Food</label>
           <textarea
@@ -410,7 +372,23 @@ export const SiteVisitLogisticsSection = () => {
             style={textareaStyle}
             placeholder="e.g. Kitchen notes, special handling, venue setup instructions"
           />
-          <Helper>Notes for the kitchen and pack-out. Special handling, labeling, or setup instructions.</Helper>
+          <Helper>Any special food items that need to be ordered or picked up outside of normal business.</Helper>
+        </div>
+      </CollapsibleSubsection>
+
+      <CollapsibleSubsection title="Timeline" icon="⏱️" defaultOpen={false}>
+        <div style={{ gridColumn: "1 / -1" }}>
+          <label style={labelStyle}>Timeline / Flow Notes</label>
+          <textarea
+            rows={4}
+            value={notes.timelineNotes}
+            disabled={!canEdit}
+            onChange={(e) => setNotes((p) => ({ ...p, timelineNotes: e.target.value }))}
+            onBlur={(e) => handleBlur(FIELD_IDS.TIMELINE_NOTES, e.target.value)}
+            style={textareaStyle}
+            placeholder="e.g. Apps first, dinner buffet-style whenever ready, dessert after"
+          />
+          <Helper>For informal events only — all formal events must use formal timeline at bottom of page.</Helper>
         </div>
       </CollapsibleSubsection>
     </FormSection>

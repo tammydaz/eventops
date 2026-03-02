@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { useEventStore } from "../../state/eventStore";
 import { FIELD_IDS } from "../../services/airtable/events";
 import { asString, asSingleSelectName, asLinkedRecordIds } from "../../services/airtable/selectors";
-import { FormSection, CollapsibleSubsection } from "./FormSection";
+import { FormSection, CollapsibleSubsection, Helper } from "./FormSection";
 
 const SUPPLIER_OPTIONS = [
   "FoodWerx Standard",
@@ -459,6 +459,7 @@ export const ServicewareSection = ({ embedded = false }: ServicewareSectionProps
                 <option key={opt} value={opt}>{opt}</option>
               ))}
             </select>
+            <Helper>Who provides plates, cutlery, glassware? Mixed = some from FoodWerx, some from client/rentals.</Helper>
           </div>
           <div>
             <label style={labelStyle}>Paper Type</label>
@@ -477,6 +478,7 @@ export const ServicewareSection = ({ embedded = false }: ServicewareSectionProps
                 <option key={opt} value={opt}>{opt}</option>
               ))}
             </select>
+            <Helper>Standard/Premium = disposable. China = reusable plates and glassware.</Helper>
           </div>
         </div>
         <div style={{ marginBottom: 16 }}>
