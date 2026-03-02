@@ -1,6 +1,7 @@
 import { useState, useCallback } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { extractTextFromPdf, parseInvoiceText, type ParsedInvoice } from "../services/invoiceParser";
+import { parseDeliveryExcel } from "../services/excelParser";
 import { createEvent, uploadAttachment, FIELD_IDS } from "../services/airtable/events";
 import { isErrorResult } from "../services/airtable/selectors";
 import { useEventStore } from "../state/eventStore";
@@ -57,9 +58,10 @@ export default function InvoiceIntakePage() {
         }
         await loadEvents();
         await selectEvent(result.id);
-        const uploadResult = await uploadAttachment(result.id, FIELD_IDS.INVOICE_PDF, file);
+        const attachField = /\.xlsx?$/i.test(file.name) ? FIELD_IDS.EVENT_DOCUMENTS : FIELD_IDS.INVOICE_PDF;
+        const uploadResult = await uploadAttachment(result.id, attachField, file);
         if (isErrorResult(uploadResult)) {
-          console.warn("[InvoiceIntake] PDF attach failed:", uploadResult.message);
+          console.warn("[InvoiceIntake] Attachment failed:", uploadResult.message);
         }
         const name =
           [parsed.clientFirstName, parsed.clientLastName].filter(Boolean).join(" ") ||
@@ -85,17 +87,23 @@ export default function InvoiceIntakePage() {
 
   const processFile = useCallback(
     async (file: File) => {
-      if (!file || !file.name.toLowerCase().endsWith(".pdf")) {
-        setError("Please drop or select a PDF invoice.");
+      const isPdf = /\.pdf$/i.test(file?.name ?? "");
+      const isExcel = /\.xlsx?$/i.test(file?.name ?? "");
+      if (!file || (!isPdf && !isExcel)) {
+        setError("Please drop or select a PDF invoice or Excel delivery BEO.");
         return;
       }
       setStep("processing");
       setError(null);
       setDuplicateState(null);
       try {
-        const text = await extractTextFromPdf(file);
-        const parsed = await parseInvoiceText(text);
-        if (!parsed || (!parsed.clientEmail && !parsed.clientOrganization && !parsed.venueName && !parsed.eventDate)) {
+        const parsed = isExcel
+          ? await parseDeliveryExcel(file)
+          : await (async () => {
+              const text = await extractTextFromPdf(file);
+              return parseInvoiceText(text);
+            })();
+        if (!parsed || (!parsed.clientEmail && !parsed.clientOrganization && !parsed.venueName && !parsed.eventDate && !parsed.clientFirstName)) {
           setError("Could not extract enough data from this invoice. Try a different file or add details manually in BEO Intake.");
           setStep("error");
           return;
@@ -129,9 +137,10 @@ export default function InvoiceIntakePage() {
     const { duplicateEvent, file } = duplicateState;
     try {
       await selectEvent(duplicateEvent.id);
-      const uploadResult = await uploadAttachment(duplicateEvent.id, FIELD_IDS.INVOICE_PDF, file);
+      const attachField = /\.xlsx?$/i.test(file.name) ? FIELD_IDS.EVENT_DOCUMENTS : FIELD_IDS.INVOICE_PDF;
+      const uploadResult = await uploadAttachment(duplicateEvent.id, attachField, file);
       if (isErrorResult(uploadResult)) {
-        console.warn("[InvoiceIntake] PDF attach failed:", uploadResult.message);
+        console.warn("[InvoiceIntake] Attachment failed:", uploadResult.message);
       }
       setDuplicateState(null);
       navigate(`/beo-intake/${duplicateEvent.id}`);
@@ -233,7 +242,7 @@ export default function InvoiceIntakePage() {
             textAlign: "center",
           }}
         >
-          Drag & drop an invoice PDF, or click to browse. It will automatically create an event and open BEO Intake.
+          Drag & drop a PDF invoice or Excel delivery BEO, or click to browse. It will automatically create an event and open BEO Intake.
         </p>
 
         <div
@@ -254,7 +263,7 @@ export default function InvoiceIntakePage() {
           <input
             id="invoice-file-input"
             type="file"
-            accept=".pdf"
+            accept=".pdf,.xlsx,.xls"
             onChange={handleFileInput}
             style={{ display: "none" }}
           />
@@ -286,7 +295,7 @@ export default function InvoiceIntakePage() {
             <>
               <div style={{ fontSize: 64, marginBottom: 16, opacity: 0.9 }}>📥</div>
               <div style={{ fontSize: 18, fontWeight: 600, marginBottom: 8 }}>
-                Drop PDF here or click to upload
+                Drop PDF or Excel here, or click to upload
               </div>
               <div style={{ fontSize: 13, color: "#666" }}>
                 Works with Hospitality Management Services / FoodWerx invoices
@@ -327,7 +336,7 @@ export default function InvoiceIntakePage() {
                   cursor: "pointer",
                 }}
               >
-                Open existing & attach PDF
+                Open existing & attach file
               </button>
               <button
                 type="button"

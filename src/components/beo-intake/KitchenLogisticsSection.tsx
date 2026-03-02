@@ -4,7 +4,7 @@ import { FIELD_IDS } from "../../services/airtable/events";
 import { asSingleSelectName, asBoolean } from "../../services/airtable/selectors";
 import { FormSection } from "./FormSection";
 
-const KITCHEN_OPTIONS = ["Yes", "No"];
+const KITCHEN_OPTIONS = ["Yes", "No", "None"];
 
 type KitchenLogisticsSectionProps = { embedded?: boolean };
 

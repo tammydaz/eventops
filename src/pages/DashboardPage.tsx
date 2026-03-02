@@ -267,7 +267,7 @@ export default function DashboardPage() {
                       className="dp-add-event-item"
                       onClick={() => setAddEventOpen(false)}
                     >
-                      Upload Invoice PDF
+                      Upload Invoice / Excel
                     </Link>
                   )}
                 </div>

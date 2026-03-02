@@ -166,10 +166,12 @@ const printStyles = `
       margin: 0 !important;
       box-sizing: border-box !important;
       font-size: 14pt !important;
+      overflow: visible !important;
     }
     .beo-print-layout, .beo-print-main {
       background: #fff !important;
       max-width: none !important;
+      overflow: visible !important;
     }
     .beo-print-table thead {
       display: table-header-group !important;
@@ -184,8 +186,9 @@ const printStyles = `
       font-weight: 600 !important;
     }
     .beo-section-card {
-      break-inside: avoid !important;
-      page-break-inside: avoid !important;
+      break-inside: auto !important;
+      page-break-inside: auto !important;
+      overflow: visible !important;
     }
     .beo-event-header-block {
       break-inside: avoid !important;
@@ -197,8 +200,8 @@ const printStyles = `
       font-size: 14pt !important;
     }
     .beo-menu-item-block {
-      break-inside: avoid !important;
-      page-break-inside: avoid !important;
+      break-inside: auto !important;
+      page-break-inside: auto !important;
     }
     .beo-banner-block {
       break-inside: avoid !important;
@@ -226,11 +229,18 @@ const printStyles = `
     }
     .beo-item-col {
       font-size: 14pt !important;
+      overflow: visible !important;
+      overflow-wrap: break-word !important;
+      word-break: break-word !important;
     }
     .no-print { display: none !important; }
     .print-only { display: block !important; }
     .print-page { break-after: page; }
-    .kitchen-beo-page { break-after: page; }
+    .kitchen-beo-page {
+      break-after: page;
+      overflow: visible !important;
+      min-height: 0 !important;
+    }
     .kitchen-beo-page:not(:first-child) { break-before: page !important; }
     .kitchen-beo-page:last-child { break-after: auto; }
     .meeting-beo-notes-section { break-before: page !important; }
@@ -518,7 +528,7 @@ const styles: Record<string, React.CSSProperties> = {
     border: "3px solid #000",
     borderRadius: 8,
     marginBottom: 6,
-    overflow: "hidden" as const,
+    overflow: "visible" as const,
   },
   sectionHeader: {
     background: "transparent",
@@ -544,7 +554,7 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: "center" as const,
   },
   specCol: { fontWeight: 700, color: "#555", fontSize: 12 },
-  itemCol: { fontWeight: 600, color: "#333" },
+  itemCol: { fontWeight: 600, color: "#333", overflowWrap: "break-word" as const, wordBreak: "break-word" as const, minWidth: 0 },
   packOutCol: { fontSize: 11, color: "#666", textAlign: "right" as const },
   checkboxCol: { display: "flex", alignItems: "center", justifyContent: "center" },
   footer: {
@@ -2048,19 +2058,30 @@ const BeoPrintPage: React.FC = () => {
     : "—";
   const phone = contactPhone || clientPhone;
 
-  // ── Parse linked menu items ──
+  // ── Parse linked menu items (handles Airtable formats: string[], {id:string}[], or single value) ──
   const parseMenuItems = (fieldId: string): MenuLineItem[] => {
     const raw = eventData[fieldId];
-    if (!raw || !Array.isArray(raw)) return [];
+    if (!raw) return [];
+    const arr = Array.isArray(raw) ? raw : [raw];
 
-    return raw.map((item: unknown) => {
-      const id = typeof item === "string" ? item : (item && typeof item === "object" && "id" in item) ? (item as { id: string }).id : String(item);
-      const data = menuItemData[id];
-      return {
-        id,
-        name: data?.name || "Loading...",
-      };
-    });
+    return arr
+      .map((item: unknown) => {
+        const id =
+          typeof item === "string"
+            ? item
+            : item && typeof item === "object" && "id" in item
+              ? (item as { id: string }).id
+              : String(item);
+        return id;
+      })
+      .filter((id): id is string => typeof id === "string" && id.startsWith("rec"))
+      .map((id) => {
+        const data = menuItemData[id];
+        return {
+          id,
+          name: data?.name || "Loading...",
+        };
+      });
   };
 
   // ── Custom text → menu items (each item + sauce on its own line; split by newline, comma, or semicolon)
@@ -2086,32 +2107,49 @@ const BeoPrintPage: React.FC = () => {
     { title: "STATIONS", fieldId: FIELD_IDS.STATIONS, linkedFieldId: FIELD_IDS.STATIONS, customFieldId: "" },
   ];
 
-  const DELIVERY_SECTION_CONFIG: { title: string; fieldIds: string[] }[] = [
-    { title: "HOT - DISPOSABLE", fieldIds: [FIELD_IDS.BUFFET_METAL, FIELD_IDS.PASSED_APPETIZERS, FIELD_IDS.PRESENTED_APPETIZERS] },
-    { title: "DELI - DISPOSABLE", fieldIds: [FIELD_IDS.DELIVERY_DELI] },
-    { title: "KITCHEN - DISPOSABLE", fieldIds: [FIELD_IDS.BUFFET_CHINA, FIELD_IDS.PASSED_APPETIZERS, FIELD_IDS.PRESENTED_APPETIZERS] },
-    { title: "SALADS - DISPOSABLE", fieldIds: [FIELD_IDS.ROOM_TEMP_DISPLAY] },
-    { title: "DESSERTS - DISPOSABLE", fieldIds: [FIELD_IDS.DESSERTS] },
+  const DELIVERY_SECTION_CONFIG: { title: string; fieldIds: string[]; customFieldIds: string[] }[] = [
+    { title: "HOT - DISPOSABLE", fieldIds: [FIELD_IDS.BUFFET_METAL, FIELD_IDS.PASSED_APPETIZERS, FIELD_IDS.PRESENTED_APPETIZERS], customFieldIds: [FIELD_IDS.CUSTOM_BUFFET_METAL, FIELD_IDS.CUSTOM_PASSED_APP, FIELD_IDS.CUSTOM_PRESENTED_APP] },
+    { title: "DELI - DISPOSABLE", fieldIds: [FIELD_IDS.DELIVERY_DELI], customFieldIds: [FIELD_IDS.CUSTOM_DELIVERY_DELI] },
+    { title: "KITCHEN - DISPOSABLE", fieldIds: [FIELD_IDS.BUFFET_CHINA, FIELD_IDS.PASSED_APPETIZERS, FIELD_IDS.PRESENTED_APPETIZERS], customFieldIds: [FIELD_IDS.CUSTOM_BUFFET_CHINA, FIELD_IDS.CUSTOM_PASSED_APP, FIELD_IDS.CUSTOM_PRESENTED_APP] },
+    { title: "SALADS - DISPOSABLE", fieldIds: [FIELD_IDS.ROOM_TEMP_DISPLAY], customFieldIds: [FIELD_IDS.CUSTOM_ROOM_TEMP_DISPLAY] },
+    { title: "DESSERTS - DISPOSABLE", fieldIds: [FIELD_IDS.DESSERTS], customFieldIds: [FIELD_IDS.CUSTOM_DESSERTS] },
   ];
 
   const menuSections: SectionData[] = isDelivery
     ? DELIVERY_SECTION_CONFIG.map((config) => {
         const allLinked: MenuLineItem[] = [];
         const seenIds = new Set<string>();
+        const seenNames = new Set<string>();
         for (const fid of config.fieldIds) {
           for (const item of parseMenuItems(fid)) {
             if (!seenIds.has(item.id)) {
               seenIds.add(item.id);
+              seenNames.add(item.name);
               allLinked.push(item);
             }
           }
+        }
+        for (const customFid of config.customFieldIds || []) {
+          customTextToItems(asString(eventData[customFid]), `custom-${config.fieldIds[0]}-${customFid}`).forEach((c) => {
+            if (!seenNames.has(c.name)) {
+              seenNames.add(c.name);
+              allLinked.push(c);
+            }
+          });
         }
         return { title: config.title, fieldId: config.fieldIds[0], items: allLinked };
       }).filter((s) => s.items.length > 0)
     : FULL_SERVICE_SECTION_DEFS.map((def) => {
         const linked = parseMenuItems(def.linkedFieldId);
         const custom = def.customFieldId ? customTextToItems(asString(eventData[def.customFieldId]), `custom-${def.fieldId}`) : [];
-        const items = linked.length > 0 ? linked : custom;
+        const seenNames = new Set(linked.map((i) => i.name));
+        const items = [...linked];
+        custom.forEach((c) => {
+          if (!seenNames.has(c.name)) {
+            seenNames.add(c.name);
+            items.push(c);
+          }
+        });
         return { title: def.title, fieldId: def.fieldId, items };
       });
 
@@ -2182,38 +2220,67 @@ const BeoPrintPage: React.FC = () => {
   };
 
   // ── Kitchen BEO pagination: page 1 has less room (header/banners), pages 2+ have full height ──
-  // Sections are never split across pages — each pill stays whole.
+  // Sections CAN be split across pages to fill the first page and avoid empty gaps.
   // Never let last page have only 1–3 lines; avoid breaking if next section would create tiny last page.
-  const LINES_PER_PAGE_FIRST = 22;  // page 1: event header + banners
-  const LINES_PER_PAGE = 38;        // pages 2+: full page for menu
+  const LINES_PER_PAGE_FIRST = 18;  // page 1: event header + banners
+  const LINES_PER_PAGE = 32;        // pages 2+: full page for menu
   const SECTION_HEADER_LINES = 2;
   const MIN_LINES_ON_LAST_PAGE = 4;  // avoid orphan 1–3 lines on last page
-  type KitchenPage = { pageNum: number; sections: Array<{ section: SectionData; items: MenuLineItem[] }> };
+  type KitchenPage = { pageNum: number; sections: Array<{ section: SectionData; items: MenuLineItem[]; isContinuation?: boolean }> };
   const kitchenPages: KitchenPage[] = (() => {
     const pages: KitchenPage[] = [];
     let current: KitchenPage = { pageNum: 1, sections: [] };
     let linesUsed = 0;
     const getMaxLines = (pageNum: number) => (pageNum === 1 ? LINES_PER_PAGE_FIRST : LINES_PER_PAGE);
-    const sectionsWithLines = activeSections.map((section) => {
-      const itemLines = section.items.reduce((sum, item) => sum + expandItemToRows(item).length, 0);
-      return { section, items: section.items, sectionLines: SECTION_HEADER_LINES + itemLines };
-    });
-    for (let i = 0; i < sectionsWithLines.length; i++) {
-      const { section, items, sectionLines } = sectionsWithLines[i];
-      const wouldExceed = linesUsed + sectionLines > getMaxLines(current.pageNum);
-      const wouldCreateTinyLastPage = wouldExceed && sectionLines < MIN_LINES_ON_LAST_PAGE;
-      // Don't break if it would create a new page with only 1–3 lines; fit on current instead
-      if (wouldExceed && current.sections.length > 0 && !wouldCreateTinyLastPage) {
-        pages.push(current);
-        current = { pageNum: pages.length + 1, sections: [] };
-        linesUsed = 0;
-      }
-      current.sections.push({ section, items });
-      linesUsed += sectionLines;
-      if (linesUsed >= getMaxLines(current.pageNum) && !wouldCreateTinyLastPage) {
-        pages.push(current);
-        current = { pageNum: pages.length + 1, sections: [] };
-        linesUsed = 0;
+    const getItemLines = (item: MenuLineItem) => expandItemToRows(item).length;
+
+    for (const section of activeSections) {
+      const isDesserts = section.title === "DESSERTS";
+      let remainingItems = [...section.items];
+      let isFirstChunkOfSection = true;
+
+      while (remainingItems.length > 0) {
+        const maxLines = getMaxLines(current.pageNum);
+        const headerLines = isFirstChunkOfSection ? SECTION_HEADER_LINES : 0;
+
+        // Find how many items fit on this page (linesUsed + header + items must not exceed maxLines)
+        let itemsToAdd: MenuLineItem[] = [];
+        let chunkLines = headerLines;
+        for (const item of remainingItems) {
+          const itemLines = getItemLines(item);
+          if (linesUsed + chunkLines + itemLines > maxLines && itemsToAdd.length > 0) break;
+          if (linesUsed + chunkLines + itemLines > maxLines && current.sections.length === 0) {
+            // Must add at least one item even if it overflows
+            itemsToAdd.push(item);
+            chunkLines += itemLines;
+            break;
+          }
+          itemsToAdd.push(item);
+          chunkLines += itemLines;
+        }
+
+        if (itemsToAdd.length === 0) {
+          // No more room on this page; start new page
+          pages.push(current);
+          current = { pageNum: pages.length + 1, sections: [] };
+          linesUsed = 0;
+          continue;
+        }
+
+        current.sections.push({
+          section,
+          items: itemsToAdd,
+          isContinuation: !isFirstChunkOfSection,
+        });
+        linesUsed += chunkLines;
+        remainingItems = remainingItems.slice(itemsToAdd.length);
+        isFirstChunkOfSection = false;
+
+        if (remainingItems.length > 0) {
+          pages.push(current);
+          current = { pageNum: pages.length + 1, sections: [] };
+          linesUsed = 0;
+        }
       }
     }
     if (current.sections.length > 0) pages.push(current);
@@ -2222,13 +2289,15 @@ const BeoPrintPage: React.FC = () => {
     while (result.length >= 2) {
       const last = result[result.length - 1];
       const lastLines = last.sections.reduce(
-        (sum, { section, items }) => sum + SECTION_HEADER_LINES + items.reduce((s, item) => s + expandItemToRows(item).length, 0),
+        (sum, { section, items, isContinuation }) =>
+          sum + (isContinuation ? 0 : SECTION_HEADER_LINES) + items.reduce((s, item) => s + getItemLines(item), 0),
         0
       );
       if (lastLines >= MIN_LINES_ON_LAST_PAGE) break;
       const prev = result[result.length - 2];
       const prevLines = prev.sections.reduce(
-        (sum, { section, items }) => sum + SECTION_HEADER_LINES + items.reduce((s, item) => s + expandItemToRows(item).length, 0),
+        (sum, { section, items, isContinuation }) =>
+          sum + (isContinuation ? 0 : SECTION_HEADER_LINES) + items.reduce((s, item) => s + getItemLines(item), 0),
         0
       );
       const prevMax = getMaxLines(prev.pageNum);
@@ -2240,11 +2309,11 @@ const BeoPrintPage: React.FC = () => {
     return result;
   })();
 
-  // Grid columns: item (left), spec (right), optional right column (override / equipment / checkbox)
+  // Grid columns: spec (left), item (middle), optional right column (override / equipment / checkbox)
   const gridTemplateColumns =
-    leftCheck === "spec" ? "1fr 140px 200px" :
-    leftCheck === "packout" ? "1fr 140px 250px" :
-    leftCheck === "kitchen" || leftCheck === "expeditor" || leftCheck === "server" ? "1fr 140px 40px" :
+    leftCheck === "spec" ? "140px 1fr 200px" :
+    leftCheck === "packout" ? "140px 1fr 250px" :
+    leftCheck === "kitchen" || leftCheck === "expeditor" || leftCheck === "server" ? "140px 1fr 40px" :
     "1fr";
 
   const handleSaveNote = () => {
@@ -2606,11 +2675,11 @@ const BeoPrintPage: React.FC = () => {
             )}
 
             {/* ── Menu Sections for this page ── */}
-            {page.sections.map(({ section, items: sectionItems }) => (
-          <div key={`${section.fieldId}-${page.pageNum}`} className="beo-section-card" style={styles.sectionCard}>
+            {page.sections.map(({ section, items: sectionItems, isContinuation }, secIdx) => (
+          <div key={`${section.fieldId}-${page.pageNum}-${secIdx}`} className="beo-section-card" style={styles.sectionCard}>
             <div className="beo-section-header" style={styles.sectionHeader}>
               <span style={{ color: getSectionColor(section.title), fontSize: "22px", lineHeight: 0 }}>●</span>
-              <span>{section.title}</span>
+              <span>{section.title}{isContinuation ? " (cont.)" : ""}</span>
               <span style={{ color: getSectionColor(section.title), fontSize: "22px", lineHeight: 0 }}>●</span>
             </div>
             {sectionItems.map((item, itemIdx) => {
@@ -2619,12 +2688,7 @@ const BeoPrintPage: React.FC = () => {
               <div key={`${item.id}-${itemIdx}`} className="beo-menu-item-block" style={{ borderBottom: "1px solid #eee", marginTop: itemIdx > 0 ? 2 : 0 }}>
               {rows.map((row, rowIdx) => (
               <div key={rowIdx} className="beo-line-item" style={{ ...styles.lineItem, borderBottom: "none", gridTemplateColumns, padding: "2px 12px", lineHeight: 1.2, minHeight: "unset", alignItems: "flex-start", ...(row.isChild ? {} : {}) }}>
-                {/* ALL MODES: Item Name (left column — what is written) */}
-                <div className="beo-item-col" style={{ ...styles.itemCol, lineHeight: 1.25 }}>
-                  {row.isChild ? `  ${row.lineName}` : row.lineName}
-                </div>
-
-                {/* SPEC / PACK-OUT / EXPEDITOR / KITCHEN / SERVER: Spec Column (right) — override only */}
+                {/* SPEC / PACK-OUT / EXPEDITOR / KITCHEN / SERVER: Spec Column (left) */}
                 {(leftCheck === "spec" || leftCheck === "packout" || leftCheck === "expeditor" || leftCheck === "kitchen" || leftCheck === "server") && (
                   <div className="beo-spec-col" style={{ ...styles.specCol, lineHeight: 1.2 }}>
                     {(() => {
@@ -2635,6 +2699,11 @@ const BeoPrintPage: React.FC = () => {
                     })()}
                   </div>
                 )}
+
+                {/* Item Name (middle column) */}
+                <div className="beo-item-col" style={{ ...styles.itemCol, lineHeight: 1.25 }}>
+                  {row.isChild ? `  ${row.lineName}` : row.lineName}
+                </div>
 
                 {/* SPEC VIEW: Override input — every row (including children) for spec reasons */}
                 {leftCheck === "spec" && (

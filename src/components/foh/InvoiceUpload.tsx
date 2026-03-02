@@ -2,6 +2,7 @@ import { useState } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import { extractTextFromPdf, parseInvoiceText, type ParsedInvoice } from "../../services/invoiceParser";
+import { parseDeliveryExcel } from "../../services/excelParser";
 import { createEvent, FIELD_IDS, uploadAttachment } from "../../services/airtable/events";
 import { parsedInvoiceToFields } from "../../utils/invoiceToEventFields";
 import { isErrorResult } from "../../services/airtable/selectors";
@@ -58,7 +59,8 @@ export default function InvoiceUpload({ onClose }: Props) {
     setError(null);
     try {
       await selectEvent(duplicateEvent.id);
-      const uploadResult = await uploadAttachment(duplicateEvent.id, FIELD_IDS.INVOICE_PDF, file);
+      const attachField = /\.xlsx?$/i.test(file.name) ? FIELD_IDS.EVENT_DOCUMENTS : FIELD_IDS.INVOICE_PDF;
+      const uploadResult = await uploadAttachment(duplicateEvent.id, attachField, file);
       if (isErrorResult(uploadResult)) {
         console.warn("[InvoiceUpload] PDF attach failed:", uploadResult.message);
       }
@@ -75,16 +77,22 @@ export default function InvoiceUpload({ onClose }: Props) {
 
   const handleProcess = async () => {
     if (!file) {
-      setError("Please choose a PDF invoice first.");
+      setError("Please choose a PDF invoice or Excel delivery BEO first.");
       return;
     }
     setLoading(true);
     setError(null);
     try {
-      const text = await extractTextFromPdf(file);
-      const parsed = await parseInvoiceText(text);
+      const isExcel = /\.xlsx?$/i.test(file.name);
+      let parsed: ParsedInvoice | null;
+      if (isExcel) {
+        parsed = await parseDeliveryExcel(file);
+      } else {
+        const text = await extractTextFromPdf(file);
+        parsed = await parseInvoiceText(text);
+      }
       if (!parsed) {
-        setError("Unable to parse invoice. Please try again or enter data manually.");
+        setError("Unable to parse file. Please try again or enter data manually.");
       } else {
         setPreview(parsed);
       }
@@ -137,7 +145,8 @@ export default function InvoiceUpload({ onClose }: Props) {
       });
       await selectEvent(result.id);
       if (file) {
-        const uploadResult = await uploadAttachment(result.id, FIELD_IDS.INVOICE_PDF, file);
+        const attachField = /\.xlsx?$/i.test(file.name) ? FIELD_IDS.EVENT_DOCUMENTS : FIELD_IDS.INVOICE_PDF;
+        const uploadResult = await uploadAttachment(result.id, attachField, file);
         if (isErrorResult(uploadResult)) {
           console.warn("[InvoiceUpload] PDF attach failed:", uploadResult.message);
         }
@@ -174,7 +183,7 @@ export default function InvoiceUpload({ onClose }: Props) {
         <div className="dp-card-header" style={{ marginBottom: "1rem" }}>
           <div className="dp-card-info">
             <div className="dp-card-name" id="upload-invoice-title">Upload Invoice</div>
-            <div className="dp-card-time" style={{ marginTop: 2 }}>PDF → BEO</div>
+            <div className="dp-card-time" style={{ marginTop: 2 }}>PDF / Excel → BEO</div>
           </div>
           <button
             type="button"
@@ -189,11 +198,11 @@ export default function InvoiceUpload({ onClose }: Props) {
 
         <div className="dp-card-details" style={{ marginBottom: 0 }}>
           <div className="dp-card-row" style={{ marginBottom: 12 }}>
-            <span className="dp-card-label">Invoice PDF</span>
+            <span className="dp-card-label">Invoice PDF or Delivery BEO Excel</span>
           </div>
           <input
             type="file"
-            accept=".pdf"
+            accept=".pdf,.xlsx,.xls"
             onChange={handleFileChange}
             className="block w-full text-xs text-gray-300 file:mr-3 file:px-3 file:py-1.5 file:rounded file:border-0 file:text-xs file:font-semibold file:bg-red-700/70 file:text-white hover:file:bg-red-600/80"
             style={{ marginBottom: 12 }}

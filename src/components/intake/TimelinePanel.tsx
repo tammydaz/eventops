@@ -69,11 +69,13 @@ export const TimelinePanel = () => {
           <label className="text-xs uppercase tracking-widest text-gray-400">Dispatch Time</label>
           <input
             type="time"
-            value={details.dispatchTime}
+            value={details.dispatchTime === "—" || !details.dispatchTime ? "" : details.dispatchTime}
             disabled={!canEdit}
             onChange={(event) => {
-              handleChange("dispatchTime", event.target.value);
-              saveField(FIELD_IDS.DISPATCH_TIME, timeStringToSeconds(event.target.value));
+              const val = event.target.value;
+              handleChange("dispatchTime", val);
+              const sec = timeStringToSeconds(val);
+              saveField(FIELD_IDS.DISPATCH_TIME, sec ?? null);
             }}
             className="mt-2 w-full rounded-md bg-gray-950 border border-gray-700 text-gray-300 px-3 py-2"
           />
@@ -82,11 +84,13 @@ export const TimelinePanel = () => {
           <label className="text-xs uppercase tracking-widest text-gray-400">Event Start Time</label>
           <input
             type="time"
-            value={details.eventStartTime}
+            value={details.eventStartTime === "—" || !details.eventStartTime ? "" : details.eventStartTime}
             disabled={!canEdit}
             onChange={(event) => {
-              handleChange("eventStartTime", event.target.value);
-              saveField(FIELD_IDS.EVENT_START_TIME, timeStringToSeconds(event.target.value));
+              const val = event.target.value;
+              handleChange("eventStartTime", val);
+              const sec = timeStringToSeconds(val);
+              if (sec != null) saveField(FIELD_IDS.EVENT_START_TIME, sec);
             }}
             className="mt-2 w-full rounded-md bg-gray-950 border border-gray-700 text-gray-300 px-3 py-2"
           />
@@ -95,11 +99,13 @@ export const TimelinePanel = () => {
           <label className="text-xs uppercase tracking-widest text-gray-400">Event End Time</label>
           <input
             type="time"
-            value={details.eventEndTime}
+            value={details.eventEndTime === "—" || !details.eventEndTime ? "" : details.eventEndTime}
             disabled={!canEdit}
             onChange={(event) => {
-              handleChange("eventEndTime", event.target.value);
-              saveField(FIELD_IDS.EVENT_END_TIME, timeStringToSeconds(event.target.value));
+              const val = event.target.value;
+              handleChange("eventEndTime", val);
+              const sec = timeStringToSeconds(val);
+              saveField(FIELD_IDS.EVENT_END_TIME, sec ?? null);
             }}
             className="mt-2 w-full rounded-md bg-gray-950 border border-gray-700 text-gray-300 px-3 py-2"
           />
@@ -108,11 +114,13 @@ export const TimelinePanel = () => {
           <label className="text-xs uppercase tracking-widest text-gray-400">FoodWerx Arrival Time</label>
           <input
             type="time"
-            value={details.foodwerxArrival}
+            value={details.foodwerxArrival === "—" || !details.foodwerxArrival ? "" : details.foodwerxArrival}
             disabled={!canEdit}
             onChange={(event) => {
-              handleChange("foodwerxArrival", event.target.value);
-              saveField(FIELD_IDS.FOODWERX_ARRIVAL, timeStringToSeconds(event.target.value));
+              const val = event.target.value;
+              handleChange("foodwerxArrival", val);
+              const sec = timeStringToSeconds(val);
+              saveField(FIELD_IDS.FOODWERX_ARRIVAL, sec ?? null);
             }}
             className="mt-2 w-full rounded-md bg-gray-950 border border-gray-700 text-gray-300 px-3 py-2"
           />

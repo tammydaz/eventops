@@ -718,18 +718,8 @@ const DATE_TIME_FIELD_IDS = new Set([
 // Field IDs Airtable rejects — strip before PATCH (Bar Service now resolved dynamically by name)
 const STRIP_FIELD_IDS = new Set<string>([]);
 
-// Single Select fields: Airtable REST API accepts string, but some bases require { name: "..." } format
-const SINGLE_SELECT_FIELD_IDS = new Set([
-  FIELD_IDS.BAR_SIGNATURE_DRINK_YES_NO,
-  FIELD_IDS.BAR_SIGNATURE_DRINK_MIXERS_SUPPLIER,
-  FIELD_IDS.EVENT_TYPE,
-  FIELD_IDS.EVENT_OCCASION,
-  FIELD_IDS.SERVICE_STYLE,
-  FIELD_IDS.KITCHEN_ON_SITE,
-  FIELD_IDS.SERVICE_WARE_SOURCE,
-  FIELD_IDS.STAIRS_STEPS,
-  FIELD_IDS.ELEVATORS_AVAILABLE,
-]);
+// Single-select: send plain string (many bases reject { name } format with "Cannot parse value")
+const SINGLE_SELECT_FIELD_IDS = new Set<string>([]);
 
 /** Convert seconds (from midnight) + date string → ISO datetime for Airtable */
 function secondsAndDateToIso(seconds: number, dateStr: string): string {
@@ -786,8 +776,16 @@ export const updateEventMultiple = async (
     const isDateTimeField = DATE_TIME_FIELD_IDS.has(key) || (foodwerxArrivalFieldId && key === foodwerxArrivalFieldId);
     if (isDateTimeField && typeof value === "number" && !isNaN(value)) {
       filteredFields[key] = secondsAndDateToIso(value, eventDate);
-    } else if (SINGLE_SELECT_FIELD_IDS.has(key) && (value === null || value === "")) {
-      filteredFields[key] = null;
+    } else if (SINGLE_SELECT_FIELD_IDS.has(key)) {
+      if (value === null || value === "") {
+        filteredFields[key] = null;
+      } else if (typeof value === "object" && value !== null && "name" in value && typeof (value as { name?: string }).name === "string") {
+        filteredFields[key] = { name: (value as { name: string }).name };
+      } else if (typeof value === "string" && value.trim()) {
+        filteredFields[key] = { name: value.trim() };
+      } else {
+        filteredFields[key] = null;
+      }
     } else {
       filteredFields[key] = value;
     }
@@ -821,7 +819,7 @@ export const updateEventMultiple = async (
   return { success: true };
 };
 
-/** Prepare fields for create: resolve FOODWERX_ARRIVAL, convert dateTime fields (seconds) → ISO strings */
+/** Prepare fields for create: resolve FOODWERX_ARRIVAL, convert dateTime fields (seconds) → ISO strings, normalize single-select to { name } */
 async function prepareFieldsForCreate(fields: Record<string, unknown>): Promise<Record<string, unknown>> {
   const obj = { ...fields };
   // Resolve FOODWERX_ARRIVAL: replace placeholder with real field ID (fld598p was invalid)
@@ -841,6 +839,16 @@ async function prepareFieldsForCreate(fields: Record<string, unknown>): Promise<
     const isDateTimeField = DATE_TIME_FIELD_IDS.has(key) || (foodwerxArrivalFieldId && key === foodwerxArrivalFieldId);
     if (isDateTimeField && typeof value === "number" && !isNaN(value)) {
       result[key] = secondsAndDateToIso(value, eventDate);
+    } else if (SINGLE_SELECT_FIELD_IDS.has(key)) {
+      if (value === null || value === "") {
+        result[key] = null;
+      } else if (typeof value === "object" && value !== null && "name" in value && typeof (value as { name?: string }).name === "string") {
+        result[key] = { name: (value as { name: string }).name };
+      } else if (typeof value === "string" && value.trim()) {
+        result[key] = { name: value.trim() };
+      } else {
+        result[key] = null;
+      }
     } else {
       result[key] = value;
     }

@@ -40,6 +40,7 @@ export function parsedInvoiceToFields(parsed: ParsedInvoice): Record<string, unk
     if (sec != null) fields[FIELD_IDS.FOODWERX_ARRIVAL] = sec;
   }
   if (parsed.fwStaff) fields[FIELD_IDS.CAPTAIN] = parsed.fwStaff;
+  // EVENT_TYPE omitted on create — Airtable rejects if value doesn't match base options. User sets in BEO Intake.
   // Build BEO timeline from parsed times (e.g. "1:00 PM – Staff arrival\n2:00 PM – Event begins")
   const timelineParts: string[] = [];
   if (parsed.staffArrivalTime) timelineParts.push(`${formatTimeForTimeline(parsed.staffArrivalTime)} – Staff arrival`);

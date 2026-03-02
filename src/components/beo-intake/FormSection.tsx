@@ -119,6 +119,13 @@ export const FormSection = ({
   isDelivery = false,
 }: FormSectionProps) => {
   const [isOpen, setIsOpen] = useState(defaultOpen);
+  const prevDefaultOpen = useRef(defaultOpen);
+  useEffect(() => {
+    if (prevDefaultOpen.current !== defaultOpen) {
+      prevDefaultOpen.current = defaultOpen;
+      setIsOpen(defaultOpen);
+    }
+  }, [defaultOpen]);
   const borderColor = isDelivery ? "#22c55e" : "#00bcd4";
   const glowColor = isDelivery ? "rgba(34,197,94,0.2)" : "rgba(0,188,212,0.2)";
 
