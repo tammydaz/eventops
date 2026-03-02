@@ -4,6 +4,15 @@ import { FIELD_IDS, createEvent, loadSingleSelectOptions, type SingleSelectOptio
 import { isErrorResult } from "../services/airtable/selectors";
 import { useEventStore } from "../state/eventStore";
 
+/** Fallback when Meta API fails (schema.bases:read) — must match Airtable Event Type options */
+const FALLBACK_EVENT_TYPES: SingleSelectOption[] = [
+  { id: "Full Service", name: "Full Service" },
+  { id: "Delivery", name: "Delivery" },
+  { id: "Pickup", name: "Pickup" },
+  { id: "Grazing Display / Interactive Station", name: "Grazing Display / Interactive Station" },
+  { id: "Tasting", name: "Tasting" },
+];
+
 const initialForm = {
   clientFirstName: "",
   clientLastName: "",
@@ -30,12 +39,13 @@ export const QuickIntake = () => {
       if (!isMounted) return;
       if (isErrorResult(result)) {
         const msg = result.message ?? "Unable to load select options.";
-        // Meta API 403: token has records access but lacks schema.bases:read — don't alarm staff, just use empty options
         const isSchemaScope = msg.includes("Invalid permissions") || msg.includes("model was not found");
         if (!isSchemaScope) setOptionsError(msg);
+        setEventTypeOptions(FALLBACK_EVENT_TYPES);
         return;
       }
-      setEventTypeOptions(result[FIELD_IDS.EVENT_TYPE] ?? []);
+      const opts = result[FIELD_IDS.EVENT_TYPE] ?? [];
+      setEventTypeOptions(opts.length > 0 ? opts : FALLBACK_EVENT_TYPES);
     };
 
     loadOptions();
