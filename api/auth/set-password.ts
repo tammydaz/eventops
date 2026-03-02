@@ -32,50 +32,50 @@ function signToken(payload: object, secret: string): string {
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  res.setHeader("Access-Control-Allow-Origin", req.headers.origin || "*");
-  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
-
-  if (req.method === "OPTIONS") {
-    return res.status(204).end();
-  }
-
-  if (req.method !== "POST") {
-    return res.status(405).json({ error: "Method not allowed" });
-  }
-
-  const apiKey = process.env.AIRTABLE_API_KEY;
-  const baseId = process.env.AIRTABLE_BASE_ID;
-  const tableId = process.env.AIRTABLE_USERS_TABLE;
-  const jwtSecret = process.env.AUTH_JWT_SECRET;
-
-  const missing = [
-    !apiKey && "AIRTABLE_API_KEY",
-    !baseId && "AIRTABLE_BASE_ID",
-    !tableId && "AIRTABLE_USERS_TABLE",
-    !jwtSecret && "AUTH_JWT_SECRET",
-  ].filter(Boolean) as string[];
-  if (missing.length > 0) {
-    console.error("Missing env:", missing.join(", "));
-    return res.status(500).json({
-      error: "Server configuration error",
-      details: `Missing: ${missing.join(", ")}. Add to .env.local and restart vercel dev.`,
-    });
-  }
-
-  const { email, password } = req.body || {};
-  if (!email || typeof email !== "string" || !password || typeof password !== "string") {
-    return res.status(400).json({ error: "Email and password required" });
-  }
-
-  if (password.length < 6) {
-    return res.status(400).json({ error: "Password must be at least 6 characters" });
-  }
-
-  const emailLower = email.trim().toLowerCase();
-  const escaped = emailLower.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
-
   try {
+    res.setHeader("Access-Control-Allow-Origin", req.headers.origin || "*");
+    res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+
+    if (req.method === "OPTIONS") {
+      return res.status(204).end();
+    }
+
+    if (req.method !== "POST") {
+      return res.status(405).json({ error: "Method not allowed" });
+    }
+
+    const apiKey = process.env.AIRTABLE_API_KEY;
+    const baseId = process.env.AIRTABLE_BASE_ID;
+    const tableId = process.env.AIRTABLE_USERS_TABLE;
+    const jwtSecret = process.env.AUTH_JWT_SECRET;
+
+    const missing = [
+      !apiKey && "AIRTABLE_API_KEY",
+      !baseId && "AIRTABLE_BASE_ID",
+      !tableId && "AIRTABLE_USERS_TABLE",
+      !jwtSecret && "AUTH_JWT_SECRET",
+    ].filter(Boolean) as string[];
+    if (missing.length > 0) {
+      console.error("Missing env:", missing.join(", "));
+      return res.status(500).json({
+        error: "Server configuration error",
+        details: `Missing: ${missing.join(", ")}. Add to .env.local and restart vercel dev.`,
+      });
+    }
+
+    const { email, password } = req.body || {};
+    if (!email || typeof email !== "string" || !password || typeof password !== "string") {
+      return res.status(400).json({ error: "Email and password required" });
+    }
+
+    if (password.length < 6) {
+      return res.status(400).json({ error: "Password must be at least 6 characters" });
+    }
+
+    const emailLower = email.trim().toLowerCase();
+    const escaped = emailLower.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+
     const filterFormula = encodeURIComponent(`LOWER({Email})="${escaped}"`);
     const url = `${AIRTABLE_API}/${baseId}/${tableId}?filterByFormula=${filterFormula}&maxRecords=1`;
     const airRes = await fetch(url, {
@@ -86,8 +86,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     });
 
     if (!airRes.ok) {
-      console.error("Airtable error:", airRes.status, await airRes.text());
-      return res.status(500).json({ error: "Failed to fetch user" });
+      const errText = await airRes.text();
+      console.error("Airtable error:", airRes.status, errText);
+      return res.status(500).json({
+        error: "Failed to fetch user",
+        details: `Airtable error ${airRes.status}. Check AIRTABLE_BASE_ID and AIRTABLE_USERS_TABLE.`,
+      });
     }
 
     const data = (await airRes.json()) as { records: AirtableUser[] };
@@ -112,8 +116,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     });
 
     if (!patchRes.ok) {
-      console.error("Airtable PATCH error:", patchRes.status, await patchRes.text());
-      return res.status(500).json({ error: "Failed to save password" });
+      const errText = await patchRes.text();
+      console.error("Airtable PATCH error:", patchRes.status, errText);
+      return res.status(500).json({
+        error: "Failed to save password",
+        details: `Airtable error ${patchRes.status}.`,
+      });
     }
 
     const role = (record.fields.Role || "kitchen") as Role;
@@ -135,6 +143,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     });
   } catch (e) {
     console.error("Set password error:", e);
-    return res.status(500).json({ error: "Failed to set password" });
+    return res.status(500).json({
+      error: "Failed to set password",
+      details: e instanceof Error ? e.message : "Unknown error",
+    });
   }
 }

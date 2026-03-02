@@ -6,7 +6,7 @@ import LoginPage from "../pages/LoginPage";
 const LOGIN_PATH = "/login";
 
 /** Set to true to require login. Set to false for open access (practice mode). */
-const AUTH_REQUIRED = false;
+const AUTH_REQUIRED = true;
 
 const DEMO_USER = { id: "demo", name: "Practice Mode", role: "ops_admin" as const };
 

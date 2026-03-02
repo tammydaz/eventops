@@ -29,7 +29,10 @@ export const QuickIntake = () => {
       const result = await loadSingleSelectOptions([FIELD_IDS.EVENT_TYPE]);
       if (!isMounted) return;
       if (isErrorResult(result)) {
-        setOptionsError(result.message ?? "Unable to load select options.");
+        const msg = result.message ?? "Unable to load select options.";
+        // Meta API 403: token has records access but lacks schema.bases:read — don't alarm staff, just use empty options
+        const isSchemaScope = msg.includes("Invalid permissions") || msg.includes("model was not found");
+        if (!isSchemaScope) setOptionsError(msg);
         return;
       }
       setEventTypeOptions(result[FIELD_IDS.EVENT_TYPE] ?? []);
@@ -115,6 +118,7 @@ export const QuickIntake = () => {
 
     setSubmitMessage("✅ Event created successfully!");
     setCreatedId(result.id);
+    setOptionsError(null);
     setForm(initialForm);
     await loadEvents();
     setIsSubmitting(false);
