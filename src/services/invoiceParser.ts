@@ -62,16 +62,6 @@ export type ParsedInvoice = {
   fwStaff?: string;
 };
 
-/** Clean numbered list format: "1)C heesesteak" -> "Cheesesteak", fix OCR space-after-number */
-function cleanNumberedList(text: string): string {
-  return text
-    .replace(/\d+\)\s*/g, " ")           // Remove "1)", "2)", etc.
-    .replace(/\b([A-Z])\s+(?=[a-z])/g, "$1")  // Fix "C heesesteak" -> "Cheesesteak", "R aspberry" -> "Raspberry"
-    .replace(/\s+/g, " ")
-    .replace(/,\s*,/g, ",")
-    .trim();
-}
-
 /**
  * Rule-based parser for Hospitality Management Services / FoodWerx invoice format.
  * Works without OpenAI. Extracts: Bill To, Phone, E-Mail, Date, guest count, venue, menu, etc.
@@ -253,68 +243,7 @@ export function parseInvoiceTextRuleBased(text: string): ParsedInvoice | null {
     const timeline = descBlock.match(/(?:Breakfast|Lunch|Dinner|served)\s+(?:at\s+)?(\d{1,2}(?::\d{2})?\s*(?:am|pm))/gi);
     if (timeline?.length) notes.push(...timeline);
     if (notes.length) result.notes = notes.join("\n");
-    const menuCleaned = descBlock.replace(/\s{2,}/g, " ").trim();
-    result.menuText = menuCleaned.slice(0, 2500);
-
-    // Parse menu sections for BEO custom fields (Rhinchart / Hospitality format)
-    const extractSection = (sectionName: string, altNames?: string[]): string => {
-      const names = [sectionName, ...(altNames || [])];
-      for (const name of names) {
-        const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-        // Prefer content in parens: "Passed Appetizers (Quilted Franks, Cheesesteak...)"
-        const parenRe = new RegExp(`${escaped}\\s*\\(([^)]+)\\)`, "is");
-        const parenM = descBlock.match(parenRe);
-        if (parenM && parenM[1]) {
-          const c = parenM[1].replace(/\s+/g, " ").trim();
-          if (c.length > 2) return c.slice(0, 500);
-        }
-        // Fallback: content after section name until numbers or next section
-        const fallbackRe = new RegExp(
-          `${escaped}\\s*[:]?\\s*([\\s\\S]+?)(?=\\s+\\d{2,}\\s+[\\d.]+\\s+[\\d,]+|Presented|Buffet|Dessert|Small Plate|Grande|Chef|Full Service|Sales Tax|Total|Cocktail Display|All American Station|Entree Options|Starch|Vegetable|Salad|upcharge|$)`,
-          "i"
-        );
-        const fallbackM = descBlock.match(fallbackRe);
-        if (fallbackM && fallbackM[1]) {
-          let c = fallbackM[1].replace(/\s+/g, " ").trim();
-          c = cleanNumberedList(c);
-          if (c.length > 2) return c.slice(0, 800);
-        }
-      }
-      return "";
-    };
-    result.customPassedApp = extractSection("Passed Appetizers", ["Passed App"]);
-    result.customPresentedApp = extractSection("Presented Appetizers", ["Presented App", "Room Temp Display", "Cocktail Display"]);
-    result.customBuffetMetal = extractSection("Small Plate Buffet", ["Buffet Metal", "Buffet – Hot", "Buffet Presentation", "Buffet", "All American Station", "Entree Options"]);
-    result.customBuffetChina = extractSection("Buffet China");
-    result.customDessert = extractSection("Grande Display of Decadent Desserts", ["Desserts", "Dessert"]);
-
-    // Hospitality/FoodWerx format: items listed after package line (e.g. "166 Flirty Package") with no section headers
-    // Extract lines before first "Display:", "Station:", "Options:", "upcharge" as passed apps
-    if (!result.customPassedApp && /Flirty Package|Quantity\s+Description|Taking place at/i.test(descBlock)) {
-      const packageMatch = descBlock.match(/\d{2,4}\s+(?:Flirty|[\w\s]+)\s+Package\s+[\d.]+\s+[\d,]+\.?\d*T?/i);
-      const packageEnd = packageMatch ? (packageMatch.index ?? 0) + packageMatch[0].length : 0;
-      const blockAfterPackage = descBlock.slice(packageEnd);
-      const firstLabel = blockAfterPackage.search(/(?:Cocktail\s+Display|All American\s+Station|Entree\s+Options|upcharge|Starch|Vegetable|Salad)\s*:/i);
-      const itemsBlock = firstLabel >= 0 ? blockAfterPackage.slice(0, firstLabel) : blockAfterPackage;
-      const lines = itemsBlock.split(/[\n]+/).map((l) => l.replace(/\s{2,}/g, " ").trim()).filter(Boolean);
-      const foodLines: string[] = [];
-      for (const line of lines) {
-        const clean = line.replace(/^\d+\s+/, "").replace(/\s+[\d.]+\s+[\d,]+\.?\d*T?\s*$/, "").trim();
-        if (clean.length > 3 && !/^[\d.,\s$]+$/.test(clean) && !/^(Quantity|Description|Rate|Amount)$/i.test(clean)) {
-          foodLines.push(clean);
-        }
-      }
-      if (foodLines.length > 0) result.customPassedApp = foodLines.join(", ");
-    }
-
-    // Starch/Vegetable/Salad sections (Hospitality format) -> combine into customBuffetChina
-    if (!result.customBuffetChina) {
-      const starch = extractSection("Starch");
-      const veg = extractSection("Vegetable");
-      const salad = extractSection("Salad");
-      const parts = [starch, veg, salad].filter(Boolean);
-      if (parts.length > 0) result.customBuffetChina = parts.join(", ");
-    }
+    // Food items parsing disabled — user will add menu items manually in BEO Intake
   }
 
   if (Object.keys(result).length === 0) return null;
@@ -337,6 +266,7 @@ export async function parseInvoiceText(text: string): Promise<ParsedInvoice | nu
 You are helping a catering company populate a BEO intake form from a PDF invoice.
 
 Given the raw invoice text below, extract the key fields and return STRICT JSON only.
+Do NOT extract any food/menu items — those will be added manually.
 
 JSON shape:
 {
@@ -351,24 +281,19 @@ JSON shape:
   "eventEndTime": string | null,
   "venueName": string | null,
   "notes": string | null,
-  "menuText": string | null,
-  "customPassedApp": string | null,
-  "customPresentedApp": string | null,
-  "customBuffetMetal": string | null,
-  "customBuffetChina": string | null,
-  "customDessert": string | null,
+  "menuText": null,
+  "customPassedApp": null,
+  "customPresentedApp": null,
+  "customBuffetMetal": null,
+  "customBuffetChina": null,
+  "customDessert": null,
   "fwStaff": string | null,
   "staffArrivalTime": string | null
 }
 
 Rules:
 - If you are unsure about a field, use null.
-- "menuText" should be a single multi-line string that contains the human-readable menu / service description.
-- "customPassedApp": items from Passed Appetizers section (e.g. "Quilted Franks, Cheesesteak Dumplings, Jumbo Lump Crab Cakes").
-- "customPresentedApp": items from Presented Appetizers.
-- "customBuffetMetal": items from Small Plate Buffet or Buffet Metal.
-- "customBuffetChina": items from Buffet China.
-- "customDessert": items from Desserts section.
+- ALWAYS set menuText, customPassedApp, customPresentedApp, customBuffetMetal, customBuffetChina, customDessert to null — do not parse food items.
 - "fwStaff": staff counts from line items, e.g. "2 Server, 1 Bartender" from "2 Server (5 Hours of Service)" and "1 Bartender (5 Hours of Service)".
 - "staffArrivalTime": time staff arrives, e.g. "13:00" for 1pm from "Staff on-site 1pm-6pm".
 - Do NOT include any extra keys.
