@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useEventStore } from "../../state/eventStore";
-import { FIELD_IDS } from "../../services/airtable/events";
+import { FIELD_IDS, getFoodwerxArrivalFieldId } from "../../services/airtable/events";
 import { asSingleSelectName, asString } from "../../services/airtable/selectors";
 import { FormSection } from "./FormSection";
 import type { EventCore } from "./types";
@@ -31,9 +31,10 @@ const SERVICE_STYLE_OPTIONS = [
   "Plated",
 ];
 
-export const EventCoreSection = () => {
+export const EventCoreSection = ({ isDelivery = false }: { isDelivery?: boolean }) => {
   const { selectedEventId, selectedEventData, setFields } = useEventStore();
   const isUpdatingRef = useRef(false);
+  const [fwArrivalFieldId, setFwArrivalFieldId] = useState<string | null>(null);
   const [details, setDetails] = useState<EventCore>({
     eventType: "",
     eventOccasion: "",
@@ -46,6 +47,10 @@ export const EventCoreSection = () => {
     eventArrivalTime: "",
     opsExceptions: "",
   });
+
+  useEffect(() => {
+    getFoodwerxArrivalFieldId().then(setFwArrivalFieldId);
+  }, []);
 
   useEffect(() => {
     if (isUpdatingRef.current) return;
@@ -64,7 +69,8 @@ export const EventCoreSection = () => {
       });
       return;
     }
-
+    const arrivalFieldId = fwArrivalFieldId ?? FIELD_IDS.VENUE_ARRIVAL_TIME;
+    const arrivalRaw = selectedEventData[arrivalFieldId] ?? selectedEventData[FIELD_IDS.VENUE_ARRIVAL_TIME];
     setDetails({
       eventType: asSingleSelectName(selectedEventData[FIELD_IDS.EVENT_TYPE]),
       eventOccasion: asSingleSelectName(selectedEventData[FIELD_IDS.EVENT_OCCASION]),
@@ -76,10 +82,10 @@ export const EventCoreSection = () => {
       dispatchTime: secondsToTimeString(selectedEventData[FIELD_IDS.DISPATCH_TIME]),
       eventStartTime: secondsToTimeString(selectedEventData[FIELD_IDS.EVENT_START_TIME]),
       eventEndTime: secondsToTimeString(selectedEventData[FIELD_IDS.EVENT_END_TIME]),
-      eventArrivalTime: secondsToTimeString(selectedEventData[FIELD_IDS.FOODWERX_ARRIVAL]),
+      eventArrivalTime: secondsToTimeString(arrivalRaw),
       opsExceptions: asString(selectedEventData[FIELD_IDS.OPS_EXCEPTIONS_SPECIAL_HANDLING]),
     });
-  }, [selectedEventId, selectedEventData]);
+  }, [selectedEventId, selectedEventData, fwArrivalFieldId]);
 
   const canEdit = Boolean(selectedEventId);
 
@@ -125,7 +131,7 @@ export const EventCoreSection = () => {
   };
 
   return (
-    <FormSection title="Event Details" icon="🎉">
+    <FormSection title={isDelivery ? "Delivery Event Details" : "Event Details"} icon={isDelivery ? "🚚" : "🎉"} dotColor={isDelivery ? "#22c55e" : undefined} isDelivery={isDelivery}>
       <div>
         <label style={labelStyle}>Event Date</label>
         <input
@@ -188,59 +194,63 @@ export const EventCoreSection = () => {
         </select>
       </div>
 
-      <div>
-        <label style={labelStyle}>Event Occasion</label>
-        <select
-          value={details.eventOccasion}
-          disabled={!canEdit}
-          onChange={async (e) => {
-            const value = e.target.value;
-            setDetails(prev => ({ ...prev, eventOccasion: value }));
-            if (selectedEventId) {
-              await saveField(FIELD_IDS.EVENT_OCCASION, value || null);
-            }
-          }}
-          style={inputStyle}
-        >
-          <option value="">Select occasion...</option>
-          {EVENT_OCCASION_OPTIONS.map((option) => (
-            <option key={option} value={option}>
-              {option}
-            </option>
-          ))}
-        </select>
-        <div style={{ fontSize: "11px", color: "#666", marginTop: "6px", lineHeight: 1.4 }}>
-          Wedding & Bar/Bat Mitzvah show extra timeline prompts below.
-        </div>
-      </div>
+      {!isDelivery && (
+        <>
+          <div>
+            <label style={labelStyle}>Event Occasion</label>
+            <select
+              value={details.eventOccasion}
+              disabled={!canEdit}
+              onChange={async (e) => {
+                const value = e.target.value;
+                setDetails(prev => ({ ...prev, eventOccasion: value }));
+                if (selectedEventId) {
+                  await saveField(FIELD_IDS.EVENT_OCCASION, value || null);
+                }
+              }}
+              style={inputStyle}
+            >
+              <option value="">Select occasion...</option>
+              {EVENT_OCCASION_OPTIONS.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
+            </select>
+            <div style={{ fontSize: "11px", color: "#666", marginTop: "6px", lineHeight: 1.4 }}>
+              Wedding & Bar/Bat Mitzvah show extra timeline prompts below.
+            </div>
+          </div>
 
-      <div>
-        <label style={labelStyle}>Service Style (kitchen banner)</label>
-        <select
-          value={details.serviceStyle}
-          disabled={!canEdit}
-          onChange={async (e) => {
-            const value = e.target.value;
-            setDetails(prev => ({ ...prev, serviceStyle: value }));
-            if (selectedEventId) {
-              await saveField(FIELD_IDS.SERVICE_STYLE, value || null);
-            }
-          }}
-          style={inputStyle}
-        >
-          <option value="">Select style...</option>
-          {SERVICE_STYLE_OPTIONS.map((option) => (
-            <option key={option} value={option}>
-              {option}
-            </option>
-          ))}
-        </select>
-        <div style={{ fontSize: "11px", color: "#666", marginTop: "6px", lineHeight: 1.4 }}>
-          Buffet vs plated/cocktail/etc. When not buffet, a banner warns the kitchen. (Different from Food Service Flow in Site Visit—that one is for servers.)
-        </div>
-      </div>
+          <div>
+            <label style={labelStyle}>Service Style (kitchen banner)</label>
+            <select
+              value={details.serviceStyle}
+              disabled={!canEdit}
+              onChange={async (e) => {
+                const value = e.target.value;
+                setDetails(prev => ({ ...prev, serviceStyle: value }));
+                if (selectedEventId) {
+                  await saveField(FIELD_IDS.SERVICE_STYLE, value || null);
+                }
+              }}
+              style={inputStyle}
+            >
+              <option value="">Select style...</option>
+              {SERVICE_STYLE_OPTIONS.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
+            </select>
+            <div style={{ fontSize: "11px", color: "#666", marginTop: "6px", lineHeight: 1.4 }}>
+              Buffet vs plated/cocktail/etc. When not buffet, a banner warns the kitchen. (Different from Food Service Flow in Site Visit—that one is for servers.)
+            </div>
+          </div>
+        </>
+      )}
 
-      {(["dispatchTime", "eventStartTime", "eventEndTime", "eventArrivalTime"] as const).map((key) => {
+      {((isDelivery ? ["dispatchTime"] : ["dispatchTime", "eventStartTime", "eventEndTime", "eventArrivalTime"]) as const).map((key) => {
         const fieldIdMap = {
           dispatchTime: FIELD_IDS.DISPATCH_TIME,
           eventStartTime: FIELD_IDS.EVENT_START_TIME,

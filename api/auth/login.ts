@@ -65,7 +65,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       console.error("Missing env:", missing.join(", "));
       return res.status(500).json({
         error: "Server configuration error",
-        details: `Missing: ${missing.join(", ")}. Add to .env.local and restart vercel dev.`,
+        details: `Missing: ${missing.join(", ")}. Add these in Vercel: Project → Settings → Environment Variables.`,
       });
     }
 

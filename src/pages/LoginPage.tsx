@@ -267,7 +267,7 @@ export default function LoginPage() {
               disabled={loading}
               style={{ marginTop: 8, background: "none", border: "none", color: "#888", cursor: "pointer", fontSize: 13 }}
             >
-              Forgot password? Set a new one
+              First time or forgot? Set your password here
             </button>
             <button type="button" className="login-back" onClick={handleBack}>
               Back

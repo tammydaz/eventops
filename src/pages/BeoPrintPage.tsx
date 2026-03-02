@@ -3,11 +3,9 @@ import { useEventStore } from "../state/eventStore";
 import { useBeoPrintStore } from "../state/beoPrintStore";
 import { FIELD_IDS, getBarServiceFieldId } from "../services/airtable/events";
 import { asSingleSelectName, asString, asStringArray } from "../services/airtable/selectors";
-import { useSpecsForEvent } from "../hooks/useSpecsForEvent";
-import { formatSpecForDisplay, formatSpecWithUnit } from "../lib/specs/calculateSpecs";
-import type { SpecUnitType } from "../lib/specs/calculateSpecs";
 import { secondsToTimeString, secondsTo12HourString } from "../utils/timeHelpers";
 import { sanitizeForHeader } from "../utils/httpHeaders";
+import { isDeliveryOrPickup } from "../lib/deliveryHelpers";
 import { FULL_BAR_PACKAGE, FULL_BAR_PACKAGE_SPECK_ROWS, getFullBarPackagePackoutItems, getSignatureCocktailGreeting } from "../constants/fullBarPackage";
 
 // ── Types ──
@@ -34,6 +32,8 @@ type TopTab = "kitchenBEO" | "meetingBeoNotes" | "fullBeoPacket" | "buffetMenuSi
 
 // ── Section color by type ──
 const getSectionColor = (sectionTitle: string): string => {
+  // Delivery sections: all green
+  if (sectionTitle.includes("DISPOSABLE")) return "#22c55e";
   if (sectionTitle.includes("PASSED")) return "#22c55e";
   if (sectionTitle.includes("PRESENTED")) return "#f97316";
   if (sectionTitle.includes("BUFFET")) return "#3b82f6";
@@ -1586,10 +1586,8 @@ function MeetingBeoNotesContent(props: {
   expandItemToRows: (item: MenuLineItem) => { lineName: string; isChild: boolean; itemId?: string }[];
   meetingNotes: Record<string, { itemName: string; sectionTitle: string; notes: string[] }>;
   onAddNote: (itemId: string, itemName: string, sectionTitle: string) => void;
-  specMap?: import("../hooks/useSpecsForEvent").SpecMap;
-  specsLoading?: boolean;
 }) {
-  const { activeSections, expandItemToRows, meetingNotes, onAddNote, specMap = {}, specsLoading } = props;
+  const { activeSections, expandItemToRows, meetingNotes, onAddNote } = props;
   const notesEntries = Object.entries(meetingNotes).filter(([, v]) => v.notes.length > 0);
 
   return (
@@ -1672,17 +1670,9 @@ function MeetingBeoNotesContent(props: {
               return (
                 <div key={`${item.id}-${itemIdx}`} className="beo-menu-item-block" style={{ borderBottom: "1px solid #eee", marginTop: itemIdx > 0 ? 16 : 0 }}>
                   {rows.map((row, rowIdx) => {
-                    const specData = specMap[item.id];
-                    const unitType = specData?.unitType as SpecUnitType | undefined;
-                    const specDisplay = specData && unitType ? formatSpecForDisplay(specData.fwxSpecValue, unitType) : (rowIdx === 0 ? (specsLoading ? "Loading…" : "—") : "—");
                     return (
                     <div key={rowIdx} className="beo-line-item" style={{ ...styles.lineItem, borderBottom: "none", gridTemplateColumns: row.isChild ? "140px 1fr" : "140px 1fr auto", padding: "8px 16px", ...(row.isChild ? { marginTop: -6 } : {}) }}>
-                      <div className="beo-spec-col" style={styles.specCol}>
-                        {rowIdx === 0 ? specDisplay : "—"}
-                        {rowIdx === 0 && specData && unitType && (
-                          <div style={{ fontSize: 9, color: "#999", marginTop: 1 }}>Industry: {formatSpecWithUnit(specData.industryValue, unitType)}</div>
-                        )}
-                      </div>
+                      <div className="beo-spec-col" style={styles.specCol}>—</div>
                       <div className="beo-item-col" style={styles.itemCol}>{row.lineName}</div>
                       {!row.isChild && (
                         <button
@@ -1767,7 +1757,6 @@ const BeoPrintPage: React.FC = () => {
   const [hiddenMenuItems, setHiddenMenuItems] = useState<Set<string>>(new Set());
   const [barServiceFieldId, setBarServiceFieldId] = useState<string | null>(null);
   const eventId = selectedEventId ?? getEventIdFromUrl();
-  const { specMap, loading: specsLoading, error: specsError } = useSpecsForEvent(eventId);
 
   useEffect(() => {
     getBarServiceFieldId().then(setBarServiceFieldId);
@@ -1804,14 +1793,27 @@ const BeoPrintPage: React.FC = () => {
 
   // ── Step 2: Fetch menu items with Item Name + Child Items (linked records) ──
   useEffect(() => {
-    const menuFieldIds = [
-      FIELD_IDS.PASSED_APPETIZERS,
-      FIELD_IDS.PRESENTED_APPETIZERS,
-      FIELD_IDS.BUFFET_METAL,
-      FIELD_IDS.BUFFET_CHINA,
-      FIELD_IDS.DESSERTS,
-      FIELD_IDS.STATIONS,
-    ];
+    const eventTypeRaw = asSingleSelectName(eventData[FIELD_IDS.EVENT_TYPE])?.toLowerCase() ?? "";
+    const isDelivery = eventTypeRaw.includes("delivery") || eventTypeRaw.includes("pick up") || eventTypeRaw.includes("pickup");
+
+    const menuFieldIds = isDelivery
+      ? [
+          FIELD_IDS.PASSED_APPETIZERS,
+          FIELD_IDS.PRESENTED_APPETIZERS,
+          FIELD_IDS.BUFFET_METAL,
+          FIELD_IDS.BUFFET_CHINA,
+          FIELD_IDS.DESSERTS,
+          FIELD_IDS.DELIVERY_DELI,
+          FIELD_IDS.ROOM_TEMP_DISPLAY,
+        ]
+      : [
+          FIELD_IDS.PASSED_APPETIZERS,
+          FIELD_IDS.PRESENTED_APPETIZERS,
+          FIELD_IDS.BUFFET_METAL,
+          FIELD_IDS.BUFFET_CHINA,
+          FIELD_IDS.DESSERTS,
+          FIELD_IDS.STATIONS,
+        ];
 
     const parentIds = new Set<string>();
     menuFieldIds.forEach((fid) => {
@@ -2021,7 +2023,10 @@ const BeoPrintPage: React.FC = () => {
   };
 
   // ── Menu Sections (linked items, or fallback to custom text from invoice)
-  const sectionDefs: { title: string; fieldId: string; linkedFieldId: string; customFieldId: string }[] = [
+  const eventType = asSingleSelectName(eventData[FIELD_IDS.EVENT_TYPE]);
+  const isDelivery = isDeliveryOrPickup(eventType);
+
+  const FULL_SERVICE_SECTION_DEFS: { title: string; fieldId: string; linkedFieldId: string; customFieldId: string }[] = [
     { title: "PASSED APPETIZERS", fieldId: FIELD_IDS.PASSED_APPETIZERS, linkedFieldId: FIELD_IDS.PASSED_APPETIZERS, customFieldId: FIELD_IDS.CUSTOM_PASSED_APP },
     { title: "PRESENTED APPETIZERS", fieldId: FIELD_IDS.PRESENTED_APPETIZERS, linkedFieldId: FIELD_IDS.PRESENTED_APPETIZERS, customFieldId: FIELD_IDS.CUSTOM_PRESENTED_APP },
     { title: "BUFFET – METAL", fieldId: FIELD_IDS.BUFFET_METAL, linkedFieldId: FIELD_IDS.BUFFET_METAL, customFieldId: FIELD_IDS.CUSTOM_BUFFET_METAL },
@@ -2029,12 +2034,35 @@ const BeoPrintPage: React.FC = () => {
     { title: "DESSERTS", fieldId: FIELD_IDS.DESSERTS, linkedFieldId: FIELD_IDS.DESSERTS, customFieldId: FIELD_IDS.CUSTOM_DESSERTS },
     { title: "STATIONS", fieldId: FIELD_IDS.STATIONS, linkedFieldId: FIELD_IDS.STATIONS, customFieldId: "" },
   ];
-  const menuSections: SectionData[] = sectionDefs.map((def) => {
-    const linked = parseMenuItems(def.linkedFieldId);
-    const custom = def.customFieldId ? customTextToItems(asString(eventData[def.customFieldId]), `custom-${def.fieldId}`) : [];
-    const items = linked.length > 0 ? linked : custom;
-    return { title: def.title, fieldId: def.fieldId, items };
-  });
+
+  const DELIVERY_SECTION_CONFIG: { title: string; fieldIds: string[] }[] = [
+    { title: "HOT - DISPOSABLE", fieldIds: [FIELD_IDS.BUFFET_METAL, FIELD_IDS.PASSED_APPETIZERS, FIELD_IDS.PRESENTED_APPETIZERS] },
+    { title: "DELI - DISPOSABLE", fieldIds: [FIELD_IDS.DELIVERY_DELI] },
+    { title: "KITCHEN - DISPOSABLE", fieldIds: [FIELD_IDS.BUFFET_CHINA, FIELD_IDS.PASSED_APPETIZERS, FIELD_IDS.PRESENTED_APPETIZERS] },
+    { title: "SALADS - DISPOSABLE", fieldIds: [FIELD_IDS.ROOM_TEMP_DISPLAY] },
+    { title: "DESSERTS - DISPOSABLE", fieldIds: [FIELD_IDS.DESSERTS] },
+  ];
+
+  const menuSections: SectionData[] = isDelivery
+    ? DELIVERY_SECTION_CONFIG.map((config) => {
+        const allLinked: MenuLineItem[] = [];
+        const seenIds = new Set<string>();
+        for (const fid of config.fieldIds) {
+          for (const item of parseMenuItems(fid)) {
+            if (!seenIds.has(item.id)) {
+              seenIds.add(item.id);
+              allLinked.push(item);
+            }
+          }
+        }
+        return { title: config.title, fieldId: config.fieldIds[0], items: allLinked };
+      }).filter((s) => s.items.length > 0)
+    : FULL_SERVICE_SECTION_DEFS.map((def) => {
+        const linked = parseMenuItems(def.linkedFieldId);
+        const custom = def.customFieldId ? customTextToItems(asString(eventData[def.customFieldId]), `custom-${def.fieldId}`) : [];
+        const items = linked.length > 0 ? linked : custom;
+        return { title: def.title, fieldId: def.fieldId, items };
+      });
 
   const barFid = barServiceFieldId ?? FIELD_IDS.BAR_SERVICE;
   const barService = asSingleSelectName(eventData[barFid]);
@@ -2408,16 +2436,6 @@ const BeoPrintPage: React.FC = () => {
         style={styles.page}
         onClick={() => { if (document.activeElement instanceof HTMLButtonElement) document.activeElement.blur(); }}
       >
-        {specsError && (
-          <div className="no-print" style={{ padding: 12, background: "#fef2f2", color: "#b91c1c", fontSize: 13, marginBottom: 12 }}>
-            Specs: {specsError}
-          </div>
-        )}
-        {!specsLoading && !specsError && activeSections.length > 0 && Object.keys(specMap).length === 0 && eventId && (
-          <div className="no-print" style={{ padding: 12, background: "#fef9c3", color: "#854d0e", fontSize: 13, marginBottom: 12 }}>
-            Specs: No Master Menu Specs found for menu items. Add records in Master Menu Specs table.
-          </div>
-        )}
         {kitchenPages.length === 0 || (kitchenPages.length === 1 && kitchenPages[0].sections.length === 0) ? (
           <div style={{ padding: 32, textAlign: "center", color: "#999", fontSize: 16 }}>
             No menu items assigned to this event yet.
@@ -2527,31 +2545,14 @@ const BeoPrintPage: React.FC = () => {
               <div key={`${item.id}-${itemIdx}`} className="beo-menu-item-block" style={{ borderBottom: "1px solid #eee", marginTop: itemIdx > 0 ? 2 : 0 }}>
               {rows.map((row, rowIdx) => (
               <div key={rowIdx} className="beo-line-item" style={{ ...styles.lineItem, borderBottom: "none", gridTemplateColumns, padding: "2px 12px", lineHeight: 1.2, minHeight: "unset", alignItems: "flex-start", ...(row.isChild ? { marginTop: -2 } : {}) }}>
-                {/* SPEC / PACK-OUT / EXPEDITOR / KITCHEN / SERVER: Spec Column (left) — override when present, else Spec Engine output */}
+                {/* SPEC / PACK-OUT / EXPEDITOR / KITCHEN / SERVER: Spec Column (left) — override only (auto spec disabled) */}
                 {(leftCheck === "spec" || leftCheck === "packout" || leftCheck === "expeditor" || leftCheck === "kitchen" || leftCheck === "server") && (
                   <div className="beo-spec-col" style={{ ...styles.specCol, lineHeight: 1.2 }}>
                     {(() => {
                       const overrideKey = `${section.fieldId}:${item.id}:${rowIdx}`;
                       const overrideKeyLegacy = `${section.fieldId}:${item.id}`;
                       const overrideVal = specOverrides[overrideKey] ?? (rowIdx === 0 ? specOverrides[overrideKeyLegacy] : undefined) ?? "";
-                      const specData = specMap[item.id];
-                      const unitType = specData?.unitType as SpecUnitType | undefined;
-                      const specDisplay = specData && unitType ? formatSpecForDisplay(specData.fwxSpecValue, unitType) : (rowIdx === 0 ? (specsLoading ? "Loading…" : "—") : "—");
-                      const displayVal = overrideVal.trim()
-                        ? overrideVal.trim()
-                        : rowIdx === 0
-                          ? (specData ? specDisplay : specsLoading ? "Loading…" : specDisplay)
-                          : "—";
-                      return (
-                        <div>
-                          <span>{displayVal}</span>
-                          {rowIdx === 0 && specData && !overrideVal.trim() && (
-                            <div style={{ fontSize: 9, color: "#999", marginTop: 1 }}>
-                              Industry: {formatSpecWithUnit(specData.industryValue, unitType!)}
-                            </div>
-                          )}
-                        </div>
-                      );
+                      return <span>{overrideVal.trim() || "—"}</span>;
                     })()}
                   </div>
                 )}
@@ -2561,31 +2562,11 @@ const BeoPrintPage: React.FC = () => {
                   {row.lineName}
                 </div>
 
-                {/* SPEC VIEW: Spec value + optional override — parent row only */}
+                {/* SPEC VIEW: Override input (auto spec disabled) — parent row only */}
                 {leftCheck === "spec" && (
                   <div className="beo-spec-col" style={{ ...styles.specCol, display: "flex", flexDirection: "column", gap: 2 }} onClick={(e) => { e.stopPropagation(); if (document.activeElement instanceof HTMLButtonElement) document.activeElement.blur(); }}>
                     {rowIdx === 0 ? (
                       <>
-                        <div style={{ fontSize: 12, fontWeight: 600, color: "#0a5e0a" }}>
-                          {(() => {
-                            const overrideKey = `${section.fieldId}:${item.id}:${rowIdx}`;
-                            const overrideKeyLegacy = `${section.fieldId}:${item.id}`;
-                            const overrideVal = specOverrides[overrideKey] ?? specOverrides[overrideKeyLegacy] ?? "";
-                            const specData = specMap[item.id];
-                            const unitType = specData?.unitType as SpecUnitType | undefined;
-                            return overrideVal.trim() ? overrideVal.trim() : (specData && unitType ? formatSpecForDisplay(specData.fwxSpecValue, unitType) : specsLoading ? "Loading…" : "—");
-                          })()}
-                        </div>
-                        {(() => {
-                          const overrideKey = `${section.fieldId}:${item.id}:${rowIdx}`;
-                          const overrideKeyLegacy = `${section.fieldId}:${item.id}`;
-                          const overrideVal = specOverrides[overrideKey] ?? specOverrides[overrideKeyLegacy] ?? "";
-                          const specData = specMap[item.id];
-                          const unitType = specData?.unitType as SpecUnitType | undefined;
-                          return specData && !overrideVal.trim() && unitType ? (
-                            <div style={{ fontSize: 9, color: "#999" }}>Industry: {formatSpecWithUnit(specData.industryValue, unitType)}</div>
-                          ) : null;
-                        })()}
                         <input
                           type="text"
                           placeholder="Override..."
@@ -2750,8 +2731,6 @@ const BeoPrintPage: React.FC = () => {
               onAddNote={(itemId, itemName, sectionTitle) =>
                 setNoteModal({ open: true, itemId, itemName, sectionTitle, draftNote: "" })
               }
-              specMap={specMap}
-              specsLoading={specsLoading}
             />
           )}
           {topTab === "fullBeoPacket" && (

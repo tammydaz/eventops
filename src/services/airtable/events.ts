@@ -62,6 +62,7 @@ export const FIELD_IDS = {
   CLIENT_FIRST_NAME: "fldFAspB1ds9Yn0Kl",
   CLIENT_LAST_NAME: "fldeciZmsIY3c2T1v",
   CLIENT_BUSINESS_NAME: "fld4YxQOjzPyyBIHL",     // Formula - READ ONLY
+  BUSINESS_NAME: "fldm6SwoGe6pS7Uam",             // Business Name (writable, for delivery)
   CLIENT_EMAIL: "fldT5lcdCL5ndh84D",
   CLIENT_PHONE: "fldnw1VGIi3oXM4g3",
   CLIENT_STREET: "fldUyi7xzG60H1ML4",
@@ -90,9 +91,14 @@ export const FIELD_IDS = {
   DESSERTS: "flddPGfYJQxixWRq9",
   CUSTOM_DESSERTS: "fld95NEZsIfHpVvAk",
   ROOM_TEMP_DISPLAY: "fld1373dtkeXhufoL",
+  DISPLAYS: "fld9Yesa5cazu27W2",           // Display items (linked to Menu Items)
   STATIONS: "fldbbDlpheiUGQbKu",
   BEVERAGES: "fldRb454yd3EQhcbo",
   MENU_ITEMS: "fld7n9gmBURwXzrnB",
+
+  // ── Delivery-only (linked to Menu Items; no metal/china/appetizer lanes) ──
+  DELIVERY_HOT: "fldowVMZrulZLR8X5",   // Entrées (used for hot delivery items)
+  DELIVERY_DELI: "fldKRlrDNIJjxg9jn",  // Deli (linked to Menu Items)
   MENU_ITEM_SPECS: "fldX9ayAyjMqYT2Oi",
   LOADED: "fldrKmicpgzVJRGjp",
 
@@ -556,6 +562,7 @@ const SAVE_WHITELIST = new Set([
   "fldWehIaLQd5sHDts",   // VENUE_ZIP
   "fldFAspB1ds9Yn0Kl",   // CLIENT_FIRST_NAME
   "fldeciZmsIY3c2T1v",   // CLIENT_LAST_NAME
+  "fldm6SwoGe6pS7Uam",   // BUSINESS_NAME
   "fldT5lcdCL5ndh84D",   // CLIENT_EMAIL
   "fldnw1VGIi3oXM4g3",   // CLIENT_PHONE
   "fldUyi7xzG60H1ML4",   // CLIENT_STREET
@@ -623,6 +630,8 @@ const SAVE_WHITELIST = new Set([
   "fldgi4mL7kyhpQzsy",   // BUFFET_METAL
   "fldtpY6zR1KCag3mI",   // BUFFET_CHINA
   "flddPGfYJQxixWRq9",   // DESSERTS
+  "fldowVMZrulZLR8X5",   // DELIVERY_HOT (Entrées)
+  "fldKRlrDNIJjxg9jn",   // DELIVERY_DELI (Deli)
   "fldRb454yd3EQhcbo",   // BEVERAGES
   "fld7n9gmBURwXzrnB",   // MENU_ITEMS
   "fldX9ayAyjMqYT2Oi",   // MENU_ITEM_SPECS
@@ -672,6 +681,8 @@ const SAVE_WHITELIST = new Set([
   "fldGUB8Thl42pJcx6",   // HYDRATION_DIET_TEA
   "fldV6XXkMe5S0zyEV",   // HYDRATION_MIXTURE
   "fldbbDlpheiUGQbKu",   // STATIONS
+  "fld1373dtkeXhufoL",   // ROOM_TEMP_DISPLAY
+  "fld9Yesa5cazu27W2",   // DISPLAYS
 ]);
 
 export const EDITABLE_FIELD_IDS = SAVE_WHITELIST;

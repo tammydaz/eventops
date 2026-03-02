@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+                                                                                                                                import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { FIELD_IDS, loadSingleSelectOptions, type SingleSelectOption } from "../../services/airtable/events";
 
@@ -31,6 +31,17 @@ const labelStyle = {
   fontWeight: "600" as const,
 };
 
+const FALLBACK_DRINK_OPTIONS: SingleSelectOption[] = [
+  { id: "water", name: "Water" },
+  { id: "soda", name: "Soda" },
+  { id: "lemonade", name: "Lemonade" },
+  { id: "iced-tea", name: "Iced Tea" },
+  { id: "sweet-tea", name: "Sweet Tea" },
+  { id: "unsweet-tea", name: "Unsweet Tea" },
+  { id: "bottled-water", name: "Bottled Water" },
+  { id: "sparkling-water", name: "Sparkling Water" },
+];
+
 export const HydrationStationModal = ({
   isOpen,
   onClose,
@@ -42,14 +53,26 @@ export const HydrationStationModal = ({
   canEdit,
 }: HydrationStationModalProps) => {
   const [drinkOptions, setDrinkOptions] = useState<SingleSelectOption[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (!isOpen) return;
+    setLoading(true);
     let cancelled = false;
     loadSingleSelectOptions([FIELD_IDS.HYDRATION_STATION_DRINK_OPTIONS]).then((result) => {
-      if (cancelled || "error" in result) return;
+      if (cancelled) return;
+      setLoading(false);
+      if ("error" in result) {
+        setDrinkOptions(FALLBACK_DRINK_OPTIONS);
+        return;
+      }
       const opts = result[FIELD_IDS.HYDRATION_STATION_DRINK_OPTIONS] ?? [];
-      setDrinkOptions(opts);
+      setDrinkOptions(opts.length > 0 ? opts : FALLBACK_DRINK_OPTIONS);
+    }).catch(() => {
+      if (!cancelled) {
+        setLoading(false);
+        setDrinkOptions(FALLBACK_DRINK_OPTIONS);
+      }
     });
     return () => { cancelled = true; };
   }, [isOpen]);
@@ -110,8 +133,8 @@ export const HydrationStationModal = ({
           <div>
             <label style={labelStyle}>Drink options</label>
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              {drinkOptions.length === 0 ? (
-                <div style={{ fontSize: 13, color: "#888" }}>Loading options from Airtable…</div>
+              {loading ? (
+                <div style={{ fontSize: 13, color: "#888" }}>Loading options…</div>
               ) : (
                 drinkOptions.map((opt) => (
                   <label

@@ -229,6 +229,9 @@ type MenuSelections = {
   buffetMetal: string[];
   buffetChina: string[];
   desserts: string[];
+  deliveryDeli: string[];
+  roomTempDisplay: string[];
+  displays: string[];
 };
 
 type CustomFields = {
@@ -257,9 +260,9 @@ type MenuItemRecord = {
 const MENU_TABLE_ID = "tbl0aN33DGG6R1sPZ";
 const MENU_NAME_FIELD_ID = "fldQ83gpgOmMxNMQw";
 
-type MenuSectionProps = { embedded?: boolean };
+type MenuSectionProps = { embedded?: boolean; isDelivery?: boolean };
 
-export const MenuSection = ({ embedded = false }: MenuSectionProps) => {
+export const MenuSection = ({ embedded = false, isDelivery = false }: MenuSectionProps) => {
   const { selectedEventId, selectedEventData, setFields } = useEventStore();
   const [menuItems, setMenuItems] = useState<LinkedRecordItem[]>([]);
   const [menuItemNames, setMenuItemNames] = useState<Record<string, string>>({});
@@ -269,6 +272,9 @@ export const MenuSection = ({ embedded = false }: MenuSectionProps) => {
     buffetMetal: [],
     buffetChina: [],
     desserts: [],
+    deliveryDeli: [],
+    roomTempDisplay: [],
+    displays: [],
   });
   const [customFields, setCustomFields] = useState<CustomFields>({
     customPassedApp: "",
@@ -351,6 +357,9 @@ export const MenuSection = ({ embedded = false }: MenuSectionProps) => {
         buffetMetal: [],
         buffetChina: [],
         desserts: [],
+        deliveryDeli: [],
+        roomTempDisplay: [],
+        displays: [],
       });
       setCustomFields({
         customPassedApp: "",
@@ -368,6 +377,9 @@ export const MenuSection = ({ embedded = false }: MenuSectionProps) => {
       buffetMetal: asLinkedRecordIds(selectedEventData[FIELD_IDS.BUFFET_METAL]),
       buffetChina: asLinkedRecordIds(selectedEventData[FIELD_IDS.BUFFET_CHINA]),
       desserts: asLinkedRecordIds(selectedEventData[FIELD_IDS.DESSERTS]),
+      deliveryDeli: asLinkedRecordIds(selectedEventData[FIELD_IDS.DELIVERY_DELI]),
+      roomTempDisplay: asLinkedRecordIds(selectedEventData[FIELD_IDS.ROOM_TEMP_DISPLAY]),
+      displays: asLinkedRecordIds(selectedEventData[FIELD_IDS.DISPLAYS]),
     };
     setSelections(newSelections);
 
@@ -377,6 +389,9 @@ export const MenuSection = ({ embedded = false }: MenuSectionProps) => {
       ...newSelections.buffetMetal,
       ...newSelections.buffetChina,
       ...newSelections.desserts,
+      ...newSelections.deliveryDeli,
+      ...newSelections.roomTempDisplay,
+      ...newSelections.displays,
     ];
     if (allRecordIds.length > 0) {
       fetchItemNames(allRecordIds);
@@ -399,9 +414,12 @@ export const MenuSection = ({ embedded = false }: MenuSectionProps) => {
     buffetMetal: FIELD_IDS.BUFFET_METAL,
     buffetChina: FIELD_IDS.BUFFET_CHINA,
     desserts: FIELD_IDS.DESSERTS,
+    deliveryDeli: FIELD_IDS.DELIVERY_DELI,
+    roomTempDisplay: FIELD_IDS.ROOM_TEMP_DISPLAY,
+    displays: FIELD_IDS.DISPLAYS,
   };
 
-  const openPicker = (categoryKey: MenuCategoryKey, fieldKey: keyof MenuSelections, title: string) => {
+  const openPicker = (categoryKey: MenuCategoryKey | null, fieldKey: keyof MenuSelections, title: string) => {
     setPickerState({ isOpen: true, categoryKey, fieldKey, title });
     setPickerSearch("");
   };
@@ -479,7 +497,7 @@ export const MenuSection = ({ embedded = false }: MenuSectionProps) => {
 
   const searchLower = pickerSearch.trim().toLowerCase();
 
-  // X = filtered items (what you actually show) — category + search
+  // X = filtered items (what you actually show) — category + search (null = show all)
   const categoryFiltered = !categoryKey
     ? menuItems
     : menuItems.filter((item) => {
@@ -488,9 +506,16 @@ export const MenuSection = ({ embedded = false }: MenuSectionProps) => {
         return cats.some((cat) => allowedCategories.includes(String(cat)));
       });
 
+  // If category filter returns nothing, show all items (items may not have Category set in Airtable yet)
+  const fallbackCategories = ["deli", "room_temp", "displays", "passed", "presented"];
+  const effectiveCategoryFiltered =
+    categoryFiltered.length === 0 && categoryKey && fallbackCategories.includes(categoryKey)
+      ? menuItems
+      : categoryFiltered;
+
   const filteredPickerItems = !searchLower
-    ? categoryFiltered
-    : categoryFiltered.filter((item) => item.name.toLowerCase().includes(searchLower));
+    ? effectiveCategoryFiltered
+    : effectiveCategoryFiltered.filter((item) => item.name.toLowerCase().includes(searchLower));
 
   // Dressing picker filtered items (categoryKey = "dressing")
   const dressingAllowed = CATEGORY_MAP.dressing || [];
@@ -541,6 +566,10 @@ export const MenuSection = ({ embedded = false }: MenuSectionProps) => {
     transition: "all 0.2s",
   };
 
+  const deliveryButtonStyle = { ...buttonStyle, borderColor: "#22c55e", color: "#22c55e" };
+  const deliveryItemBorder = "1px solid #22c55e";
+  const deliveryRemoveColor = "#22c55e";
+
   const content = (
     <>
       {error && (
@@ -549,6 +578,115 @@ export const MenuSection = ({ embedded = false }: MenuSectionProps) => {
         </div>
       )}
 
+      {isDelivery ? (
+        /* ── DELIVERY: HOT, DELI, KITCHEN, SALADS, DESSERTS ── */
+        <>
+          <CollapsibleSubsection title="HOT - DISPOSABLE" icon="🔥" defaultOpen isDelivery>
+            <div style={{ gridColumn: "1 / -1" }}>
+              <label style={labelStyle}>Passed Appetizers</label>
+              <div style={{ marginBottom: "8px" }}>
+                {selections.passedAppetizers.map((itemId) => (
+                  <div key={itemId} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", backgroundColor: "#2a2a2a", border: deliveryItemBorder, borderRadius: "6px", padding: "8px 12px", marginBottom: "6px" }}>
+                    <span style={{ fontSize: "14px", color: "#e0e0e0" }}>{getItemName(itemId)}</span>
+                    <button type="button" disabled={!canEdit} onClick={() => removeMenuItem("passedAppetizers", itemId)} style={{ background: "none", border: "none", color: deliveryRemoveColor, cursor: "pointer", fontSize: "16px", fontWeight: "bold" }}>✕</button>
+                  </div>
+                ))}
+              </div>
+              <button type="button" disabled={!canEdit} onClick={() => openPicker("passed", "passedAppetizers", "Select Passed Appetizers")} style={deliveryButtonStyle}>+ Add Passed Appetizer</button>
+              <div style={{ marginTop: "12px" }}>
+                <label style={labelStyle}>Presented Appetizers</label>
+                <div style={{ marginBottom: "8px" }}>
+                  {selections.presentedAppetizers.map((itemId) => (
+                    <div key={itemId} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", backgroundColor: "#2a2a2a", border: deliveryItemBorder, borderRadius: "6px", padding: "8px 12px", marginBottom: "6px" }}>
+                      <span style={{ fontSize: "14px", color: "#e0e0e0" }}>{getItemName(itemId)}</span>
+                      <button type="button" disabled={!canEdit} onClick={() => removeMenuItem("presentedAppetizers", itemId)} style={{ background: "none", border: "none", color: deliveryRemoveColor, cursor: "pointer", fontSize: "16px", fontWeight: "bold" }}>✕</button>
+                    </div>
+                  ))}
+                </div>
+                <button type="button" disabled={!canEdit} onClick={() => openPicker("presented", "presentedAppetizers", "Select Presented Appetizers")} style={deliveryButtonStyle}>+ Add Presented Appetizer</button>
+              </div>
+              <div style={{ marginTop: "12px" }}>
+                <label style={labelStyle}>Buffet – Metal (hot items)</label>
+                <div style={{ marginBottom: "8px" }}>
+                  {selections.buffetMetal.map((itemId) => (
+                    <div key={itemId} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", backgroundColor: "#2a2a2a", border: deliveryItemBorder, borderRadius: "6px", padding: "8px 12px", marginBottom: "6px" }}>
+                      <span style={{ fontSize: "14px", color: "#e0e0e0" }}>{getItemName(itemId)}</span>
+                      <button type="button" disabled={!canEdit} onClick={() => removeMenuItem("buffetMetal", itemId)} style={{ background: "none", border: "none", color: deliveryRemoveColor, cursor: "pointer", fontSize: "16px", fontWeight: "bold" }}>✕</button>
+                    </div>
+                  ))}
+                </div>
+                <button type="button" disabled={!canEdit} onClick={() => openPicker("buffet_metal", "buffetMetal", "Select Hot Buffet Items")} style={deliveryButtonStyle}>+ Add Hot Buffet Item</button>
+              </div>
+            </div>
+          </CollapsibleSubsection>
+
+          <CollapsibleSubsection title="DELI - DISPOSABLE" icon="🥪" defaultOpen isDelivery>
+            <div style={{ gridColumn: "1 / -1" }}>
+              <label style={labelStyle}>Sandwiches & Wraps</label>
+              <div style={{ marginBottom: "8px" }}>
+                {selections.deliveryDeli.map((itemId) => (
+                  <div key={itemId} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", backgroundColor: "#2a2a2a", border: deliveryItemBorder, borderRadius: "6px", padding: "8px 12px", marginBottom: "6px" }}>
+                    <span style={{ fontSize: "14px", color: "#e0e0e0" }}>{getItemName(itemId)}</span>
+                    <button type="button" disabled={!canEdit} onClick={() => removeMenuItem("deliveryDeli", itemId)} style={{ background: "none", border: "none", color: deliveryRemoveColor, cursor: "pointer", fontSize: "16px", fontWeight: "bold" }}>✕</button>
+                  </div>
+                ))}
+              </div>
+              <button type="button" disabled={!canEdit} onClick={() => openPicker("deli", "deliveryDeli", "Select Deli Items (Sandwiches & Wraps)")} style={deliveryButtonStyle}>+ Add Deli Item</button>
+            </div>
+          </CollapsibleSubsection>
+
+          <CollapsibleSubsection title="KITCHEN - DISPOSABLE" icon="🍳" defaultOpen={false} isDelivery>
+            <div style={{ gridColumn: "1 / -1" }}>
+              <label style={labelStyle}>Buffet – China (cold/kitchen items)</label>
+              <div style={{ marginBottom: "8px" }}>
+                {selections.buffetChina.map((itemId) => (
+                  <div key={itemId} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", backgroundColor: "#2a2a2a", border: deliveryItemBorder, borderRadius: "6px", padding: "8px 12px", marginBottom: "6px" }}>
+                    <span style={{ fontSize: "14px", color: "#e0e0e0" }}>{getItemName(itemId)}</span>
+                    <button type="button" disabled={!canEdit} onClick={() => removeMenuItem("buffetChina", itemId)} style={{ background: "none", border: "none", color: deliveryRemoveColor, cursor: "pointer", fontSize: "16px", fontWeight: "bold" }}>✕</button>
+                  </div>
+                ))}
+              </div>
+              <button type="button" disabled={!canEdit} onClick={() => openPicker("buffet_china", "buffetChina", "Select Kitchen Items")} style={deliveryButtonStyle}>+ Add Kitchen Item</button>
+            </div>
+          </CollapsibleSubsection>
+
+          <CollapsibleSubsection title="SALADS - DISPOSABLE" icon="🥗" defaultOpen={false} isDelivery>
+            <div style={{ gridColumn: "1 / -1" }}>
+              <label style={labelStyle}>Room Temp Display / Salads</label>
+              <div style={{ marginBottom: "8px" }}>
+                {selections.roomTempDisplay.map((itemId) => (
+                  <div key={itemId} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", backgroundColor: "#2a2a2a", border: deliveryItemBorder, borderRadius: "6px", padding: "8px 12px", marginBottom: "6px" }}>
+                    <span style={{ fontSize: "14px", color: "#e0e0e0" }}>{getItemName(itemId)}</span>
+                    <button type="button" disabled={!canEdit} onClick={() => removeMenuItem("roomTempDisplay", itemId)} style={{ background: "none", border: "none", color: deliveryRemoveColor, cursor: "pointer", fontSize: "16px", fontWeight: "bold" }}>✕</button>
+                  </div>
+                ))}
+              </div>
+              <button type="button" disabled={!canEdit} onClick={() => openPicker("room_temp", "roomTempDisplay", "Select Room Temp / Salad Items")} style={deliveryButtonStyle}>+ Add Salad Item</button>
+            </div>
+          </CollapsibleSubsection>
+
+          <CollapsibleSubsection title="DESSERTS - DISPOSABLE" icon="🍰" defaultOpen={false} isDelivery>
+            <div style={{ gridColumn: "1 / -1" }}>
+              <label style={labelStyle}>Desserts</label>
+              <div style={{ marginBottom: "8px" }}>
+                {selections.desserts.map((itemId) => (
+                  <div key={itemId} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", backgroundColor: "#2a2a2a", border: deliveryItemBorder, borderRadius: "6px", padding: "8px 12px", marginBottom: "6px" }}>
+                    <span style={{ fontSize: "14px", color: "#e0e0e0" }}>{getItemName(itemId)}</span>
+                    <button type="button" disabled={!canEdit} onClick={() => removeMenuItem("desserts", itemId)} style={{ background: "none", border: "none", color: deliveryRemoveColor, cursor: "pointer", fontSize: "16px", fontWeight: "bold" }}>✕</button>
+                  </div>
+                ))}
+              </div>
+              <button type="button" disabled={!canEdit} onClick={() => openPicker("desserts", "desserts", "Select Desserts")} style={deliveryButtonStyle}>+ Add Dessert</button>
+              <div style={{ marginTop: "12px" }}>
+                <label style={labelStyle}>Custom Desserts (free text)</label>
+                <textarea rows={2} value={customFields.customDessert} disabled={!canEdit} onChange={(e) => setCustomFields((p) => ({ ...p, customDessert: e.target.value }))} onBlur={(e) => saveCustomField(FIELD_IDS.CUSTOM_DESSERTS, e.target.value)} style={inputStyle} placeholder="Enter custom desserts..." />
+              </div>
+            </div>
+          </CollapsibleSubsection>
+        </>
+      ) : (
+        /* ── FULL SERVICE: Passed, Presented, Stations, Buffet Metal, Buffet China, Desserts ── */
+        <>
       {/* Passed Appetizers */}
       <CollapsibleSubsection title="Passed Appetizers" icon="▶" defaultOpen={false}>
       <div style={{ gridColumn: "1 / -1" }}>
@@ -714,6 +852,9 @@ export const MenuSection = ({ embedded = false }: MenuSectionProps) => {
       </div>
       </CollapsibleSubsection>
 
+        </>
+      )}
+
       {/* Picker Modal */}
       {pickerState.isOpen &&
         createPortal(
@@ -721,7 +862,7 @@ export const MenuSection = ({ embedded = false }: MenuSectionProps) => {
             style={{
               position: "fixed",
               inset: 0,
-              zIndex: 99998,
+              zIndex: 100000,
               backgroundColor: "rgba(0, 0, 0, 0.8)",
               display: "flex",
               alignItems: "center",

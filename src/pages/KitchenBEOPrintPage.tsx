@@ -1,9 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useEventStore } from "../state/eventStore";
-import { FIELD_IDS } from "../services/airtable/events";
+import { FIELD_IDS, getFoodwerxArrivalFieldId } from "../services/airtable/events";
 import { asString, asSingleSelectName, asBoolean, asStringArray } from "../services/airtable/selectors";
-import { useSpecsForEvent } from "../hooks/useSpecsForEvent";
-import { SpecBlock } from "../components/beo/SpecBlock";
 import { EventSelector } from "../components/EventSelector";
 import { secondsTo12HourString } from "../utils/timeHelpers";
 import { sanitizeForHeader } from "../utils/httpHeaders";
@@ -22,7 +20,6 @@ type MenuItem = {
   breadVessel?: string;
   groupHeader?: string;
   isCallout?: boolean;
-  specData?: import("../hooks/useSpecsForEvent").SpecItemData;
 };
 
 type MenuSection = {
@@ -666,13 +663,17 @@ const renderHeader = (beo: BEOData) => {
   }
 
   return (
-    <table style={print.headerTable}>
+    <>
+      <div style={{ background: "#16a34a", color: "#fff", textAlign: "center", fontWeight: 700, fontSize: 18, padding: "8px 0", marginBottom: 0, borderBottom: "3px solid #15803d" }}>
+        🚚 DELIVERY — ALL DISPOSABLE
+      </div>
+      <table style={print.headerTable}>
       <tbody>
         <tr>
           <td style={{ ...print.headerCell, width: "15%" }}><span style={print.headerLabel}>CLIENT</span></td>
           <td style={{ ...print.headerCell, width: "35%" }}>{beo.client}</td>
           <td style={{ ...print.headerCell, width: "18%" }}><span style={print.headerLabel}>HOUSE ORDER NUMBER</span></td>
-          <td style={{ ...print.headerCell, width: "32%", color: "#ff0000", fontWeight: 700 }}>{beo.orderNumber}</td>
+          <td style={{ ...print.headerCell, width: "32%", color: "#16a34a", fontWeight: 700 }}>{beo.orderNumber}</td>
         </tr>
         <tr>
           <td style={print.headerCell}><span style={print.headerLabel}>CONTACT</span></td>
@@ -684,28 +685,29 @@ const renderHeader = (beo: BEOData) => {
           <td style={print.headerCell}><span style={print.headerLabel}>PHONE</span></td>
           <td style={print.headerCell}>{beo.phone}</td>
           <td style={print.headerCell}><span style={print.headerLabel}>GUESTS</span></td>
-          <td style={{ ...print.headerCell, color: "#ff0000", fontWeight: 700 }}>{beo.guestCount}</td>
+          <td style={{ ...print.headerCell, color: "#16a34a", fontWeight: 700 }}>{beo.guestCount}</td>
         </tr>
         <tr>
           <td style={print.headerCell}><span style={print.headerLabel}>ADDRESS</span></td>
           <td style={print.headerCell}>{beo.address}</td>
           <td style={print.headerCell}><span style={print.headerLabel}>DELIVERY TIME</span></td>
-          <td style={{ ...print.headerCell, color: "#ff0000", fontWeight: 700 }}>{beo.deliveryTime}</td>
+          <td style={{ ...print.headerCell, color: "#16a34a", fontWeight: 700 }}>{beo.deliveryTime}</td>
         </tr>
         <tr>
           <td style={print.headerCell}><span style={print.headerLabel}>CITY, ST</span></td>
           <td style={print.headerCell}>{beo.cityState}</td>
           <td style={print.headerCell}><span style={print.headerLabel}>DELIVERY NOTES</span></td>
-          <td style={{ ...print.headerCell, color: "#ff0000", fontWeight: 700, whiteSpace: "pre-line" }}>{beo.deliveryNotes}</td>
+          <td style={{ ...print.headerCell, color: "#16a34a", fontWeight: 700, whiteSpace: "pre-line" }}>{beo.deliveryNotes}</td>
         </tr>
         <tr>
-          <td style={{ ...print.headerCell, background: "#ff0000" }}></td>
-          <td style={{ ...print.headerCell, background: "#ff0000" }}></td>
-          <td style={{ ...print.headerCell, background: "#ff0000", color: "#fff", fontWeight: 700 }}>EMPLOYEE</td>
+          <td style={{ ...print.headerCell, background: "#16a34a" }}></td>
+          <td style={{ ...print.headerCell, background: "#16a34a" }}></td>
+          <td style={{ ...print.headerCell, background: "#16a34a", color: "#fff", fontWeight: 700 }}>EMPLOYEE</td>
           <td style={print.headerCell}>{beo.employee}</td>
         </tr>
       </tbody>
     </table>
+    </>
   );
 };
 
@@ -730,13 +732,7 @@ const renderMenuItem = (item: MenuItem, idx: number) => {
   return (
     <React.Fragment key={idx}>
       <div style={print.itemRow}>
-        <div style={print.itemQty}>
-          {item.specData ? (
-            <SpecBlock spec={item.specData} variant="full" showVesselQuantities />
-          ) : (
-            item.qty
-          )}
-        </div>
+        <div style={print.itemQty}>{item.qty}</div>
         <div style={print.itemName}>
           {item.name}
           {item.customSpec && (
@@ -773,10 +769,10 @@ const renderMenuItem = (item: MenuItem, idx: number) => {
   );
 };
 
-const renderSection = (section: MenuSection, idx: number) => (
+const renderSection = (section: MenuSection, idx: number, isDelivery = false) => (
   <div key={idx}>
-    <div style={print.sectionBanner}>
-      {section.title} - {section.vessel}
+    <div style={isDelivery ? { ...print.sectionBanner, background: "#dcfce7", color: "#166534", borderColor: "#16a34a" } : print.sectionBanner}>
+      {section.title} {section.vessel ? `- ${section.vessel}` : ""}
     </div>
     {section.items.map((item, iIdx) => renderMenuItem(item, iIdx))}
   </div>
@@ -862,34 +858,37 @@ const renderPage2FullService = (beo: BEOData) => (
 
 const renderPaperProductsDelivery = (beo: BEOData) => (
   <>
-    <div style={print.redSectionBanner}>PAPER PRODUCTS & BEVERAGES</div>
+    <div style={{ ...print.redSectionBanner, background: "#16a34a", color: "#fff" }}>PAPER PRODUCTS & BEVERAGES</div>
     <table style={print.paperTable}>
       <thead>
         <tr>
-          <td style={{ ...print.paperCell, background: "#ff0000", color: "#fff", width: "10%", textAlign: "center" }}>
+          <td style={{ ...print.paperCell, background: "#16a34a", color: "#fff", width: "10%", textAlign: "center" }}>
             {beo.paperProductsIncluded ? "YES" : "NO"}
           </td>
-          <td style={{ ...print.paperCell, background: "#ff0000", color: "#fff", width: "40%" }}>
+          <td style={{ ...print.paperCell, background: "#16a34a", color: "#fff", width: "40%" }}>
             STANDARD PAPER PRODUCTS
           </td>
-          <td style={{ ...print.paperCell, background: "#ff0000", color: "#fff", width: "35%" }}>
+          <td style={{ ...print.paperCell, background: "#16a34a", color: "#fff", width: "35%" }}>
             BEVERAGES
           </td>
-          <td style={{ ...print.paperCell, background: "#ff0000", color: "#fff", width: "15%", textAlign: "center" }}>
+          <td style={{ ...print.paperCell, background: "#16a34a", color: "#fff", width: "15%", textAlign: "center" }}>
             {beo.deliveryBeveragesIncluded ? "YES" : "NO"}
           </td>
         </tr>
       </thead>
       <tbody>
         {Array.from({
-          length: Math.max(beo.paperProducts?.length || 0, beo.deliveryBeverages?.length || 0),
+          length: Math.max(
+            beo.paperProductsIncluded ? Math.max(beo.paperProducts?.length || 0, 1) : 0,
+            beo.deliveryBeveragesIncluded ? Math.max(beo.deliveryBeverages?.length || 0, 1) : 0,
+          ),
         }).map((_, i) => (
           <tr key={i}>
             <td style={{ ...print.paperCell, textAlign: "center" }}>
               {beo.paperProducts?.[i]?.qty || ""}
             </td>
             <td style={print.paperCell}>{beo.paperProducts?.[i]?.item || ""}</td>
-            <td style={{ ...print.paperCell, color: "#ff0000", fontWeight: 700 }}>
+            <td style={{ ...print.paperCell, color: "#16a34a", fontWeight: 700 }}>
               {beo.deliveryBeverages?.[i]?.item || ""}
             </td>
             <td style={{ ...print.paperCell, textAlign: "center" }}>
@@ -911,6 +910,20 @@ const MENU_SECTION_CONFIG: { title: string; fieldId: string }[] = [
   { title: "DESSERTS", fieldId: FIELD_IDS.DESSERTS },
   { title: "STATIONS", fieldId: FIELD_IDS.STATIONS },
   { title: "ROOM TEMP/DISPLAYS", fieldId: FIELD_IDS.ROOM_TEMP_DISPLAY },
+];
+
+/** Delivery BEO section config — delivery-only fields (no metal/china/appetizer lanes; all disposable)
+ * HOT = buffet metal + apps (not yet broken down hot/cold)
+ * KITCHEN = buffet china + apps (same)
+ * SALADS/DISPLAYS = room temp + displays
+ * DELI = sandwiches, wraps, etc. (Deli field)
+ */
+const DELIVERY_MENU_SECTION_CONFIG: { title: string; fieldIds: string[] }[] = [
+  { title: "HOT - DISPOSABLE", fieldIds: [FIELD_IDS.BUFFET_METAL, FIELD_IDS.PASSED_APPETIZERS, FIELD_IDS.PRESENTED_APPETIZERS] },
+  { title: "DELI - DISPOSABLE", fieldIds: [FIELD_IDS.DELIVERY_DELI] },
+  { title: "KITCHEN - DISPOSABLE", fieldIds: [FIELD_IDS.BUFFET_CHINA] },
+  { title: "SALADS - DISPOSABLE", fieldIds: [FIELD_IDS.ROOM_TEMP_DISPLAY] },
+  { title: "DESSERTS - DISPOSABLE", fieldIds: [FIELD_IDS.DESSERTS] },
 ];
 
 const MENU_TABLE = "tbl0aN33DGG6R1sPZ";
@@ -1023,10 +1036,14 @@ function parseBEOTimeline(text: string | null | undefined): TimelineEntry[] {
 
 // ── Main Component ──
 const KitchenBEOPrintPage: React.FC = () => {
-  const { selectedEventId, selectedEventData, loadEvents, loadEventData, selectEvent } = useEventStore();
+  const { selectedEventId, selectedEventData, loadEvents, loadEventData, selectEvent, setFields } = useEventStore();
   const [loading, setLoading] = useState(true);
   const [menuItemData, setMenuItemData] = useState<Record<string, { name: string; childIds: string[] }>>({});
-  const { specMap } = useSpecsForEvent(selectedEventId);
+  const [fwArrivalFieldId, setFwArrivalFieldId] = useState<string | null>(null);
+
+  useEffect(() => {
+    getFoodwerxArrivalFieldId().then(setFwArrivalFieldId);
+  }, []);
 
   useEffect(() => {
     loadEvents().then(() => setLoading(false));
@@ -1052,8 +1069,13 @@ const KitchenBEOPrintPage: React.FC = () => {
   // Fetch menu items with Item Name + Child Items (linked records)
   useEffect(() => {
     const parentIds = new Set<string>();
-    MENU_SECTION_CONFIG.forEach((c) => {
-      const val = selectedEventData[c.fieldId];
+    const eventTypeRaw = asSingleSelectName(selectedEventData?.[FIELD_IDS.EVENT_TYPE])?.toLowerCase() ?? "";
+    const isDelivery = eventTypeRaw.includes("delivery") || eventTypeRaw.includes("pick up") || eventTypeRaw.includes("pickup");
+    const fieldIdsToFetch = isDelivery
+      ? DELIVERY_MENU_SECTION_CONFIG.flatMap((c) => c.fieldIds)
+      : MENU_SECTION_CONFIG.map((c) => c.fieldId);
+    fieldIdsToFetch.forEach((fid) => {
+      const val = selectedEventData[fid];
       if (Array.isArray(val)) {
         val.forEach((id: unknown) => {
           if (typeof id === "string" && id.startsWith("rec")) parentIds.add(id);
@@ -1141,10 +1163,9 @@ const KitchenBEOPrintPage: React.FC = () => {
     const guestCount = parseInt(asString(selectedEventData[FIELD_IDS.GUEST_COUNT]) || "0", 10);
     const sections: MenuSection[] = [];
 
-    for (const config of MENU_SECTION_CONFIG) {
-      const raw = selectedEventData[config.fieldId];
-      if (!raw || !Array.isArray(raw)) continue;
-
+    const processField = (fieldId: string): MenuItem[] => {
+      const raw = selectedEventData[fieldId];
+      if (!raw || !Array.isArray(raw)) return [];
       const items: MenuItem[] = [];
       for (const item of raw) {
         const id = typeof item === "string" ? item : (item && typeof item === "object" && "id" in item) ? (item as { id: string }).id : String(item);
@@ -1153,23 +1174,41 @@ const KitchenBEOPrintPage: React.FC = () => {
         const childIds = data?.childIds ?? [];
         const rows = expandItemToRows(parentName, childIds, menuItemData);
         if (rows.length === 0) continue;
-        const specData = specMap[id];
-        const spec = specData ? specData.display : "—";
         items.push({
-          qty: spec,
+          qty: "—",
           name: parentName,
           subItems: rows.length > 1
             ? rows.slice(1).map((r) => ({ text: r.lineName }))
             : undefined,
-          specData,
         });
       }
-      if (items.length > 0) {
-        sections.push({
-          title: config.title,
-          vessel: getVesselForSection(config.title, isDelivery),
-          items,
-        });
+      return items;
+    };
+
+    if (isDelivery) {
+      for (const config of DELIVERY_MENU_SECTION_CONFIG) {
+        const allItems: MenuItem[] = [];
+        for (const fid of config.fieldIds) {
+          allItems.push(...processField(fid));
+        }
+        if (allItems.length > 0) {
+          sections.push({
+            title: config.title,
+            vessel: "DISPOSABLE",
+            items: allItems,
+          });
+        }
+      }
+    } else {
+      for (const config of MENU_SECTION_CONFIG) {
+        const items = processField(config.fieldId);
+        if (items.length > 0) {
+          sections.push({
+            title: config.title,
+            vessel: getVesselForSection(config.title, false),
+            items,
+          });
+        }
       }
     }
     return sections;
@@ -1203,8 +1242,17 @@ const KitchenBEOPrintPage: React.FC = () => {
     eventStart: secondsTo12HourString(selectedEventData[FIELD_IDS.EVENT_START_TIME]) || "",
     eventEnd: secondsTo12HourString(selectedEventData[FIELD_IDS.EVENT_END_TIME]) || "",
     fwStaff: asString(selectedEventData[FIELD_IDS.CAPTAIN]) || asString(selectedEventData[FIELD_IDS.SERVERS]) || asString(selectedEventData[FIELD_IDS.STAFF]) || "",
-    staffArrival: secondsTo12HourString(selectedEventData[FIELD_IDS.FOODWERX_ARRIVAL]) || asString(selectedEventData[FIELD_IDS.VENUE_ARRIVAL_TIME]) || "",
-    deliveryTime: isPickUp ? "PICK UP" : (secondsTo12HourString(selectedEventData[FIELD_IDS.DISPATCH_TIME]) || asString(selectedEventData[FIELD_IDS.DISPATCH_TIME]) || ""),
+    staffArrival: (() => {
+      const arrivalFieldId = fwArrivalFieldId ?? FIELD_IDS.VENUE_ARRIVAL_TIME;
+      const raw = selectedEventData[arrivalFieldId] ?? selectedEventData[FIELD_IDS.VENUE_ARRIVAL_TIME];
+      return secondsTo12HourString(raw) || asString(raw) || "";
+    })(),
+    deliveryTime: isPickUp
+      ? "PICK UP"
+      : (() => {
+          const t = secondsTo12HourString(selectedEventData[FIELD_IDS.DISPATCH_TIME]) || asString(selectedEventData[FIELD_IDS.DISPATCH_TIME]) || "";
+          return t ? (t.toUpperCase().includes("DELIVERY") ? t : `${t} DELIVERY`) : "";
+        })(),
     deliveryNotes: asString(selectedEventData[FIELD_IDS.SPECIAL_NOTES]) || "",
     employee: asString(selectedEventData[FIELD_IDS.CAPTAIN]) || "",
     allergyBanner: asString(selectedEventData[FIELD_IDS.DIETARY_NOTES]) ? `ALLERGIES: ${asString(selectedEventData[FIELD_IDS.DIETARY_NOTES])}` : undefined,
@@ -1220,7 +1268,14 @@ const KitchenBEOPrintPage: React.FC = () => {
     beveragesFoodwerx: asString(selectedEventData[FIELD_IDS.BAR_SERVICE_KITCHEN_BEO]) ? asString(selectedEventData[FIELD_IDS.BAR_SERVICE_KITCHEN_BEO]).split("\n").filter(Boolean) : undefined,
     serviceware: buildServicewareFromEvent(selectedEventData),
     paperProducts: buildPaperProductsFromEvent(selectedEventData),
-    paperProductsIncluded: buildPaperProductsFromEvent(selectedEventData).length > 0 || !!asSingleSelectName(selectedEventData[FIELD_IDS.SERVICEWARE_SOURCE]),
+    paperProductsIncluded: (() => {
+      const items = buildPaperProductsFromEvent(selectedEventData);
+      const src = (asSingleSelectName(selectedEventData[FIELD_IDS.SERVICEWARE_SOURCE]) || "").toLowerCase();
+      if (isDelivery) {
+        return items.length > 0 || src === "foodwerx" || src === "mixed";
+      }
+      return items.length > 0 || !!asSingleSelectName(selectedEventData[FIELD_IDS.SERVICEWARE_SOURCE]);
+    })(),
     deliveryBeverages: buildDeliveryBeveragesFromEvent(selectedEventData),
     deliveryBeveragesIncluded: buildDeliveryBeveragesFromEvent(selectedEventData).length > 0,
   } : FULL_SERVICE_SAMPLE;
@@ -1230,6 +1285,14 @@ const KitchenBEOPrintPage: React.FC = () => {
     requestAnimationFrame(() => {
       setTimeout(() => window.print(), 50);
     });
+  };
+
+  const statusRaw = selectedEventData ? asSingleSelectName(selectedEventData[FIELD_IDS.STATUS]) : "";
+  const isLocked = statusRaw === "Kitchen Ready";
+
+  const handleLockBEO = async () => {
+    if (!selectedEventId) return;
+    await setFields(selectedEventId, { [FIELD_IDS.STATUS]: "Kitchen Ready" });
   };
 
   return (
@@ -1309,6 +1372,20 @@ const KitchenBEOPrintPage: React.FC = () => {
               Full BEO (tabs & checklist)
             </button>
           )}
+          {isLocked ? (
+            <span style={{ padding: "8px 16px", background: "#2e7d32", color: "#fff", fontWeight: 700, borderRadius: 4 }}>
+              LOCKED
+            </span>
+          ) : selectedEventId ? (
+            <button
+              type="button"
+              style={{ ...print.backBtn, background: "#b8860b", color: "#fff", borderColor: "#8b6914" }}
+              onClick={handleLockBEO}
+              title="Lock BEO for kitchen (sets status to Kitchen Ready)"
+            >
+              Lock BEO
+            </button>
+          ) : null}
           <button type="button" className="kitchen-beo-print-btn" style={print.printBtn} onClick={handlePrint} title="Print this BEO">
             Print
           </button>
@@ -1348,7 +1425,7 @@ const KitchenBEOPrintPage: React.FC = () => {
           </div>
         )}
 
-        {beo.sections.map((section, idx) => renderSection(section, idx))}
+        {beo.sections.map((section, idx) => renderSection(section, idx, beo.serviceType === "delivery"))}
 
         {beo.serviceType === "delivery" && renderPaperProductsDelivery(beo)}
 
