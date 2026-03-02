@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useEventStore } from "../../state/eventStore";
 import { FIELD_IDS, loadSingleSelectOptions, type SingleSelectOption } from "../../services/airtable/events";
 import { asString, asSingleSelectName } from "../../services/airtable/selectors";
+import { isDeliveryOrPickup } from "../../lib/deliveryHelpers";
 import { FormSection } from "./FormSection";
 import type { ClientDetails, PrimaryContact } from "./types";
 
@@ -28,10 +29,11 @@ const labelStyle = {
 export const ClientAndContactSection = () => {
   const { selectedEventId, selectedEventData, setFields } = useEventStore();
   const [roleOptions, setRoleOptions] = useState<string[]>(ROLE_OPTIONS_FALLBACK);
-  const [client, setClient] = useState<ClientDetails>({
+  const [client, setClient] = useState<ClientDetails & { businessName: string }>({
     clientFirstName: "",
     clientLastName: "",
     clientBusinessName: "",
+    businessName: "",
     clientEmail: "",
     clientPhone: "",
     clientStreet: "",
@@ -66,6 +68,7 @@ export const ClientAndContactSection = () => {
       clientFirstName: asString(selectedEventData[FIELD_IDS.CLIENT_FIRST_NAME]),
       clientLastName: asString(selectedEventData[FIELD_IDS.CLIENT_LAST_NAME]),
       clientBusinessName: asString(selectedEventData[FIELD_IDS.CLIENT_BUSINESS_NAME]),
+      businessName: asString(selectedEventData[FIELD_IDS.BUSINESS_NAME]),
       clientEmail: asString(selectedEventData[FIELD_IDS.CLIENT_EMAIL]),
       clientPhone: asString(selectedEventData[FIELD_IDS.CLIENT_PHONE]),
       clientStreet: asString(selectedEventData[FIELD_IDS.CLIENT_STREET]),
@@ -84,6 +87,7 @@ export const ClientAndContactSection = () => {
         prev.clientFirstName === newClient.clientFirstName &&
         prev.clientLastName === newClient.clientLastName &&
         prev.clientBusinessName === newClient.clientBusinessName &&
+        prev.businessName === newClient.businessName &&
         prev.clientEmail === newClient.clientEmail &&
         prev.clientPhone === newClient.clientPhone &&
         prev.clientStreet === newClient.clientStreet &&
@@ -124,10 +128,10 @@ export const ClientAndContactSection = () => {
 
   const canEdit = Boolean(selectedEventId);
   const eventType = selectedEventData ? asSingleSelectName(selectedEventData[FIELD_IDS.EVENT_TYPE]) : "";
-  const isDelivery = eventType === "Delivery";
+  const isDelivery = isDeliveryOrPickup(eventType);
 
   return (
-    <FormSection title="Client & Day-of Contact" icon="👤">
+    <FormSection title="Client & Day-of Contact" icon={isDelivery ? "🚚" : "👤"} isDelivery={isDelivery}>
       {/* Client info */}
       <div>
         <label style={labelStyle}>Client First Name *</label>
@@ -203,43 +207,40 @@ export const ClientAndContactSection = () => {
           placeholder="(555) 555-5555"
         />
       </div>
-      <div>
-        <label style={labelStyle}>Primary Contact Role</label>
-        <select
-          value={contact.primaryContactRole}
-          disabled={!canEdit}
-          onChange={(e) => {
-            const v = e.target.value;
-            setContact((p) => ({ ...p, primaryContactRole: v }));
-            handleBlur(FIELD_IDS.PRIMARY_CONTACT_ROLE, v || null);
-          }}
-          style={inputStyle}
-        >
-          <option value="">Select role</option>
-          {[...new Set([...roleOptions, contact.primaryContactRole].filter(Boolean))].map((role) => (
-            <option key={role} value={role}>
-              {role}
-            </option>
-          ))}
-        </select>
-      </div>
+      {!isDelivery && (
+        <div>
+          <label style={labelStyle}>Primary Contact Role</label>
+          <select
+            value={contact.primaryContactRole}
+            disabled={!canEdit}
+            onChange={(e) => {
+              const v = e.target.value;
+              setContact((p) => ({ ...p, primaryContactRole: v }));
+              handleBlur(FIELD_IDS.PRIMARY_CONTACT_ROLE, v || null);
+            }}
+            style={inputStyle}
+          >
+            <option value="">Select role</option>
+            {[...new Set([...roleOptions, contact.primaryContactRole].filter(Boolean))].map((role) => (
+              <option key={role} value={role}>
+                {role}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
 
       {isDelivery && (
         <div style={{ gridColumn: "1 / -1" }}>
-          <label style={labelStyle}>Client Business Name (Auto-Generated)</label>
+          <label style={labelStyle}>Business Name</label>
           <input
             type="text"
-            value={client.clientBusinessName}
-            disabled
-            readOnly
-            style={{
-              ...inputStyle,
-              backgroundColor: "#0f0f0f",
-              color: "#666",
-              cursor: "not-allowed",
-              border: "1px solid #333",
-            }}
-            placeholder="Computed from client name"
+            value={client.businessName}
+            disabled={!canEdit}
+            onChange={(e) => setClient((p) => ({ ...p, businessName: e.target.value }))}
+            onBlur={(e) => handleBlur(FIELD_IDS.BUSINESS_NAME, e.target.value)}
+            style={inputStyle}
+            placeholder="e.g. ABC Corporation"
           />
         </div>
       )}

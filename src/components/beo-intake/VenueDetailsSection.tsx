@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useEventStore } from "../../state/eventStore";
 import { FIELD_IDS } from "../../services/airtable/events";
 import { asSingleSelectName, asString } from "../../services/airtable/selectors";
+import { isDeliveryOrPickup } from "../../lib/deliveryHelpers";
 import { FormSection } from "./FormSection";
 import type { VenueDetails } from "./types";
 
@@ -18,9 +19,8 @@ export const VenueDetailsSection = () => {
   });
   const [deliveryNotes, setDeliveryNotes] = useState("");
 
-  // Determine if this is a delivery event
   const eventType = selectedEventData ? asSingleSelectName(selectedEventData[FIELD_IDS.EVENT_TYPE]) : "";
-  const isDelivery = eventType === "Delivery";
+  const isDelivery = isDeliveryOrPickup(eventType);
 
   useEffect(() => {
     if (!selectedEventId || !selectedEventData) {
@@ -91,8 +91,20 @@ export const VenueDetailsSection = () => {
   return (
     <FormSection 
       title={isDelivery ? "Delivery Location" : "Venue"} 
-      icon="📍"
+      icon={isDelivery ? "🚚" : "📍"}
+      isDelivery={isDelivery}
     >
+      {isDelivery && (
+        <div style={{ gridColumn: "1 / -1", marginBottom: "12px", padding: "12px", backgroundColor: "rgba(34,197,94,0.08)", borderRadius: "8px", border: "1px solid rgba(34,197,94,0.3)" }}>
+          <div style={{ fontSize: "11px", color: "#86efac", fontWeight: "600", marginBottom: "6px" }}>Delivering to…</div>
+          <div style={{ fontSize: "11px", color: "#a7f3d0", lineHeight: 1.5 }}>
+            <strong>Client residence?</strong> Leave this section blank — client address (above) will be used.<br />
+            <strong>Business?</strong> Enter business name + delivery address below.<br />
+            <strong>Venue?</strong> Enter venue name + delivery address below.
+          </div>
+        </div>
+      )}
+
       <div style={{ gridColumn: "1 / -1" }}>
         <label style={labelStyle}>
           {isDelivery ? "Business / Location Name" : "Venue Name"}
@@ -105,11 +117,11 @@ export const VenueDetailsSection = () => {
           onBlur={(e) => handleBlur(FIELD_IDS.VENUE, e.target.value)}
           autoComplete="off"
           style={inputStyle}
-          placeholder={isDelivery ? "e.g. ABC Corporation" : "e.g. The Merion – Palazzo Room"}
+          placeholder={isDelivery ? "e.g. ABC Corporation or The Merion" : "e.g. The Merion – Palazzo Room"}
         />
         <div style={{ fontSize: "10px", color: "#888", marginTop: "4px" }}>
           {isDelivery 
-            ? "💡 Enter the business name if delivering to a company/organization"
+            ? "💡 Leave blank if delivering to client's home; otherwise enter business or venue name"
             : "💡 Only fill this if the event is at a venue different from the client's residence"
           }
         </div>
@@ -127,7 +139,7 @@ export const VenueDetailsSection = () => {
           onBlur={(e) => handleBlur(FIELD_IDS.VENUE_ADDRESS, e.target.value)}
           autoComplete="off"
           style={inputStyle}
-          placeholder={isDelivery ? "e.g. 456 Business Blvd" : "e.g. 123 Main St"}
+          placeholder={isDelivery ? "e.g. 456 Business Blvd — leave blank if client residence" : "e.g. 123 Main St"}
         />
       </div>
 

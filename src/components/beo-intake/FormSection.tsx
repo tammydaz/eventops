@@ -6,6 +6,8 @@ type CollapsibleSubsectionProps = {
   summary?: string;
   children: ReactNode;
   defaultOpen?: boolean;
+  /** When true, use green delivery styling for header */
+  isDelivery?: boolean;
 };
 
 export const CollapsibleSubsection = ({
@@ -14,8 +16,10 @@ export const CollapsibleSubsection = ({
   summary,
   children,
   defaultOpen = false,
+  isDelivery = false,
 }: CollapsibleSubsectionProps) => {
   const [isOpen, setIsOpen] = useState(defaultOpen);
+  const accentColor = isDelivery ? "#22c55e" : "#ff6b6b";
 
   // Sync open state when defaultOpen changes (e.g. when a service is picked)
   const prevDefaultOpen = useRef(defaultOpen);
@@ -39,7 +43,7 @@ export const CollapsibleSubsection = ({
           marginTop: 16,
           marginBottom: isOpen ? 12 : 0,
           paddingBottom: 8,
-          borderBottom: "1px solid #444",
+          borderBottom: `1px solid ${isDelivery ? "#22c55e" : "#444"}`,
           background: "none",
           border: "none",
           cursor: "pointer",
@@ -47,14 +51,14 @@ export const CollapsibleSubsection = ({
           textAlign: "left",
         }}
       >
-        <span style={{ fontSize: "12px", transform: isOpen ? "rotate(90deg)" : "rotate(0deg)", transition: "transform 0.3s ease", color: "#ff6b6b" }}>
+        <span style={{ fontSize: "12px", transform: isOpen ? "rotate(90deg)" : "rotate(0deg)", transition: "transform 0.3s ease", color: accentColor }}>
           {icon}
         </span>
         <span
           style={{
             fontSize: "12px",
             fontWeight: 700,
-            color: "#ff6b6b",
+            color: accentColor,
             textTransform: "uppercase",
             letterSpacing: "0.5px",
           }}
@@ -89,6 +93,8 @@ type FormSectionProps = {
   icon?: string;
   /** Dot color for section header (e.g. #22c55e green, #a855f7 purple, #eab308 yellow, #3b82f6 blue) */
   dotColor?: string;
+  /** When true, use green delivery theme (border, glow) */
+  isDelivery?: boolean;
 };
 
 export const FormSection = ({
@@ -97,8 +103,11 @@ export const FormSection = ({
   defaultOpen = false,
   icon = "📋",
   dotColor,
+  isDelivery = false,
 }: FormSectionProps) => {
   const [isOpen, setIsOpen] = useState(defaultOpen);
+  const borderColor = isDelivery ? "#22c55e" : "#00bcd4";
+  const glowColor = isDelivery ? "rgba(34,197,94,0.2)" : "rgba(0,188,212,0.2)";
 
   return (
     <div
@@ -107,8 +116,8 @@ export const FormSection = ({
         borderRadius: "16px",
         padding: "24px",
         marginBottom: "20px",
-        border: "2px solid #00bcd4",
-        boxShadow: "0 15px 35px rgba(0,0,0,0.4), 0 0 20px rgba(0,188,212,0.2), inset -2px -2px 8px rgba(0,0,0,0.2), inset 2px 2px 8px rgba(255,255,255,0.04)",
+        border: `2px solid ${borderColor}`,
+        boxShadow: `0 15px 35px rgba(0,0,0,0.4), 0 0 20px ${glowColor}, inset -2px -2px 8px rgba(0,0,0,0.2), inset 2px 2px 8px rgba(255,255,255,0.04)`,
         transition: "all 0.4s cubic-bezier(0.34,1.56,0.64,1)",
       }}
     >
@@ -151,7 +160,7 @@ export const FormSection = ({
         </h2>
         <span
           style={{
-            color: "#ff6b6b",
+            color: borderColor,
             fontSize: "12px",
             transform: isOpen ? "rotate(90deg)" : "rotate(0deg)",
             transition: "transform 0.3s ease",

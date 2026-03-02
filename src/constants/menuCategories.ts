@@ -23,6 +23,9 @@ export const CATEGORY_MAP: Record<string, string[]> = {
   desserts:     ['Dessert'],
   stations:     ['Station'],
   dressing:     ['Dressing'],
+  deli:         ['Deli/Sandwhiches', 'Deli/Breads', 'Deli/Sandwiches', 'Deli', 'Sandwich', 'Wrap'],
+  room_temp:    ['Room Temp Display', 'Display', 'Buffet China'],
+  displays:     ['Display', 'Buffet China'],
 };
 
 export type MenuCategoryKey = keyof typeof CATEGORY_MAP;
