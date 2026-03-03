@@ -10,7 +10,8 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "schema": "node scripts/updateAirtableSchema.js",
-    "seed-specs": "node scripts/seedMasterMenuSpecs.js"
+    "seed-specs": "node scripts/seedMasterMenuSpecs.js",
+    "import-march6": "node scripts/importMarch6Deliveries.js"
   },
   "dependencies": {
     "dotenv": "^17.2.4",

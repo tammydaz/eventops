@@ -6,6 +6,7 @@ import { FormSection, CollapsibleSubsection, Helper } from "./FormSection";
 import { HydrationStationModal } from "./HydrationStationModal";
 
 const BAR_SERVICE_FALLBACK_OPTIONS = ["None", "Full Bar Package", "FoodWerx Bartender Only", "FoodWerx Mixers Only"];
+const ICE_PROVIDED_BY_FALLBACK_OPTIONS = ["Client", "Foodwerx", "Venue"];
 
 const inputStyle = {
   width: "100%",
@@ -78,9 +79,8 @@ export const BeverageServicesSection = ({ embedded = false }: BeverageServicesSe
     loadSingleSelectOptions([FIELD_IDS.ICE_PROVIDED_BY]).then((result) => {
       if (cancelled || "error" in result) return;
       const opts = result[FIELD_IDS.ICE_PROVIDED_BY] ?? [];
-      if (opts.length > 0) {
-        setIceOptions(opts.map((o: SingleSelectOption) => o.name));
-      }
+      const names = opts.length > 0 ? opts.map((o: SingleSelectOption) => o.name) : ICE_PROVIDED_BY_FALLBACK_OPTIONS;
+      setIceOptions(names);
     });
     return () => { cancelled = true; };
   }, []);
@@ -485,9 +485,9 @@ export const BeverageServicesSection = ({ embedded = false }: BeverageServicesSe
             value={iceProvidedBy}
             disabled={!canEdit}
             onChange={(e) => {
-              const v = e.target.value || null;
-              setIceProvidedBy(v || "");
-              saveSingle(FIELD_IDS.ICE_PROVIDED_BY, v);
+              const v = e.target.value || "";
+              setIceProvidedBy(v);
+              saveSingle(FIELD_IDS.ICE_PROVIDED_BY, v || null);
             }}
             style={inputStyle}
           >

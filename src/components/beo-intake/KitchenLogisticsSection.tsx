@@ -56,8 +56,9 @@ export const KitchenLogisticsSection = ({ embedded = false }: KitchenLogisticsSe
           value={kitchenOnSite}
           disabled={!canEdit}
           onChange={(e) => {
-            setKitchenOnSite(e.target.value);
-            handleFieldChange(FIELD_IDS.KITCHEN_ON_SITE, e.target.value ? { name: e.target.value } : null);
+            const v = e.target.value || null;
+            setKitchenOnSite(v || "");
+            handleFieldChange(FIELD_IDS.KITCHEN_ON_SITE, v);
           }}
           style={inputStyle}
         >

@@ -6,6 +6,7 @@
 import * as XLSX from "xlsx";
 import { isVendorOrPlaceholderName, type ParsedInvoice } from "./invoiceParser";
 
+
 /** Convert Excel serial date (days since 1900-01-01) to YYYY-MM-DD */
 function excelDateToIso(serial: number): string | undefined {
   if (typeof serial !== "number" || isNaN(serial) || serial < 1) return undefined;
@@ -129,6 +130,86 @@ export async function parseDeliveryExcel(file: File): Promise<ParsedInvoice | nu
   if (clientRaw) result.venueName = clientRaw;
 
   // Event date: Excel serial or YYYY-MM-DD
+  if (eventDateRaw) {
+    const num = Number(eventDateRaw);
+    if (!isNaN(num) && num > 1000) {
+      result.eventDate = excelDateToIso(num);
+    } else if (/^\d{4}-\d{2}-\d{2}/.test(eventDateRaw)) {
+      result.eventDate = eventDateRaw.slice(0, 10);
+    }
+  }
+
+  const guests = parseInt(guestsRaw ?? "", 10);
+  if (!isNaN(guests) && guests > 0) result.guestCount = guests;
+
+  const deliveryTime = parseDeliveryTime(deliveryTimeRaw ?? "");
+  if (deliveryTime) {
+    result.eventStartTime = deliveryTime;
+    result.staffArrivalTime = deliveryTime;
+  }
+
+  const notesParts: string[] = [];
+  if (deliveryNotes) notesParts.push(`Delivery: ${deliveryNotes}`);
+  if (specialNotes) notesParts.push(specialNotes);
+  if (orderNum) result.invoiceNumber = orderNum;
+  if (notesParts.length > 0) result.notes = notesParts.join("\n");
+
+  result.eventType = "Delivery";
+
+  return result as ParsedInvoice;
+}
+
+/** Parse delivery BEO Excel from buffer (for Node.js scripts). Same logic as parseDeliveryExcel. */
+export function parseDeliveryExcelFromBuffer(buffer: ArrayBuffer | Buffer): ParsedInvoice | null {
+  const workbook = XLSX.read(buffer, { type: "array" });
+  const sheetName = workbook.SheetNames[0];
+  if (!sheetName) return null;
+
+  const sheet = workbook.Sheets[sheetName];
+  const data = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "" }) as unknown[][];
+  const map = buildLabelMap(data);
+
+  const get = (key: string) => map.get(key.toUpperCase())?.trim() || undefined;
+
+  const clientRaw = get("CLIENT");
+  const contact = get("CONTACT");
+  const phone = get("PHONE");
+  const address = get("ADDRESS");
+  const citySt = get("CITY, ST") || get("CITY ST");
+  const eventDateRaw = get("EVENT DATE");
+  const guestsRaw = get("GUESTS");
+  const deliveryTimeRaw = get("DELIVERY TIME");
+  const deliveryNotes = get("DELIVERY NOTES");
+  const specialNotes = get("SPECIAL NOTES");
+  const orderNum = get("HOUSE ORDER NUMBER");
+
+  const result: ParsedInvoice & { eventType?: string } = {};
+
+  if (clientRaw) {
+    const paren = clientRaw.indexOf("(");
+    const main = paren >= 0 ? clientRaw.slice(0, paren).trim() : clientRaw;
+    const parts = main.split(/\s+/);
+    if (parts.length >= 2) {
+      const fn = parts[0];
+      const ln = parts.slice(1).join(" ");
+      if (!isVendorOrPlaceholderName(fn)) result.clientFirstName = fn;
+      if (!isVendorOrPlaceholderName(ln)) result.clientLastName = ln;
+    } else if (!isVendorOrPlaceholderName(main)) {
+      result.clientOrganization = main;
+    }
+  }
+
+  result.primaryContactName = contact;
+  result.clientPhone = phone;
+  result.clientStreet = address;
+
+  const { city, state, zip } = parseCityStateZip(citySt ?? "");
+  if (city) result.clientCity = city;
+  if (state) result.clientState = state;
+  if (zip) result.clientZip = zip;
+
+  if (clientRaw) result.venueName = clientRaw;
+
   if (eventDateRaw) {
     const num = Number(eventDateRaw);
     if (!isNaN(num) && num > 1000) {
