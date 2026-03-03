@@ -145,7 +145,7 @@ export const FIELD_IDS = {
   COFFEE_MUG_TYPE: "fldCoffeeMugTypeTODO",        // Single Select: Standard / Premium / Irish — create in Airtable, replace ID
 
   // ── Ice ──
-  ICE_PROVIDED_BY: "fldlPI3Ix1UTuGrCf",         // Single Select: Ice Provided By (options from Airtable)
+  ICE_PROVIDED_BY: "fldlPI3Ix1UTuGrCf",         // Single Select: shares field with SERVICE_WARE_SOURCE — if Ice has its own field in Airtable, update ID
 
   // ── Staff ──
   STAFF: "fldWkHPhynjxyecq7",
@@ -382,6 +382,64 @@ export async function getBarServiceFieldId(): Promise<string | null> {
   return cachedBarServiceFieldId;
 }
 
+/** Lockout field names (exact match in Airtable Events table) */
+const LOCKOUT_FIELD_NAMES = [
+  "Guest Count Confirmed",
+  "Guest Count Change Requested",
+  "Guest Count Change Approved (Kitchen)",
+  "Menu Accepted by Kitchen",
+  "Menu Change Requested",
+  "Menu Change Approved (Kitchen)",
+] as const;
+
+export type LockoutFieldIds = {
+  guestCountConfirmed: string;
+  guestCountChangeRequested: string;
+  guestCountChangeApprovedKitchen: string;
+  menuAcceptedByKitchen: string;
+  menuChangeRequested: string;
+  menuChangeApprovedKitchen: string;
+};
+
+let cachedLockoutFieldIds: LockoutFieldIds | null | undefined = undefined;
+
+/** Resolve Guest Count / Menu lockout field IDs from Airtable Meta API by name (cached). */
+export async function getLockoutFieldIds(): Promise<LockoutFieldIds | null> {
+  if (cachedLockoutFieldIds !== undefined) return cachedLockoutFieldIds;
+  const tableKey = getEventsTable();
+  if (typeof tableKey !== "string") {
+    cachedLockoutFieldIds = null;
+    return null;
+  }
+  const data = await airtableMetaFetch<AirtableTablesResponse>("");
+  if (isErrorResult(data)) {
+    cachedLockoutFieldIds = null;
+    return null;
+  }
+  const table = data.tables.find((t) => t.id === tableKey || t.name === tableKey);
+  if (!table) {
+    cachedLockoutFieldIds = null;
+    return null;
+  }
+  const byName = Object.fromEntries(table.fields.map((f) => [f.name, f.id]));
+  const ids = {
+    guestCountConfirmed: byName["Guest Count Confirmed"],
+    guestCountChangeRequested: byName["Guest Count Change Requested"],
+    guestCountChangeApprovedKitchen: byName["Guest Count Change Approved (Kitchen)"],
+    menuAcceptedByKitchen: byName["Menu Accepted by Kitchen"],
+    menuChangeRequested: byName["Menu Change Requested"],
+    menuChangeApprovedKitchen: byName["Menu Change Approved (Kitchen)"],
+  };
+  const allPresent = Object.values(ids).every(Boolean);
+  if (allPresent) {
+    Object.values(ids).forEach((id) => additionalAllowedFieldIds.add(id as string));
+    cachedLockoutFieldIds = ids as LockoutFieldIds;
+  } else {
+    cachedLockoutFieldIds = null;
+  }
+  return cachedLockoutFieldIds;
+}
+
 /** Field IDs resolved at runtime (e.g. Bar Service by name) — allowed in PATCH */
 const additionalAllowedFieldIds = new Set<string>([
   FIELD_IDS.FOODWERX_ARRIVAL,  // Placeholder; updateEventMultiple/createEvent replace with resolved ID
@@ -435,6 +493,8 @@ export const loadEvents = async (): Promise<EventListItem[] | AirtableErrorResul
   type ListResponse = AirtableListResponse<Record<string, unknown>> & { offset?: string };
   let offset: string | undefined;
   let allRecords: AirtableRecord<Record<string, unknown>>[] = [];
+  /** Cap to prevent freeze when event list has thousands of records */
+  const MAX_EVENTS_LOAD = 500;
 
   do {
     const pageParams = new URLSearchParams(params);
@@ -443,6 +503,7 @@ export const loadEvents = async (): Promise<EventListItem[] | AirtableErrorResul
     if (isErrorResult(data)) return data;
     allRecords.push(...data.records);
     offset = data.offset;
+    if (allRecords.length >= MAX_EVENTS_LOAD) break;
   } while (offset);
 
   return allRecords.map((record) => {

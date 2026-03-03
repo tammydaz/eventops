@@ -1,4 +1,4 @@
-import { useMemo, useState, useRef, useEffect } from "react";
+import { useMemo, useState, useRef, useEffect, startTransition } from "react";
 import { createPortal } from "react-dom";
 import { useEventStore } from "../state/eventStore";
 
@@ -7,6 +7,8 @@ const EVENT_SEARCH_PLACEHOLDER = "Type event name...";
 const EVENT_EMPTY_STATE = "No events found.";
 const EVENT_LOADING_STATE = "Loading events...";
 const EVENT_ERROR_PREFIX = "Error loading events:";
+/** Max events to render in dropdown — prevents freeze when there are hundreds/thousands */
+const MAX_RENDER_EVENTS = 50;
 
 const beoStyles = {
   wrap: { marginBottom: 0 },
@@ -91,12 +93,14 @@ export const EventSelector = ({ variant = "default" }: EventSelectorProps) => {
   const { events, eventsLoading, eventsError, selectedEventId, selectEvent } = useEventStore();
   const [isOpen, setIsOpen] = useState(false);
   const [query, setQuery] = useState("");
+  const [listReady, setListReady] = useState(false);
   const triggerRef = useRef<HTMLDivElement>(null);
   const [dropdownRect, setDropdownRect] = useState<{ top: number; left: number; width: number } | null>(null);
 
   useEffect(() => {
     if (!isOpen) {
       setDropdownRect(null);
+      setListReady(false);
       return;
     }
     const el = triggerRef.current;
@@ -107,6 +111,8 @@ export const EventSelector = ({ variant = "default" }: EventSelectorProps) => {
       left: rect.left,
       width: Math.max(rect.width, 320),
     });
+    const id = requestAnimationFrame(() => setListReady(true));
+    return () => cancelAnimationFrame(id);
   }, [isOpen]);
 
   const filteredEvents = useMemo(() => {
@@ -115,12 +121,23 @@ export const EventSelector = ({ variant = "default" }: EventSelectorProps) => {
     return events.filter((event) => (event.eventName ?? "").toLowerCase().includes(normalized));
   }, [events, query]);
 
+  /** Limit rendered items to prevent freeze with large event lists */
+  const eventsToRender = useMemo(() => {
+    if (filteredEvents.length <= MAX_RENDER_EVENTS) return filteredEvents;
+    const selected = selectedEventId ? filteredEvents.find((e) => e.id === selectedEventId) : null;
+    const rest = filteredEvents.filter((e) => e.id !== selectedEventId);
+    const head = rest.slice(0, MAX_RENDER_EVENTS - (selected ? 1 : 0));
+    return selected ? [selected, ...head] : head;
+  }, [filteredEvents, selectedEventId]);
+
   const selectedEvent = useMemo(
     () => events.find((event) => event.id === selectedEventId) ?? null,
     [events, selectedEventId]
   );
 
-  const toggleOpen = () => setIsOpen((v) => !v);
+  const toggleOpen = () => {
+    startTransition(() => setIsOpen((v) => !v));
+  };
 
   const handleSelect = (eventId: string) => {
     selectEvent(eventId).catch(() => null);
@@ -195,8 +212,13 @@ export const EventSelector = ({ variant = "default" }: EventSelectorProps) => {
                 {!eventsLoading && !eventsError && filteredEvents.length === 0 && (
                   <div style={beoStyles.empty}>{EVENT_EMPTY_STATE}</div>
                 )}
+                {!eventsLoading && !eventsError && filteredEvents.length > MAX_RENDER_EVENTS && (
+                  <div style={{ ...beoStyles.empty, fontSize: 11, padding: 8 }}>
+                    Showing first {MAX_RENDER_EVENTS} of {filteredEvents.length}. Type to search.
+                  </div>
+                )}
                 {!eventsLoading && !eventsError &&
-                  filteredEvents.map((event) => {
+                  eventsToRender.map((event) => {
                     const isSelected = event.id === selectedEventId;
                     return (
                       <div
@@ -330,8 +352,11 @@ export const EventSelector = ({ variant = "default" }: EventSelectorProps) => {
               {!eventsLoading && !eventsError && filteredEvents.length === 0 ? (
                 <div className="px-4 py-3 text-gray-400">{EVENT_EMPTY_STATE}</div>
               ) : null}
+              {!eventsLoading && !eventsError && filteredEvents.length > MAX_RENDER_EVENTS ? (
+                <div className="px-4 py-2 text-xs text-gray-500">Showing first {MAX_RENDER_EVENTS} of {filteredEvents.length}. Type to search.</div>
+              ) : null}
               {!eventsLoading && !eventsError &&
-                filteredEvents.map((event) => (
+                eventsToRender.map((event) => (
                   <button
                     key={event.id}
                     type="button"

@@ -2347,8 +2347,6 @@ const BeoPrintPage: React.FC = () => {
   }
 
   // ── Client name for page markers (injected into @page; escaped for CSS) ──
-  const pageMarkerClientName = (clientName || "—").replace(/\\/g, "\\\\").replace(/"/g, '\\"');
-
   // ── Render ──
   return (
     <>
@@ -2356,8 +2354,8 @@ const BeoPrintPage: React.FC = () => {
       {topTab !== "buffetMenuSigns" && (
         <style dangerouslySetInnerHTML={{ __html: `
           @media print {
-            @page { @top-center { content: "PAGE " counter(page) " - ${pageMarkerClientName}"; } }
-            @page :first { @top-center { content: none; } }
+            @page { @top-center { content: none !important; } }
+            @page :first { @top-center { content: none !important; } }
           }
         `}} />
       )}
@@ -2600,7 +2598,10 @@ const BeoPrintPage: React.FC = () => {
           <div
             key={page.pageNum}
             className="kitchen-beo-page"
-            style={{ pageBreakAfter: pageIdx < kitchenPages.length - 1 ? "page" : "auto" }}
+            style={{
+              pageBreakAfter: pageIdx < kitchenPages.length - 1 ? "page" : "auto",
+              paddingTop: pageIdx > 0 ? "1.25in" : undefined,
+            }}
           >
             {/* Page marker (PAGE 2, 3, …) is rendered via @page @top-center in print CSS — not in DOM */}
 
@@ -2791,21 +2792,24 @@ const BeoPrintPage: React.FC = () => {
                     ⚠️ ALLERGIES / DIETARY RESTRICTIONS: {allergies.toUpperCase()}
                   </div>
                 )}
-                <div className="beo-footer-block" style={{ marginTop: 12, breakInside: "avoid", pageBreakInside: "avoid", breakBefore: "avoid", pageBreakBefore: "avoid" }}>
-                  <div style={{ border: "2px solid #333", borderRadius: 6, padding: "10px 16px", background: "#374151" }}>
-                    <div style={{ display: "flex", justifyContent: "center", alignItems: "center", flexWrap: "nowrap", gap: 10, fontSize: 12, fontWeight: 600, color: "#fff", whiteSpace: "nowrap" }}>
-                      <span>Client: {clientName || "—"}</span>
-                      <span style={{ color: "rgba(255,255,255,0.6)", fontSize: 10 }}>|</span>
-                      <span>Venue: {eventLocation || "—"}</span>
-                      <span style={{ color: "rgba(255,255,255,0.6)", fontSize: 10 }}>|</span>
-                      <span style={{ fontSize: 15, fontWeight: 700 }}>Job #: {jobNumberDisplay}</span>
-                      <span style={{ color: "rgba(255,255,255,0.6)", fontSize: 10 }}>|</span>
-                      <span style={{ fontSize: 15, fontWeight: 700 }}>Dispatch: {dispatchTime || "—"}</span>
-                      <span style={{ color: "rgba(255,255,255,0.6)", fontSize: 10 }}>|</span>
-                      <span>Guests: {guestCount || "—"}</span>
+                <div className="beo-footer-block" style={{ marginTop: 12, breakInside: "avoid", pageBreakInside: "avoid", breakBefore: "avoid", pageBreakBefore: "avoid", display: "flex", flexDirection: "column", alignItems: "flex-start" }}>
+                  <div style={{ border: "2px solid #4b5563", outline: "2px solid #4b5563", outlineOffset: "2px", borderRadius: 6, padding: "16px 20px", background: "#9ca3af", width: "fit-content" }}>
+                    <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 6, color: "#fff" }}>
+                      <div style={{ fontSize: 13, fontWeight: 600 }}>Client: {clientName || "—"}</div>
+                      {!isDelivery && (() => {
+                        const v = f(FIELD_IDS.VENUE) || "";
+                        const addr = (venueAddress || "").trim();
+                        const show = v.trim() && v.trim() !== addr;
+                        return show ? <div style={{ fontSize: 13, fontWeight: 600 }}>Venue: {v}</div> : null;
+                      })()}
+                      <div style={{ fontSize: 13, fontWeight: 600 }}>Guests: {guestCount || "—"}</div>
+                      <div style={{ display: "flex", gap: 16, alignItems: "center", background: "#fff", color: "#000", padding: "8px 12px", borderRadius: 4, border: "2px solid #000", fontWeight: 700, fontSize: 16 }}>
+                        <span>Job #: {jobNumberDisplay}</span>
+                        <span>Dispatch: {dispatchTime || "—"}</span>
+                      </div>
                     </div>
                   </div>
-                  <div style={{ textAlign: "center" as const, marginTop: 8, fontSize: 12, fontWeight: 700, letterSpacing: 2, color: "#333" }}>
+                  <div style={{ textAlign: "left" as const, marginTop: 8, fontSize: 14, fontWeight: 700, letterSpacing: 2, color: "#333" }}>
                     ***end of event***
                   </div>
                 </div>
@@ -2815,7 +2819,7 @@ const BeoPrintPage: React.FC = () => {
         )))}
         {/* When packout/expeditor/server: append Server BEO 2nd page (beverage, hydration, paper, notes, timeline) so it appears in those checks */}
         {(leftCheck === "packout" || leftCheck === "expeditor" || leftCheck === "server") && (
-          <div style={{ pageBreakBefore: "always", marginTop: 12 }}>
+          <div style={{ pageBreakBefore: "always", paddingTop: "1.25in" }}>
             <ServerBeo2ndPageContent
               eventDate={eventDate}
               clientName={clientName}

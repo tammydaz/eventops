@@ -10,6 +10,7 @@ import {
   KitchenAndServicewareSection,
   SiteVisitLogisticsSection,
 } from "../components/beo-intake";
+import { ApprovalsLockoutSection } from "../components/beo-intake/ApprovalsLockoutSection";
 import { BeoIntakeActionBar } from "../components/beo-intake/BeoIntakeActionBar";
 import { isDeliveryOrPickup } from "../lib/deliveryHelpers";
 import { asSingleSelectName } from "../services/airtable/selectors";
@@ -17,7 +18,7 @@ import { FIELD_IDS } from "../services/airtable/events";
 import "./IntakePage.css";
 
 export const BeoIntakePage = () => {
-  const { loadEvents, selectedEventId, selectEvent, setSelectedEventId, eventDataLoading, selectedEventData } = useEventStore();
+  const { loadEvents, selectedEventId, selectEvent, setSelectedEventId, setFields, eventDataLoading, selectedEventData } = useEventStore();
   const eventType = selectedEventData ? asSingleSelectName(selectedEventData[FIELD_IDS.EVENT_TYPE]) : "";
   const isDelivery = isDeliveryOrPickup(eventType);
 
@@ -67,6 +68,25 @@ export const BeoIntakePage = () => {
             <p style={{ fontSize: "12px", color: "#888", margin: 0 }}>
               {isDelivery ? "Delivery order — simplified intake (all disposable)" : "Complete event details for operations"}
             </p>
+            {!isDelivery && selectedEventId && (
+              <button
+                type="button"
+                onClick={() => setFields(selectedEventId, { [FIELD_IDS.EVENT_TYPE]: "Delivery" })}
+                style={{
+                  marginTop: 8,
+                  padding: "6px 12px",
+                  borderRadius: "6px",
+                  border: "2px solid #22c55e",
+                  background: "transparent",
+                  color: "#22c55e",
+                  fontSize: "12px",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                }}
+              >
+                Switch to Delivery
+              </button>
+            )}
           </div>
           <div style={{ minWidth: "220px", maxWidth: "320px" }}>
             <EventSelector variant="beo-header" />
@@ -80,14 +100,34 @@ export const BeoIntakePage = () => {
               padding: "12px 40px",
               display: "flex",
               alignItems: "center",
+              justifyContent: "space-between",
               gap: "12px",
+              flexWrap: "wrap",
             }}
           >
-            <span style={{ fontSize: "24px" }}>🚚</span>
-            <span style={{ fontSize: "14px", fontWeight: "700", color: "#22c55e", textTransform: "uppercase", letterSpacing: "1px" }}>
-              Delivery Order — Kitchen sees green theme
-            </span>
-            <span style={{ fontSize: "12px", color: "#86efac" }}>No metal/china/serviceware — all disposable</span>
+            <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+              <span style={{ fontSize: "24px" }}>🚚</span>
+              <span style={{ fontSize: "14px", fontWeight: "700", color: "#22c55e", textTransform: "uppercase", letterSpacing: "1px" }}>
+                Delivery Order — Kitchen sees green theme
+              </span>
+              <span style={{ fontSize: "12px", color: "#86efac" }}>No metal/china/serviceware — all disposable</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setFields(selectedEventId, { [FIELD_IDS.EVENT_TYPE]: "Full Service" })}
+              style={{
+                padding: "8px 16px",
+                borderRadius: "6px",
+                border: "2px solid #ff6b6b",
+                background: "transparent",
+                color: "#ff6b6b",
+                fontSize: "13px",
+                fontWeight: 700,
+                cursor: "pointer",
+              }}
+            >
+              Switch to Full Service
+            </button>
           </div>
         )}
         <div style={{ position: "relative", zIndex: 1, padding: "40px", minHeight: "calc(100vh - 100px)", paddingBottom: "140px", maxWidth: "1200px", margin: "0 auto" }}>
@@ -107,6 +147,7 @@ export const BeoIntakePage = () => {
               {!isDelivery && <KitchenAndServicewareSection />}
               {!isDelivery && <TimelineSection />}
               {!isDelivery && <SiteVisitLogisticsSection />}
+              <ApprovalsLockoutSection eventId={selectedEventId} />
             </>
           ) : (
             <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "400px", textAlign: "center" }}>

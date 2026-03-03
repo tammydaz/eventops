@@ -1,12 +1,22 @@
 import { useEffect, useState } from "react";
 import { useEventStore } from "../../state/eventStore";
-import { FIELD_IDS } from "../../services/airtable/events";
+import { FIELD_IDS, loadSingleSelectOptions } from "../../services/airtable/events";
 import { asString } from "../../services/airtable/selectors";
 import { FormSection } from "./FormSection";
 
 export const HydrationStationSection = () => {
   const { selectedEventId, selectedEventData, setFields } = useEventStore();
   const [details, setDetails] = useState({ infusedWater: "", infusionIngredients: "", dispenserCount: "", bottledWater: "", unsweetTea: "", sweetTea: "", sodaSelection: "", other: "" });
+  const [unsweetTeaOptions, setUnsweetTeaOptions] = useState<string[]>([]);
+  const [sweetTeaOptions, setSweetTeaOptions] = useState<string[]>([]);
+
+  useEffect(() => {
+    loadSingleSelectOptions([FIELD_IDS.HYDRATION_UNSWEET_TEA, FIELD_IDS.HYDRATION_SWEET_TEA]).then((result) => {
+      if ("error" in result) return;
+      setUnsweetTeaOptions((result[FIELD_IDS.HYDRATION_UNSWEET_TEA] ?? []).map((o) => o.name));
+      setSweetTeaOptions((result[FIELD_IDS.HYDRATION_SWEET_TEA] ?? []).map((o) => o.name));
+    }).catch(() => {});
+  }, []);
 
   useEffect(() => {
     if (!selectedEventId || !selectedEventData) {
@@ -118,27 +128,63 @@ export const HydrationStationSection = () => {
       </div>
       <div>
         <label style={labelStyle}>Unsweet Tea</label>
-        <input 
-          type="text" 
-          value={details.unsweetTea} 
-          disabled={!canEdit} 
-          onChange={(e) => setDetails(p => ({ ...p, unsweetTea: e.target.value }))} 
-          onBlur={(e) => handleBlur(FIELD_IDS.HYDRATION_UNSWEET_TEA, e.target.value)}
-          style={inputStyle} 
-          placeholder="Quantity" 
-        />
+        {unsweetTeaOptions.length > 0 ? (
+          <select
+            value={details.unsweetTea}
+            disabled={!canEdit}
+            onChange={(e) => {
+              const v = e.target.value;
+              setDetails((p) => ({ ...p, unsweetTea: v }));
+              handleBlur(FIELD_IDS.HYDRATION_UNSWEET_TEA, v || null);
+            }}
+            style={inputStyle}
+          >
+            <option value="">—</option>
+            {[...new Set([...unsweetTeaOptions, details.unsweetTea].filter(Boolean))].map((opt) => (
+              <option key={opt} value={opt}>{opt}</option>
+            ))}
+          </select>
+        ) : (
+          <input
+            type="text"
+            value={details.unsweetTea}
+            disabled={!canEdit}
+            onChange={(e) => setDetails((p) => ({ ...p, unsweetTea: e.target.value }))}
+            onBlur={(e) => handleBlur(FIELD_IDS.HYDRATION_UNSWEET_TEA, e.target.value)}
+            style={inputStyle}
+            placeholder="Quantity"
+          />
+        )}
       </div>
       <div>
         <label style={labelStyle}>Sweet Tea</label>
-        <input 
-          type="text" 
-          value={details.sweetTea} 
-          disabled={!canEdit} 
-          onChange={(e) => setDetails(p => ({ ...p, sweetTea: e.target.value }))} 
-          onBlur={(e) => handleBlur(FIELD_IDS.HYDRATION_SWEET_TEA, e.target.value)}
-          style={inputStyle} 
-          placeholder="Quantity" 
-        />
+        {sweetTeaOptions.length > 0 ? (
+          <select
+            value={details.sweetTea}
+            disabled={!canEdit}
+            onChange={(e) => {
+              const v = e.target.value;
+              setDetails((p) => ({ ...p, sweetTea: v }));
+              handleBlur(FIELD_IDS.HYDRATION_SWEET_TEA, v || null);
+            }}
+            style={inputStyle}
+          >
+            <option value="">—</option>
+            {[...new Set([...sweetTeaOptions, details.sweetTea].filter(Boolean))].map((opt) => (
+              <option key={opt} value={opt}>{opt}</option>
+            ))}
+          </select>
+        ) : (
+          <input
+            type="text"
+            value={details.sweetTea}
+            disabled={!canEdit}
+            onChange={(e) => setDetails((p) => ({ ...p, sweetTea: e.target.value }))}
+            onBlur={(e) => handleBlur(FIELD_IDS.HYDRATION_SWEET_TEA, e.target.value)}
+            style={inputStyle}
+            placeholder="Quantity"
+          />
+        )}
       </div>
       <div style={{ gridColumn: "1 / -1" }}>
         <label style={labelStyle}>Soda Selection</label>
