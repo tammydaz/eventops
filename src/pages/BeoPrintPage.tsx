@@ -247,7 +247,7 @@ const printStyles = `
     }
     .kitchen-beo-page:not(:first-child) { break-before: page !important; }
     .kitchen-beo-page:last-child { break-after: auto; }
-    .kitchen-beo-page2-buffer { height: 9in !important; min-height: 9in !important; flex-shrink: 0 !important; }
+    .kitchen-beo-page2-buffer { height: 10in !important; min-height: 10in !important; flex-shrink: 0 !important; }
     .meeting-beo-notes-section { break-before: page !important; }
     .menu-section-page { break-after: page !important; width: 8in !important; min-height: 10in !important; box-sizing: border-box !important; }
   }
@@ -530,36 +530,36 @@ const styles: Record<string, React.CSSProperties> = {
   },
   sectionCard: {
     background: "transparent",
-    border: "3px solid #000",
-    borderRadius: 8,
-    marginBottom: 6,
+    border: "2px solid #000",
+    borderRadius: 4,
+    marginBottom: 4,
     overflow: "visible" as const,
   },
   sectionHeader: {
     background: "transparent",
     color: "#000",
-    padding: "4px 12px",
-    fontSize: 12,
+    padding: "2px 8px",
+    fontSize: 11,
     fontWeight: 700,
     fontFamily: "'Segoe UI', Arial, sans-serif",
     textAlign: "center" as const,
-    marginTop: 6,
-    marginBottom: 2,
+    marginTop: 2,
+    marginBottom: 1,
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    gap: "8px",
+    gap: "6px",
   },
   lineItem: {
     display: "grid",
-    padding: "2px 12px",
+    padding: "1px 8px",
     borderBottom: "1px solid #eee",
-    fontSize: 12,
-    lineHeight: 1.2,
+    fontSize: 11,
+    lineHeight: 1.15,
     alignItems: "center" as const,
   },
-  specCol: { fontWeight: 700, color: "#555", fontSize: 12 },
-  itemCol: { fontWeight: 600, color: "#333", overflowWrap: "break-word" as const, wordBreak: "break-word" as const, minWidth: 0 },
+  specCol: { fontWeight: 700, color: "#555", fontSize: 11 },
+  itemCol: { fontWeight: 600, color: "#333", fontSize: 11, overflowWrap: "break-word" as const, wordBreak: "break-word" as const, minWidth: 0, paddingLeft: "2ch" },
   packOutCol: { fontSize: 11, color: "#666", textAlign: "right" as const },
   checkboxCol: { display: "flex", alignItems: "center", justifyContent: "center" },
   footer: {
@@ -2303,11 +2303,11 @@ const BeoPrintPage: React.FC = () => {
     return rows;
   };
 
-  // ── Kitchen BEO pagination: page 1 has less room (header/banners), pages 2+ have grey bar + 9in buffer ──
-  // Page 2+ has ~1in for content (9in buffer + ~1in grey bar leaves little room) — keep low so content doesn't overflow to next page without header.
-  // Never let last page have only 1–3 lines; avoid breaking if next section would create tiny last page.
-  const LINES_PER_PAGE_FIRST = 42;  // page 1: event header + banners
-  const LINES_PER_PAGE = 8;        // pages 2+: grey bar + 9in buffer — keep low so content doesn't overflow to next page without header
+  // ── Kitchen BEO pagination ──
+  // Delivery: target 2 pages (no buffer)
+  // Full service: 10in buffer on page 2+ leaves ~0.5in for content — use 4 lines so each page gets its own buffer
+  const LINES_PER_PAGE_FIRST = isDelivery ? 52 : 48;
+  const LINES_PER_PAGE = isDelivery ? 55 : 4;
   const SECTION_HEADER_LINES = 2;
   const MIN_LINES_ON_LAST_PAGE = 4;  // avoid orphan 1–3 lines on last page
   type KitchenPage = { pageNum: number; sections: Array<{ section: SectionData; items: MenuLineItem[]; isContinuation?: boolean }> };
@@ -2393,14 +2393,12 @@ const BeoPrintPage: React.FC = () => {
     return result;
   })();
 
-  // Grid columns: spec (left), item (middle), optional right column (override / equipment / checkbox)
-  // Delivery: no right column — just item name
-  const gridTemplateColumns = isDelivery
-    ? "1fr"
-    : leftCheck === "spec" ? "140px 1fr 200px" :
-      leftCheck === "packout" ? "140px 1fr 250px" :
-      leftCheck === "kitchen" || leftCheck === "expeditor" || leftCheck === "server" ? "140px 1fr 40px" :
-      "1fr";
+  // Grid columns: spec (left), item (middle), override/equipment/checkbox (right)
+  const gridTemplateColumns =
+    leftCheck === "spec" ? "140px 1fr 200px" :
+    leftCheck === "packout" ? "140px 1fr 250px" :
+    leftCheck === "kitchen" || leftCheck === "expeditor" || leftCheck === "server" ? "140px 1fr 40px" :
+    "1fr";
 
   const handleSaveNote = () => {
     const { itemId, itemName, sectionTitle, draftNote } = noteModal;
@@ -2706,9 +2704,9 @@ const BeoPrintPage: React.FC = () => {
               <span>JOB#: {jobNumberDisplay}-----------------DISPATCH TIME {dispatchTime}</span>
             </div>
 
-            {/* Page 2+: spacer so content starts 10in down (below ticket hanger) */}
-            {page.pageNum > 1 && (
-              <div className="kitchen-beo-page2-buffer" style={{ height: "9in", minHeight: "9in", flexShrink: 0 }} aria-hidden="true" />
+            {/* Page 2+: 10in buffer for ticket hanger (full service only) */}
+            {page.pageNum > 1 && !isDelivery && (
+              <div className="kitchen-beo-page2-buffer" style={{ height: "10in", minHeight: "10in", flexShrink: 0 }} aria-hidden="true" />
             )}
 
             {/* Page 1 only: date + event details table under grey box */}
@@ -2780,11 +2778,11 @@ const BeoPrintPage: React.FC = () => {
                 const item = sectionItems[0];
                 const rows = expandItemToRows(item);
                 return (
-              <div key={`${item.id}-0`} className="beo-menu-item-block" style={{ borderBottom: "1px solid #ddd", paddingBottom: 4, marginTop: 0 }}>
+              <div key={`${item.id}-0`} className="beo-menu-item-block" style={{ borderBottom: "1px solid #ddd", paddingBottom: 2, marginTop: 0 }}>
               {rows.map((row, rowIdx) => (
-              <div key={rowIdx} className="beo-line-item" style={{ ...styles.lineItem, borderBottom: "none", gridTemplateColumns, padding: row.isChild ? "0 12px 0 12px" : "0 12px", paddingLeft: row.isChild ? "calc(12px + 2ch)" : 12, lineHeight: 1.2, minHeight: "unset", alignItems: "flex-start", marginTop: row.isChild ? 0 : 0 }}>
-                {/* SPEC / PACK-OUT / EXPEDITOR / KITCHEN / SERVER: Spec Column (left) — hidden for delivery */}
-                {!isDelivery && (leftCheck === "spec" || leftCheck === "packout" || leftCheck === "expeditor" || leftCheck === "kitchen" || leftCheck === "server") && (
+              <div key={rowIdx} className="beo-line-item" style={{ ...styles.lineItem, borderBottom: "none", gridTemplateColumns, padding: row.isChild ? "0 8px 0 8px" : "0 8px", paddingLeft: row.isChild ? "calc(8px + 2ch)" : 8, lineHeight: 1.15, minHeight: "unset", alignItems: "flex-start", marginTop: row.isChild ? 0 : 0 }}>
+                {/* SPEC / PACK-OUT / EXPEDITOR / KITCHEN / SERVER: Spec Column (left) */}
+                {(leftCheck === "spec" || leftCheck === "packout" || leftCheck === "expeditor" || leftCheck === "kitchen" || leftCheck === "server") && (
                   <div className="beo-spec-col" style={{ ...styles.specCol, lineHeight: 1.2 }}>
                     {(() => {
                       const overrideKey = `${section.fieldId}:${item.id}:${rowIdx}`;
@@ -2800,8 +2798,8 @@ const BeoPrintPage: React.FC = () => {
                   {row.lineName}
                 </div>
 
-                {/* SPEC VIEW: Override input — every row (including children) for spec reasons — hidden for delivery */}
-                {!isDelivery && leftCheck === "spec" && (
+                {/* SPEC VIEW: Override input (right) — to override the spec on the left */}
+                {leftCheck === "spec" && (
                   <div className="beo-spec-col" style={{ ...styles.specCol, display: "flex", flexDirection: "column", gap: 2 }} onClick={(e) => { e.stopPropagation(); if (document.activeElement instanceof HTMLButtonElement) document.activeElement.blur(); }}>
                     <input
                       type="text"
@@ -2825,8 +2823,8 @@ const BeoPrintPage: React.FC = () => {
                   </div>
                 )}
 
-                {/* KITCHEN / EXPEDITOR / SERVER: Checkbox (right) — each mode has its own state — hidden for delivery */}
-                {!isDelivery && (leftCheck === "kitchen" || leftCheck === "expeditor" || leftCheck === "server") && (
+                {/* KITCHEN / EXPEDITOR / SERVER: Checkbox (right) */}
+                {(leftCheck === "kitchen" || leftCheck === "expeditor" || leftCheck === "server") && (
                   <div style={styles.checkboxCol} onClick={(e) => { e.stopPropagation(); if (document.activeElement instanceof HTMLButtonElement) document.activeElement.blur(); }}>
                     <input
                       type="checkbox"
@@ -2840,8 +2838,8 @@ const BeoPrintPage: React.FC = () => {
                   </div>
                 )}
 
-                {/* PACK-OUT: Editable equipment list (right) — per item, only on parent row — hidden for delivery */}
-                {!isDelivery && leftCheck === "packout" && (
+                {/* PACK-OUT: Editable equipment list (right) — per item, only on parent row */}
+                {leftCheck === "packout" && (
                   <div style={styles.packOutCol} onClick={(e) => { e.stopPropagation(); if (document.activeElement instanceof HTMLButtonElement) document.activeElement.blur(); }}>
                     {rowIdx === 0 ? (
                       <textarea
@@ -2879,10 +2877,10 @@ const BeoPrintPage: React.FC = () => {
             {sectionItems.slice(1).map((item, itemIdx) => {
               const rows = expandItemToRows(item);
               return (
-              <div key={`${item.id}-${itemIdx + 1}`} className="beo-menu-item-block" style={{ borderBottom: "1px solid #ddd", paddingBottom: 4, marginTop: 6 }}>
+              <div key={`${item.id}-${itemIdx + 1}`} className="beo-menu-item-block" style={{ borderBottom: "1px solid #ddd", paddingBottom: 2, marginTop: 2 }}>
               {rows.map((row, rowIdx) => (
-              <div key={rowIdx} className="beo-line-item" style={{ ...styles.lineItem, borderBottom: "none", gridTemplateColumns, padding: row.isChild ? "0 12px 0 12px" : "0 12px", paddingLeft: row.isChild ? "calc(12px + 2ch)" : 12, lineHeight: 1.2, minHeight: "unset", alignItems: "flex-start", marginTop: row.isChild ? 0 : 0 }}>
-                {!isDelivery && (leftCheck === "spec" || leftCheck === "packout" || leftCheck === "expeditor" || leftCheck === "kitchen" || leftCheck === "server") && (
+              <div key={rowIdx} className="beo-line-item" style={{ ...styles.lineItem, borderBottom: "none", gridTemplateColumns, padding: row.isChild ? "0 8px 0 8px" : "0 8px", paddingLeft: row.isChild ? "calc(8px + 2ch)" : 8, lineHeight: 1.15, minHeight: "unset", alignItems: "flex-start", marginTop: row.isChild ? 0 : 0 }}>
+                {(leftCheck === "spec" || leftCheck === "packout" || leftCheck === "expeditor" || leftCheck === "kitchen" || leftCheck === "server") && (
                   <div className="beo-spec-col" style={{ ...styles.specCol, lineHeight: 1.2 }}>
                     {(() => {
                       const overrideKey = `${section.fieldId}:${item.id}:${rowIdx}`;
@@ -2893,17 +2891,17 @@ const BeoPrintPage: React.FC = () => {
                   </div>
                 )}
                 <div className="beo-item-col" style={{ ...styles.itemCol, lineHeight: 1.25 }}>{row.lineName}</div>
-                {!isDelivery && leftCheck === "spec" && (
+                {leftCheck === "spec" && (
                   <div className="beo-spec-col" style={{ ...styles.specCol, display: "flex", flexDirection: "column", gap: 2 }} onClick={(e) => { e.stopPropagation(); if (document.activeElement instanceof HTMLButtonElement) document.activeElement.blur(); }}>
                     <input type="text" placeholder="spec..." value={specOverrides[`${section.fieldId}:${item.id}:${rowIdx}`] ?? (rowIdx === 0 ? specOverrides[`${section.fieldId}:${item.id}`] : undefined) ?? ""} onChange={(e) => { setSpecOverrides((prev) => ({ ...prev, [`${section.fieldId}:${item.id}:${rowIdx}`]: e.target.value })); }} style={{ width: "100%", padding: "2px 6px", fontSize: 11, lineHeight: 1, background: "#f9f9f9", border: "1px solid #ddd", borderRadius: 2 }} className="no-print" />
                   </div>
                 )}
-                {!isDelivery && (leftCheck === "kitchen" || leftCheck === "expeditor" || leftCheck === "server") && (
+                {(leftCheck === "kitchen" || leftCheck === "expeditor" || leftCheck === "server") && (
                   <div style={styles.checkboxCol} onClick={(e) => { e.stopPropagation(); if (document.activeElement instanceof HTMLButtonElement) document.activeElement.blur(); }}>
                     <input type="checkbox" checked={checkState[`${leftCheck}:${section.fieldId}:${item.id}:${rowIdx}`] ?? item.loaded ?? false} onChange={(e) => { setCheckState((prev) => ({ ...prev, [`${leftCheck}:${section.fieldId}:${item.id}:${rowIdx}`]: e.target.checked })); }} className="no-print" />
                   </div>
                 )}
-                {!isDelivery && leftCheck === "packout" && (
+                {leftCheck === "packout" && (
                   <div style={styles.packOutCol} onClick={(e) => { e.stopPropagation(); if (document.activeElement instanceof HTMLButtonElement) document.activeElement.blur(); }}>
                     {rowIdx === 0 ? <textarea placeholder="equipment..." value={packOutEdits[`${section.fieldId}:${item.id}`] ?? item.packOutItems ?? ""} onChange={(e) => { setPackOutEdits((prev) => ({ ...prev, [`${section.fieldId}:${item.id}`]: e.target.value })); }} style={{ width: "100%", minHeight: 36, padding: "4px 6px", fontSize: 11, background: "#f5f5f5", border: "1px solid #ccc", borderRadius: 3, resize: "vertical", boxSizing: "border-box" }} className="no-print" rows={2} /> : <span style={{ color: "#999", fontSize: 10 }}>—</span>}
                   </div>
@@ -2967,7 +2965,7 @@ const BeoPrintPage: React.FC = () => {
               </div>
               <span>JOB#: {jobNumberDisplay}-----------------DISPATCH TIME {dispatchTime}</span>
             </div>
-            <div className="kitchen-beo-page2-buffer" style={{ height: "9in", minHeight: "9in", flexShrink: 0 }} aria-hidden="true" />
+            <div className="kitchen-beo-page2-buffer" style={{ height: "10in", minHeight: "10in", flexShrink: 0 }} aria-hidden="true" />
             <ServerBeo2ndPageContent
               eventDate={eventDate}
               clientName={clientName}
