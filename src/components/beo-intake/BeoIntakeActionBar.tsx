@@ -102,7 +102,7 @@ export const BeoIntakeActionBar = ({ eventId }: BeoIntakeActionBarProps) => {
   if (!eventId) return null;
 
   return (
-    <div style={styles.container}>
+    <div className="beo-action-bar" style={styles.container}>
       <div style={styles.inner}>
         {saveError && (
           <div style={styles.errorBanner}>

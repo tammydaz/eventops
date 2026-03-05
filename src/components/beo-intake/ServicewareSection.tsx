@@ -13,6 +13,26 @@ const SUPPLIER_OPTIONS = [
   "Venue",
 ] as const;
 
+/** Short labels for the type dropdown: Standard, Prem, China, Client */
+const TYPE_OPTIONS: { label: string; value: string }[] = [
+  { label: "Standard", value: "FoodWerx Standard" },
+  { label: "Prem", value: "FoodWerx Premium" },
+  { label: "China", value: "FoodWerx China" },
+  { label: "Client", value: "Client" },
+  { label: "Rentals", value: "Ocean Rentals" },
+  { label: "Venue", value: "Venue" },
+];
+
+function supplierToDisplay(supplier: string): string {
+  const found = TYPE_OPTIONS.find((o) => o.value === supplier);
+  return found ? found.label : supplier;
+}
+
+function displayToSupplier(display: string): string {
+  const found = TYPE_OPTIONS.find((o) => o.label === display);
+  return found ? found.value : display;
+}
+
 type ServicewareItem = {
   id: string;
   item: string;
@@ -145,6 +165,66 @@ function autoFillServiceware(
   }
 }
 
+/** Auto-fill typical items when client is supplying – so nothing is missed on the BEO */
+function autoFillClientServiceware(
+  paperType: string,
+  guestCount: number,
+  hasAppetizersAndDesserts: boolean,
+  carafesPerTable: number
+): { plates: ServicewareItem[]; cutlery: ServicewareItem[]; glassware: ServicewareItem[] } {
+  const count = Math.max(0, Number(guestCount) || 0) + GUEST_COUNT_BUFFER;
+  const appetizerQty = hasAppetizersAndDesserts ? count * 2 : count;
+  const tables = Math.max(1, Math.ceil(count / 8));
+  const carafePlates = Math.max(0, Number(carafesPerTable) || 0) * tables;
+  const bAndBQty = appetizerQty + carafePlates;
+  const sAndPDefault = Math.ceil(count / 10);
+  const breadBasketsDefault = Math.ceil(count / 8);
+
+  const withIds = <T extends { item: string; qty: number | null }>(arr: T[]) =>
+    arr.map((row) => ({ ...row, id: generateId(), supplier: "Client" }));
+
+  const isChina = paperType === "China";
+  if (isChina) {
+    return {
+      plates: withIds([
+        { item: "B&B Plates (app + dessert, carafes)", qty: bAndBQty },
+        { item: "Salad Plates", qty: count },
+        { item: "Dinner Plates", qty: count },
+        { item: "S&P Shakers", qty: sAndPDefault },
+        { item: "Bread Baskets", qty: breadBasketsDefault },
+      ]),
+      cutlery: withIds([
+        { item: "Dinner Forks", qty: count },
+        { item: "Salad Forks", qty: count },
+        { item: "Knives", qty: count },
+        { item: "Spoons", qty: count },
+      ]),
+      glassware: withIds([
+        { item: "All-Purpose Glasses", qty: count },
+        { item: "Wine Glasses", qty: count },
+        { item: "Champagne Flutes", qty: Math.ceil(count * 0.3) },
+      ]),
+    };
+  }
+  return {
+    plates: withIds([
+      { item: "Small Plates (app + dessert)", qty: appetizerQty },
+      { item: "Large Plates (dinner)", qty: count },
+    ]),
+    cutlery: withIds([
+      { item: "Forks", qty: count },
+      { item: "Knives", qty: count },
+      { item: "Spoons", qty: count },
+      { item: "FW Napkins", qty: count },
+      { item: "Cocktail Napkins", qty: count },
+    ]),
+    glassware: withIds([
+      { item: "Large Cups", qty: count },
+      { item: "Small Cups", qty: count },
+    ]),
+  };
+}
+
 type ItemRowProps = {
   item: ServicewareItem;
   onUpdate: (id: string, updates: Partial<ServicewareItem>) => void;
@@ -164,36 +244,18 @@ function ItemRow({ item, onUpdate, onRemove, onBlur, canEdit }: ItemRowProps) {
     minWidth: 0,
   };
 
+  const displaySupplier = supplierToDisplay(item.supplier);
+
   return (
     <div
       style={{
         display: "grid",
-        gridTemplateColumns: "1fr 140px 80px 36px",
+        gridTemplateColumns: "80px 90px 1fr 36px",
         gap: "8px",
         alignItems: "center",
         marginBottom: "8px",
       }}
     >
-      <input
-        type="text"
-        value={item.item}
-        disabled={!canEdit}
-        onChange={(e) => onUpdate(item.id, { item: e.target.value })}
-        onBlur={onBlur}
-        style={inputStyle}
-        placeholder="Item name"
-      />
-      <select
-        value={item.supplier}
-        disabled={!canEdit}
-        onChange={(e) => onUpdate(item.id, { supplier: e.target.value })}
-        onBlur={onBlur}
-        style={inputStyle}
-      >
-        {SUPPLIER_OPTIONS.map((opt) => (
-          <option key={opt} value={opt}>{opt}</option>
-        ))}
-      </select>
       <input
         type="text"
         inputMode="numeric"
@@ -206,6 +268,26 @@ function ItemRow({ item, onUpdate, onRemove, onBlur, canEdit }: ItemRowProps) {
         onBlur={onBlur}
         style={inputStyle}
         placeholder="Qty"
+      />
+      <select
+        value={displaySupplier}
+        disabled={!canEdit}
+        onChange={(e) => onUpdate(item.id, { supplier: displayToSupplier(e.target.value) })}
+        onBlur={onBlur}
+        style={inputStyle}
+      >
+        {TYPE_OPTIONS.map((opt) => (
+          <option key={opt.value} value={opt.label}>{opt.label}</option>
+        ))}
+      </select>
+      <input
+        type="text"
+        value={item.item}
+        disabled={!canEdit}
+        onChange={(e) => onUpdate(item.id, { item: e.target.value })}
+        onBlur={onBlur}
+        style={inputStyle}
+        placeholder="Large Plates; small plates; fw napkins; cocktail naps"
       />
       <button
         type="button"
@@ -394,6 +476,28 @@ export const ServicewareSection = ({ embedded = false }: ServicewareSectionProps
     setGlassware(defaults.glassware);
   };
 
+  const handleClearAll = () => {
+    setPlates([]);
+    setCutlery([]);
+    setGlassware([]);
+  };
+
+  const handleAutoFillClient = () => {
+    const carafes = typeof carafesPerTable === "number" ? carafesPerTable : (parseInt(String(carafesPerTable), 10) || 0);
+    const defaults = autoFillClientServiceware(paperType, guestCount, hasAppetizersAndDesserts, carafes);
+    setPlates(defaults.plates);
+    setCutlery(defaults.cutlery);
+    setGlassware(defaults.glassware);
+  };
+
+  const hasAnyItems = plates.length > 0 || cutlery.length > 0 || glassware.length > 0;
+
+  const isAutoFillClientDisabled =
+    !canEdit ||
+    servicewareSource !== "Client" ||
+    !paperType ||
+    !["Standard Paper", "Premium Paper", "China", "Standard", "Premium"].includes(paperType);
+
   const isAutoFillDisabled =
     !canEdit ||
     servicewareSource === "Client" ||
@@ -481,7 +585,7 @@ export const ServicewareSection = ({ embedded = false }: ServicewareSectionProps
             <Helper>Standard/Premium = disposable. China = reusable plates and glassware.</Helper>
           </div>
         </div>
-        <div style={{ marginBottom: 16 }}>
+        <div style={{ marginBottom: 16, display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center" }}>
           <button
             type="button"
             onClick={handleAutoFill}
@@ -494,6 +598,37 @@ export const ServicewareSection = ({ embedded = false }: ServicewareSectionProps
             }}
           >
             Auto-Fill FoodWerx Defaults
+          </button>
+          <button
+            type="button"
+            onClick={handleAutoFillClient}
+            disabled={isAutoFillClientDisabled}
+            style={{
+              ...addButtonStyle,
+              borderColor: "#16a34a",
+              color: "#22c55e",
+              background: "rgba(34,197,94,0.15)",
+              padding: "10px 20px",
+              opacity: isAutoFillClientDisabled ? 0.5 : 1,
+              cursor: isAutoFillClientDisabled ? "not-allowed" : "pointer",
+            }}
+          >
+            Auto-Fill Client Defaults
+          </button>
+          <button
+            type="button"
+            onClick={handleClearAll}
+            disabled={!canEdit || !hasAnyItems}
+            style={{
+              ...addButtonStyle,
+              borderColor: "#666",
+              color: "#a0a0a0",
+              padding: "10px 20px",
+              opacity: !canEdit || !hasAnyItems ? 0.5 : 1,
+              cursor: !canEdit || !hasAnyItems ? "not-allowed" : "pointer",
+            }}
+          >
+            Clear All & Start Over
           </button>
           {guestCount > 0 && (
             <span style={{ marginLeft: 12, fontSize: 12, color: "#888" }}>

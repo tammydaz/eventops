@@ -1,6 +1,5 @@
-import { airtableFetch, getBaseId, getApiKey, getStationsTable, type AirtableListResponse, type AirtableErrorResult } from "./client";
+import { airtableFetch, getBaseId, getApiKey, getStationsTable, getMenuItemsTable, airtableMetaFetch, type AirtableListResponse, type AirtableErrorResult } from "./client";
 import { sanitizeForHeader } from "../../utils/httpHeaders";
-import { airtableMetaFetch } from "./client";
 import { isErrorResult, asString, asSingleSelectName, asLinkedRecordIds } from "./selectors";
 import { STATION_ITEMS_FIELD_ID, STATION_EVENT_FIELD_ID } from "../../constants/stations";
 
@@ -52,7 +51,7 @@ export type LinkedRecordItem = {
   childItems?: string[];
 };
 
-const MENU_ITEMS_TABLE_ID = "tbl0aN33DGG6R1sPZ";
+const MENU_ITEMS_TABLE_ID_DEFAULT = "tbl0aN33DGG6R1sPZ";
 const MENU_ITEMS_FORMATTED_NAME_FIELD_ID = "fldQ83gpgOmMxNMQw"; // Name field - verify in Airtable
 const MENU_ITEMS_SERVICE_TYPE_FIELD_ID = "fld2EhDP5GRalZJzQ"; // Service Type - verify in Airtable
 const MENU_ITEMS_CATEGORY_FIELD_ID = "fldM7lWvjH8S0YNSX"; // Category (alternate) - verify in Airtable
@@ -61,6 +60,8 @@ const MENU_ITEMS_DIETARY_TAGS_FIELD_ID = "fldUSr1QgzP4nv9vs"; // Allergen Icons 
 const MENU_ITEMS_VESSEL_TYPE_FIELD_ID = "fldZCnfKzWijIDaeV";
 /** Section: "Passed Apps", "Presented Apps", "Buffet", "Desserts", "Beverages", etc. */
 const MENU_ITEMS_SECTION_FIELD_ID = "fldwl2KIn0xOW1TR3";
+/** Menu Items.Station Type — links item to station type (e.g. "Pasta Station"). Per constants/stations.ts */
+const MENU_ITEMS_STATION_TYPE_FIELD_ID = "fldBSOxpjxcVnIYhK";
 
 const MENU_ITEM_SPECS_TABLE_ID = "tblGeCmzJscnocs1T";
 const MENU_ITEM_SPECS_NAME_FIELD_ID = "fldjrrdBySGDHLLLl";
@@ -122,8 +123,9 @@ export const loadMenuItems = async (): Promise<LinkedRecordItem[] | AirtableErro
       params.append("fields[]", MENU_ITEMS_CATEGORY_FIELD_ID);
       if (offset) params.set("offset", offset);
 
+      const tableId = getMenuItemsTable() || MENU_ITEMS_TABLE_ID_DEFAULT;
       const res = await fetch(
-        `https://api.airtable.com/v0/${baseId}/${MENU_ITEMS_TABLE_ID}?${params.toString()}`,
+        `https://api.airtable.com/v0/${baseId}/${tableId}?${params.toString()}`,
         { headers: { Authorization: `Bearer ${sanitizeForHeader(apiKey)}` } }
       );
 
@@ -179,6 +181,63 @@ export const loadMenuItems = async (): Promise<LinkedRecordItem[] | AirtableErro
     return allRecords;
   } catch (error) {
     console.error("❌ Failed to load menu items:", error);
+    return { error: true, message: error instanceof Error ? error.message : "Unknown error" };
+  }
+};
+
+/** Fetch menu items that match a station type (Menu Items.Station Type field). */
+export const loadMenuItemsByStationType = async (
+  stationType: string
+): Promise<LinkedRecordItem[] | AirtableErrorResult> => {
+  const apiKeyResult = getApiKey();
+  const baseIdResult = getBaseId();
+  if (isErrorResult(apiKeyResult)) return apiKeyResult;
+  if (isErrorResult(baseIdResult)) return baseIdResult;
+  const apiKey = (apiKeyResult as string).trim();
+  const baseId = (baseIdResult as string).trim();
+  if (!apiKey || !baseId || !stationType.trim()) {
+    return [];
+  }
+
+  const tableId = getMenuItemsTable() || MENU_ITEMS_TABLE_ID_DEFAULT;
+  const escaped = stationType.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+  const formula = `{Station Type}="${escaped}"`;
+
+  try {
+    const params = new URLSearchParams();
+    params.set("pageSize", "100");
+    params.set("returnFieldsByFieldId", "true");
+    params.set("filterByFormula", formula);
+    params.append("fields[]", MENU_ITEMS_FORMATTED_NAME_FIELD_ID);
+    params.append("fields[]", MENU_ITEMS_CATEGORY_FIELD_ID);
+    params.append("fields[]", MENU_ITEMS_STATION_TYPE_FIELD_ID);
+
+    const res = await fetch(
+      `https://api.airtable.com/v0/${baseId}/${tableId}?${params.toString()}`,
+      { headers: { Authorization: `Bearer ${sanitizeForHeader(apiKey)}` } }
+    );
+
+    const data = (await res.json()) as {
+      records?: Array<{ id: string; fields: Record<string, unknown> }>;
+      error?: { message?: string };
+    };
+
+    if (data.error) {
+      console.log(`[Station Picker] Station Type: ${stationType} | Error: ${data.error.message ?? "Airtable API error"}`);
+      return { error: true, message: data.error.message ?? "Airtable API error" };
+    }
+
+    const items = (data.records ?? []).map((rec) => {
+      const nameRaw = rec.fields[MENU_ITEMS_FORMATTED_NAME_FIELD_ID];
+      const name = typeof nameRaw === "string" ? nameRaw : nameRaw && typeof nameRaw === "object" && "name" in nameRaw ? String((nameRaw as { name: string }).name) : "";
+      const categoryRaw = rec.fields[MENU_ITEMS_CATEGORY_FIELD_ID];
+      const category = Array.isArray(categoryRaw) ? categoryRaw[0] : typeof categoryRaw === "string" ? categoryRaw : undefined;
+      return { id: rec.id, name: name || rec.id, category } as LinkedRecordItem;
+    });
+    console.log(`[Station Picker] Station Type: ${stationType} | Items returned: ${items.length}`);
+    return items;
+  } catch (error) {
+    console.error("❌ Failed to load menu items by station type:", error);
     return { error: true, message: error instanceof Error ? error.message : "Unknown error" };
   }
 };
@@ -341,6 +400,41 @@ export const createStation = async (params: {
   );
   if (isErrorResult(data)) return data;
   return { id: (data as { id: string }).id };
+};
+
+/** Station preset from Station Presets table. */
+export type StationPreset = {
+  name: string;
+  line1: string[];
+  line2: string[];
+  individuals: string[];
+};
+
+/** Fetch a station preset by name from the Station Presets table. */
+export const loadStationPreset = async (presetName: string): Promise<StationPreset | null> => {
+  try {
+    const table = import.meta.env.VITE_AIRTABLE_STATION_PRESETS_TABLE;
+    const formula = `{Preset Name} = "${presetName.replace(/"/g, '\\"')}"`;
+
+    const resp = await fetch(
+      `/api/airtable/select?table=${encodeURIComponent(table)}&formula=${encodeURIComponent(formula)}`
+    );
+
+    const data = await resp.json();
+    if (!data.records?.length) return null;
+
+    const rec = data.records[0].fields;
+
+    return {
+      name: rec["Preset Name"],
+      line1: asLinkedRecordIds(rec["Line 1 Items"]),
+      line2: asLinkedRecordIds(rec["Line 2 Items"]),
+      individuals: asLinkedRecordIds(rec["Individual Items"]),
+    };
+  } catch (err) {
+    console.error("Failed to load station preset", err);
+    return null;
+  }
 };
 
 /** Update a station's Station Items (linked menu items). Uses field ID from Meta API. */

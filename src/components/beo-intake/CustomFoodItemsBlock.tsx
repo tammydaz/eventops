@@ -45,7 +45,7 @@ type CustomFoodItemsBlockProps = {
   placeholder?: string;
   notesPlaceholder?: string; // e.g. "Ranch, gluten-free"
   canEdit: boolean;
-  onSave: (fieldId: string, value: string) => void;
+  onSave: (fieldId: string, value: string) => void | Promise<void>;
   label?: string;
   inputStyle?: React.CSSProperties;
   labelStyle?: React.CSSProperties;
@@ -80,20 +80,28 @@ export function CustomFoodItemsBlock({
   }, [value]);
 
   const save = useCallback(
-    (newItems: CustomFoodItem[]) => {
+    async (newItems: CustomFoodItem[]) => {
       const str = formatForStorage(newItems);
       skipLoadRef.current = true;
-      onSave(fieldId, str);
+      await onSave(fieldId, str);
     },
     [fieldId, onSave]
   );
+
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const updateItem = (id: string, updates: Partial<CustomFoodItem>) => {
     setItems((prev) => prev.map((it) => (it.id === id ? { ...it, ...updates } : it)));
   };
 
-  const removeItem = (id: string) => {
-    setItems((prev) => prev.filter((it) => it.id !== id));
+  const removeItem = async (id: string) => {
+    const next = items.filter((it) => it.id !== id);
+    if (debounceRef.current) {
+      clearTimeout(debounceRef.current);
+      debounceRef.current = null;
+    }
+    setItems(next);
+    await save(next); // Save immediately so print page sees the change
   };
 
   const addItem = () => {
@@ -105,10 +113,16 @@ export function CustomFoodItemsBlock({
   useEffect(() => {
     const out = formatForStorage(items);
     if (out === (value || "").trim()) return;
-    const t = setTimeout(() => {
+    debounceRef.current = setTimeout(() => {
+      debounceRef.current = null;
       save(items);
     }, 500);
-    return () => clearTimeout(t);
+    return () => {
+      if (debounceRef.current) {
+        clearTimeout(debounceRef.current);
+        debounceRef.current = null;
+      }
+    };
   }, [items, save, value]);
 
   const handleBlur = () => {

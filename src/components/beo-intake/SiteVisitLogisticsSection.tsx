@@ -3,6 +3,7 @@ import { useEventStore } from "../../state/eventStore";
 import { FIELD_IDS, loadSingleSelectOptions, type SingleSelectOption } from "../../services/airtable/events";
 import { asString, asSingleSelectName } from "../../services/airtable/selectors";
 import { FormSection, CollapsibleSubsection, Helper } from "./FormSection";
+import { KitchenLogisticsSection } from "./KitchenLogisticsSection";
 
 const inputStyle = {
   width: "100%",
@@ -129,7 +130,7 @@ export const SiteVisitLogisticsSection = () => {
   const textareaStyle = { ...inputStyle, resize: "vertical" as const, fontFamily: "inherit" };
 
   return (
-    <FormSection title="Site Visit / Logistics" dotColor="#f59e0b" defaultOpen>
+    <FormSection title="Notes / Onsite event logistics" dotColor="#f59e0b" defaultOpen>
       <CollapsibleSubsection title="Parking & Load-In" icon="🚗" defaultOpen={true}>
         <div style={{ gridColumn: "1 / -1" }}>
           <label style={labelStyle}>Parking Notes</label>
@@ -198,6 +199,9 @@ export const SiteVisitLogisticsSection = () => {
       </CollapsibleSubsection>
 
       <CollapsibleSubsection title="Venue & Setup" icon="🏠">
+        <div style={{ gridColumn: "1 / -1" }}>
+          <KitchenLogisticsSection embedded />
+        </div>
         <div style={{ gridColumn: "1 / -1" }}>
           <label style={labelStyle}>Venue Notes</label>
           <textarea

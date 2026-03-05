@@ -8,6 +8,7 @@ import {
   FIELD_IDS,
   type EventListItem,
 } from "../services/airtable/events";
+import { useAuthStore } from "./authStore";
 import { isErrorResult } from "../services/airtable/selectors";
 
 type Fields = Record<string, unknown>;
@@ -89,16 +90,25 @@ export const useEventStore = create<EventStore>((set, get) => ({
 
   updateEvent: async (eventId, patch) => {
     const { selectedEventId, eventData } = get();
+    // Dispatch time is read-only except for ops_admin
+    const role = useAuthStore.getState().user?.role;
+    const patchFiltered =
+      role !== "ops_admin" && FIELD_IDS.DISPATCH_TIME in patch
+        ? (() => {
+            const { [FIELD_IDS.DISPATCH_TIME]: _, ...rest } = patch;
+            return rest;
+          })()
+        : patch;
     const timeFieldIdSet = new Set<string>([
       FIELD_IDS.DISPATCH_TIME,
       FIELD_IDS.FOODWERX_ARRIVAL,
       FIELD_IDS.VENUE_ARRIVAL_TIME,
     ]);
-    const hasTimeField = Object.keys(patch).some((k) => timeFieldIdSet.has(k));
-    const needsEventDate = hasTimeField && !patch[FIELD_IDS.EVENT_DATE] && eventData?.[FIELD_IDS.EVENT_DATE];
+    const hasTimeField = Object.keys(patchFiltered).some((k) => timeFieldIdSet.has(k));
+    const needsEventDate = hasTimeField && !patchFiltered[FIELD_IDS.EVENT_DATE] && eventData?.[FIELD_IDS.EVENT_DATE];
     const augmented = needsEventDate
-      ? { ...patch, [FIELD_IDS.EVENT_DATE]: eventData[FIELD_IDS.EVENT_DATE] }
-      : patch;
+      ? { ...patchFiltered, [FIELD_IDS.EVENT_DATE]: eventData[FIELD_IDS.EVENT_DATE] }
+      : patchFiltered;
     const filtered = filterToEditableOnly(augmented);
     // Optimistic update: merge into store immediately so "Update Event" and other consumers
     // see the latest values even before the API call completes (fixes Bar Service not carrying over)

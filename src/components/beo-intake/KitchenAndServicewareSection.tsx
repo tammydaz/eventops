@@ -1,12 +1,8 @@
-import { FormSection, CollapsibleSubsection } from "./FormSection";
-import { KitchenLogisticsSection } from "./KitchenLogisticsSection";
+import { FormSection } from "./FormSection";
 import { ServicewareSection } from "./ServicewareSection";
 
 export const KitchenAndServicewareSection = () => (
-  <FormSection title="Kitchen & Serviceware" icon="🔥" dotColor="#a855f7">
-    <CollapsibleSubsection title="Kitchen & Hot Food Logic" icon="🔥" defaultOpen>
-      <KitchenLogisticsSection embedded />
-    </CollapsibleSubsection>
+  <FormSection title="PAPER PRODUCTS / CHINA — CUTLERY — GLASSWARE" icon="🍽️" dotColor="#a855f7">
     <ServicewareSection embedded />
   </FormSection>
 );
