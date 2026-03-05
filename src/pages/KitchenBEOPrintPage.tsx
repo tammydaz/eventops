@@ -96,7 +96,7 @@ const expandItemToRows = (
   const rows: { lineName: string; isChild: boolean }[] = [{ lineName: parentName, isChild: false }];
   childIds.forEach((childId) => {
     const childName = menuItemData[childId]?.name || "Loading...";
-    rows.push({ lineName: "  " + childName, isChild: true });
+    rows.push({ lineName: childName, isChild: true });
   });
   return rows;
 };
@@ -433,7 +433,7 @@ const print: Record<string, React.CSSProperties> = {
   itemRow: {
     display: "grid",
     gridTemplateColumns: "120px 1fr",
-    padding: "3px 0",
+    padding: "0",
     alignItems: "flex-start",
   },
   itemQty: {
@@ -449,7 +449,7 @@ const print: Record<string, React.CSSProperties> = {
     padding: "0",
     alignItems: "flex-start",
   },
-  subItemText: { fontSize: 13, paddingLeft: 0 },
+  subItemText: { fontSize: 13, paddingLeft: "2ch" },
   groupHeader: {
     color: "#0000ff",
     textDecoration: "underline",
@@ -473,7 +473,7 @@ const print: Record<string, React.CSSProperties> = {
     padding: "4px 0",
     textAlign: "center" as const,
   },
-  spacer: { height: 8 },
+  spacer: { height: 2, borderTop: "1px solid #ddd" },
   notesSection: {
     padding: "8px 24px",
     textAlign: "center" as const,
@@ -814,7 +814,7 @@ const renderPage2FullService = (beo: BEOData) => (
           <td style={print.twoColHeader}>SERVICEWARE</td>
         </tr>
         <tr>
-          <td style={{ ...print.twoColHeader, color: "#ff0000" }}>IN HOUSE</td>
+          <td style={{ ...print.twoColHeader, color: "#ff0000" }}>{beo.serviceware?.[0]?.clientSide === "CLIENT" ? "CLIENT" : "IN HOUSE"}</td>
           <td style={{ ...print.twoColHeader, color: "#0000ff" }}>FOODWERX PACK OUT</td>
         </tr>
       </thead>
@@ -930,15 +930,23 @@ const MENU_TABLE = "tbl0aN33DGG6R1sPZ";
 const ITEM_NAME = FIELD_IDS.MENU_ITEM_NAME;
 const CHILD_ITEMS = FIELD_IDS.MENU_ITEM_CHILD_ITEMS;
 
-/** Parse custom text (newline/comma/semicolon separated) into menu items */
+const NOTES_SEP = " – ";
+
+/** Parse custom text (newline/comma/semicolon separated) into menu items. "Item – Notes" becomes parent + child. */
 function customTextToItems(text: string | null | undefined): MenuItem[] {
   const t = (text || "").trim();
   if (!t) return [];
-  return t.split(/[\n,;]+/).map((s) => s.trim()).filter(Boolean).map((name) => ({
-    qty: "—",
-    name,
-    subItems: undefined,
-  }));
+  return t.split(/[\n,;]+/).map((s) => s.trim()).filter(Boolean).map((line) => {
+    const sepIdx = line.indexOf(NOTES_SEP);
+    const parentName = sepIdx >= 0 ? line.slice(0, sepIdx).trim() : line;
+    const notes = sepIdx >= 0 ? line.slice(sepIdx + NOTES_SEP.length).trim() : "";
+    if (!parentName) return null;
+    return {
+      qty: "—",
+      name: parentName,
+      subItems: notes ? [{ text: notes }] : undefined,
+    };
+  }).filter((x): x is MenuItem => x != null);
 }
 
 /** Remove consecutive duplicate lines (e.g. "COFFEE SERVICE" appearing twice) */
@@ -1012,7 +1020,7 @@ function buildServicewareFromEvent(fields: Record<string, unknown> | null): Serv
   const source = asSingleSelectName(fields[FIELD_IDS.SERVICEWARE_SOURCE])?.toLowerCase() || "";
   const rows: ServicewareRow[] = [];
   if (source.includes("client") || source.includes("mixed")) {
-    rows.push({ clientSide: "IN HOUSE", foodwerxSide: "" });
+    rows.push({ clientSide: "CLIENT", foodwerxSide: "" });
   }
   if (source.includes("foodwerx") || source.includes("mixed")) {
     rows.push({ clientSide: "", foodwerxSide: "FOODWERX PACK OUT" });
@@ -1024,7 +1032,7 @@ function buildServicewareFromEvent(fields: Record<string, unknown> | null): Serv
       rows.push({ clientSide: isClient ? display : "", foodwerxSide: isClient ? "" : display });
     });
   }
-  return rows.length > 0 ? rows : [{ clientSide: "IN HOUSE", foodwerxSide: "FOODWERX PACK OUT" }];
+  return rows.length > 0 ? rows : [{ clientSide: "CLIENT", foodwerxSide: "FOODWERX PACK OUT" }];
 }
 
 /** Parse BEO_TIMELINE long text into timeline entries. Expects lines like "10:30AM Staff arrival" or "10:30 AM - Action" */

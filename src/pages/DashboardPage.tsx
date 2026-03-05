@@ -109,6 +109,7 @@ export default function DashboardPage() {
   const [vaultOpen, setVaultOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [addEventOpen, setAddEventOpen] = useState(false);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const searchWrapRef = useRef<HTMLDivElement>(null);
   const addEventRef = useRef<HTMLDivElement>(null);
 
@@ -204,10 +205,41 @@ export default function DashboardPage() {
         )}
       </aside>
 
+      {/* ═══ MOBILE NAV DRAWER (visible only on small screens) ═══ */}
+      <div className={`dp-mobile-nav-overlay ${mobileNavOpen ? "open" : ""}`} onClick={() => setMobileNavOpen(false)} aria-hidden="true" />
+      <aside className={`dp-mobile-nav-drawer ${mobileNavOpen ? "open" : ""}`}>
+        <div className="dp-mobile-nav-header">
+          <div className="dp-logo-section">
+            <div className="dp-logo-diamond"><span className="dp-logo-letter">F</span></div>
+            <div><div className="dp-logo-title">FOODWERX</div><div className="dp-logo-subtitle">EVENTOPS</div></div>
+          </div>
+          <button type="button" className="dp-mobile-nav-close" onClick={() => setMobileNavOpen(false)} aria-label="Close menu">✕</button>
+        </div>
+        <ul className="dp-nav">
+          {visibleNav.map((item) => (
+            <li key={item.label}>
+              <Link to={item.href} className={`dp-nav-link ${item.active ? "active" : ""}`} onClick={() => setMobileNavOpen(false)}>
+                <span className="dp-nav-dot" />
+                {item.label}
+              </Link>
+            </li>
+          ))}
+        </ul>
+        {user && (
+          <div className="dp-user-section">
+            <span className="dp-user-role">{user.name}</span>
+            <button type="button" onClick={() => { logout(); window.location.href = "/login"; }} className="dp-signout">Sign out</button>
+          </div>
+        )}
+      </aside>
+
       {/* ═══ MAIN AREA ═══ */}
       <main className="dp-main">
         {/* ── Header ── */}
         <header className="dp-header">
+          <button type="button" className="dp-mobile-hamburger" onClick={() => setMobileNavOpen(true)} aria-label="Open menu">
+            <span /><span /><span />
+          </button>
           <div className="dp-search-wrap" ref={searchWrapRef}>
             <input
               className="dp-search"

@@ -5,6 +5,8 @@ import { CATEGORY_MAP, type MenuCategoryKey } from "../../constants/menuCategori
 import { STATION_TYPE_OPTIONS } from "../../constants/stations";
 import {
   loadMenuItems,
+  loadMenuItemsByStationType,
+  loadStationPreset,
   loadStationsByRecordIds,
   createStation,
   updateStationItems,
@@ -17,29 +19,112 @@ import { FormSection, CollapsibleSubsection } from "./FormSection";
 import { CustomFoodItemsBlock } from "./CustomFoodItemsBlock";
 import { sanitizeForHeader } from "../../utils/httpHeaders";
 
+/** Inline replace button — opens picker to swap one station item for another. */
+function StationItemReplaceButton(props: {
+  stationId: string;
+  stationType: string;
+  currentId: string;
+  stationItems: string[];
+  getItemName: (id: string) => string;
+  onReplaced: (newItems: string[]) => void;
+  updateStationItems: (stationId: string, items: string[]) => Promise<unknown>;
+  isErrorResult: (r: unknown) => r is { error: true };
+  buttonStyle: React.CSSProperties;
+}) {
+  const { stationId, stationType, currentId, stationItems, onReplaced, updateStationItems, isErrorResult, buttonStyle } = props;
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const [menuItems, setMenuItems] = useState<LinkedRecordItem[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!stationType?.trim()) return;
+    setLoading(true);
+    loadMenuItemsByStationType(stationType)
+      .then((result) => {
+        if (!isErrorResult(result)) setMenuItems(result);
+        else setMenuItems([]);
+      })
+      .catch(() => setMenuItems([]))
+      .finally(() => setLoading(false));
+  }, [stationType]);
+
+  const hasStationType = Boolean(stationType?.trim());
+  const filtered = !search.trim()
+    ? menuItems.filter((m) => m.id !== currentId)
+    : menuItems.filter((m) => m.id !== currentId && m.name.toLowerCase().includes(search.trim().toLowerCase()));
+  return (
+    <>
+      <button type="button" onClick={() => setOpen(true)} disabled={!hasStationType} style={{ ...buttonStyle, padding: "2px 6px", fontSize: 10, opacity: hasStationType ? 1 : 0.5, cursor: hasStationType ? "pointer" : "not-allowed" }} title={hasStationType ? "Replace" : "Replace (requires station type)"}>↔</button>
+      {open &&
+        createPortal(
+          <div style={{ position: "fixed", inset: 0, zIndex: 99998, backgroundColor: "rgba(0,0,0,0.8)", display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }} onClick={() => setOpen(false)}>
+            <div style={{ backgroundColor: "#1a1a1a", borderRadius: 12, border: "2px solid #ff6b6b", maxWidth: 400, width: "100%", maxHeight: "70vh", overflow: "hidden" }} onClick={(e) => e.stopPropagation()}>
+              <div style={{ padding: 12, borderBottom: "1px solid #444" }}>
+                <h4 style={{ margin: "0 0 8px 0", fontSize: 14, color: "#e0e0e0" }}>Replace with</h4>
+                <input type="text" placeholder="Search..." value={search} onChange={(e) => setSearch(e.target.value)} style={{ width: "100%", padding: 8, borderRadius: 6, border: "1px solid #444", background: "#2a2a2a", color: "#e0e0e0", fontSize: 13 }} autoFocus />
+              </div>
+              <div style={{ maxHeight: 200, overflowY: "auto", padding: 12 }}>
+                {loading ? (
+                  <div style={{ color: "#999", fontSize: 13 }}>Loading items…</div>
+                ) : (
+                  <>
+                    {filtered.map((item) => (
+                      <div key={item.id} onClick={async () => { const idx = stationItems.indexOf(currentId); if (idx >= 0) { const newItems = [...stationItems]; newItems[idx] = item.id; const r = await updateStationItems(stationId, newItems); if (!isErrorResult(r)) onReplaced(newItems); setOpen(false); } }} style={{ padding: 10, marginBottom: 6, fontSize: 13, color: "#e0e0e0", background: "#2a2a2a", borderRadius: 6, cursor: "pointer" }}>{item.name}</div>
+                    ))}
+                    {filtered.length === 0 && <div style={{ color: "#666", fontSize: 13 }}>No other items</div>}
+                  </>
+                )}
+              </div>
+            </div>
+          </div>,
+          document.body
+        )}
+    </>
+  );
+}
+
 /** Picker to add a menu item to a station. */
 function StationItemPicker(props: {
   stationId: string;
+  stationType: string;
   existingIds: string[];
-  menuItems: LinkedRecordItem[];
   onSelect: (itemId: string) => void;
   buttonStyle: React.CSSProperties;
   labelStyle: React.CSSProperties;
+  /** Use higher z-index when picker is inside another modal (e.g. StationItemsConfigModal) */
+  portalZIndex?: number;
 }) {
-  const { existingIds, menuItems, onSelect, buttonStyle } = props;
+  const { existingIds, onSelect, buttonStyle, portalZIndex = 99998 } = props;
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
+  const [menuItems, setMenuItems] = useState<LinkedRecordItem[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!props.stationType?.trim()) return;
+    setLoading(true);
+    loadMenuItemsByStationType(props.stationType)
+      .then((result) => {
+        if (!isErrorResult(result)) setMenuItems(result);
+        else setMenuItems([]);
+      })
+      .catch(() => setMenuItems([]))
+      .finally(() => setLoading(false));
+  }, [props.stationType]);
+
+  const hasStationType = Boolean(props.stationType?.trim());
   const filtered = !search.trim()
     ? menuItems.filter((m) => !existingIds.includes(m.id))
     : menuItems.filter((m) => !existingIds.includes(m.id) && m.name.toLowerCase().includes(search.trim().toLowerCase()));
   return (
     <>
-      <button type="button" onClick={() => setOpen(true)} style={{ ...buttonStyle, padding: "6px 10px", fontSize: 12 }}>
+      <button type="button" onClick={() => setOpen(true)} disabled={!hasStationType} style={{ ...buttonStyle, padding: "6px 10px", fontSize: 12, opacity: hasStationType ? 1 : 0.5, cursor: hasStationType ? "pointer" : "not-allowed" }} title={hasStationType ? "Add item" : "Add item (requires station type)"}>
         + Add Item
       </button>
       {open &&
         createPortal(
-          <div style={{ position: "fixed", inset: 0, zIndex: 99998, backgroundColor: "rgba(0,0,0,0.8)", display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }} onClick={() => setOpen(false)}>
+          <div style={{ position: "fixed", inset: 0, zIndex: portalZIndex, backgroundColor: "rgba(0,0,0,0.8)", display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }} onClick={() => setOpen(false)}>
             <div style={{ backgroundColor: "#1a1a1a", borderRadius: 12, border: "2px solid #ff6b6b", maxWidth: 500, width: "100%", maxHeight: "80vh", overflow: "hidden" }} onClick={(e) => e.stopPropagation()}>
               <div style={{ padding: 16, borderBottom: "1px solid #444" }}>
                 <h3 style={{ margin: "0 0 12px 0", fontSize: 16, color: "#e0e0e0" }}>Add menu item to station</h3>
@@ -53,25 +138,184 @@ function StationItemPicker(props: {
                 />
               </div>
               <div style={{ maxHeight: 300, overflowY: "auto", padding: 16 }}>
-                {filtered.map((item) => (
-                  <div
-                    key={item.id}
-                    onClick={() => {
-                      onSelect(item.id);
-                      setOpen(false);
-                    }}
-                    style={{ padding: 12, marginBottom: 8, fontSize: 14, color: "#e0e0e0", background: "#2a2a2a", borderRadius: 6, cursor: "pointer" }}
-                  >
-                    {item.name}
-                  </div>
-                ))}
-                {filtered.length === 0 && <div style={{ color: "#999", fontSize: 14 }}>No items found</div>}
+                {loading ? (
+                  <div style={{ color: "#999", fontSize: 14 }}>Loading items…</div>
+                ) : (
+                  <>
+                    {filtered.map((item) => (
+                      <div
+                        key={item.id}
+                        onClick={() => {
+                          onSelect(item.id);
+                          setOpen(false);
+                        }}
+                        style={{ padding: 12, marginBottom: 8, fontSize: 14, color: "#e0e0e0", background: "#2a2a2a", borderRadius: 6, cursor: "pointer" }}
+                      >
+                        {item.name}
+                      </div>
+                    ))}
+                    {filtered.length === 0 && <div style={{ color: "#999", fontSize: 14 }}>No items found</div>}
+                  </>
+                )}
               </div>
             </div>
           </div>,
           document.body
         )}
     </>
+  );
+}
+
+/** Modal to configure station items when adding a station. Shows items for that station type with Replace/Remove options. */
+function StationItemsConfigModal(props: {
+  isOpen: boolean;
+  stationType: string;
+  stationNotes: string;
+  getItemName: (id: string) => string;
+  onConfirm: (itemIds: string[]) => void;
+  onCancel: () => void;
+  inputStyle: React.CSSProperties;
+  labelStyle: React.CSSProperties;
+  buttonStyle: React.CSSProperties;
+}) {
+  const { isOpen, stationType, stationNotes, getItemName, onConfirm, onCancel, inputStyle, labelStyle, buttonStyle } = props;
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [menuItems, setMenuItems] = useState<LinkedRecordItem[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [replaceIdx, setReplaceIdx] = useState<number | null>(null);
+  const [search, setSearch] = useState("");
+
+  useEffect(() => {
+    if (!isOpen || !stationType.trim()) return;
+
+    let cancelled = false;
+    setLoading(true);
+
+    (async () => {
+      const [preset, typeResult] = await Promise.all([
+        loadStationPreset(stationType.trim()),
+        loadMenuItemsByStationType(stationType.trim()),
+      ]);
+
+      if (!cancelled) {
+        if (!isErrorResult(typeResult)) {
+          setMenuItems(typeResult);
+        } else {
+          setMenuItems([]);
+        }
+
+        if (preset) {
+          const combined = [...preset.line1, ...preset.line2, ...preset.individuals];
+          setSelectedIds(combined);
+        } else if (!isErrorResult(typeResult)) {
+          setSelectedIds(typeResult.map((r) => r.id));
+        } else {
+          setSelectedIds([]);
+        }
+      }
+
+      if (!cancelled) setLoading(false);
+    })();
+
+    return () => { cancelled = true; };
+  }, [isOpen, stationType]);
+
+  if (!isOpen) return null;
+
+  const removeItem = (idx: number) => {
+    setSelectedIds((prev) => prev.filter((_, i) => i !== idx));
+    if (replaceIdx !== null && replaceIdx >= idx) setReplaceIdx((r) => (r > idx ? r - 1 : null));
+  };
+
+  const replaceItem = (idx: number, newId: string) => {
+    setSelectedIds((prev) => prev.map((id, i) => (i === idx ? newId : id)));
+    setReplaceIdx(null);
+  };
+
+  const addItem = (itemId: string) => {
+    if (!selectedIds.includes(itemId)) setSelectedIds((prev) => [...prev, itemId]);
+  };
+
+  const filteredForReplace = !search.trim()
+    ? menuItems.filter((m) => !selectedIds.includes(m.id) || (replaceIdx !== null && selectedIds[replaceIdx] === m.id))
+    : menuItems.filter((m) => (!selectedIds.includes(m.id) || (replaceIdx !== null && selectedIds[replaceIdx] === m.id)) && m.name.toLowerCase().includes(search.trim().toLowerCase()));
+
+  return createPortal(
+    <div style={{ position: "fixed", inset: 0, zIndex: 99999, display: "flex", alignItems: "center", justifyContent: "center", padding: 16, pointerEvents: "auto" }}>
+      <div style={{ position: "absolute", inset: 0, backgroundColor: "rgba(0,0,0,0.85)", pointerEvents: "auto" }} onClick={onCancel} aria-hidden="true" />
+      <div role="dialog" style={{ position: "relative", zIndex: 1, backgroundColor: "#1a1a1a", borderRadius: 12, border: "2px solid #ff6b6b", maxWidth: 560, width: "100%", maxHeight: "85vh", overflow: "hidden", display: "flex", flexDirection: "column", pointerEvents: "auto" }}>
+        <div style={{ padding: 16, borderBottom: "1px solid #444", flexShrink: 0 }}>
+          <h3 style={{ margin: "0 0 8px 0", fontSize: 18, color: "#e0e0e0" }}>Configure {stationType}</h3>
+          <p style={{ margin: 0, fontSize: 12, color: "#999" }}>Review items, replace, or remove. Then confirm.</p>
+        </div>
+        <div style={{ flex: 1, overflowY: "auto", padding: 16 }}>
+          {loading ? (
+            <div style={{ color: "#999", padding: 24, textAlign: "center" }}>Loading items…</div>
+          ) : (
+            <>
+              <label style={labelStyle}>Station items</label>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 16 }}>
+                {selectedIds.map((id, idx) => (
+                  <div key={`${id}-${idx}`} style={{ display: "flex", alignItems: "center", gap: 8, padding: 10, backgroundColor: "#2a2a2a", borderRadius: 8, border: "1px solid #444" }}>
+                    <span style={{ flex: 1, color: "#e0e0e0", fontSize: 14 }}>{getItemName(id)}</span>
+                    {replaceIdx === idx ? (
+                      <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 6 }}>
+                        <input
+                          type="text"
+                          placeholder="Search to replace..."
+                          value={search}
+                          onChange={(e) => setSearch(e.target.value)}
+                          style={{ ...inputStyle, padding: 8, fontSize: 12 }}
+                          autoFocus
+                        />
+                        <div style={{ maxHeight: 120, overflowY: "auto" }}>
+                          {filteredForReplace.map((item) => (
+                            <div key={item.id} onClick={() => replaceItem(idx, item.id)} style={{ padding: 8, fontSize: 12, color: "#e0e0e0", cursor: "pointer", background: "#1a1a1a", borderRadius: 4, marginBottom: 4 }}>{item.name}</div>
+                          ))}
+                          {filteredForReplace.length === 0 && <div style={{ color: "#666", fontSize: 12 }}>No other items</div>}
+                        </div>
+                        <button type="button" onClick={() => setReplaceIdx(null)} style={{ ...buttonStyle, padding: 6, fontSize: 12 }}>Cancel</button>
+                      </div>
+                    ) : (
+                      <>
+                        <button type="button" onClick={() => setReplaceIdx(idx)} style={{ ...buttonStyle, padding: "6px 10px", fontSize: 11 }}>Replace</button>
+                        <button type="button" onClick={() => removeItem(idx)} style={{ padding: "6px 10px", fontSize: 11, background: "#444", color: "#e0e0e0", border: "1px solid #666", borderRadius: 6, cursor: "pointer" }}>Remove</button>
+                      </>
+                    )}
+                  </div>
+                ))}
+                {selectedIds.length === 0 && !loading && (
+                  <div style={{ marginBottom: 12 }}>
+                    <div style={{ color: "#666", fontSize: 13, marginBottom: 8 }}>No items for this station type. Click items below to add:</div>
+                    <div style={{ maxHeight: 180, overflowY: "auto", display: "flex", flexDirection: "column", gap: 4 }}>
+                      {menuItems.slice(0, 100).map((item) => (
+                        <div key={item.id} onClick={() => addItem(item.id)} style={{ padding: 8, fontSize: 13, color: "#e0e0e0", cursor: "pointer", background: "#2a2a2a", borderRadius: 6, border: "1px solid #444" }}>{item.name}</div>
+                      ))}
+                      {menuItems.length > 100 && <div style={{ color: "#666", fontSize: 12 }}>… or use + Add Item for full list</div>}
+                    </div>
+                  </div>
+                )}
+              </div>
+              <label style={labelStyle}>Add more items</label>
+              <StationItemPicker
+                stationId=""
+                stationType={stationType}
+                existingIds={selectedIds}
+                onSelect={(id) => { addItem(id); }}
+                buttonStyle={buttonStyle}
+                labelStyle={labelStyle}
+                portalZIndex={100001}
+              />
+            </>
+          )}
+        </div>
+        <div style={{ padding: 16, borderTop: "1px solid #444", display: "flex", gap: 12, justifyContent: "flex-end", flexShrink: 0 }}>
+          <button type="button" onClick={onCancel} style={{ padding: "10px 20px", background: "#444", color: "#e0e0e0", border: "none", borderRadius: 8, cursor: "pointer" }}>Cancel</button>
+          <button type="button" onClick={() => onConfirm(selectedIds)} disabled={loading} style={buttonStyle}>Confirm & Add Station</button>
+        </div>
+      </div>
+    </div>,
+    document.body
   );
 }
 
@@ -93,6 +337,7 @@ function CreationStationContent(props: {
   const [stationTypeOptions, setStationTypeOptions] = useState<string[]>([]);
   const [newStationType, setNewStationType] = useState("");
   const [newStationNotes, setNewStationNotes] = useState("");
+  const [showConfigModal, setShowConfigModal] = useState(false);
   const stationIds = asLinkedRecordIds(selectedEventData?.[FIELD_IDS.STATIONS]) ?? [];
 
   useEffect(() => {
@@ -109,19 +354,24 @@ function CreationStationContent(props: {
       if (active && !isErrorResult(result)) {
         setStations(result);
         const allStationItemIds = result.flatMap((s) => s.stationItems).filter((id) => id.startsWith("rec"));
-        if (allStationItemIds.length > 0) {
-          fetchItemNames(allStationItemIds);
+        if (allStationItemIds.length > 0 && selectedEventId) {
+          fetchItemNames(selectedEventId, allStationItemIds);
         }
       }
     });
     return () => { active = false; };
   }, [stationIds?.join(","), fetchItemNames]);
 
-  const addStation = async () => {
+  const openAddStationModal = () => {
+    if (!newStationType.trim()) return;
+    setShowConfigModal(true);
+  };
+
+  const confirmAddStation = async (itemIds: string[]) => {
     if (!selectedEventId || !newStationType.trim()) return;
     const result = await createStation({
       stationType: newStationType.trim(),
-      stationItems: [],
+      stationItems: itemIds,
       stationNotes: newStationNotes.trim(),
       eventId: selectedEventId,
     });
@@ -129,11 +379,13 @@ function CreationStationContent(props: {
       console.error("Failed to create station:", result);
       return;
     }
-    setStations((prev) => [...prev, { id: result.id, stationType: newStationType.trim(), stationItems: [], stationNotes: newStationNotes.trim() }]);
+    setStations((prev) => [...prev, { id: result.id, stationType: newStationType.trim(), stationItems: itemIds, stationNotes: newStationNotes.trim() }]);
     setNewStationType("");
     setNewStationNotes("");
+    setShowConfigModal(false);
     const updatedIds = [...stationIds, result.id];
     await setFields(selectedEventId, { [FIELD_IDS.STATIONS]: updatedIds });
+    if (itemIds.length > 0 && selectedEventId) fetchItemNames(selectedEventId, itemIds);
   };
 
   const addStationItem = async (stationId: string, itemId: string) => {
@@ -146,7 +398,7 @@ function CreationStationContent(props: {
       return;
     }
     setStations((prev) => prev.map((s) => (s.id === stationId ? { ...s, stationItems: newItems } : s)));
-    fetchItemNames([itemId]);
+    if (selectedEventId) fetchItemNames(selectedEventId, [itemId]);
   };
 
   const selectStyle = { ...inputStyle, cursor: canEdit ? "pointer" : "not-allowed" };
@@ -163,15 +415,58 @@ function CreationStationContent(props: {
             <div>
               <label style={labelStyle}>Station Items</label>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center" }}>
-                {st.stationItems.map((id) => (
-                  <span key={id} style={{ fontSize: 12, padding: "4px 8px", backgroundColor: "#2a2a2a", borderRadius: 4 }}>{getItemName(id)}</span>
-                ))}
+                {st.stationType === "Grande Charcuterie Display" ? (
+                  (() => {
+                    const line1 = st.stationItems.slice(0, 5);
+                    const line2 = st.stationItems.slice(5, 9);
+                    const individuals = st.stationItems.slice(9);
+                    return (
+                      <>
+                        {line1.length > 0 && (
+                          <div style={{ width: "100%", fontSize: 12, color: "#e0e0e0", marginBottom: 4 }}>
+                            Line 1: {line1.map((id) => getItemName(id)).join(", ")}
+                          </div>
+                        )}
+                        {line2.length > 0 && (
+                          <div style={{ width: "100%", fontSize: 12, color: "#e0e0e0", marginBottom: 4 }}>
+                            Line 2: {line2.map((id) => getItemName(id)).join(", ")}
+                          </div>
+                        )}
+                        {individuals.map((id) => (
+                            <span key={id} style={{ fontSize: 12, padding: "4px 8px", backgroundColor: "#2a2a2a", borderRadius: 4, display: "inline-flex", alignItems: "center", gap: 4 }}>
+                              {getItemName(id)}
+                              {canEdit && (
+                                <>
+                                  <button type="button" onClick={() => { const idx = st.stationItems.indexOf(id); if (idx >= 0) { const newItems = st.stationItems.filter((_, i) => i !== idx); updateStationItems(st.id, newItems).then((r) => { if (!isErrorResult(r)) setStations((prev) => prev.map((s) => (s.id === st.id ? { ...s, stationItems: newItems } : s))); }); } }} style={{ background: "none", border: "none", color: "#888", cursor: "pointer", fontSize: 10 }} title="Remove">✕</button>
+                                  <StationItemReplaceButton stationId={st.id} stationType={st.stationType} currentId={id} stationItems={st.stationItems} getItemName={getItemName} onReplaced={(newItems) => { setStations((prev) => prev.map((s) => (s.id === st.id ? { ...s, stationItems: newItems } : s))); if (selectedEventId) fetchItemNames(selectedEventId, newItems); }} updateStationItems={updateStationItems} isErrorResult={isErrorResult} buttonStyle={buttonStyle} />
+                                </>
+                              )}
+                            </span>
+                          ))}
+                      </>
+                    );
+                  })()
+                ) : (
+                  <>
+                    {st.stationItems.map((id) => (
+                      <span key={id} style={{ fontSize: 12, padding: "4px 8px", backgroundColor: "#2a2a2a", borderRadius: 4, display: "inline-flex", alignItems: "center", gap: 4 }}>
+                        {getItemName(id)}
+                        {canEdit && (
+                          <>
+                            <button type="button" onClick={() => { const idx = st.stationItems.indexOf(id); if (idx >= 0) { const newItems = st.stationItems.filter((_, i) => i !== idx); updateStationItems(st.id, newItems).then((r) => { if (!isErrorResult(r)) setStations((prev) => prev.map((s) => (s.id === st.id ? { ...s, stationItems: newItems } : s))); }); } }} style={{ background: "none", border: "none", color: "#888", cursor: "pointer", fontSize: 10 }} title="Remove">✕</button>
+                            <StationItemReplaceButton stationId={st.id} stationType={st.stationType} currentId={id} stationItems={st.stationItems} getItemName={getItemName} onReplaced={(newItems) => { setStations((prev) => prev.map((s) => (s.id === st.id ? { ...s, stationItems: newItems } : s))); if (selectedEventId) fetchItemNames(selectedEventId, newItems); }} updateStationItems={updateStationItems} isErrorResult={isErrorResult} buttonStyle={buttonStyle} />
+                          </>
+                        )}
+                      </span>
+                    ))}
+                  </>
+                )}
                 {st.stationItems.length === 0 && <span style={{ color: "#666", fontSize: 12 }}>No items</span>}
                 {canEdit && (
                   <StationItemPicker
                     stationId={st.id}
+                    stationType={st.stationType}
                     existingIds={st.stationItems}
-                    menuItems={props.menuItems}
                     onSelect={(itemId) => addStationItem(st.id, itemId)}
                     buttonStyle={buttonStyle}
                     labelStyle={labelStyle}
@@ -203,12 +498,23 @@ function CreationStationContent(props: {
               <label style={labelStyle}>Station Notes</label>
               <textarea rows={2} value={newStationNotes} onChange={(e) => setNewStationNotes(e.target.value)} disabled={!canEdit} style={inputStyle} placeholder="Special instructions or notes..." />
             </div>
-            <button type="button" disabled={!canEdit || !newStationType.trim()} onClick={addStation} style={buttonStyle}>
+            <button type="button" disabled={!canEdit || !newStationType.trim()} onClick={openAddStationModal} style={buttonStyle}>
               + Add Station
             </button>
           </div>
         </div>
       )}
+      <StationItemsConfigModal
+        isOpen={showConfigModal}
+        stationType={newStationType}
+        stationNotes={newStationNotes}
+        getItemName={getItemName}
+        onConfirm={confirmAddStation}
+        onCancel={() => setShowConfigModal(false)}
+        inputStyle={inputStyle}
+        labelStyle={labelStyle}
+        buttonStyle={buttonStyle}
+      />
     </div>
   );
 }
@@ -318,15 +624,19 @@ export const MenuSection = ({ embedded = false, isDelivery = false }: MenuSectio
     return () => { active = false; };
   }, []);
 
-  // Fetch item names from Airtable when event data has linked record IDs
-  const fetchItemNames = useCallback(async (recordIds: string[]) => {
+  // Fetch item names from Airtable when event data has linked record IDs.
+  // Batches all fetches and applies a single setState to avoid re-render storm when switching events.
+  // Skips update if event changed during fetch (cancellation).
+  const fetchItemNames = useCallback(async (eventId: string | null, recordIds: string[]) => {
     const apiKey = (import.meta.env.VITE_AIRTABLE_API_KEY as string)?.trim();
     const baseId = (import.meta.env.VITE_AIRTABLE_BASE_ID as string)?.trim();
     if (!recordIds?.length || !apiKey || !baseId) return;
 
     const uniqueIds = [...new Set(recordIds.filter((id) => typeof id === "string" && id.startsWith("rec")))];
+    const allNames: Record<string, string> = {};
 
     for (let i = 0; i < uniqueIds.length; i += 10) {
+      if (eventId && useEventStore.getState().selectedEventId !== eventId) return;
       const chunk = uniqueIds.slice(i, i + 10);
       const formula = `OR(${chunk.map((id) => `RECORD_ID()='${id}'`).join(",")})`;
       const params = new URLSearchParams();
@@ -340,16 +650,16 @@ export const MenuSection = ({ embedded = false, isDelivery = false }: MenuSectio
           { headers: { Authorization: `Bearer ${sanitizeForHeader(apiKey)}` } }
         );
         const data = (await response.json()) as { records?: Array<{ id: string; fields: Record<string, unknown> }> };
-        const names: Record<string, string> = {};
         data.records?.forEach((rec) => {
           const name = rec.fields[MENU_NAME_FIELD_ID];
-          names[rec.id] = typeof name === "string" ? name : rec.id;
+          allNames[rec.id] = typeof name === "string" ? name : rec.id;
         });
-        setMenuItemNames((prev) => ({ ...prev, ...names }));
       } catch (err) {
         console.error("Failed to fetch item names:", err);
       }
     }
+    if (eventId && useEventStore.getState().selectedEventId !== eventId) return;
+    setMenuItemNames((prev) => ({ ...prev, ...allNames }));
   }, []);
 
   // Load selections from event data whenever selectedEventData changes
@@ -399,7 +709,7 @@ export const MenuSection = ({ embedded = false, isDelivery = false }: MenuSectio
       ...newSelections.displays,
     ];
     if (allRecordIds.length > 0) {
-      fetchItemNames(allRecordIds);
+      fetchItemNames(selectedEventId, allRecordIds);
     }
 
     setCustomFields({
@@ -514,7 +824,7 @@ export const MenuSection = ({ embedded = false, isDelivery = false }: MenuSectio
       });
 
   // If category filter returns nothing, show all items (items may not have Category set in Airtable yet)
-  const fallbackCategories = ["deli", "room_temp", "displays", "passed", "presented"];
+  const fallbackCategories = ["deli", "room_temp", "displays", "passed", "presented", "stations"];
   const effectiveCategoryFiltered =
     categoryFiltered.length === 0 && categoryKey && fallbackCategories.includes(categoryKey)
       ? menuItems

@@ -140,9 +140,11 @@ export const EventSelector = ({ variant = "default" }: EventSelectorProps) => {
   };
 
   const handleSelect = (eventId: string) => {
-    selectEvent(eventId).catch(() => null);
-    window.history.pushState({}, "", `/beo-intake/${eventId}`);
     setIsOpen(false);
+    window.history.pushState({}, "", `/beo-intake/${eventId}`);
+    requestAnimationFrame(() => {
+      selectEvent(eventId).catch(() => null);
+    });
   };
 
   const isBeo = variant === "beo-header";
@@ -230,17 +232,21 @@ export const EventSelector = ({ variant = "default" }: EventSelectorProps) => {
                           ...(isSelected ? beoStyles.itemSelected : {}),
                         }}
                         onClick={() => {
-                          selectEvent(event.id).catch(() => null);
-                          window.history.pushState({}, "", `/beo-intake/${event.id}`);
                           setIsOpen(false);
                           setQuery("");
+                          window.history.pushState({}, "", `/beo-intake/${event.id}`);
+                          requestAnimationFrame(() => {
+                            selectEvent(event.id).catch(() => null);
+                          });
                         }}
                         onKeyDown={(e) => {
                           if (e.key === "Enter") {
-                            selectEvent(event.id).catch(() => null);
-                            window.history.pushState({}, "", `/beo-intake/${event.id}`);
                             setIsOpen(false);
                             setQuery("");
+                            window.history.pushState({}, "", `/beo-intake/${event.id}`);
+                            requestAnimationFrame(() => {
+                              selectEvent(event.id).catch(() => null);
+                            });
                           }
                         }}
                         onMouseEnter={(e) => {

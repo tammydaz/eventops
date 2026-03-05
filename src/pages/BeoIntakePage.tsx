@@ -54,9 +54,9 @@ export const BeoIntakePage = () => {
   const accentGlow = isDelivery ? "rgba(34,197,94,0.3)" : "rgba(255,107,107,0.3)";
 
   return (
-    <div style={{ minHeight: "100vh", backgroundColor: "#1a1a1a", color: "#e0e0e0", position: "relative", fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif" }}>
+    <div className="beo-intake-page" style={{ minHeight: "100vh", backgroundColor: "#1a1a1a", color: "#e0e0e0", position: "relative", fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif" }}>
       <div style={{ position: "relative", zIndex: 10 }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "20px 40px", borderBottom: `3px solid ${accentColor}`, backdropFilter: "blur(10px)" }}>
+        <div className="beo-header" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "20px 40px", borderBottom: `3px solid ${accentColor}`, backdropFilter: "blur(10px)" }}>
           <button type="button" style={{ display: "flex", alignItems: "center", gap: "12px", textDecoration: "none", background: "none", border: "none", cursor: "pointer", padding: 0 }} onClick={() => { window.location.pathname = "/"; }}>
             <div style={{ width: "48px", height: "48px", background: accentColor, display: "flex", alignItems: "center", justifyContent: "center", borderRadius: "12px", fontSize: "24px", boxShadow: `0 4px 12px ${accentGlow}` }}>←</div>
             <span style={{ fontSize: "14px", color: "#e0e0e0", fontWeight: "600" }}>Back to Dashboard</span>
@@ -88,12 +88,13 @@ export const BeoIntakePage = () => {
               </button>
             )}
           </div>
-          <div style={{ minWidth: "220px", maxWidth: "320px" }}>
+          <div className="beo-header-selector" style={{ minWidth: "220px", maxWidth: "320px" }}>
             <EventSelector variant="beo-header" />
           </div>
         </div>
         {isDelivery && selectedEventId && (
           <div
+            className="beo-delivery-banner"
             style={{
               background: "linear-gradient(90deg, rgba(34,197,94,0.15), rgba(34,197,94,0.05))",
               borderBottom: "2px solid #22c55e",
@@ -130,7 +131,7 @@ export const BeoIntakePage = () => {
             </button>
           </div>
         )}
-        <div style={{ position: "relative", zIndex: 1, padding: "40px", minHeight: "calc(100vh - 100px)", paddingBottom: "140px", maxWidth: "1200px", margin: "0 auto" }}>
+        <div className="beo-content" style={{ position: "relative", zIndex: 1, padding: "40px", minHeight: "calc(100vh - 100px)", paddingBottom: "140px", maxWidth: "1200px", margin: "0 auto" }}>
           {selectedEventId && eventDataLoading ? (
             <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "400px", textAlign: "center" }}>
               <div>

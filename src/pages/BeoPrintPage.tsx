@@ -190,6 +190,10 @@ const printStyles = `
       page-break-inside: auto !important;
       overflow: visible !important;
     }
+    .beo-section-header-with-first-item {
+      break-inside: avoid !important;
+      page-break-inside: avoid !important;
+    }
     .beo-event-header-block {
       break-inside: avoid !important;
       page-break-inside: avoid !important;
@@ -243,6 +247,7 @@ const printStyles = `
     }
     .kitchen-beo-page:not(:first-child) { break-before: page !important; }
     .kitchen-beo-page:last-child { break-after: auto; }
+    .kitchen-beo-page2-buffer { height: 9in !important; min-height: 9in !important; flex-shrink: 0 !important; }
     .meeting-beo-notes-section { break-before: page !important; }
     .menu-section-page { break-after: page !important; width: 8in !important; min-height: 10in !important; box-sizing: border-box !important; }
   }
@@ -258,7 +263,7 @@ const printStyles = `
     }
   }
   @page :first {
-    margin-top: 0.35in;
+    margin-top: 0.25in;
     @top-center {
       content: none;
     }
@@ -1416,7 +1421,7 @@ function ServerBeo2ndPageContent(props: {
   // ── Paper product rows (CLIENT | RENTALS | FOODWERX) ──
   const hasNewLists = platesList.trim() || cutleryList.trim() || glasswareList.trim();
   if (hasNewLists) {
-    paperRows.push({ client: source.includes("client") || source.includes("mixed") ? "IN HOUSE" : "", rentals: rentalsDisplay, foodwerx: source.includes("foodwerx") || source.includes("mixed") ? "FOODWERX PACK OUT" : "" });
+    paperRows.push({ client: source.includes("client") || source.includes("mixed") ? "CLIENT" : "", rentals: rentalsDisplay, foodwerx: source.includes("foodwerx") || source.includes("mixed") ? "FOODWERX PACK OUT" : "" });
     const addServicewareRows = (text: string) => {
       parseServicewareLines(text).forEach((p) => {
         const display = p.qty ? `${p.qty} ${p.item}` : p.item;
@@ -1428,7 +1433,7 @@ function ServerBeo2ndPageContent(props: {
     if (cutleryList.trim()) addServicewareRows(cutleryList);
     if (glasswareList.trim()) addServicewareRows(glasswareList);
   } else {
-    paperRows.push({ client: source.includes("client") || source.includes("mixed") ? "IN HOUSE" : "", rentals: rentalsDisplay, foodwerx: source.includes("foodwerx") || source.includes("mixed") ? "FOODWERX PACK OUT" : "" });
+    paperRows.push({ client: source.includes("client") || source.includes("mixed") ? "CLIENT" : "", rentals: rentalsDisplay, foodwerx: source.includes("foodwerx") || source.includes("mixed") ? "FOODWERX PACK OUT" : "" });
     if (isFullBarPackage) FULL_BAR_PACKAGE.glasswareAndService.forEach((g) => paperRows.push({ client: "", rentals: "", foodwerx: g.toUpperCase() }));
     const parseLines = (t: string) => t.split(/\n/).filter(Boolean).map((line) => {
       const dashIdx = line.indexOf(" - ");
@@ -1613,6 +1618,33 @@ function ServerBeo2ndPageContent(props: {
       </BeoSectionPill>
 
       <div style={{ marginTop: 12, fontSize: 11, fontWeight: 700, marginBottom: 4 }}>***end of server BEO***</div>
+
+      {/* Footer on last page (Server BEO 2nd page is last when packout/expeditor/server) */}
+      {(() => {
+        const eventType = asSingleSelectName(props.eventData[FIELD_IDS.EVENT_TYPE]);
+        const isDelivery = isDeliveryOrPickup(eventType);
+        const v = asString(props.eventData[FIELD_IDS.VENUE]) || "";
+        const addr = (props.venueAddress || "").trim();
+        const showVenue = !isDelivery && v.trim() && v.trim() !== addr;
+        return (
+          <div className="beo-footer-block" style={{ marginTop: 12, breakInside: "avoid", pageBreakInside: "avoid", breakBefore: "avoid", pageBreakBefore: "avoid", display: "flex", flexDirection: "column", alignItems: "flex-start", border: "3px solid #000", padding: "16px 20px", borderRadius: 4 }}>
+            <div style={{ border: "2px solid #4b5563", outline: "2px solid #4b5563", outlineOffset: "2px", borderRadius: 6, padding: "16px 20px", background: isDelivery ? "#facc15" : "#9ca3af", width: "fit-content" }}>
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 6, color: isDelivery ? "#000" : "#fff" }}>
+                <div style={{ fontSize: 13, fontWeight: 600 }}>Client: {props.clientName || "—"}</div>
+                {showVenue && <div style={{ fontSize: 13, fontWeight: 600 }}>Venue: {v}</div>}
+                <div style={{ fontSize: 13, fontWeight: 600 }}>Guests: {props.guestCount || "—"}</div>
+                <div style={{ display: "flex", gap: 16, alignItems: "center", background: "#fff", color: "#000", padding: "8px 12px", borderRadius: 4, border: "2px solid #000", fontWeight: 700, fontSize: 16 }}>
+                  <span>Job #: {props.jobNumberDisplay}</span>
+                  <span>Dispatch: {props.dispatchTime || "—"}</span>
+                </div>
+              </div>
+            </div>
+            <div style={{ textAlign: "left" as const, marginTop: 8, fontSize: 14, fontWeight: 700, letterSpacing: 2, color: "#333" }}>
+              ***end of event***
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }
@@ -1813,6 +1845,10 @@ const BeoPrintPage: React.FC = () => {
   const [specOverrides, setSpecOverrides] = useState<Record<string, string>>({});
   const [packOutEdits, setPackOutEdits] = useState<Record<string, string>>({});
   const [checkState, setCheckState] = useState<Record<string, boolean>>({});
+
+  const SPEC_STORAGE_KEY = (eid: string) => `beo-spec-overrides-${eid}`;
+  const PACKOUT_STORAGE_KEY = (eid: string) => `beo-packout-edits-${eid}`;
+  const CHECK_STORAGE_KEY = (eid: string) => `beo-check-state-${eid}`;
   const [hiddenMenuItems, setHiddenMenuItems] = useState<Set<string>>(new Set());
   const [barServiceFieldId, setBarServiceFieldId] = useState<string | null>(null);
   const eventId = selectedEventId ?? getEventIdFromUrl();
@@ -1832,6 +1868,42 @@ const BeoPrintPage: React.FC = () => {
       setLoading(false);
     }
   }, []);
+
+  // ── Load spec overrides, packout edits, check state from localStorage (per event) ──
+  useEffect(() => {
+    if (!eventId) return;
+    try {
+      const specRaw = localStorage.getItem(SPEC_STORAGE_KEY(eventId));
+      if (specRaw) {
+        const parsed = JSON.parse(specRaw) as Record<string, string>;
+        if (parsed && typeof parsed === "object") setSpecOverrides(parsed);
+      }
+      const packRaw = localStorage.getItem(PACKOUT_STORAGE_KEY(eventId));
+      if (packRaw) {
+        const parsed = JSON.parse(packRaw) as Record<string, string>;
+        if (parsed && typeof parsed === "object") setPackOutEdits(parsed);
+      }
+      const checkRaw = localStorage.getItem(CHECK_STORAGE_KEY(eventId));
+      if (checkRaw) {
+        const parsed = JSON.parse(checkRaw) as Record<string, boolean>;
+        if (parsed && typeof parsed === "object") setCheckState(parsed);
+      }
+    } catch {
+      // ignore parse errors
+    }
+  }, [eventId]);
+
+  // ── Persist spec overrides, packout edits, check state to localStorage ──
+  useEffect(() => {
+    if (!eventId) return;
+    try {
+      localStorage.setItem(SPEC_STORAGE_KEY(eventId), JSON.stringify(specOverrides));
+      localStorage.setItem(PACKOUT_STORAGE_KEY(eventId), JSON.stringify(packOutEdits));
+      localStorage.setItem(CHECK_STORAGE_KEY(eventId), JSON.stringify(checkState));
+    } catch {
+      // ignore quota errors
+    }
+  }, [eventId, specOverrides, packOutEdits, checkState]);
 
   // ── Sync menu theme from Airtable on load ──
   useEffect(() => {
@@ -2205,25 +2277,37 @@ const BeoPrintPage: React.FC = () => {
     items: s.items.filter((item) => !hiddenMenuItems.has(item.id)),
   })).filter((s) => s.items.length > 0);
 
-  // Expand items using linked Child Items (parent on first line, each child on own line indented)
+  const NOTES_SEP = " – ";
+  // Expand items using linked Child Items (parent on first line, each child on own line indented 2 spaces)
+  // Custom items with "Item – Notes" format: split into parent + child
   const expandItemToRows = (item: MenuLineItem): { lineName: string; isChild: boolean; itemId: string }[] => {
     const data = menuItemData[item.id];
-    const parentName = data?.name || item.name || "Loading...";
-    const rows: { lineName: string; isChild: boolean; itemId: string }[] = [{ lineName: parentName, isChild: false, itemId: item.id }];
-    if (data?.childIds?.length) {
-      data.childIds.forEach((childId) => {
-        const childName = menuItemData[childId]?.name || "Loading...";
-        rows.push({ lineName: childName, isChild: true, itemId: childId });
-      });
+    const rows: { lineName: string; isChild: boolean; itemId: string }[] = [];
+    // Custom items (id starts with "custom-"): parse "Item – Notes" into parent + child
+    if (item.id.startsWith("custom-")) {
+      const sepIdx = item.name.indexOf(NOTES_SEP);
+      const parentName = sepIdx >= 0 ? item.name.slice(0, sepIdx).trim() : item.name;
+      const notes = sepIdx >= 0 ? item.name.slice(sepIdx + NOTES_SEP.length).trim() : "";
+      if (parentName) rows.push({ lineName: parentName, isChild: false, itemId: item.id });
+      if (notes) rows.push({ lineName: notes, isChild: true, itemId: `${item.id}-notes` });
+    } else {
+      const parentName = data?.name || item.name || "Loading...";
+      rows.push({ lineName: parentName, isChild: false, itemId: item.id });
+      if (data?.childIds?.length) {
+        data.childIds.forEach((childId) => {
+          const childName = menuItemData[childId]?.name || "Loading...";
+          rows.push({ lineName: childName, isChild: true, itemId: childId });
+        });
+      }
     }
     return rows;
   };
 
-  // ── Kitchen BEO pagination: page 1 has less room (header/banners), pages 2+ have full height ──
-  // Sections CAN be split across pages to fill the first page and avoid empty gaps.
+  // ── Kitchen BEO pagination: page 1 has less room (header/banners), pages 2+ have grey bar + 9in buffer ──
+  // Page 2+ has ~1in for content (9in buffer + ~1in grey bar leaves little room) — keep low so content doesn't overflow to next page without header.
   // Never let last page have only 1–3 lines; avoid breaking if next section would create tiny last page.
-  const LINES_PER_PAGE_FIRST = 18;  // page 1: event header + banners
-  const LINES_PER_PAGE = 32;        // pages 2+: full page for menu
+  const LINES_PER_PAGE_FIRST = 42;  // page 1: event header + banners
+  const LINES_PER_PAGE = 8;        // pages 2+: grey bar + 9in buffer — keep low so content doesn't overflow to next page without header
   const SECTION_HEADER_LINES = 2;
   const MIN_LINES_ON_LAST_PAGE = 4;  // avoid orphan 1–3 lines on last page
   type KitchenPage = { pageNum: number; sections: Array<{ section: SectionData; items: MenuLineItem[]; isContinuation?: boolean }> };
@@ -2310,11 +2394,13 @@ const BeoPrintPage: React.FC = () => {
   })();
 
   // Grid columns: spec (left), item (middle), optional right column (override / equipment / checkbox)
-  const gridTemplateColumns =
-    leftCheck === "spec" ? "140px 1fr 200px" :
-    leftCheck === "packout" ? "140px 1fr 250px" :
-    leftCheck === "kitchen" || leftCheck === "expeditor" || leftCheck === "server" ? "140px 1fr 40px" :
-    "1fr";
+  // Delivery: no right column — just item name
+  const gridTemplateColumns = isDelivery
+    ? "1fr"
+    : leftCheck === "spec" ? "140px 1fr 200px" :
+      leftCheck === "packout" ? "140px 1fr 250px" :
+      leftCheck === "kitchen" || leftCheck === "expeditor" || leftCheck === "server" ? "140px 1fr 40px" :
+      "1fr";
 
   const handleSaveNote = () => {
     const { itemId, itemName, sectionTitle, draftNote } = noteModal;
@@ -2600,28 +2686,35 @@ const BeoPrintPage: React.FC = () => {
             className="kitchen-beo-page"
             style={{
               pageBreakAfter: pageIdx < kitchenPages.length - 1 ? "page" : "auto",
-              paddingTop: pageIdx > 0 ? "1.25in" : undefined,
             }}
           >
             {/* Page marker (PAGE 2, 3, …) is rendered via @page @top-center in print CSS — not in DOM */}
 
-            {/* Page 1 only: Event header */}
+            {/* Grey BEO letterhead bar at top of every page (noticeable header) */}
+            <div className="beo-letterhead-bar" style={{
+              background: "#6b7280", color: "#fff", padding: "12px 16px",
+              display: "flex", alignItems: "center", justifyContent: "space-between",
+              fontSize: 14, fontWeight: 700, border: "2px solid #374151",
+              marginBottom: page.pageNum === 1 ? 8 : 0,
+            }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <div style={{ width: 24, height: 24, background: "#dc2626", display: "flex", alignItems: "center", justifyContent: "center", transform: "rotate(45deg)", flexShrink: 0 }}>
+                  <span style={{ transform: "rotate(-45deg)", fontSize: 12, fontWeight: 800, color: "#fff" }}>f</span>
+                </div>
+                <span>BEO</span>
+              </div>
+              <span>JOB#: {jobNumberDisplay}-----------------DISPATCH TIME {dispatchTime}</span>
+            </div>
+
+            {/* Page 2+: spacer so content starts 10in down (below ticket hanger) */}
+            {page.pageNum > 1 && (
+              <div className="kitchen-beo-page2-buffer" style={{ height: "9in", minHeight: "9in", flexShrink: 0 }} aria-hidden="true" />
+            )}
+
+            {/* Page 1 only: date + event details table under grey box */}
             {page.pageNum === 1 && (
               <div className="beo-event-header-block" style={{ marginBottom: 8 }}>
                 <div style={{ fontSize: 12, fontWeight: 600, color: "#111", marginBottom: 4 }}>{eventDate || "—"}</div>
-                <div className="beo-letterhead-bar" style={{
-                  background: "#6b7280", color: "#fff", padding: "10px 16px",
-                  display: "flex", alignItems: "center", justifyContent: "space-between",
-                  fontSize: 14, fontWeight: 700, border: "2px solid #374151",
-                }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <div style={{ width: 24, height: 24, background: "#dc2626", display: "flex", alignItems: "center", justifyContent: "center", transform: "rotate(45deg)", flexShrink: 0 }}>
-                      <span style={{ transform: "rotate(-45deg)", fontSize: 12, fontWeight: 800, color: "#fff" }}>f</span>
-                    </div>
-                    <span>BEO</span>
-                  </div>
-                  <span>JOB#: {jobNumberDisplay}-----------------DISPATCH TIME {dispatchTime}</span>
-                </div>
                 <div className="beo-event-details-table" style={{ marginTop: 6, overflow: "hidden", border: "1px solid #000" }}>
                   <table style={{ width: "100%", borderCollapse: "collapse" }}>
                     <colgroup>
@@ -2661,7 +2754,6 @@ const BeoPrintPage: React.FC = () => {
               </div>
             )}
 
-            {/* Page 1 only: Banners under header */}
             {page.pageNum === 1 && beoNotes.trim() && (
               <div className="beo-banner-block" style={styles.beoNotesBanner}>📋 BEO NOTES: {beoNotes.trim()}</div>
             )}
@@ -2678,19 +2770,21 @@ const BeoPrintPage: React.FC = () => {
             {/* ── Menu Sections for this page ── */}
             {page.sections.map(({ section, items: sectionItems, isContinuation }, secIdx) => (
           <div key={`${section.fieldId}-${page.pageNum}-${secIdx}`} className="beo-section-card" style={styles.sectionCard}>
-            <div className="beo-section-header" style={styles.sectionHeader}>
-              <span style={{ color: getSectionColor(section.title), fontSize: "22px", lineHeight: 0 }}>●</span>
-              <span>{section.title}{isContinuation ? " (cont.)" : ""}</span>
-              <span style={{ color: getSectionColor(section.title), fontSize: "22px", lineHeight: 0 }}>●</span>
-            </div>
-            {sectionItems.map((item, itemIdx) => {
-              const rows = expandItemToRows(item);
-              return (
-              <div key={`${item.id}-${itemIdx}`} className="beo-menu-item-block" style={{ borderBottom: "1px solid #eee", marginTop: itemIdx > 0 ? 2 : 0 }}>
+            <div className={sectionItems.length > 0 ? "beo-section-header-with-first-item" : undefined}>
+              <div className="beo-section-header" style={styles.sectionHeader}>
+                <span style={{ color: getSectionColor(section.title), fontSize: "22px", lineHeight: 0 }}>●</span>
+                <span>{section.title}{isContinuation ? " (cont.)" : ""}</span>
+                <span style={{ color: getSectionColor(section.title), fontSize: "22px", lineHeight: 0 }}>●</span>
+              </div>
+              {sectionItems.length > 0 && (() => {
+                const item = sectionItems[0];
+                const rows = expandItemToRows(item);
+                return (
+              <div key={`${item.id}-0`} className="beo-menu-item-block" style={{ borderBottom: "1px solid #ddd", paddingBottom: 4, marginTop: 0 }}>
               {rows.map((row, rowIdx) => (
-              <div key={rowIdx} className="beo-line-item" style={{ ...styles.lineItem, borderBottom: "none", gridTemplateColumns, padding: "2px 12px", lineHeight: 1.2, minHeight: "unset", alignItems: "flex-start", ...(row.isChild ? {} : {}) }}>
-                {/* SPEC / PACK-OUT / EXPEDITOR / KITCHEN / SERVER: Spec Column (left) */}
-                {(leftCheck === "spec" || leftCheck === "packout" || leftCheck === "expeditor" || leftCheck === "kitchen" || leftCheck === "server") && (
+              <div key={rowIdx} className="beo-line-item" style={{ ...styles.lineItem, borderBottom: "none", gridTemplateColumns, padding: row.isChild ? "0 12px 0 12px" : "0 12px", paddingLeft: row.isChild ? "calc(12px + 2ch)" : 12, lineHeight: 1.2, minHeight: "unset", alignItems: "flex-start", marginTop: row.isChild ? 0 : 0 }}>
+                {/* SPEC / PACK-OUT / EXPEDITOR / KITCHEN / SERVER: Spec Column (left) — hidden for delivery */}
+                {!isDelivery && (leftCheck === "spec" || leftCheck === "packout" || leftCheck === "expeditor" || leftCheck === "kitchen" || leftCheck === "server") && (
                   <div className="beo-spec-col" style={{ ...styles.specCol, lineHeight: 1.2 }}>
                     {(() => {
                       const overrideKey = `${section.fieldId}:${item.id}:${rowIdx}`;
@@ -2703,11 +2797,11 @@ const BeoPrintPage: React.FC = () => {
 
                 {/* Item Name (middle column) */}
                 <div className="beo-item-col" style={{ ...styles.itemCol, lineHeight: 1.25 }}>
-                  {row.isChild ? `  ${row.lineName}` : row.lineName}
+                  {row.lineName}
                 </div>
 
-                {/* SPEC VIEW: Override input — every row (including children) for spec reasons */}
-                {leftCheck === "spec" && (
+                {/* SPEC VIEW: Override input — every row (including children) for spec reasons — hidden for delivery */}
+                {!isDelivery && leftCheck === "spec" && (
                   <div className="beo-spec-col" style={{ ...styles.specCol, display: "flex", flexDirection: "column", gap: 2 }} onClick={(e) => { e.stopPropagation(); if (document.activeElement instanceof HTMLButtonElement) document.activeElement.blur(); }}>
                     <input
                       type="text"
@@ -2731,8 +2825,8 @@ const BeoPrintPage: React.FC = () => {
                   </div>
                 )}
 
-                {/* KITCHEN / EXPEDITOR / SERVER: Checkbox (right) — each mode has its own state */}
-                {(leftCheck === "kitchen" || leftCheck === "expeditor" || leftCheck === "server") && (
+                {/* KITCHEN / EXPEDITOR / SERVER: Checkbox (right) — each mode has its own state — hidden for delivery */}
+                {!isDelivery && (leftCheck === "kitchen" || leftCheck === "expeditor" || leftCheck === "server") && (
                   <div style={styles.checkboxCol} onClick={(e) => { e.stopPropagation(); if (document.activeElement instanceof HTMLButtonElement) document.activeElement.blur(); }}>
                     <input
                       type="checkbox"
@@ -2746,8 +2840,8 @@ const BeoPrintPage: React.FC = () => {
                   </div>
                 )}
 
-                {/* PACK-OUT: Editable equipment list (right) — per item, only on parent row */}
-                {leftCheck === "packout" && (
+                {/* PACK-OUT: Editable equipment list (right) — per item, only on parent row — hidden for delivery */}
+                {!isDelivery && leftCheck === "packout" && (
                   <div style={styles.packOutCol} onClick={(e) => { e.stopPropagation(); if (document.activeElement instanceof HTMLButtonElement) document.activeElement.blur(); }}>
                     {rowIdx === 0 ? (
                       <textarea
@@ -2779,22 +2873,60 @@ const BeoPrintPage: React.FC = () => {
               </div>
             ))}
               </div>
+                );
+              })()}
+            </div>
+            {sectionItems.slice(1).map((item, itemIdx) => {
+              const rows = expandItemToRows(item);
+              return (
+              <div key={`${item.id}-${itemIdx + 1}`} className="beo-menu-item-block" style={{ borderBottom: "1px solid #ddd", paddingBottom: 4, marginTop: 6 }}>
+              {rows.map((row, rowIdx) => (
+              <div key={rowIdx} className="beo-line-item" style={{ ...styles.lineItem, borderBottom: "none", gridTemplateColumns, padding: row.isChild ? "0 12px 0 12px" : "0 12px", paddingLeft: row.isChild ? "calc(12px + 2ch)" : 12, lineHeight: 1.2, minHeight: "unset", alignItems: "flex-start", marginTop: row.isChild ? 0 : 0 }}>
+                {!isDelivery && (leftCheck === "spec" || leftCheck === "packout" || leftCheck === "expeditor" || leftCheck === "kitchen" || leftCheck === "server") && (
+                  <div className="beo-spec-col" style={{ ...styles.specCol, lineHeight: 1.2 }}>
+                    {(() => {
+                      const overrideKey = `${section.fieldId}:${item.id}:${rowIdx}`;
+                      const overrideKeyLegacy = `${section.fieldId}:${item.id}`;
+                      const overrideVal = specOverrides[overrideKey] ?? (rowIdx === 0 ? specOverrides[overrideKeyLegacy] : undefined) ?? "";
+                      return <span>{overrideVal.trim() || "—"}</span>;
+                    })()}
+                  </div>
+                )}
+                <div className="beo-item-col" style={{ ...styles.itemCol, lineHeight: 1.25 }}>{row.lineName}</div>
+                {!isDelivery && leftCheck === "spec" && (
+                  <div className="beo-spec-col" style={{ ...styles.specCol, display: "flex", flexDirection: "column", gap: 2 }} onClick={(e) => { e.stopPropagation(); if (document.activeElement instanceof HTMLButtonElement) document.activeElement.blur(); }}>
+                    <input type="text" placeholder="spec..." value={specOverrides[`${section.fieldId}:${item.id}:${rowIdx}`] ?? (rowIdx === 0 ? specOverrides[`${section.fieldId}:${item.id}`] : undefined) ?? ""} onChange={(e) => { setSpecOverrides((prev) => ({ ...prev, [`${section.fieldId}:${item.id}:${rowIdx}`]: e.target.value })); }} style={{ width: "100%", padding: "2px 6px", fontSize: 11, lineHeight: 1, background: "#f9f9f9", border: "1px solid #ddd", borderRadius: 2 }} className="no-print" />
+                  </div>
+                )}
+                {!isDelivery && (leftCheck === "kitchen" || leftCheck === "expeditor" || leftCheck === "server") && (
+                  <div style={styles.checkboxCol} onClick={(e) => { e.stopPropagation(); if (document.activeElement instanceof HTMLButtonElement) document.activeElement.blur(); }}>
+                    <input type="checkbox" checked={checkState[`${leftCheck}:${section.fieldId}:${item.id}:${rowIdx}`] ?? item.loaded ?? false} onChange={(e) => { setCheckState((prev) => ({ ...prev, [`${leftCheck}:${section.fieldId}:${item.id}:${rowIdx}`]: e.target.checked })); }} className="no-print" />
+                  </div>
+                )}
+                {!isDelivery && leftCheck === "packout" && (
+                  <div style={styles.packOutCol} onClick={(e) => { e.stopPropagation(); if (document.activeElement instanceof HTMLButtonElement) document.activeElement.blur(); }}>
+                    {rowIdx === 0 ? <textarea placeholder="equipment..." value={packOutEdits[`${section.fieldId}:${item.id}`] ?? item.packOutItems ?? ""} onChange={(e) => { setPackOutEdits((prev) => ({ ...prev, [`${section.fieldId}:${item.id}`]: e.target.value })); }} style={{ width: "100%", minHeight: 36, padding: "4px 6px", fontSize: 11, background: "#f5f5f5", border: "1px solid #ccc", borderRadius: 3, resize: "vertical", boxSizing: "border-box" }} className="no-print" rows={2} /> : <span style={{ color: "#999", fontSize: 10 }}>—</span>}
+                  </div>
+                )}
+              </div>
+            ))}
+              </div>
             );
             })}
           </div>
         ))}
 
-            {/* Last page only: Allergy banner + footer (inside page div) */}
-            {pageIdx === kitchenPages.length - 1 && (
+            {/* Last page only (when no Server BEO 2nd page): Allergy banner + footer */}
+            {pageIdx === kitchenPages.length - 1 && !["packout", "expeditor", "server"].includes(leftCheck) && (
               <>
                 {allergies && (
                   <div className="beo-banner-block" style={{ ...styles.allergyBanner, marginTop: 20, marginBottom: 12 }}>
                     ⚠️ ALLERGIES / DIETARY RESTRICTIONS: {allergies.toUpperCase()}
                   </div>
                 )}
-                <div className="beo-footer-block" style={{ marginTop: 12, breakInside: "avoid", pageBreakInside: "avoid", breakBefore: "avoid", pageBreakBefore: "avoid", display: "flex", flexDirection: "column", alignItems: "flex-start" }}>
-                  <div style={{ border: "2px solid #4b5563", outline: "2px solid #4b5563", outlineOffset: "2px", borderRadius: 6, padding: "16px 20px", background: "#9ca3af", width: "fit-content" }}>
-                    <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 6, color: "#fff" }}>
+                <div className="beo-footer-block" style={{ marginTop: 12, breakInside: "avoid", pageBreakInside: "avoid", breakBefore: "avoid", pageBreakBefore: "avoid", display: "flex", flexDirection: "column", alignItems: "flex-start", border: "3px solid #000", padding: "16px 20px", borderRadius: 4 }}>
+                  <div style={{ border: "2px solid #4b5563", outline: "2px solid #4b5563", outlineOffset: "2px", borderRadius: 6, padding: "16px 20px", background: isDelivery ? "#facc15" : "#9ca3af", width: "fit-content" }}>
+                    <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 6, color: isDelivery ? "#000" : "#fff" }}>
                       <div style={{ fontSize: 13, fontWeight: 600 }}>Client: {clientName || "—"}</div>
                       {!isDelivery && (() => {
                         const v = f(FIELD_IDS.VENUE) || "";
@@ -2819,7 +2951,23 @@ const BeoPrintPage: React.FC = () => {
         )))}
         {/* When packout/expeditor/server: append Server BEO 2nd page (beverage, hydration, paper, notes, timeline) so it appears in those checks */}
         {(leftCheck === "packout" || leftCheck === "expeditor" || leftCheck === "server") && (
-          <div style={{ pageBreakBefore: "always", paddingTop: "1.25in" }}>
+          <div className="kitchen-beo-page" style={{ pageBreakBefore: "always" }}>
+            {/* Grey BEO letterhead bar + 9in buffer (same as kitchen pages 2+) */}
+            <div className="beo-letterhead-bar" style={{
+              background: "#6b7280", color: "#fff", padding: "12px 16px",
+              display: "flex", alignItems: "center", justifyContent: "space-between",
+              fontSize: 14, fontWeight: 700, border: "2px solid #374151",
+              marginBottom: 0,
+            }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <div style={{ width: 24, height: 24, background: "#dc2626", display: "flex", alignItems: "center", justifyContent: "center", transform: "rotate(45deg)", flexShrink: 0 }}>
+                  <span style={{ transform: "rotate(-45deg)", fontSize: 12, fontWeight: 800, color: "#fff" }}>f</span>
+                </div>
+                <span>BEO</span>
+              </div>
+              <span>JOB#: {jobNumberDisplay}-----------------DISPATCH TIME {dispatchTime}</span>
+            </div>
+            <div className="kitchen-beo-page2-buffer" style={{ height: "9in", minHeight: "9in", flexShrink: 0 }} aria-hidden="true" />
             <ServerBeo2ndPageContent
               eventDate={eventDate}
               clientName={clientName}
