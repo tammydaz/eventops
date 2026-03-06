@@ -477,6 +477,7 @@ const DeliveryCommandPage: React.FC = () => {
           .delivery-conflict-banner { padding: 12px 16px !important; }
           .delivery-driver-jobs { flex-wrap: wrap !important; }
           .delivery-role-hub { grid-template-columns: 1fr 1fr !important; gap: 12px !important; }
+          .delivery-hub-columns { grid-template-columns: 1fr !important; }
         }
         @media (max-width: 480px) {
           .delivery-role-hub { grid-template-columns: 1fr !important; }
@@ -518,58 +519,85 @@ const DeliveryCommandPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Conflict Banner */}
-      {conflicts.length > 0 && (
-        <div style={s.conflictBanner}>
-          <div style={s.conflictTitle}>
-            🚨 {conflicts.length} DISPATCH CONFLICTS DETECTED
-          </div>
-          <div style={s.conflictDetail}>
-            The current schedule is PHYSICALLY IMPOSSIBLE — drivers cannot be in two places at once
-          </div>
-          <div style={{ fontSize: 12, color: "#aaa", marginTop: 8 }}>
-            Review timeline below and reassign drivers or stagger dispatch times
-          </div>
+      {/* ── DISPATCH & DELIVERIES HUB (main content) ── */}
+      <div
+        style={{
+          background: "linear-gradient(180deg, rgba(15,20,30,0.6) 0%, rgba(10,10,15,0.8) 100%)",
+          border: "2px solid rgba(0,229,255,0.3)",
+          borderRadius: 12,
+          padding: "24px 28px",
+          marginBottom: 32,
+        }}
+      >
+        <div
+          style={{
+            fontSize: 20,
+            fontWeight: 800,
+            color: "#00e5ff",
+            letterSpacing: 2,
+            marginBottom: 20,
+            paddingBottom: 12,
+            borderBottom: "1px solid rgba(0,229,255,0.3)",
+          }}
+        >
+          🚛 DISPATCH & DELIVERIES HUB
         </div>
-      )}
 
-      {/* Stats */}
-      <div style={s.statsBar} className="delivery-stats">
-        <div style={s.stat}>
-          <div style={s.statNumber}>{dispatches.length}</div>
-          <div style={s.statLabel}>Total Dispatches</div>
-        </div>
-        <div style={s.stat}>
-          <div style={s.statNumber}>{deliveries}</div>
-          <div style={s.statLabel}>Deliveries</div>
-        </div>
-        <div style={s.stat}>
-          <div style={s.statNumber}>{fullService}</div>
-          <div style={s.statLabel}>Full Service</div>
-        </div>
-        <div style={s.stat}>
-          <div style={s.statNumber}>{pickups}</div>
-          <div style={s.statLabel}>Pickups</div>
-        </div>
-        <div style={s.stat}>
-          <div style={s.statNumber}>{totalPans}</div>
-          <div style={s.statLabel}>Total Pans</div>
-        </div>
-        <div style={s.stat}>
-          <div style={s.statNumber}>{totalGuests}</div>
-          <div style={s.statLabel}>Total Guests</div>
-        </div>
-        <div style={s.stat}>
-          <div style={{ ...s.statNumber, color: conflicts.length > 0 ? "#ff0000" : "#00ff00" }}>
-            {conflicts.length}
+        {/* Conflict Banner */}
+        {conflicts.length > 0 && (
+          <div style={s.conflictBanner}>
+            <div style={s.conflictTitle}>
+              🚨 {conflicts.length} DISPATCH CONFLICTS DETECTED
+            </div>
+            <div style={s.conflictDetail}>
+              The current schedule is PHYSICALLY IMPOSSIBLE — drivers cannot be in two places at once
+            </div>
+            <div style={{ fontSize: 12, color: "#aaa", marginTop: 8 }}>
+              Review timeline below and reassign drivers or stagger dispatch times
+            </div>
           </div>
-          <div style={s.statLabel}>Conflicts</div>
-        </div>
-      </div>
+        )}
 
-      {/* ── Driver Overview ── */}
-      <div style={s.sectionTitle}>📋 TODAY'S DISPATCH — Driver Assignments</div>
-      {drivers.map((driver) => (
+        {/* Stats */}
+        <div style={s.statsBar} className="delivery-stats">
+          <div style={s.stat}>
+            <div style={s.statNumber}>{dispatches.length}</div>
+            <div style={s.statLabel}>Total Dispatches</div>
+          </div>
+          <div style={s.stat}>
+            <div style={s.statNumber}>{deliveries}</div>
+            <div style={s.statLabel}>Deliveries</div>
+          </div>
+          <div style={s.stat}>
+            <div style={s.statNumber}>{fullService}</div>
+            <div style={s.statLabel}>Full Service</div>
+          </div>
+          <div style={s.stat}>
+            <div style={s.statNumber}>{pickups}</div>
+            <div style={s.statLabel}>Pickups</div>
+          </div>
+          <div style={s.stat}>
+            <div style={s.statNumber}>{totalPans}</div>
+            <div style={s.statLabel}>Total Pans</div>
+          </div>
+          <div style={s.stat}>
+            <div style={s.statNumber}>{totalGuests}</div>
+            <div style={s.statLabel}>Total Guests</div>
+          </div>
+          <div style={s.stat}>
+            <div style={{ ...s.statNumber, color: conflicts.length > 0 ? "#ff0000" : "#00ff00" }}>
+              {conflicts.length}
+            </div>
+            <div style={s.statLabel}>Conflicts</div>
+          </div>
+        </div>
+
+        {/* Two-column: Drivers | Timeline */}
+        <div className="delivery-hub-columns" style={{ display: "grid", gridTemplateColumns: "minmax(280px, 380px) 1fr", gap: 28, marginTop: 24 }}>
+          {/* ── Driver Assignments ── */}
+          <div>
+            <div style={s.sectionTitle}>👤 DRIVER ASSIGNMENTS</div>
+            {drivers.map((driver) => (
         <div
           key={driver.name}
           style={driver.hasConflict ? s.driverCardConflict : s.driverCard}
@@ -607,10 +635,12 @@ const DeliveryCommandPage: React.FC = () => {
           )}
         </div>
       ))}
+          </div>
 
-      {/* ── Dispatch Timeline ── */}
-      <div style={s.sectionTitle}>⏱️ DISPATCH TIMELINE</div>
-      <div style={s.timeline}>
+          {/* ── Dispatch Timeline ── */}
+          <div>
+            <div style={s.sectionTitle}>⏱️ DISPATCH TIMELINE</div>
+            <div style={s.timeline}>
         <div style={s.timelineLine} />
 
         {sortedDispatches.map((d) => (
@@ -714,6 +744,9 @@ const DeliveryCommandPage: React.FC = () => {
             )}
           </div>
         ))}
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* ── Route Optimization (also in sticky panel below) ── */}
