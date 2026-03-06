@@ -1,4 +1,7 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import { loadDispatchItems } from "../services/airtable/events";
+import { DISPATCH_SERVER_NAME_FIELD, DISPATCH_VAN_NUMBER_FIELD } from "../constants/dispatchFields";
+import { isErrorResult } from "../services/airtable/selectors";
 
 // ── Types ──
 type DeliveryType = "delivery" | "pickup" | "full-service";
@@ -459,9 +462,23 @@ const SHOW_WARNINGS = false;
 
 // ── Component ──
 const DeliveryCommandPage: React.FC = () => {
-  const [dispatches] = useState<DispatchItem[]>(SAMPLE_DISPATCHES);
+  const [dispatches, setDispatches] = useState<DispatchItem[]>(SAMPLE_DISPATCHES);
   const [drivers] = useState<Driver[]>(SAMPLE_DRIVERS);
   const [optimizePanelOpen, setOptimizePanelOpen] = useState(true);
+  const [dispatchLoading, setDispatchLoading] = useState(true);
+
+  useEffect(() => {
+    const serverField = DISPATCH_SERVER_NAME_FIELD || undefined;
+    const vanField = DISPATCH_VAN_NUMBER_FIELD || undefined;
+    loadDispatchItems(serverField, vanField).then((result) => {
+      setDispatchLoading(false);
+      if (!isErrorResult(result) && result.length > 0) {
+        setDispatches(result as DispatchItem[]);
+      }
+    }).catch(() => setDispatchLoading(false));
+  }, []);
+  const [jobOverrides, setJobOverrides] = useState<Record<string, number>>({});
+  const [editingJobId, setEditingJobId] = useState<string | null>(null);
 
   const conflicts = dispatches.filter((d) => d.status === "conflict");
   const totalPans = dispatches.reduce((sum, d) => sum + d.panCount, 0);
@@ -483,8 +500,16 @@ const DeliveryCommandPage: React.FC = () => {
   const sortedDispatches = [...dispatches].sort(
     (a, b) => parseDispatchTime(a.dispatchTime) - parseDispatchTime(b.dispatchTime)
   );
+  const baseSeq: Record<string, number> = {};
+  sortedDispatches.forEach((d, i) => { baseSeq[d.id] = i + 1; });
+  const getDisplaySeq = (d: DispatchItem) => jobOverrides[d.id] ?? baseSeq[d.id];
   const jobNumberToSeq: Record<string, number> = {};
-  sortedDispatches.forEach((d, i) => { jobNumberToSeq[d.jobNumber] = i + 1; });
+  dispatches.forEach((d) => { jobNumberToSeq[d.jobNumber] = getDisplaySeq(d); });
+
+  const handleJobOverride = (id: string, value: number) => {
+    if (value >= 1 && value <= 999) setJobOverrides((prev) => ({ ...prev, [id]: value }));
+    setEditingJobId(null);
+  };
 
   return (
     <>
@@ -572,9 +597,13 @@ const DeliveryCommandPage: React.FC = () => {
             marginBottom: 20,
             paddingBottom: 12,
             borderBottom: "1px solid rgba(0,229,255,0.3)",
+            display: "flex",
+            alignItems: "center",
+            gap: 12,
           }}
         >
           🚛 DISPATCH & DELIVERIES HUB
+          {dispatchLoading && <span style={{ fontSize: 12, fontWeight: 500, color: "#888" }}>Loading from Airtable…</span>}
         </div>
 
         {/* Conflict Banner */}
@@ -694,10 +723,44 @@ const DeliveryCommandPage: React.FC = () => {
               }}
             />
 
-            {/* Header — Job # assigned by dispatch time order for the day (all jobs: delivery, pickup, full-service) */}
+            {/* Header — Job # assigned by dispatch time (overridable); full-service not assignable to driver */}
             <div style={s.cardHeader}>
               <div>
-                <span style={{ ...s.jobTag, marginRight: 8 }}>Job #{idx + 1}</span>
+                {editingJobId === d.id ? (
+                  <input
+                    type="number"
+                    min={1}
+                    max={999}
+                    defaultValue={getDisplaySeq(d)}
+                    autoFocus
+                    onBlur={(e) => handleJobOverride(d.id, parseInt(e.target.value, 10) || baseSeq[d.id])}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") handleJobOverride(d.id, parseInt((e.target as HTMLInputElement).value, 10) || baseSeq[d.id]);
+                      if (e.key === "Escape") setEditingJobId(null);
+                    }}
+                    style={{
+                      width: 52,
+                      padding: "4px 8px",
+                      background: "#111",
+                      border: "1px solid #00e5ff",
+                      borderRadius: 4,
+                      color: "#fff",
+                      fontSize: 12,
+                      fontWeight: 700,
+                    }}
+                  />
+                ) : (
+                  <span
+                    role="button"
+                    tabIndex={0}
+                    style={{ ...s.jobTag, marginRight: 8, cursor: "pointer" }}
+                    onClick={() => setEditingJobId(d.id)}
+                    onKeyDown={(e) => e.key === "Enter" && setEditingJobId(d.id)}
+                    title="Click to override job number"
+                  >
+                    Job #{getDisplaySeq(d)}
+                  </span>
+                )}
                 <span style={s.cardTitle}>{d.eventName}</span>
                 <span style={{ ...s.jobTag, background: "rgba(255,255,255,0.15)", color: "#aaa" }}>{d.jobNumber}</span>
               </div>
@@ -748,11 +811,11 @@ const DeliveryCommandPage: React.FC = () => {
                 <div style={s.cardValue}>{d.panCount} pans</div>
               </div>
               <div>
-                <div style={s.cardLabel}>Driver</div>
+                <div style={s.cardLabel}>{d.type === "full-service" ? "Server Name" : "Driver"}</div>
                 <div style={s.cardValue}>{d.assignedDriver}</div>
               </div>
               <div>
-                <div style={s.cardLabel}>Vehicle</div>
+                <div style={s.cardLabel}>{d.type === "full-service" ? "Van #" : "Vehicle"}</div>
                 <div style={s.cardValue}>{d.assignedVehicle}</div>
               </div>
               <div>

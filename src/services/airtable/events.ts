@@ -534,6 +534,112 @@ export const loadEvents = async (): Promise<EventListItem[] | AirtableErrorResul
   });
 };
 
+/** Load today's dispatch items (delivery, pickup, full-service) for autopopulation.
+ * Server name: use serverNameFieldId when set, else CAPTAIN. Van #: use vanNumberFieldId when set.
+ */
+export async function loadDispatchItems(
+  serverNameFieldId?: string,
+  vanNumberFieldId?: string
+): Promise<Array<{
+  id: string;
+  eventName: string;
+  jobNumber: string;
+  client: string;
+  type: "delivery" | "pickup" | "full-service";
+  venue: string;
+  venueAddress: string;
+  distanceFromKitchen: string;
+  estimatedDriveTime: number;
+  guestCount: number;
+  dispatchTime: string;
+  eventStartTime: string;
+  assignedDriver: string;
+  assignedVehicle: string;
+  status: "staged" | "loaded" | "en-route" | "delivered" | "picked-up" | "conflict";
+  requiresExpeditor: boolean;
+  panCount: number;
+}> | AirtableErrorResult> {
+  const table = getEventsTable();
+  if (typeof table !== "string") return table;
+
+  const today = new Date().toISOString().slice(0, 10);
+  const params = new URLSearchParams();
+  params.set("pageSize", "100");
+  params.set("cellFormat", "json");
+  params.set("returnFieldsByFieldId", "true");
+  params.append("fields[]", FIELD_IDS.EVENT_NAME);
+  params.append("fields[]", FIELD_IDS.EVENT_DATE);
+  params.append("fields[]", FIELD_IDS.DISPATCH_TIME);
+  params.append("fields[]", FIELD_IDS.EVENT_TYPE);
+  params.append("fields[]", FIELD_IDS.VENUE);
+  params.append("fields[]", FIELD_IDS.VENUE_ADDRESS);
+  params.append("fields[]", FIELD_IDS.GUEST_COUNT);
+  params.append("fields[]", FIELD_IDS.CAPTAIN);
+
+  if (serverNameFieldId) params.append("fields[]", serverNameFieldId);
+  if (vanNumberFieldId) params.append("fields[]", vanNumberFieldId);
+
+  const data = await airtableFetch<AirtableListResponse<Record<string, unknown>>>(`/${table}?${params.toString()}`);
+  if (isErrorResult(data)) return data;
+
+  const { secondsTo12HourString } = await import("../../utils/timeHelpers");
+
+  const records = data.records.filter((record) => {
+    const fields = record.fields ?? {};
+    const eventDate = typeof fields[FIELD_IDS.EVENT_DATE] === "string" ? (fields[FIELD_IDS.EVENT_DATE] as string).slice(0, 10) : "";
+    const eventType = (asSingleSelectName(fields[FIELD_IDS.EVENT_TYPE]) || asString(fields[FIELD_IDS.EVENT_TYPE]) || "").toLowerCase();
+    const isDispatchType = eventType.includes("delivery") || eventType.includes("pick") || eventType.includes("full");
+    return eventDate === today && isDispatchType;
+  });
+
+  return records.map((record) => {
+    const fields = record.fields ?? {};
+    const eventTypeRaw = (asSingleSelectName(fields[FIELD_IDS.EVENT_TYPE]) || asString(fields[FIELD_IDS.EVENT_TYPE]) || "").toLowerCase();
+    let type: "delivery" | "pickup" | "full-service" = "delivery";
+    if (eventTypeRaw.includes("pick") || eventTypeRaw.includes("pickup")) type = "pickup";
+    else if (eventTypeRaw.includes("full") || eventTypeRaw.includes("service")) type = "full-service";
+
+    const eventName = asString(fields[FIELD_IDS.EVENT_NAME]) || "Untitled";
+    const parts = eventName.split(/\s*[–—-]\s*/);
+    const client = parts[0]?.trim() || "—";
+
+    const rawDispatch = fields[FIELD_IDS.DISPATCH_TIME];
+    let dispatchTime = "—";
+    if (typeof rawDispatch === "number" && !isNaN(rawDispatch)) {
+      dispatchTime = secondsTo12HourString(rawDispatch);
+    } else if (typeof rawDispatch === "string") {
+      dispatchTime = rawDispatch;
+    }
+
+    const serverName = serverNameFieldId ? asString(fields[serverNameFieldId]) : undefined;
+    const vanNumber = vanNumberFieldId ? asString(fields[vanNumberFieldId]) : undefined;
+    const captain = asString(fields[FIELD_IDS.CAPTAIN]);
+
+    const serverVal = type === "full-service" ? (serverName || captain || "—") : "—";
+    const vanVal = type === "full-service" ? (vanNumber || "—") : "—";
+
+    return {
+      id: record.id,
+      eventName,
+      jobNumber: record.id.slice(-6).toUpperCase(),
+      client,
+      type,
+      venue: asString(fields[FIELD_IDS.VENUE]) || "—",
+      venueAddress: asString(fields[FIELD_IDS.VENUE_ADDRESS]) || "—",
+      distanceFromKitchen: "—",
+      estimatedDriveTime: 0,
+      guestCount: typeof fields[FIELD_IDS.GUEST_COUNT] === "number" ? (fields[FIELD_IDS.GUEST_COUNT] as number) : 0,
+      dispatchTime,
+      eventStartTime: "—",
+      assignedDriver: serverVal,
+      assignedVehicle: vanVal,
+      status: "staged",
+      requiresExpeditor: false,
+      panCount: 0,
+    };
+  });
+}
+
 export const loadSingleSelectOptions = async (
   fieldIds: string[]
 ): Promise<Record<string, SingleSelectOption[]> | AirtableErrorResult> => {
