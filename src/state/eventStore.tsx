@@ -5,6 +5,7 @@ import {
   updateEventMultiple,
   deleteEvent as deleteEventApi,
   filterToEditableOnly,
+  getBarServiceFieldId,
   FIELD_IDS,
   type EventListItem,
 } from "../services/airtable/events";
@@ -35,6 +36,9 @@ export type EventStore = {
 
   saveError: string | null;
   setSaveError: (error: string | null) => void;
+
+  /** Save current event data to Airtable (blur + filter + setFields). Returns true on success. */
+  saveCurrentEvent: (eventId: string) => Promise<boolean>;
 
   fields: Fields;
   setFieldLegacy: (name: string, value: unknown) => void;
@@ -150,6 +154,18 @@ export const useEventStore = create<EventStore>((set, get) => ({
 
   saveError: null,
   setSaveError: (error) => set({ saveError: error }),
+
+  saveCurrentEvent: async (eventId) => {
+    await getBarServiceFieldId();
+    (document.activeElement as HTMLElement)?.blur();
+    await new Promise((r) => setTimeout(r, 600));
+    const { eventData, selectedEventId } = get();
+    const raw = selectedEventId === eventId ? eventData : {};
+    const dataToSave = filterToEditableOnly(raw);
+    if (Object.keys(dataToSave).length === 0) return true;
+    const ok = await get().setFields(eventId, { ...dataToSave });
+    return ok ?? false;
+  },
 
   fields: { ...emptyFields },
   setFieldLegacy: (name, value) =>
