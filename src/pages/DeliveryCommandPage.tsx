@@ -454,6 +454,9 @@ const RouteOptimizationContent: React.FC = () => (
   </>
 );
 
+// ── Hide warnings until design is ready ──
+const SHOW_WARNINGS = false;
+
 // ── Component ──
 const DeliveryCommandPage: React.FC = () => {
   const [dispatches] = useState<DispatchItem[]>(SAMPLE_DISPATCHES);
@@ -563,7 +566,7 @@ const DeliveryCommandPage: React.FC = () => {
         </div>
 
         {/* Conflict Banner */}
-        {conflicts.length > 0 && (
+        {SHOW_WARNINGS && conflicts.length > 0 && (
           <div style={s.conflictBanner}>
             <div style={s.conflictTitle}>
               🚨 {conflicts.length} DISPATCH CONFLICTS DETECTED
@@ -604,7 +607,7 @@ const DeliveryCommandPage: React.FC = () => {
             <div style={s.statLabel}>Total Guests</div>
           </div>
           <div style={s.stat}>
-            <div style={{ ...s.statNumber, color: conflicts.length > 0 ? "#ff0000" : "#00ff00" }}>
+            <div style={{ ...s.statNumber, color: SHOW_WARNINGS && conflicts.length > 0 ? "#ff0000" : "#00e5ff" }}>
               {conflicts.length}
             </div>
             <div style={s.statLabel}>Conflicts</div>
@@ -619,7 +622,7 @@ const DeliveryCommandPage: React.FC = () => {
             {drivers.map((driver) => (
         <div
           key={driver.name}
-          style={driver.hasConflict ? s.driverCardConflict : s.driverCard}
+          style={SHOW_WARNINGS && driver.hasConflict ? s.driverCardConflict : s.driverCard}
         >
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <div>
@@ -628,7 +631,7 @@ const DeliveryCommandPage: React.FC = () => {
                 {driver.vehicle}
               </span>
             </div>
-            {driver.hasConflict && (
+            {SHOW_WARNINGS && driver.hasConflict && (
               <span
                 style={{
                   ...s.statusBadge,
@@ -649,7 +652,7 @@ const DeliveryCommandPage: React.FC = () => {
               <span key={job} style={s.jobTag}>{job}</span>
             ))}
           </div>
-          {driver.hasConflict && driver.conflictReason && (
+          {SHOW_WARNINGS && driver.hasConflict && driver.conflictReason && (
             <div style={s.conflictNote}>⚠️ {driver.conflictReason}</div>
           )}
         </div>
@@ -665,7 +668,7 @@ const DeliveryCommandPage: React.FC = () => {
         {sortedDispatches.map((d) => (
           <div
             key={d.id}
-            style={d.status === "conflict" ? s.dispatchCardConflict : s.dispatchCard}
+            style={SHOW_WARNINGS && d.status === "conflict" ? s.dispatchCardConflict : s.dispatchCard}
           >
             <div
               style={{
@@ -685,7 +688,7 @@ const DeliveryCommandPage: React.FC = () => {
                 style={{
                   ...s.statusBadge,
                   background: statusColors[d.status],
-                  color: d.status === "conflict" ? "#fff" : "#000",
+                  color: SHOW_WARNINGS && d.status === "conflict" ? "#fff" : "#000",
                 }}
               >
                 {statusLabels[d.status]}
@@ -744,7 +747,7 @@ const DeliveryCommandPage: React.FC = () => {
             </div>
 
             {/* Conflict Note */}
-            {d.notes && d.status === "conflict" && (
+            {SHOW_WARNINGS && d.notes && d.status === "conflict" && (
               <div style={s.conflictNote}>{d.notes}</div>
             )}
 
