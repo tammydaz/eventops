@@ -3,6 +3,7 @@ import { loadDispatchItems, updateEventMultiple, FIELD_IDS } from "../services/a
 import { DISPATCH_SERVER_NAME_FIELD, DISPATCH_VAN_NUMBER_FIELD } from "../constants/dispatchFields";
 import { isErrorResult } from "../services/airtable/selectors";
 import { twelveHourStringToSeconds, addMinutesToTimeString } from "../utils/timeHelpers";
+import { DispatchMap } from "../components/delivery/DispatchMap";
 
 // ── Types ──
 type DeliveryType = "delivery" | "pickup" | "full-service";
@@ -727,6 +728,24 @@ const DeliveryCommandPage: React.FC = () => {
           </div>
         </div>
 
+        {/* Delivery Map — vans by dispatch time */}
+        <div style={{ marginTop: 24 }}>
+          <div style={s.sectionTitle}>🗺️ DELIVERY MAP — Vans by dispatch time</div>
+          <DispatchMap
+            dispatches={sortedDispatches.map((d, idx) => ({
+              id: d.id,
+              eventName: d.eventName,
+              jobNumber: d.jobNumber,
+              venue: d.venue,
+              venueAddress: d.venueAddress,
+              dispatchTime: d.dispatchTime,
+              assignedVehicle: d.assignedVehicle,
+              type: d.type,
+              seq: getDisplaySeq(d),
+            }))}
+          />
+        </div>
+
         {/* Two-column: Drivers | Timeline */}
         <div className="delivery-hub-columns" style={{ display: "grid", gridTemplateColumns: "minmax(280px, 380px) 1fr", gap: 28, marginTop: 24 }}>
           {/* ── Driver Assignments ── */}
@@ -882,7 +901,9 @@ const DeliveryCommandPage: React.FC = () => {
                 )}
               </div>
               <div>
-                <div style={s.cardLabel}>Event Start</div>
+                <div style={s.cardLabel}>
+                  {d.type === "delivery" ? "Delivery Window" : d.type === "pickup" ? "Pickup Time" : "Event Start"}
+                </div>
                 {editingField === `${d.id}:eventStartTime` ? (
                   <input
                     type="text"
