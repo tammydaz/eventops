@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import { loadDispatchItems, updateEventMultiple, FIELD_IDS } from "../services/airtable/events";
 import { DISPATCH_SERVER_NAME_FIELD, DISPATCH_VAN_NUMBER_FIELD } from "../constants/dispatchFields";
 import { isErrorResult } from "../services/airtable/selectors";
-import { twelveHourStringToSeconds } from "../utils/timeHelpers";
+import { twelveHourStringToSeconds, addMinutesToTimeString } from "../utils/timeHelpers";
 
 // ── Types ──
 type DeliveryType = "delivery" | "pickup" | "full-service";
@@ -568,6 +568,15 @@ const DeliveryCommandPage: React.FC = () => {
     setEditingJobId(null);
   };
 
+  /** Est. time back = dispatch + drive out + unload + drive back. Pickup at kitchen = N/A. */
+  const getEstimatedTimeBack = (d: DispatchItem): string => {
+    if (d.type === "pickup") return "—";
+    const driveMin = d.estimatedDriveTime || 0;
+    const unloadMin = d.type === "full-service" ? 30 : 15;
+    const totalMin = driveMin * 2 + unloadMin;
+    return addMinutesToTimeString(d.dispatchTime, totalMin);
+  };
+
   return (
     <>
       <style>{`
@@ -898,6 +907,12 @@ const DeliveryCommandPage: React.FC = () => {
                     {d.eventStartTime}
                   </div>
                 )}
+              </div>
+              <div>
+                <div style={s.cardLabel}>Est. Time Back</div>
+                <div style={{ ...s.cardValue, color: "#22c55e", fontSize: 13 }} title="Auto: dispatch + drive out + unload + drive back">
+                  {getEstimatedTimeBack(d)}
+                </div>
               </div>
               <div>
                 <div style={s.cardLabel}>Guest Count</div>
