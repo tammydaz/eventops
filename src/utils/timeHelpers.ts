@@ -64,6 +64,20 @@ export function secondsToTimeString(seconds: number | string | null | undefined)
   return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
 }
 
+/** Parse "10:00 AM" or "10:00 PM" → seconds since midnight for Airtable */
+export function twelveHourStringToSeconds(s: string): number | null {
+  if (!s || !s.trim()) return null;
+  const m = s.trim().match(/^(\d{1,2}):(\d{2})\s*(AM|PM)?$/i);
+  if (!m) return null;
+  let h = parseInt(m[1], 10);
+  const min = parseInt(m[2], 10);
+  const ampm = (m[3] || "").toUpperCase();
+  if (h >= 24 || min >= 60) return null;
+  if (ampm === "PM" && h < 12) h += 12;
+  if (ampm === "AM" && h === 12) h = 0;
+  return h * 3600 + min * 60;
+}
+
 /** Convert "HH:mm" → seconds for Airtable (minutes rounded to 0, 15, 30, 45) */
 export function timeStringToSeconds(timeStr: string): number | null {
   if (!timeStr) return null;

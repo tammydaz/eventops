@@ -553,6 +553,7 @@ export async function loadDispatchItems(
   guestCount: number;
   dispatchTime: string;
   eventStartTime: string;
+  eventDate: string;
   assignedDriver: string;
   assignedVehicle: string;
   status: "staged" | "loaded" | "en-route" | "delivered" | "picked-up" | "conflict";
@@ -570,6 +571,7 @@ export async function loadDispatchItems(
   params.append("fields[]", FIELD_IDS.EVENT_NAME);
   params.append("fields[]", FIELD_IDS.EVENT_DATE);
   params.append("fields[]", FIELD_IDS.DISPATCH_TIME);
+  params.append("fields[]", FIELD_IDS.EVENT_START_TIME);
   params.append("fields[]", FIELD_IDS.EVENT_TYPE);
   params.append("fields[]", FIELD_IDS.VENUE);
   params.append("fields[]", FIELD_IDS.VENUE_ADDRESS);
@@ -611,6 +613,16 @@ export async function loadDispatchItems(
       dispatchTime = rawDispatch;
     }
 
+    const rawEventStart = fields[FIELD_IDS.EVENT_START_TIME];
+    let eventStartTime = "—";
+    if (typeof rawEventStart === "number" && !isNaN(rawEventStart)) {
+      eventStartTime = secondsTo12HourString(rawEventStart);
+    } else if (typeof rawEventStart === "string") {
+      eventStartTime = rawEventStart;
+    }
+
+    const eventDate = typeof fields[FIELD_IDS.EVENT_DATE] === "string" ? (fields[FIELD_IDS.EVENT_DATE] as string).slice(0, 10) : "";
+
     const serverName = serverNameFieldId ? asString(fields[serverNameFieldId]) : undefined;
     const vanNumber = vanNumberFieldId ? asString(fields[vanNumberFieldId]) : undefined;
     const captain = asString(fields[FIELD_IDS.CAPTAIN]);
@@ -630,7 +642,8 @@ export async function loadDispatchItems(
       estimatedDriveTime: 0,
       guestCount: typeof fields[FIELD_IDS.GUEST_COUNT] === "number" ? (fields[FIELD_IDS.GUEST_COUNT] as number) : 0,
       dispatchTime,
-      eventStartTime: "—",
+      eventStartTime,
+      eventDate,
       assignedDriver: serverVal,
       assignedVehicle: vanVal,
       status: "staged",
