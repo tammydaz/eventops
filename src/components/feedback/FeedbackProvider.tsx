@@ -2,6 +2,8 @@ import { useState, useCallback, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { useLocation } from "react-router-dom";
 import { createFeedback, type FeedbackType } from "../../services/feedbackApi";
+import { FeedbackContext } from "./FeedbackContext";
+import FeedbackCircle from "./FeedbackCircle";
 
 const SCREEN_NAMES: Record<string, string> = {
   "/": "Dashboard",
@@ -58,10 +60,11 @@ export function FeedbackProvider({ children }: FeedbackProviderProps) {
   const [message, setMessage] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [submitSuccess, setSubmitSuccess] = useState(false);
 
   const screenName = getScreenName(pathname);
 
-  const openModal = useCallback((type: FeedbackType) => {
+  const openModal = useCallback((type: FeedbackType = "issue") => {
     setFeedbackType(type);
     setMessage("");
     setSubmitError(null);
@@ -69,11 +72,16 @@ export function FeedbackProvider({ children }: FeedbackProviderProps) {
     setMenuOpen(false);
   }, []);
 
+  const contextValue = { openSubmitModal: openModal };
+
   useEffect(() => {
     const handleContextMenu = (e: MouseEvent) => {
       e.preventDefault();
       e.stopPropagation();
-      setMenuPos({ x: e.clientX, y: e.clientY });
+      // Keep menu on-screen (menu ~180px wide, 200px tall)
+      const x = Math.min(e.clientX, window.innerWidth - 200);
+      const y = Math.min(e.clientY, window.innerHeight - 220);
+      setMenuPos({ x: Math.max(8, x), y: Math.max(8, y) });
       setMenuOpen(true);
     };
 
@@ -92,20 +100,27 @@ export function FeedbackProvider({ children }: FeedbackProviderProps) {
   }, [menuOpen]);
 
   const handleSubmit = useCallback(async () => {
+    const msg = message.trim() || "(No message provided)";
+    if (!msg) return;
     setSubmitting(true);
     setSubmitError(null);
+    setSubmitSuccess(false);
     const result = await createFeedback({
       type: feedbackType,
       screen: screenName,
       url: window.location.href,
-      message: message.trim() || "(No message provided)",
+      message: msg,
     });
     setSubmitting(false);
     if (result.error) {
       setSubmitError(result.error + (result.details ? ` — ${result.details}` : ""));
       return;
     }
-    setModalOpen(false);
+    setSubmitSuccess(true);
+    setTimeout(() => {
+      setModalOpen(false);
+      setSubmitSuccess(false);
+    }, 800);
   }, [feedbackType, screenName, message]);
 
   const menuEl = menuOpen && (
@@ -165,8 +180,13 @@ export function FeedbackProvider({ children }: FeedbackProviderProps) {
             rows={4}
             autoFocus
           />
+          {submitSuccess && (
+            <p className="feedback-modal-success" style={{ color: "#22c55e", fontSize: 14, marginBottom: 8, fontWeight: 600 }}>
+              ✓ Saved!
+            </p>
+          )}
           {submitError && (
-            <p className="feedback-modal-error" style={{ color: "#f87171", fontSize: 12, marginBottom: 8 }}>
+            <p className="feedback-modal-error" style={{ color: "#f87171", fontSize: 13, marginBottom: 8, background: "rgba(239,68,68,0.1)", padding: 8, borderRadius: 6 }}>
               {submitError}
             </p>
           )}
@@ -184,10 +204,11 @@ export function FeedbackProvider({ children }: FeedbackProviderProps) {
   );
 
   return (
-    <>
+    <FeedbackContext.Provider value={contextValue}>
       {children}
       {menuEl && createPortal(menuEl, document.body)}
       {modalEl && createPortal(modalEl, document.body)}
-    </>
+      <FeedbackCircle />
+    </FeedbackContext.Provider>
   );
 }

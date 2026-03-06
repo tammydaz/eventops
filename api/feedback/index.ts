@@ -69,6 +69,33 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
+    // Debug: GET ?debug=1 returns config + Airtable connectivity test (no auth needed)
+    if (req.method === "GET" && req.query?.debug === "1") {
+      const tablePath = encodeURIComponent(tableIdOrName);
+      const testUrl = `${AIRTABLE_API}/${baseId}/${tablePath}?pageSize=1`;
+      let airtableTest: { ok?: boolean; status?: number; error?: string } = {};
+      try {
+        const airRes = await fetch(testUrl, {
+          headers: { Authorization: `Bearer ${apiKey}` },
+        });
+        airtableTest = { ok: airRes.ok, status: airRes.status };
+        if (!airRes.ok) {
+          const errText = await airRes.text();
+          airtableTest.error = errText.slice(0, 200);
+        }
+      } catch (e) {
+        airtableTest = { ok: false, error: e instanceof Error ? e.message : "Unknown" };
+      }
+      return res.status(200).json({
+        tableIdOrName,
+        hasApiKey: !!apiKey,
+        hasBaseId: !!baseId,
+        hasJwtSecret: !!jwtSecret,
+        airtableTest,
+        hint: tableIdOrName === "Feedback Issues" ? "Env may not be loaded — add AIRTABLE_FEEDBACK_TABLE=tbl5YaVniN2w4J9fw to .env and restart with: npm run dev:full" : "Config looks OK",
+      });
+    }
+
     const user = getAuth(req);
     if (!user) {
       return res.status(401).json({ error: "Authentication required" });
@@ -103,18 +130,30 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           Authorization: `Bearer ${apiKey}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ fields }),
+        body: JSON.stringify({
+          fields,
+          typecast: true, // Allow Airtable to create new single-select options if needed
+        }),
       });
 
       if (!airRes.ok) {
         const errText = await airRes.text();
         console.error("Airtable create error:", airRes.status, errText);
+        let details = errText.slice(0, 300);
+        try {
+          const errJson = JSON.parse(errText) as { error?: { message?: string } };
+          if (errJson?.error?.message) details = errJson.error.message;
+        } catch {
+          /* use raw text */
+        }
         const isPermsOrNotFound = errText.includes("INVALID_PERMISSIONS_OR_MODEL_NOT_FOUND");
+        const hint = isPermsOrNotFound
+          ? "Fix: Go to airtable.com/create/tokens → edit your token → ensure data.records:write is checked → ensure the token has access to your base"
+          : details;
         return res.status(500).json({
           error: "Failed to save feedback",
-          details: isPermsOrNotFound
-            ? `Create a table named "Feedback Issues" in your Airtable base (same base as Events), or set AIRTABLE_FEEDBACK_TABLE to your table's exact name. See docs/FEEDBACK_SETUP.md`
-            : errText.slice(0, 200),
+          details: hint,
+          rawError: errText.slice(0, 150),
         });
       }
 
@@ -123,20 +162,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     if (req.method === "GET") {
-      const escapedId = (user.sub || "").replace(/\\/g, "\\\\").replace(/"/g, '\\"');
-      const escapedEmail = (user.email || "").replace(/\\/g, "\\\\").replace(/"/g, '\\"').toLowerCase();
-      const filter = isAdmin
-        ? ""
-        : encodeURIComponent(
-            escapedEmail
-              ? `OR({UserId}="${escapedId}", LOWER({UserEmail})="${escapedEmail}")`
-              : `{UserId}="${escapedId}"`
-          );
+      // Everyone sees all feedback — transparent so staff can see questions, fixes, status
+      // Note: Airtable doesn't support sort by createdTime; we sort in memory
       const tablePath = encodeURIComponent(tableIdOrName);
-      const url = `${AIRTABLE_API}/${baseId}/${tablePath}?sort[0][field]=createdTime&sort[0][direction]=desc`;
-      const urlWithFilter = filter ? `${url}&filterByFormula=${filter}` : url;
+      const url = `${AIRTABLE_API}/${baseId}/${tablePath}?pageSize=100`;
 
-      const airRes = await fetch(urlWithFilter, {
+      const airRes = await fetch(url, {
         headers: {
           Authorization: `Bearer ${apiKey}`,
           "Content-Type": "application/json",
@@ -146,9 +177,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (!airRes.ok) {
         const errText = await airRes.text();
         console.error("Airtable list error:", airRes.status, errText);
+        let details = errText.slice(0, 300);
+        try {
+          const errJson = JSON.parse(errText) as { error?: { message?: string } };
+          if (errJson?.error?.message) details = errJson.error.message;
+        } catch {
+          /* use raw text */
+        }
         return res.status(500).json({
           error: "Failed to load feedback",
-          details: errText.slice(0, 200),
+          details: `${details} (table: ${tableIdOrName})`,
         });
       }
 
@@ -160,21 +198,27 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         }>;
       };
 
-      const records = (data.records || []).map((r) => ({
-        id: r.id,
-        createdTime: r.createdTime,
-        type: r.fields.Type,
-        screen: r.fields.Screen,
-        url: r.fields.URL,
-        message: r.fields.Message,
-        userId: r.fields.UserId,
-        userName: r.fields.UserName,
-        userEmail: r.fields.UserEmail,
-        status: r.fields.Status || "open",
-        resolvedAt: r.fields.ResolvedAt,
-        resolvedBy: r.fields.ResolvedBy,
-        resolutionNote: r.fields.ResolutionNote,
-      }));
+      const records = (data.records || [])
+        .map((r) => ({
+          id: r.id,
+          createdTime: r.createdTime,
+          type: r.fields.Type,
+          screen: r.fields.Screen,
+          url: r.fields.URL,
+          message: r.fields.Message,
+          userId: r.fields.UserId,
+          userName: r.fields.UserName,
+          userEmail: r.fields.UserEmail,
+          status: r.fields.Status || "open",
+          resolvedAt: r.fields.ResolvedAt,
+          resolvedBy: r.fields.ResolvedBy,
+          resolutionNote: r.fields.ResolutionNote,
+        }))
+        .sort((a, b) => {
+          const ta = a.createdTime ? new Date(a.createdTime).getTime() : 0;
+          const tb = b.createdTime ? new Date(b.createdTime).getTime() : 0;
+          return tb - ta;
+        });
 
       return res.status(200).json({ records });
     }
