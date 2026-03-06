@@ -130,33 +130,55 @@ export function FeedbackProvider({ children }: FeedbackProviderProps) {
   );
 
   const modalEl = modalOpen && (
-    <div className="feedback-modal-backdrop" onClick={() => setModalOpen(false)}>
-      <div className="feedback-modal" onClick={(e) => e.stopPropagation()}>
-        <h3 className="feedback-modal-title">Send Feedback</h3>
-        <p className="feedback-modal-screen">
-          Screen: <strong>{screenName}</strong> · {FEEDBACK_LABELS[feedbackType]}
-        </p>
-        <textarea
-          className="feedback-modal-textarea"
-          placeholder="Describe the issue, idea, bug, or recommendation..."
-          value={message}
-          onChange={(e) => setMessage(e.target.value)}
-          rows={4}
-          autoFocus
-        />
-        {submitError && (
-          <p className="feedback-modal-error" style={{ color: "#f87171", fontSize: 12, marginBottom: 8 }}>
-            {submitError}
+    <div
+      className="feedback-modal-backdrop"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) setModalOpen(false);
+      }}
+    >
+      <div
+        className="feedback-modal"
+        onClick={(e) => e.stopPropagation()}
+        style={{ pointerEvents: "auto" }}
+      >
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (!submitting) handleSubmit();
+          }}
+        >
+          <h3 className="feedback-modal-title">Send Feedback</h3>
+          <p className="feedback-modal-screen">
+            Screen: <strong>{screenName}</strong> · {FEEDBACK_LABELS[feedbackType]}
           </p>
-        )}
-        <div className="feedback-modal-actions">
-          <button type="button" className="feedback-modal-cancel" onClick={() => setModalOpen(false)} disabled={submitting}>
-            Cancel
-          </button>
-          <button type="button" className="feedback-modal-submit" onClick={() => handleSubmit()} disabled={submitting}>
-            {submitting ? "Saving…" : "Submit"}
-          </button>
-        </div>
+          <textarea
+            className="feedback-modal-textarea"
+            placeholder="Describe the issue, idea, bug, or recommendation… (Ctrl+Enter to send)"
+            value={message}
+            onChange={(e) => setMessage(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && e.ctrlKey) {
+                e.preventDefault();
+                if (!submitting) handleSubmit();
+              }
+            }}
+            rows={4}
+            autoFocus
+          />
+          {submitError && (
+            <p className="feedback-modal-error" style={{ color: "#f87171", fontSize: 12, marginBottom: 8 }}>
+              {submitError}
+            </p>
+          )}
+          <div className="feedback-modal-actions">
+            <button type="button" className="feedback-modal-cancel" onClick={() => setModalOpen(false)} disabled={submitting}>
+              Cancel
+            </button>
+            <button type="submit" className="feedback-modal-submit" disabled={submitting}>
+              {submitting ? "Saving…" : "Submit"}
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   );
