@@ -413,10 +413,46 @@ const s: Record<string, React.CSSProperties> = {
   roleCardDesc: { fontSize: 12, color: "#888", lineHeight: 1.4 },
 };
 
+// ── Route Optimization content (reused in sticky panel) ──
+const RouteOptimizationContent: React.FC = () => (
+  <>
+    <div style={{ fontSize: 18, fontWeight: 800, color: "#00e5ff", marginBottom: 12 }}>
+      💡 SUGGESTED FIX — ROUTE OPTIMIZATION
+    </div>
+    <div style={{ fontSize: 13, color: "#eee", lineHeight: 1.8 }}>
+      <div style={{ marginBottom: 12 }}>
+        <strong style={{ color: "#ff6b6b" }}>Problem:</strong> Mike has 3 deliveries
+        (JAL 10:00AM, DOL 10:15AM, TCBM 10:30AM) — physically impossible.
+        Carlos has back-to-back full service loads with no buffer.
+      </div>
+      <div style={{ marginBottom: 8 }}>
+        <strong style={{ color: "#00ff00" }}>Option A:</strong> Add a 3rd driver for
+        the morning window. Mike takes JAL (furthest), 3rd driver takes DOL + TCBM
+        (both under 20mi, can combo load).
+      </div>
+      <div style={{ marginBottom: 8 }}>
+        <strong style={{ color: "#00ff00" }}>Option B:</strong> Move TCBM dispatch to
+        9:30AM (30min earlier). Mike delivers TCBM first (18mi, back by 10:30AM),
+        then takes JAL at 10:30AM (push 30min).
+      </div>
+      <div style={{ marginBottom: 8 }}>
+        <strong style={{ color: "#00ff00" }}>Option C:</strong> Combo load DOL + TCBM
+        in Van 1 (11 pans total, under 12 capacity). Both are under 20mi.
+        Mike delivers both, Carlos stays on full-service runs.
+      </div>
+      <div style={{ marginTop: 12, color: "#888", fontSize: 11 }}>
+        * In the wired version, drive times and conflicts are calculated automatically
+        from venue addresses using distance/time APIs.
+      </div>
+    </div>
+  </>
+);
+
 // ── Component ──
 const DeliveryCommandPage: React.FC = () => {
   const [dispatches] = useState<DispatchItem[]>(SAMPLE_DISPATCHES);
   const [drivers] = useState<Driver[]>(SAMPLE_DRIVERS);
+  const [optimizePanelOpen, setOptimizePanelOpen] = useState(true);
 
   const conflicts = dispatches.filter((d) => d.status === "conflict");
   const totalPans = dispatches.reduce((sum, d) => sum + d.panCount, 0);
@@ -680,7 +716,7 @@ const DeliveryCommandPage: React.FC = () => {
         ))}
       </div>
 
-      {/* ── Route Optimization Suggestion ── */}
+      {/* ── Route Optimization (also in sticky panel below) ── */}
       <div
         style={{
           background: "#0d1b2a",
@@ -690,37 +726,86 @@ const DeliveryCommandPage: React.FC = () => {
           marginTop: 32,
         }}
       >
-        <div style={{ fontSize: 18, fontWeight: 800, color: "#00e5ff", marginBottom: 12 }}>
-          💡 SUGGESTED FIX — ROUTE OPTIMIZATION
-        </div>
-        <div style={{ fontSize: 13, color: "#eee", lineHeight: 1.8 }}>
-          <div style={{ marginBottom: 12 }}>
-            <strong style={{ color: "#ff6b6b" }}>Problem:</strong> Mike has 3 deliveries
-            (JAL 10:00AM, DOL 10:15AM, TCBM 10:30AM) — physically impossible.
-            Carlos has back-to-back full service loads with no buffer.
-          </div>
-          <div style={{ marginBottom: 8 }}>
-            <strong style={{ color: "#00ff00" }}>Option A:</strong> Add a 3rd driver for
-            the morning window. Mike takes JAL (furthest), 3rd driver takes DOL + TCBM
-            (both under 20mi, can combo load).
-          </div>
-          <div style={{ marginBottom: 8 }}>
-            <strong style={{ color: "#00ff00" }}>Option B:</strong> Move TCBM dispatch to
-            9:30AM (30min earlier). Mike delivers TCBM first (18mi, back by 10:30AM),
-            then takes JAL at 10:30AM (push 30min).
-          </div>
-          <div style={{ marginBottom: 8 }}>
-            <strong style={{ color: "#00ff00" }}>Option C:</strong> Combo load DOL + TCBM
-            in Van 1 (11 pans total, under 12 capacity). Both are under 20mi.
-            Mike delivers both, Carlos stays on full-service runs.
-          </div>
-          <div style={{ marginTop: 12, color: "#888", fontSize: 11 }}>
-            * In the wired version, drive times and conflicts are calculated automatically
-            from venue addresses using distance/time APIs.
+        <RouteOptimizationContent />
+      </div>
+      </div>
+
+      {/* ── Sticky Route Optimization Panel (always accessible) ── */}
+      <div
+        style={{
+          position: "fixed",
+          top: "50%",
+          right: optimizePanelOpen ? 0 : -320,
+          transform: "translateY(-50%)",
+          zIndex: 90,
+          transition: "right 0.25s ease",
+        }}
+      >
+        <div
+          style={{
+            background: "#0d1b2a",
+            border: "2px solid #00e5ff",
+            borderRight: "none",
+            borderRadius: "8px 0 0 8px",
+            boxShadow: "-4px 0 20px rgba(0,0,0,0.5)",
+            width: 320,
+            maxHeight: "70vh",
+            overflow: "auto",
+          }}
+        >
+          <div style={{ padding: "16px 20px 16px 24px" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+              <span style={{ fontSize: 14, fontWeight: 800, color: "#00e5ff" }}>💡 Route Optimization</span>
+              <button
+                type="button"
+                onClick={() => setOptimizePanelOpen(false)}
+                style={{
+                  background: "none",
+                  border: "none",
+                  color: "#00e5ff",
+                  cursor: "pointer",
+                  fontSize: 18,
+                  padding: "0 4px",
+                  lineHeight: 1,
+                }}
+                title="Collapse panel"
+              >
+                ›
+              </button>
+            </div>
+            <RouteOptimizationContent />
           </div>
         </div>
       </div>
-      </div>
+      {!optimizePanelOpen && (
+        <button
+          type="button"
+          onClick={() => setOptimizePanelOpen(true)}
+          style={{
+            position: "fixed",
+            top: "50%",
+            right: 0,
+            transform: "translateY(-50%)",
+            zIndex: 89,
+            background: "#0d1b2a",
+            border: "2px solid #00e5ff",
+            borderRight: "none",
+            borderRadius: "8px 0 0 8px",
+            padding: "16px 10px",
+            color: "#00e5ff",
+            fontSize: 11,
+            fontWeight: 700,
+            cursor: "pointer",
+            writingMode: "vertical-rl",
+            textOrientation: "mixed",
+            letterSpacing: 1,
+            boxShadow: "-2px 0 12px rgba(0,0,0,0.4)",
+          }}
+          title="Open Route Optimization"
+        >
+          💡 OPTIMIZE
+        </button>
+      )}
     </>
   );
 };
