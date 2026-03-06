@@ -52,8 +52,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const apiKey = process.env.AIRTABLE_API_KEY;
     const baseId = process.env.AIRTABLE_BASE_ID;
-    const tableId =
-      process.env.AIRTABLE_FEEDBACK_TABLE || "tblFeedbackIssues";
+    // Use table name or ID — Airtable accepts both. Default: "Feedback Issues" (create a table with this name)
+    const tableIdOrName =
+      process.env.AIRTABLE_FEEDBACK_TABLE || "Feedback Issues";
     const jwtSecret = process.env.AUTH_JWT_SECRET;
 
     const missing = [
@@ -95,7 +96,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         Status: "open",
       };
 
-      const airRes = await fetch(`${AIRTABLE_API}/${baseId}/${tableId}`, {
+      const tablePath = encodeURIComponent(tableIdOrName);
+      const airRes = await fetch(`${AIRTABLE_API}/${baseId}/${tablePath}`, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${apiKey}`,
@@ -107,9 +109,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (!airRes.ok) {
         const errText = await airRes.text();
         console.error("Airtable create error:", airRes.status, errText);
+        const isPermsOrNotFound = errText.includes("INVALID_PERMISSIONS_OR_MODEL_NOT_FOUND");
         return res.status(500).json({
           error: "Failed to save feedback",
-          details: errText.slice(0, 200),
+          details: isPermsOrNotFound
+            ? `Create a table named "Feedback Issues" in your Airtable base (same base as Events), or set AIRTABLE_FEEDBACK_TABLE to your table's exact name. See docs/FEEDBACK_SETUP.md`
+            : errText.slice(0, 200),
         });
       }
 
@@ -122,7 +127,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const filter = isAdmin
         ? ""
         : encodeURIComponent(`{UserId}="${escaped}"`);
-      const url = `${AIRTABLE_API}/${baseId}/${tableId}?sort[0][field]=createdTime&sort[0][direction]=desc`;
+      const tablePath = encodeURIComponent(tableIdOrName);
+      const url = `${AIRTABLE_API}/${baseId}/${tablePath}?sort[0][field]=createdTime&sort[0][direction]=desc`;
       const urlWithFilter = filter ? `${url}&filterByFormula=${filter}` : url;
 
       const airRes = await fetch(urlWithFilter, {
@@ -190,7 +196,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         if (resolutionNote) fields.ResolutionNote = resolutionNote;
       }
 
-      const airRes = await fetch(`${AIRTABLE_API}/${baseId}/${tableId}/${id}`, {
+      const tablePath = encodeURIComponent(tableIdOrName);
+      const airRes = await fetch(`${AIRTABLE_API}/${baseId}/${tablePath}/${id}`, {
         method: "PATCH",
         headers: {
           Authorization: `Bearer ${apiKey}`,

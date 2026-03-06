@@ -22,13 +22,24 @@ Create a new table in your EventOps Airtable base with these fields:
 
 ## 2. Environment Variable
 
-Add to Vercel (or `.env` for local dev):
+The API uses **table name** by default: `"Feedback Issues"`. Create a table with that exact name in your Events base.
+
+If you use a different name (e.g. `"Feedback"`), add to **Vercel** and/or `.env`:
 
 ```
-AIRTABLE_FEEDBACK_TABLE=tblXXXXXXXXXXXXXX
+AIRTABLE_FEEDBACK_TABLE=Feedback
 ```
 
-Use the table ID from Airtable's URL when viewing the table, or from the API docs.
+Or use the table ID (`tblXXXXXXXXXXXXXX`) — both work. Required env vars:
+
+| Variable | Value |
+|----------|-------|
+| `AIRTABLE_API_KEY` | Token with `data.records:read`, `data.records:write`, `schema.bases:read` |
+| `AIRTABLE_BASE_ID` | Same base as Events |
+| `AUTH_JWT_SECRET` | Same secret used for login |
+| `AIRTABLE_FEEDBACK_TABLE` | Optional — table name or ID (default: `"Feedback Issues"`) |
+
+**If you see "INVALID_PERMISSIONS_OR_MODEL_NOT_FOUND":** The table name/ID doesn't exist in your base. Create a table named **Feedback Issues** in the same base as Events, or set `AIRTABLE_FEEDBACK_TABLE` to your table's exact name.
 
 ## 3. How It Works
 
