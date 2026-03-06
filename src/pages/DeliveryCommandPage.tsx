@@ -470,9 +470,21 @@ const DeliveryCommandPage: React.FC = () => {
   const pickups = dispatches.filter((d) => d.type === "pickup").length;
   const fullService = dispatches.filter((d) => d.type === "full-service").length;
 
-  const sortedDispatches = [...dispatches].sort((a, b) =>
-    a.dispatchTime.localeCompare(b.dispatchTime)
+  // Sort all jobs (delivery, pickup, full-service) by dispatch time for the day
+  const parseDispatchTime = (t: string): number => {
+    const m = t.match(/(\d{1,2}):(\d{2})\s*(AM|PM)/i);
+    if (!m) return 0;
+    let h = parseInt(m[1], 10);
+    const min = parseInt(m[2], 10);
+    if ((m[3] || "").toUpperCase() === "PM" && h < 12) h += 12;
+    if ((m[3] || "").toUpperCase() === "AM" && h === 12) h = 0;
+    return h * 60 + min;
+  };
+  const sortedDispatches = [...dispatches].sort(
+    (a, b) => parseDispatchTime(a.dispatchTime) - parseDispatchTime(b.dispatchTime)
   );
+  const jobNumberToSeq: Record<string, number> = {};
+  sortedDispatches.forEach((d, i) => { jobNumberToSeq[d.jobNumber] = i + 1; });
 
   return (
     <>
@@ -648,9 +660,13 @@ const DeliveryCommandPage: React.FC = () => {
             {driver.totalDriveMinutes} min total drive time
           </div>
           <div style={s.driverJobs} className="delivery-driver-jobs">
-            {driver.assignments.map((job) => (
-              <span key={job} style={s.jobTag}>{job}</span>
-            ))}
+            {[...driver.assignments]
+              .sort((a, b) => (jobNumberToSeq[a] ?? 999) - (jobNumberToSeq[b] ?? 999))
+              .map((job) => (
+                <span key={job} style={s.jobTag} title={job}>
+                  {jobNumberToSeq[job] ? `Job #${jobNumberToSeq[job]}` : job}
+                </span>
+              ))}
           </div>
           {SHOW_WARNINGS && driver.hasConflict && driver.conflictReason && (
             <div style={s.conflictNote}>⚠️ {driver.conflictReason}</div>
@@ -661,11 +677,11 @@ const DeliveryCommandPage: React.FC = () => {
 
           {/* ── Dispatch Timeline ── */}
           <div>
-            <div style={s.sectionTitle}>⏱️ DISPATCH TIMELINE</div>
+            <div style={s.sectionTitle}>⏱️ DISPATCH TIMELINE — All jobs by dispatch time (delivery, pickup, full-service)</div>
             <div style={s.timeline}>
         <div style={s.timelineLine} />
 
-        {sortedDispatches.map((d) => (
+        {sortedDispatches.map((d, idx) => (
           <div
             key={d.id}
             style={SHOW_WARNINGS && d.status === "conflict" ? s.dispatchCardConflict : s.dispatchCard}
@@ -678,11 +694,12 @@ const DeliveryCommandPage: React.FC = () => {
               }}
             />
 
-            {/* Header */}
+            {/* Header — Job # assigned by dispatch time order for the day (all jobs: delivery, pickup, full-service) */}
             <div style={s.cardHeader}>
               <div>
+                <span style={{ ...s.jobTag, marginRight: 8 }}>Job #{idx + 1}</span>
                 <span style={s.cardTitle}>{d.eventName}</span>
-                <span style={s.jobTag}>{d.jobNumber}</span>
+                <span style={{ ...s.jobTag, background: "rgba(255,255,255,0.15)", color: "#aaa" }}>{d.jobNumber}</span>
               </div>
               <span
                 style={{
