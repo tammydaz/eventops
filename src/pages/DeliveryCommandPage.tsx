@@ -395,6 +395,22 @@ const s: Record<string, React.CSSProperties> = {
     fontWeight: 600,
     zIndex: 100,
   },
+  roleHub: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+    gap: 16,
+    marginBottom: 32,
+  },
+  roleCard: {
+    background: "linear-gradient(145deg, #151515 0%, #0d0d0d 100%)",
+    border: "1px solid #2a2a2a",
+    borderRadius: 12,
+    padding: "20px 24px",
+    textAlign: "center" as const,
+  },
+  roleCardIcon: { fontSize: 32, marginBottom: 8 },
+  roleCardTitle: { fontSize: 14, fontWeight: 700, color: "#fff", marginBottom: 4 },
+  roleCardDesc: { fontSize: 12, color: "#888", lineHeight: 1.4 },
 };
 
 // ── Component ──
@@ -424,6 +440,10 @@ const DeliveryCommandPage: React.FC = () => {
           .delivery-card-grid { grid-template-columns: 1fr !important; gap: 4px !important; font-size: 11px !important; }
           .delivery-conflict-banner { padding: 12px 16px !important; }
           .delivery-driver-jobs { flex-wrap: wrap !important; }
+          .delivery-role-hub { grid-template-columns: 1fr 1fr !important; gap: 12px !important; }
+        }
+        @media (max-width: 480px) {
+          .delivery-role-hub { grid-template-columns: 1fr !important; }
         }
       `}</style>
       <div style={s.page} className="delivery-page">
@@ -431,8 +451,35 @@ const DeliveryCommandPage: React.FC = () => {
 
       {/* Header */}
       <div style={s.header} className="delivery-header-wrap">
-        <div style={s.title} className="delivery-header">🚛 DELIVERY & DISPATCH COMMAND</div>
-        <div style={s.subtitle} className="delivery-subtitle">Saturday, February 15, 2026 • OPS CHIEF VIEW</div>
+        <div style={s.title} className="delivery-header">🚚 DELIVERY & OPERATIONS HUB</div>
+        <div style={s.subtitle} className="delivery-subtitle">
+          Expedite full-service runs • Dispatch deliveries • Handle pickups • Keep kitchen in check
+        </div>
+        <div style={{ ...s.subtitle, marginTop: 8, fontSize: 12 }}>Saturday, February 15, 2026</div>
+      </div>
+
+      {/* Role Overview — what delivery staff owns */}
+      <div style={s.roleHub} className="delivery-role-hub">
+        <div style={s.roleCard}>
+          <div style={s.roleCardIcon}>🚛</div>
+          <div style={s.roleCardTitle}>Dispatch & Deliveries</div>
+          <div style={s.roleCardDesc}>Route deliveries, assign drivers, track en-route</div>
+        </div>
+        <div style={s.roleCard}>
+          <div style={s.roleCardIcon}>🎪</div>
+          <div style={s.roleCardTitle}>Full-Service Expediting</div>
+          <div style={s.roleCardDesc}>Load out for full-service events, ensure timely departure</div>
+        </div>
+        <div style={s.roleCard}>
+          <div style={s.roleCardIcon}>📦</div>
+          <div style={s.roleCardTitle}>Special Order Pickups</div>
+          <div style={s.roleCardDesc}>Client pickups at kitchen — hand off & heating instructions</div>
+        </div>
+        <div style={s.roleCard}>
+          <div style={s.roleCardIcon}>🍳</div>
+          <div style={s.roleCardTitle}>Kitchen Oversight</div>
+          <div style={s.roleCardDesc}>Keep kitchen in check — staging, timing, flow</div>
+        </div>
       </div>
 
       {/* Conflict Banner */}
@@ -485,7 +532,7 @@ const DeliveryCommandPage: React.FC = () => {
       </div>
 
       {/* ── Driver Overview ── */}
-      <div style={s.sectionTitle}>👤 DRIVER ASSIGNMENTS</div>
+      <div style={s.sectionTitle}>📋 TODAY'S DISPATCH — Driver Assignments</div>
       {drivers.map((driver) => (
         <div
           key={driver.name}
@@ -526,7 +573,7 @@ const DeliveryCommandPage: React.FC = () => {
       ))}
 
       {/* ── Dispatch Timeline ── */}
-      <div style={s.sectionTitle}>📋 DISPATCH TIMELINE</div>
+      <div style={s.sectionTitle}>⏱️ DISPATCH TIMELINE</div>
       <div style={s.timeline}>
         <div style={s.timelineLine} />
 
