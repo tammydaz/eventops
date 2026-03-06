@@ -1,13 +1,12 @@
 import { useState, useEffect } from "react";
 import { useEventStore } from "../../state/eventStore";
-import { filterToEditableOnly, getBarServiceFieldId } from "../../services/airtable/events";
 
 type BeoIntakeActionBarProps = {
   eventId: string | null;
 };
 
 export const BeoIntakeActionBar = ({ eventId }: BeoIntakeActionBarProps) => {
-  const { setFields, deleteEvent, saveError: storeSaveError, setSaveError: clearStoreError } = useEventStore();
+  const { setFields, deleteEvent, saveCurrentEvent, saveError: storeSaveError, setSaveError: clearStoreError } = useEventStore();
   const [isSaving, setIsSaving] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -21,25 +20,11 @@ export const BeoIntakeActionBar = ({ eventId }: BeoIntakeActionBarProps) => {
     if (!eventId) return;
     setIsSaving(true);
     setSaveError(null);
-
-    await getBarServiceFieldId(); // ensure Bar Service field ID resolved for filter
-    (document.activeElement as HTMLElement)?.blur();
-    await new Promise((resolve) => setTimeout(resolve, 600));
-
-    // Get fresh event data from store (after blur handlers have run)
-    const { eventData, selectedEventId } = useEventStore.getState();
-    const raw = selectedEventId === eventId ? eventData : {};
-    const dataToSave = filterToEditableOnly(raw);
-
-    let succeeded = true;
-    if (Object.keys(dataToSave).length > 0) {
-      succeeded = await setFields(eventId, { ...dataToSave });
-      if (!succeeded) {
-        const err = useEventStore.getState().saveError;
-        setSaveError(err ?? "Failed to save");
-      }
+    const succeeded = await saveCurrentEvent(eventId);
+    if (!succeeded) {
+      const err = useEventStore.getState().saveError;
+      setSaveError(err ?? "Failed to save");
     }
-
     setIsSaving(false);
     if (succeeded) {
       setShowSuccess(true);
@@ -64,23 +49,14 @@ export const BeoIntakeActionBar = ({ eventId }: BeoIntakeActionBarProps) => {
     if (!eventId) return;
     setIsSaving(true);
     setSaveError(null);
-    await getBarServiceFieldId(); // ensure Bar Service field ID resolved for filter
-    (document.activeElement as HTMLElement)?.blur();
-    await new Promise((r) => setTimeout(r, 400));
-    const { eventData, selectedEventId } = useEventStore.getState();
-    const raw = selectedEventId === eventId ? eventData : {};
-    const dataToSave = filterToEditableOnly(raw);
-    if (Object.keys(dataToSave).length > 0) {
-      const ok = await setFields(eventId, { ...dataToSave });
-      if (!ok) {
-        const err = useEventStore.getState().saveError;
-        setSaveError(err ?? "Failed to save before opening BEO");
-        setIsSaving(false);
-        return;
-      }
+    const ok = await saveCurrentEvent(eventId);
+    if (!ok) {
+      const err = useEventStore.getState().saveError;
+      setSaveError(err ?? "Failed to save before opening BEO");
+    } else {
+      window.location.href = `/beo-print/${eventId}`;
     }
     setIsSaving(false);
-    window.location.href = `/beo-print/${eventId}`;
   };
 
   const handleReturnToDashboard = () => {

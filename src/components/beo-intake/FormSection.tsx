@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, type ReactNode } from "react";
+import { useEventStore } from "../../state/eventStore";
 
 /** Helper text below form fields — prominent and readable on dark backgrounds */
 export const helperStyle = {
@@ -119,7 +120,12 @@ export const FormSection = ({
   isDelivery = false,
 }: FormSectionProps) => {
   const [isOpen, setIsOpen] = useState(defaultOpen);
+  const [isSaving, setIsSaving] = useState(false);
+  const [showSaved, setShowSaved] = useState(false);
   const prevDefaultOpen = useRef(defaultOpen);
+  const selectedEventId = useEventStore((s) => s.selectedEventId);
+  const saveCurrentEvent = useEventStore((s) => s.saveCurrentEvent);
+
   useEffect(() => {
     if (prevDefaultOpen.current !== defaultOpen) {
       prevDefaultOpen.current = defaultOpen;
@@ -128,6 +134,17 @@ export const FormSection = ({
   }, [defaultOpen]);
   const borderColor = isDelivery ? "#22c55e" : "#00bcd4";
   const glowColor = isDelivery ? "rgba(34,197,94,0.2)" : "rgba(0,188,212,0.2)";
+
+  const handleSave = async () => {
+    if (!selectedEventId) return;
+    setIsSaving(true);
+    const ok = await saveCurrentEvent(selectedEventId);
+    setIsSaving(false);
+    if (ok) {
+      setShowSaved(true);
+      setTimeout(() => setShowSaved(false), 2000);
+    }
+  };
 
   return (
     <div
@@ -186,15 +203,41 @@ export const FormSection = ({
 
       {/* Section Content with Grid */}
       {isOpen && (
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
-            gap: "20px",
-          }}
-        >
-          {children}
-        </div>
+        <>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
+              gap: "20px",
+            }}
+          >
+            {children}
+          </div>
+          {selectedEventId && (
+            <div style={{ marginTop: 20, paddingTop: 16, borderTop: `1px solid ${borderColor}40` }}>
+              <button
+                type="button"
+                onClick={handleSave}
+                disabled={isSaving}
+                style={{
+                  padding: "8px 20px",
+                  fontSize: "12px",
+                  fontWeight: 700,
+                  textTransform: "uppercase",
+                  letterSpacing: "0.5px",
+                  borderRadius: "8px",
+                  border: `2px solid ${isDelivery ? "#22c55e" : "#ff6b6b"}`,
+                  background: isSaving ? "rgba(255,255,255,0.05)" : (isDelivery ? "#22c55e" : "#ff6b6b"),
+                  color: "#fff",
+                  cursor: isSaving ? "not-allowed" : "pointer",
+                  opacity: isSaving ? 0.7 : 1,
+                }}
+              >
+                {showSaved ? "Saved ✓" : isSaving ? "Saving…" : "Save"}
+              </button>
+            </div>
+          )}
+        </>
       )}
     </div>
   );
