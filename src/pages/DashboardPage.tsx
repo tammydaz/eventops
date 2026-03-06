@@ -82,7 +82,7 @@ const NAV = [
 /* ── Department circles data ── */
 const DEPARTMENTS = [
   { id: "kitchen",   label: "Kitchen",                icon: "🍳", cls: "bubble-1", hasSubmenu: true },
-  { id: "logistics", label: "Delivery/Fleet Command Center", icon: "🚚", cls: "bubble-5", hasSubmenu: true },
+  { id: "logistics", label: "Delivery & Operations Hub", icon: "🚚", cls: "bubble-5", hasSubmenu: true },
   { id: "intake",    label: "CENTRAL COMMAND CENTER", icon: "📝", cls: "bubble-2", hasSubmenu: true },
   { id: "flair",     label: "Flair/Equipment Command Center", icon: "✨", cls: "bubble-3", hasSubmenu: true },
 ];
@@ -102,6 +102,9 @@ export default function DashboardPage() {
   const visibleNav = NAV.filter((item) => item.href.startsWith("#") || canAccessRoute(role, item.href));
   const [activeTab, setActiveTab] = useState("Upcoming");
   const viewMode: ViewMode = "owner";
+  const [sortBy, setSortBy] = useState<"date" | "client" | "venue" | "guests" | "category">("date");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+  const [eventView, setEventView] = useState<"grid" | "list">("grid");
   const [intakeOpen, setIntakeOpen] = useState(false);
   const [kitchenOpen, setKitchenOpen] = useState(false);
   const [logisticsOpen, setLogisticsOpen] = useState(false);
@@ -142,12 +145,27 @@ export default function DashboardPage() {
 
   const eventDataList = useMemo(() => rawEvents.map(listItemToEventData), [rawEvents]);
   const today = todayStr();
-  const events = useMemo(() => {
+  const filteredEvents = useMemo(() => {
     if (activeTab === "Live Events") return eventDataList.filter((e) => e.eventDate === today);
     if (activeTab === "Upcoming") return eventDataList.filter((e) => (e.eventDate ?? "") >= today);
     if (activeTab === "Completed" || activeTab === "Archive") return eventDataList.filter((e) => (e.eventDate ?? "") < today);
     return eventDataList;
   }, [eventDataList, activeTab, today]);
+
+  const events = useMemo(() => {
+    const arr = [...filteredEvents];
+    const mult = sortDir === "asc" ? 1 : -1;
+    arr.sort((a, b) => {
+      let cmp = 0;
+      if (sortBy === "date") cmp = (a.eventDate ?? "").localeCompare(b.eventDate ?? "");
+      else if (sortBy === "client") cmp = a.client.localeCompare(b.client);
+      else if (sortBy === "venue") cmp = a.venue.localeCompare(b.venue);
+      else if (sortBy === "guests") cmp = (a.guests ?? 0) - (b.guests ?? 0);
+      else if (sortBy === "category") cmp = a.category.localeCompare(b.category);
+      return mult * cmp;
+    });
+    return arr;
+  }, [filteredEvents, sortBy, sortDir]);
 
   const searchResults = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
@@ -333,7 +351,54 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* ── Events Grid ── */}
+        {/* ── Sort & View Toolbar ── */}
+        <div className="dp-toolbar">
+          <div className="dp-toolbar-sort">
+            <label htmlFor="dp-sort-select" className="dp-toolbar-label">Sort by</label>
+            <select
+              id="dp-sort-select"
+              className="dp-toolbar-select"
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
+            >
+              <option value="date">Date</option>
+              <option value="client">Client</option>
+              <option value="venue">Venue</option>
+              <option value="guests">Guests</option>
+              <option value="category">Category</option>
+            </select>
+            <button
+              type="button"
+              className="dp-toolbar-sort-dir"
+              onClick={() => setSortDir((d) => (d === "asc" ? "desc" : "asc"))}
+              title={sortDir === "asc" ? "Ascending (click for descending)" : "Descending (click for ascending)"}
+            >
+              {sortDir === "asc" ? "↑" : "↓"}
+            </button>
+          </div>
+          <div className="dp-toolbar-view">
+            <button
+              type="button"
+              className={`dp-toolbar-view-btn ${eventView === "grid" ? "active" : ""}`}
+              onClick={() => setEventView("grid")}
+              title="Grid view"
+              aria-pressed={eventView === "grid"}
+            >
+              ⊞ Grid
+            </button>
+            <button
+              type="button"
+              className={`dp-toolbar-view-btn ${eventView === "list" ? "active" : ""}`}
+              onClick={() => setEventView("list")}
+              title="List view"
+              aria-pressed={eventView === "list"}
+            >
+              ☰ List
+            </button>
+          </div>
+        </div>
+
+        {/* ── Events Grid / List ── */}
         <div className="dp-events-area">
           {eventsError && (
             <div className="dp-events-error">
@@ -347,22 +412,76 @@ export default function DashboardPage() {
             <div className="dp-events-loading">Loading events…</div>
           )}
           {!eventsLoading && !eventsError && (
-            <div className="dp-events-grid">
-              {events.length === 0 ? (
-                <div className="dp-events-empty">
-                  <p>No events in &quot;{activeTab}&quot;</p>
-                  <p className="dp-events-empty-hint">
-                    {activeTab === "Live Events" && "Try the Upcoming tab, or add an event."}
-                    {activeTab === "Upcoming" && "Add an event via Quick Intake or Upload Invoice."}
-                    {(activeTab === "Completed" || activeTab === "Archive") && "Past events will appear here."}
-                  </p>
-                </div>
-              ) : (
-                events.map((evt) => (
-                  <PremiumCard key={evt.id} event={evt} viewMode={viewMode} onSelect={() => handleSelectEvent(evt.id)} />
-                ))
-              )}
-            </div>
+            eventView === "grid" ? (
+              <div className="dp-events-grid">
+                {events.length === 0 ? (
+                  <div className="dp-events-empty">
+                    <p>No events in &quot;{activeTab}&quot;</p>
+                    <p className="dp-events-empty-hint">
+                      {activeTab === "Live Events" && "Try the Upcoming tab, or add an event."}
+                      {activeTab === "Upcoming" && "Add an event via Quick Intake or Upload Invoice."}
+                      {(activeTab === "Completed" || activeTab === "Archive") && "Past events will appear here."}
+                    </p>
+                  </div>
+                ) : (
+                  events.map((evt) => (
+                    <PremiumCard key={evt.id} event={evt} viewMode={viewMode} onSelect={() => handleSelectEvent(evt.id)} />
+                  ))
+                )}
+              </div>
+            ) : (
+              <div className="dp-events-list">
+                {events.length === 0 ? (
+                  <div className="dp-events-empty">
+                    <p>No events in &quot;{activeTab}&quot;</p>
+                    <p className="dp-events-empty-hint">
+                      {activeTab === "Live Events" && "Try the Upcoming tab, or add an event."}
+                      {activeTab === "Upcoming" && "Add an event via Quick Intake or Upload Invoice."}
+                      {(activeTab === "Completed" || activeTab === "Archive") && "Past events will appear here."}
+                    </p>
+                  </div>
+                ) : (
+                  <>
+                    <div className="dp-list-header">
+                      <div className="dp-list-col dp-list-col-date">Date</div>
+                      <div className="dp-list-col dp-list-col-name">Event</div>
+                      <div className="dp-list-col dp-list-col-client">Client</div>
+                      <div className="dp-list-col dp-list-col-venue">Venue</div>
+                      <div className="dp-list-col dp-list-col-guests">Guests</div>
+                      <div className="dp-list-col dp-list-col-category">Category</div>
+                    </div>
+                    {events.map((evt) => (
+                      <div
+                        key={evt.id}
+                        className="dp-list-row"
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => handleSelectEvent(evt.id)}
+                        onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && handleSelectEvent(evt.id)}
+                      >
+                        <div className="dp-list-col dp-list-col-date">{evt.time}</div>
+                        <div className="dp-list-col dp-list-col-name">{evt.name}</div>
+                        <div className="dp-list-col dp-list-col-client">{evt.client}</div>
+                        <div className="dp-list-col dp-list-col-venue">{evt.venue}</div>
+                        <div className="dp-list-col dp-list-col-guests">{evt.guests}</div>
+                        <div className="dp-list-col dp-list-col-category">
+                          <span
+                            className="dp-list-pill"
+                            style={{
+                              color: CAT_COLORS[evt.category] ?? "#ff9999",
+                              backgroundColor: `${CAT_COLORS[evt.category] ?? "#ff9999"}18`,
+                              borderColor: `${CAT_COLORS[evt.category] ?? "#ff9999"}40`,
+                            }}
+                          >
+                            {evt.category}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </>
+                )}
+              </div>
+            )
           )}
 
           {/* ── Department Command Ring ── */}
@@ -458,7 +577,7 @@ export default function DashboardPage() {
                         <a href="/beo-intake" className="dp-submenu-item">📋 Open BEO Full Intake</a>
                         {role === "ops_admin" && (
                           <>
-                            <a href="/delivery-command" className="dp-submenu-item">🚛 Delivery & Dispatch Command</a>
+                            <a href="/delivery-command" className="dp-submenu-item">🚚 Delivery & Operations Hub</a>
                             <div className="dp-submenu-item">🗺️ Route Planning</div>
                             <div className="dp-submenu-item">📍 Vehicle Tracking</div>
                             <div className="dp-submenu-item">⚙️ Fleet Management</div>

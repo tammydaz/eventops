@@ -422,7 +422,7 @@ const Watchtower = () => {
                       }}
                     >
                       <span style={styles.actionIcon}>🚛</span>
-                      <span style={styles.actionText}>Delivery & Dispatch Command</span>
+                      <span style={styles.actionText}>Delivery & Operations Hub</span>
                     </Link>
 
                     <Link

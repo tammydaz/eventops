@@ -531,6 +531,169 @@
   color: #666;
 }
 
+/* ═══ SORT & VIEW TOOLBAR ═══ */
+.dp-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 0 20px;
+  border-bottom: 1px solid rgba(204, 0, 0, 0.15);
+  margin-bottom: 20px;
+}
+
+.dp-toolbar-sort {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.dp-toolbar-label {
+  font-size: 12px;
+  color: #888;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.dp-toolbar-select {
+  padding: 8px 12px;
+  background: rgba(20, 10, 15, 0.8);
+  border: 1px solid rgba(204, 0, 0, 0.3);
+  border-radius: 6px;
+  color: #e0e0e0;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.dp-toolbar-select:hover,
+.dp-toolbar-select:focus {
+  border-color: rgba(204, 0, 0, 0.5);
+  outline: none;
+}
+
+.dp-toolbar-sort-dir {
+  padding: 8px 12px;
+  background: rgba(20, 10, 15, 0.8);
+  border: 1px solid rgba(204, 0, 0, 0.3);
+  border-radius: 6px;
+  color: #e0e0e0;
+  font-size: 14px;
+  font-weight: bold;
+  cursor: pointer;
+}
+
+.dp-toolbar-sort-dir:hover {
+  border-color: rgba(204, 0, 0, 0.5);
+  background: rgba(204, 0, 0, 0.1);
+}
+
+.dp-toolbar-view {
+  display: flex;
+  gap: 4px;
+}
+
+.dp-toolbar-view-btn {
+  padding: 8px 14px;
+  background: rgba(20, 10, 15, 0.8);
+  border: 1px solid rgba(204, 0, 0, 0.3);
+  border-radius: 6px;
+  color: #a0a0a0;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.dp-toolbar-view-btn:hover {
+  color: #fff;
+  border-color: rgba(204, 0, 0, 0.5);
+}
+
+.dp-toolbar-view-btn.active {
+  background: rgba(204, 0, 0, 0.2);
+  border-color: #cc0000;
+  color: #fff;
+}
+
+/* ═══ LIST VIEW (ROW/COLUMN) ═══ */
+.dp-events-list {
+  margin-bottom: 40px;
+}
+
+.dp-list-header {
+  display: grid;
+  grid-template-columns: 100px 1fr 1fr 1fr 70px 100px;
+  gap: 16px;
+  padding: 12px 20px;
+  background: rgba(20, 10, 15, 0.6);
+  border: 1px solid rgba(204, 0, 0, 0.2);
+  border-radius: 8px 8px 0 0;
+  font-size: 11px;
+  font-weight: 600;
+  color: #888;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.dp-list-row {
+  display: grid;
+  grid-template-columns: 100px 1fr 1fr 1fr 70px 100px;
+  gap: 16px;
+  padding: 14px 20px;
+  background: rgba(30, 10, 15, 0.4);
+  border: 1px solid rgba(204, 0, 0, 0.1);
+  border-top: none;
+  font-size: 13px;
+  color: #e0e0e0;
+  cursor: pointer;
+  transition: background 0.2s ease;
+  align-items: center;
+}
+
+.dp-list-row:last-child {
+  border-radius: 0 0 8px 8px;
+}
+
+.dp-list-row:hover {
+  background: rgba(40, 15, 20, 0.6);
+}
+
+.dp-list-col-name {
+  font-weight: 600;
+  color: #fff;
+}
+
+.dp-list-pill {
+  display: inline-block;
+  padding: 3px 8px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 500;
+  border: 1px solid;
+}
+
+@media (max-width: 900px) {
+  .dp-toolbar {
+    flex-wrap: wrap;
+  }
+  .dp-list-header,
+  .dp-list-row {
+    grid-template-columns: 80px 1fr 1fr 60px 80px;
+  }
+  .dp-list-col-venue {
+    display: none;
+  }
+}
+
+@media (max-width: 600px) {
+  .dp-list-header,
+  .dp-list-row {
+    grid-template-columns: 70px 1fr 50px 70px;
+  }
+  .dp-list-col-client {
+    display: none;
+  }
+}
+
 /* ═══ EVENT CARD ═══ */
 .dp-events-grid {
   display: grid;
