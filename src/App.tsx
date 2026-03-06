@@ -20,6 +20,7 @@ function App() {
   const isSeedDemo = pathname.startsWith("/seed-demo");
   const isInvoiceIntake = pathname.startsWith("/invoice-intake");
   const isFeedbackIssues = pathname.startsWith("/feedback-issues");
+  const isAdmin = pathname.startsWith("/admin");
 
   useEffect(() => {
     loadEvents();
@@ -35,7 +36,7 @@ function App() {
     }
   }, [pathname, selectedEventId, selectEvent]);
 
-  if (isPrintTest || isHome || isQuickIntake || isWatchtower || isPapaChulo || isFOH || isDashboardOld || isBeoIntake || isBeoPrint || isSeedDemo || isInvoiceIntake || isFeedbackIssues) {
+  if (isPrintTest || isHome || isQuickIntake || isWatchtower || isPapaChulo || isFOH || isDashboardOld || isBeoIntake || isBeoPrint || isSeedDemo || isInvoiceIntake || isFeedbackIssues || isAdmin) {
     return (
       <AuthGuard>
         <Router selectedEventId={selectedEventId} />
@@ -54,7 +55,10 @@ function App() {
         ) : null}
         {!isBeoIntake && (
           <header className="fwx-header rounded-lg p-8 mb-8">
-            <h1 className="fwx-title text-2xl font-bold text-red-500">FOODWERX EVENTOPS</h1>
+            <h1 className="fwx-title fwx-werx-brand">
+              <span className="fwx-werx-logo">Werx</span>
+              <span className="fwx-werx-tagline">The engine behind the excellence!!</span>
+            </h1>
             <p className="fwx-subtitle text-sm mt-2 uppercase tracking-[0.35em]">BEO Intake</p>
             {!selectedEventId ? (
               <div className="mt-4">

@@ -175,6 +175,41 @@ body::before {
 .header-title-section {
     text-align: center;
     flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+}
+
+.header-title-section.header-werx-brand .header-werx-logo {
+    font-family: 'Great Vibes', cursive;
+    font-size: 44px;
+    font-weight: 400;
+    color: #fff;
+    text-shadow: 0 0 20px rgba(255,255,255,1), 0 0 40px rgba(255,255,255,0.9), 0 0 60px rgba(255,255,255,0.7), 0 0 80px rgba(255,255,255,0.5);
+}
+
+.header-title-section.header-werx-brand .header-werx-tagline {
+    font-family: 'Dancing Script', cursive;
+    font-size: 19px;
+    font-weight: 600;
+    background: linear-gradient(90deg, #fff, #00bcd4, #ff6b6b, #fff, #00bcd4);
+    background-size: 300% 100%;
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    animation: header-tagline-swirl 3s ease-in-out infinite, header-tagline-shimmer 2.5s linear infinite;
+    filter: drop-shadow(0 0 8px rgba(0,188,212,0.5));
+}
+
+@keyframes header-tagline-swirl {
+    0%, 100% { transform: scale(1) rotate(-1deg); }
+    50%      { transform: scale(1.03) rotate(1deg); }
+}
+
+@keyframes header-tagline-shimmer {
+    0%   { background-position: 0% 50%; }
+    100% { background-position: 300% 50%; }
 }
 
 .header-title {

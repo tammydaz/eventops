@@ -49,8 +49,9 @@ export async function createFeedback(params: {
     headers: await getAuthHeaders(),
     body: JSON.stringify(params),
   });
-  const data = (await res.json()) as { id?: string; error?: string; details?: string };
+  const data = (await res.json()) as { id?: string; error?: string; details?: string; rawError?: string };
   if (!res.ok) {
+    console.error("[Feedback API] POST failed:", res.status, data);
     return { error: data.error || "Failed to save", details: data.details };
   }
   return { id: data.id };
@@ -71,6 +72,7 @@ export async function listFeedback(): Promise<{
     details?: string;
   };
   if (!res.ok) {
+    console.error("[Feedback API] GET failed:", res.status, data);
     return { error: data.error || "Failed to load", details: data.details };
   }
   return { records: data.records || [] };

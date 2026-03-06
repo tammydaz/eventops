@@ -10,8 +10,9 @@ export const HomeHeader = ({ activeTab, onTabChange }: HomeHeaderProps) => {
     <>
       <header className="top-header">
         <input className="search-box" placeholder="Search events..." />
-        <div className="header-title-section">
-          <div className="header-title">FoodWerx EventOps</div>
+        <div className="header-title-section header-werx-brand">
+          <span className="header-werx-logo">Werx</span>
+          <span className="header-werx-tagline">The engine behind the excellence!!</span>
         </div>
         <div className="header-right">
           <div className="notification-icon" title="Notifications"></div>

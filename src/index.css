@@ -53,10 +53,49 @@ code {
   }
 }
 
+/* ═══ Werx branding (App header, etc.) ═══ */
+.fwx-werx-brand {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.fwx-werx-brand .fwx-werx-logo {
+  font-family: 'Great Vibes', cursive;
+  font-size: 3.5rem;
+  font-weight: 400;
+  color: #fff;
+  text-shadow: 0 0 20px rgba(255,255,255,1), 0 0 40px rgba(255,255,255,0.9), 0 0 60px rgba(255,255,255,0.7), 0 0 80px rgba(255,255,255,0.5);
+}
+
+.fwx-werx-brand .fwx-werx-tagline {
+  font-family: 'Dancing Script', cursive;
+  font-size: 1.35rem;
+  font-weight: 600;
+  background: linear-gradient(90deg, #fff, #00bcd4, #ff6b6b, #fff, #00bcd4);
+  background-size: 300% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: fwx-tagline-swirl 3s ease-in-out infinite, fwx-tagline-shimmer 2.5s linear infinite;
+  filter: drop-shadow(0 0 8px rgba(0,188,212,0.5));
+}
+
+@keyframes fwx-tagline-swirl {
+  0%, 100% { transform: scale(1) rotate(-1deg); }
+  50%      { transform: scale(1.03) rotate(1deg); }
+}
+
+@keyframes fwx-tagline-shimmer {
+  0%   { background-position: 0% 50%; }
+  100% { background-position: 300% 50%; }
+}
+
 /* ═══ Feedback (right-click) ═══ */
 .feedback-context-menu {
   position: fixed;
-  z-index: 10000;
+  z-index: 10003;
   min-width: 180px;
   background: linear-gradient(180deg, #1a0a0a, #0f0505);
   border: 1px solid rgba(204, 0, 0, 0.4);
@@ -175,9 +214,263 @@ code {
   cursor: not-allowed;
 }
 
+/* ═══ Feedback Circle (floating widget) ═══ */
+.feedback-circle-btn {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  border: 2px solid rgba(204, 0, 0, 0.5);
+  background: linear-gradient(135deg, #1a0a0a, #0f0505);
+  box-shadow: 0 0 20px rgba(204, 0, 0, 0.3), 0 4px 16px rgba(0, 0, 0, 0.5);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9998;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+.feedback-circle-btn:hover {
+  transform: scale(1.08);
+  box-shadow: 0 0 28px rgba(204, 0, 0, 0.45), 0 6px 20px rgba(0, 0, 0, 0.5);
+}
+.feedback-circle-icon {
+  font-size: 24px;
+}
+.feedback-circle-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  background: #cc0000;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.feedback-circle-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  z-index: 9999;
+}
+.feedback-circle-panel {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(420px, 95vw);
+  background: linear-gradient(180deg, #0f0808, #0a0505);
+  border-left: 1px solid rgba(204, 0, 0, 0.3);
+  box-shadow: -8px 0 32px rgba(0, 0, 0, 0.5);
+  z-index: 10000;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.feedback-circle-panel-header {
+  padding: 20px 20px 12px;
+  border-bottom: 1px solid rgba(204, 0, 0, 0.2);
+  position: relative;
+}
+.feedback-circle-panel-header h3 {
+  margin: 0 0 4px;
+  font-size: 18px;
+  color: #fff;
+}
+.feedback-circle-panel-sub {
+  margin: 0;
+  font-size: 12px;
+  color: #94a3b8;
+}
+.feedback-circle-close {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: rgba(255, 255, 255, 0.05);
+  color: #94a3b8;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 16px;
+}
+.feedback-circle-close:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+}
+.feedback-circle-quick {
+  padding: 16px 20px;
+  border-bottom: 1px solid rgba(204, 0, 0, 0.15);
+  background: rgba(204, 0, 0, 0.05);
+}
+.feedback-circle-quick-label {
+  margin: 0 0 8px;
+  font-size: 12px;
+  color: #94a3b8;
+}
+.feedback-circle-quick-label strong {
+  color: #e2e8f0;
+}
+.feedback-circle-quick-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.feedback-circle-quick-row input {
+  flex: 1;
+  padding: 10px 12px;
+  border: 1px solid rgba(204, 0, 0, 0.3);
+  border-radius: 8px;
+  background: rgba(20, 10, 10, 0.8);
+  color: #e2e8f0;
+  font-size: 14px;
+}
+.feedback-circle-quick-row input:focus {
+  outline: none;
+  border-color: rgba(204, 0, 0, 0.5);
+}
+.feedback-circle-quick-row button {
+  padding: 10px 16px;
+  background: linear-gradient(135deg, #cc0000, #ff3333);
+  border: none;
+  border-radius: 8px;
+  color: #fff;
+  font-weight: 600;
+  cursor: pointer;
+}
+.feedback-circle-quick-row button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+.feedback-circle-more {
+  background: none;
+  border: none;
+  color: #94a3b8;
+  font-size: 11px;
+  cursor: pointer;
+  text-decoration: underline;
+}
+.feedback-circle-more:hover {
+  color: #e2e8f0;
+}
+.feedback-circle-error {
+  margin: 12px 20px;
+  padding: 10px 12px;
+  background: rgba(239, 68, 68, 0.15);
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  border-radius: 8px;
+  color: #fca5a5;
+  font-size: 13px;
+}
+.feedback-circle-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px 20px;
+}
+.feedback-circle-list section {
+  margin-bottom: 20px;
+}
+.feedback-circle-list section h4 {
+  margin: 0 0 10px;
+  font-size: 13px;
+  color: #a78bfa;
+  text-transform: uppercase;
+}
+.feedback-circle-loading,
+.feedback-circle-empty {
+  color: #94a3b8;
+  font-size: 14px;
+  margin: 0;
+}
+.feedback-circle-card {
+  background: #1a1a1a;
+  border: 1px solid #444;
+  border-radius: 8px;
+  padding: 14px;
+  margin-bottom: 10px;
+}
+.feedback-circle-card.resolved {
+  background: #0f0f0f;
+  border-color: rgba(34, 197, 94, 0.3);
+}
+.feedback-circle-card-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+.feedback-circle-card-body {
+  flex: 1;
+  min-width: 0;
+}
+.feedback-circle-card-meta {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 6px;
+  flex-wrap: wrap;
+}
+.feedback-circle-card-type {
+  font-size: 11px;
+  font-weight: 600;
+  color: #a78bfa;
+  text-transform: uppercase;
+}
+.feedback-circle-card-screen {
+  font-size: 12px;
+  color: #94a3b8;
+}
+.feedback-circle-card-status {
+  font-size: 11px;
+  color: #22c55e;
+  font-weight: 600;
+}
+.feedback-circle-card-msg {
+  margin: 0 0 8px;
+  color: #e2e8f0;
+  font-size: 14px;
+  line-height: 1.45;
+}
+.feedback-circle-card-by {
+  font-size: 11px;
+  color: #64748b;
+}
+.feedback-circle-card-note {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: #86efac;
+}
+.feedback-circle-resolve-btn {
+  padding: 6px 12px;
+  font-size: 12px;
+  background: #22c55e;
+  border: none;
+  border-radius: 6px;
+  color: #111;
+  font-weight: 600;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.feedback-circle-resolve-btn:disabled {
+  opacity: 0.7;
+  cursor: wait;
+}
+
 @media print {
   .feedback-context-menu,
-  .feedback-modal-backdrop {
+  .feedback-modal-backdrop,
+  .feedback-circle-btn,
+  .feedback-circle-panel,
+  .feedback-circle-backdrop {
     display: none !important;
   }
   .no-print {

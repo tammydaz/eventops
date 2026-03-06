@@ -22,6 +22,7 @@ import KitchenBEOPrintPage from "./pages/KitchenBEOPrintPage";
 import SiteVisitPage from "./pages/SiteVisitPage";
 import InvoiceIntakePage from "./pages/InvoiceIntakePage";
 import FeedbackIssuesPage from "./pages/FeedbackIssuesPage";
+import AdminPage from "./pages/AdminPage";
 
 export const Router = ({ selectedEventId }: { selectedEventId: string | null }) => {
 	const { pathname } = useLocation();
@@ -116,6 +117,10 @@ export const Router = ({ selectedEventId }: { selectedEventId: string | null }) 
 
   if (pathname.startsWith("/feedback-issues")) {
     return <FeedbackIssuesPage />;
+  }
+
+  if (pathname.startsWith("/admin")) {
+    return <AdminPage />;
   }
 
 	return <DashboardPage />;

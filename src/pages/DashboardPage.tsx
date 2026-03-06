@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, NavLink, useNavigate } from "react-router-dom";
 import "./DashboardPage.css";
 import type { ViewMode, HealthStatus } from "../components/dashboard/EventCard";
 import { useEventStore } from "../state/eventStore";
@@ -19,6 +19,8 @@ interface EventData {
   venue: string;
   guests: number;
   category: string;
+  eventType: string;
+  serviceStyle: string;
   healthFOH: HealthStatus;
   healthBOH: HealthStatus;
 }
@@ -49,6 +51,8 @@ function listItemToEventData(e: EventListItem): EventData {
     venue,
     guests: e.guestCount ?? 0,
     category: e.eventType ?? e.eventOccasion ?? "—",
+    eventType: e.eventType ?? "—",
+    serviceStyle: e.serviceStyle ?? "—",
     healthFOH: "green",
     healthBOH: "green",
   };
@@ -68,23 +72,25 @@ const CAT_COLORS: Record<string, string> = {
 };
 
 /* ── Sidebar nav items ── */
-const NAV = [
-  { label: "Dashboard", href: "/", active: true },
+type NavItem = { label: string; href: string; expandable?: boolean; subtitle?: string };
+const NAV: NavItem[] = [
+  { label: "Dashboard", href: "/" },
+  { label: "Add Event", href: "/quick-intake" },
   { label: "Open Event", href: "/beo-intake" },
-  { label: "Intake", href: "/invoice-intake" },
-  { label: "Watchtower", href: "/watchtower" },
-  { label: "Papa Chulo", href: "/papa-chulo" },
-  { label: "Departments", href: "#departments" },
-  { label: "Print Engine", href: "/print-test" },
-  { label: "My Issues", href: "/feedback-issues" },
+  { label: "Departments", href: "#departments", expandable: true },
+  { label: "Watchtower", href: "/watchtower", subtitle: "Papa Chulo Watchtower" },
+  { label: "Ops Chief", href: "/ops-chief" },
+  { label: "Admin", href: "/admin" },
+  { label: "Development Hub", href: "/feedback-issues" },
 ];
 
-/* ── Department circles data ── */
-const DEPARTMENTS = [
-  { id: "kitchen",   label: "Kitchen",                icon: "🍳", cls: "bubble-1", hasSubmenu: true },
-  { id: "logistics", label: "Delivery & Operations Hub", icon: "🚚", cls: "bubble-5", hasSubmenu: true },
-  { id: "intake",    label: "CENTRAL COMMAND CENTER", icon: "📝", cls: "bubble-2", hasSubmenu: true },
-  { id: "flair",     label: "Flair/Equipment Command Center", icon: "✨", cls: "bubble-3", hasSubmenu: true },
+/* ── Department sub-items (inside Departments expandable) ── */
+const DEPT_ITEMS = [
+  { id: "kitchen",   label: "Kitchen",                href: "/kitchen-prep" },
+  { id: "logistics", label: "Delivery & Operations Hub", href: "/delivery-command" },
+  { id: "intake",    label: "Central Command Center", href: "/quick-intake" },
+  { id: "flair",     label: "Flair/Equipment",       href: "/returned-equipment" },
+  { id: "feedback",  label: "Suggestions / Questions / Bugs", href: "/feedback-issues" },
 ];
 
 /* ═══════════════════════════════════════════
@@ -98,36 +104,21 @@ export default function DashboardPage() {
   const { events: rawEvents, loadEvents, selectEvent, eventsLoading, eventsError } = useEventStore();
   const role = user?.role ?? "ops_admin";
   const allowedDepts = ROLE_DEPARTMENTS[role] ?? [];
-  const visibleDepartments = DEPARTMENTS.filter((d) => allowedDepts.includes(d.id));
+  const visibleDeptItems = DEPT_ITEMS.filter((d) => role === "ops_admin" || allowedDepts.includes(d.id) || d.id === "feedback");
   const visibleNav = NAV.filter((item) => item.href.startsWith("#") || canAccessRoute(role, item.href));
+  const [departmentsOpen, setDepartmentsOpen] = useState(false);
   const [activeTab, setActiveTab] = useState("Upcoming");
   const viewMode: ViewMode = "owner";
-  const [sortBy, setSortBy] = useState<"date" | "client" | "venue" | "guests" | "category">("date");
+  const [sortBy, setSortBy] = useState<"date" | "client" | "venue" | "eventType" | "serviceStyle">("date");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
-  const [eventView, setEventView] = useState<"grid" | "list">("grid");
-  const [intakeOpen, setIntakeOpen] = useState(false);
-  const [kitchenOpen, setKitchenOpen] = useState(false);
-  const [logisticsOpen, setLogisticsOpen] = useState(false);
-  const [flairOpen, setFlairOpen] = useState(false);
-  const [vaultOpen, setVaultOpen] = useState(false);
+  const [eventView, setEventView] = useState<"grid" | "list" | "calendar">("grid");
+  const [calendarMonth, setCalendarMonth] = useState(() => new Date().getMonth());
+  const [calendarYear, setCalendarYear] = useState(() => new Date().getFullYear());
   const [searchQuery, setSearchQuery] = useState("");
-  const [addEventOpen, setAddEventOpen] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const searchWrapRef = useRef<HTMLDivElement>(null);
-  const addEventRef = useRef<HTMLDivElement>(null);
 
   const tabs = ["Live Events", "Upcoming", "Completed", "Archive"];
-
-  useEffect(() => {
-    if (!addEventOpen) return;
-    const handler = (e: MouseEvent) => {
-      if (addEventRef.current && !addEventRef.current.contains(e.target as Node)) {
-        setAddEventOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [addEventOpen]);
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -160,8 +151,8 @@ export default function DashboardPage() {
       if (sortBy === "date") cmp = (a.eventDate ?? "").localeCompare(b.eventDate ?? "");
       else if (sortBy === "client") cmp = a.client.localeCompare(b.client);
       else if (sortBy === "venue") cmp = a.venue.localeCompare(b.venue);
-      else if (sortBy === "guests") cmp = (a.guests ?? 0) - (b.guests ?? 0);
-      else if (sortBy === "category") cmp = a.category.localeCompare(b.category);
+      else if (sortBy === "eventType") cmp = a.eventType.localeCompare(b.eventType);
+      else if (sortBy === "serviceStyle") cmp = a.serviceStyle.localeCompare(b.serviceStyle);
       return mult * cmp;
     });
     return arr;
@@ -191,24 +182,53 @@ export default function DashboardPage() {
       <aside className="dp-sidebar">
         <div className="dp-logo-section">
           <div className="dp-logo-diamond">
-            <span className="dp-logo-letter">F</span>
+            <span className="dp-logo-letter">W</span>
           </div>
           <div>
-            <div className="dp-logo-title">FOODWERX</div>
-            <div className="dp-logo-subtitle">EVENTOPS</div>
+            <div className="dp-logo-title dp-logo-werx">Werx</div>
+            <div className="dp-logo-subtitle">The engine behind the excellence!!</div>
           </div>
         </div>
 
         <ul className="dp-nav">
           {visibleNav.map((item) => (
             <li key={item.label}>
-              <Link
-                to={item.href}
-                className={`dp-nav-link ${item.active ? "active" : ""}`}
-              >
-                <span className="dp-nav-dot" />
-                {item.label}
-              </Link>
+              {item.expandable ? (
+                <>
+                  <button
+                    type="button"
+                    className={`dp-nav-link dp-nav-expandable ${departmentsOpen ? "open" : ""}`}
+                    onClick={() => setDepartmentsOpen(!departmentsOpen)}
+                  >
+                    <span className="dp-nav-dot" />
+                    {item.label}
+                    <span className="dp-nav-chevron">{departmentsOpen ? "▾" : "▸"}</span>
+                  </button>
+                  {departmentsOpen && (
+                    <ul className="dp-nav-sub">
+                      {visibleDeptItems.map((dept) => (
+                        <li key={dept.id}>
+                          <Link
+                            to={dept.href}
+                            className="dp-nav-sub-link"
+                          >
+                            {dept.label}
+                          </Link>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </>
+              ) : (
+                <NavLink
+                  to={item.href}
+                  className={({ isActive }) => `dp-nav-link ${isActive ? "active" : ""}`}
+                >
+                  <span className="dp-nav-dot" />
+                  {item.label}
+                  {item.subtitle && <span className="dp-nav-subtitle">{item.subtitle}</span>}
+                </NavLink>
+              )}
             </li>
           ))}
         </ul>
@@ -228,18 +248,44 @@ export default function DashboardPage() {
       <aside className={`dp-mobile-nav-drawer ${mobileNavOpen ? "open" : ""}`}>
         <div className="dp-mobile-nav-header">
           <div className="dp-logo-section">
-            <div className="dp-logo-diamond"><span className="dp-logo-letter">F</span></div>
-            <div><div className="dp-logo-title">FOODWERX</div><div className="dp-logo-subtitle">EVENTOPS</div></div>
+            <div className="dp-logo-diamond"><span className="dp-logo-letter">W</span></div>
+            <div><div className="dp-logo-title dp-logo-werx">Werx</div><div className="dp-logo-subtitle">The engine behind the excellence!!</div></div>
           </div>
           <button type="button" className="dp-mobile-nav-close" onClick={() => setMobileNavOpen(false)} aria-label="Close menu">✕</button>
         </div>
         <ul className="dp-nav">
           {visibleNav.map((item) => (
             <li key={item.label}>
-              <Link to={item.href} className={`dp-nav-link ${item.active ? "active" : ""}`} onClick={() => setMobileNavOpen(false)}>
-                <span className="dp-nav-dot" />
-                {item.label}
-              </Link>
+              {item.expandable ? (
+                <>
+                  <button
+                    type="button"
+                    className={`dp-nav-link dp-nav-expandable ${departmentsOpen ? "open" : ""}`}
+                    onClick={() => setDepartmentsOpen(!departmentsOpen)}
+                  >
+                    <span className="dp-nav-dot" />
+                    {item.label}
+                    <span className="dp-nav-chevron">{departmentsOpen ? "▾" : "▸"}</span>
+                  </button>
+                  {departmentsOpen && (
+                    <ul className="dp-nav-sub">
+                      {visibleDeptItems.map((dept) => (
+                        <li key={dept.id}>
+                          <Link to={dept.href} className="dp-nav-sub-link" onClick={() => setMobileNavOpen(false)}>
+                            {dept.label}
+                          </Link>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </>
+              ) : (
+                <NavLink to={item.href} className={({ isActive }) => `dp-nav-link ${isActive ? "active" : ""}`} onClick={() => setMobileNavOpen(false)}>
+                  <span className="dp-nav-dot" />
+                  {item.label}
+                  {item.subtitle && <span className="dp-nav-subtitle">{item.subtitle}</span>}
+                </NavLink>
+              )}
             </li>
           ))}
         </ul>
@@ -255,6 +301,11 @@ export default function DashboardPage() {
       <main className="dp-main">
         {/* ── Header ── */}
         <header className="dp-header">
+          <div className="dp-header-top">
+            <span className="dp-header-copyright">System Designed & Engineered by © Tammy Daddazio — All Rights Reserved</span>
+          </div>
+          <div className="dp-header-main">
+          <div className="dp-header-left">
           <button type="button" className="dp-mobile-hamburger" onClick={() => setMobileNavOpen(true)} aria-label="Open menu">
             <span /><span /><span />
           </button>
@@ -285,188 +336,14 @@ export default function DashboardPage() {
               </div>
             )}
           </div>
-          <div className="dp-header-title">FoodWerx EventOps</div>
-          <div className="dp-header-right">
-            <div className="dp-notif" title="Notifications" />
-            <div className="dp-header-right-inner">
-            {(canAccessRoute(role, "/quick-intake") || canAccessRoute(role, "/invoice-intake")) && (
-            <div className="dp-add-event-wrap" ref={addEventRef}>
-              <button
-                type="button"
-                className="dp-add-btn"
-                onClick={() => setAddEventOpen(!addEventOpen)}
-                aria-expanded={addEventOpen}
-                aria-haspopup="true"
-              >
-                Add Event ▾
-              </button>
-              {addEventOpen && (
-                <div className="dp-add-event-dropdown">
-                  {canAccessRoute(role, "/quick-intake") && (
-                    <Link
-                      to="/quick-intake"
-                      className="dp-add-event-item"
-                      onClick={() => setAddEventOpen(false)}
-                    >
-                      New Event (Quick Intake)
-                    </Link>
-                  )}
-                  {canAccessRoute(role, "/invoice-intake") && (
-                    <Link
-                      to="/invoice-intake"
-                      className="dp-add-event-item"
-                      onClick={() => setAddEventOpen(false)}
-                    >
-                      Upload Invoice / Excel
-                    </Link>
-                  )}
-                </div>
-              )}
-            </div>
-            )}
-            {user && (
-              <span className="dp-user-badge">{user.name}</span>
-            )}
-            <div className="dp-user">FWX</div>
-            </div>
+          </div>
+          <div className="dp-header-title dp-werx-brand">
+            <span className="dp-werx-logo">Werx</span>
+            <span className="dp-werx-tagline">The engine behind the excellence!!</span>
+          </div>
+          <div className="dp-header-spacer" aria-hidden="true" />
           </div>
         </header>
-
-        {/* ── Department Hubs (moved to top) ── */}
-        <section
-          className="dp-dept-section"
-          id="departments"
-          onClick={() => {
-            setIntakeOpen(false);
-            setKitchenOpen(false);
-            setLogisticsOpen(false);
-            setFlairOpen(false);
-          }}
-        >
-          {role === "ops_admin" && (
-            <>
-              <div
-                className="dp-diamond dp-diamond-left"
-                role="button"
-                tabIndex={0}
-                onClick={() => (window.location.href = "/ops-chief")}
-                onKeyDown={(e) => { if (e.key === "Enter") window.location.href = "/ops-chief"; }}
-              >
-                <span>Ops Chief<br />Command Post</span>
-              </div>
-              <div
-                className="dp-diamond dp-diamond-right"
-                role="button"
-                tabIndex={0}
-                onClick={() => (window.location.href = "/watchtower")}
-                onKeyDown={(e) => { if (e.key === "Enter") window.location.href = "/watchtower"; }}
-              >
-                <span>Papa Chulo<br />Watchtower</span>
-              </div>
-            </>
-          )}
-
-          <h2 className="dp-dept-title">Department Hubs</h2>
-
-          <div className="dp-dept-grid">
-            {visibleDepartments.map((dept) => {
-              const isIntake = dept.id === "intake";
-              const isKitchen = dept.id === "kitchen";
-              const isLogistics = dept.id === "logistics";
-              const isFlair = dept.id === "flair";
-              const isVault = false;
-              return (
-                <div key={dept.id} className="dp-dept-wrap">
-                  <div
-                    className={`dp-dept-bubble ${dept.cls}`}
-                    role="button"
-                    tabIndex={0}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      if (isIntake) setIntakeOpen(!intakeOpen);
-                      if (isKitchen) setKitchenOpen(!kitchenOpen);
-                      if (isLogistics) setLogisticsOpen(!logisticsOpen);
-                      if (isFlair) setFlairOpen(!flairOpen);
-                      if (isVault) setVaultOpen(!vaultOpen);
-                    }}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" || e.key === " ") {
-                        if (isIntake) setIntakeOpen(!intakeOpen);
-                        if (isKitchen) setKitchenOpen(!kitchenOpen);
-                        if (isLogistics) setLogisticsOpen(!logisticsOpen);
-                        if (isFlair) setFlairOpen(!flairOpen);
-                        if (isVault) setVaultOpen(!vaultOpen);
-                      }
-                    }}
-                  >
-                    <div className="dp-bubble-icon">{dept.icon}</div>
-                    <div className="dp-bubble-label">{dept.label}</div>
-                  </div>
-
-                  {isKitchen && kitchenOpen && (
-                    <div className="dp-submenu">
-                      <a href="/quick-intake" className="dp-submenu-item">➕ Add Event</a>
-                      <a href="/beo-intake" className="dp-submenu-item">📋 Open BEO Full Intake</a>
-                      {role === "ops_admin" && (
-                        <>
-                          <a href="/kitchen-prep" className="dp-submenu-item">🔪 Kitchen Prep Timeline</a>
-                          <div className="dp-submenu-item">📦 Pack-Out Checklist</div>
-                          <div className="dp-submenu-item">🍽️ Menu Specs</div>
-                          <div className="dp-submenu-item">🧊 Inventory</div>
-                        </>
-                      )}
-                    </div>
-                  )}
-
-                  {isLogistics && logisticsOpen && (
-                    <div className="dp-submenu">
-                      <a href="/quick-intake" className="dp-submenu-item">➕ Add Event</a>
-                      <a href="/beo-intake" className="dp-submenu-item">📋 Open BEO Full Intake</a>
-                      {role === "ops_admin" && (
-                        <>
-                          <a href="/delivery-command" className="dp-submenu-item">🚚 Delivery & Operations Hub</a>
-                          <div className="dp-submenu-item">🗺️ Route Planning</div>
-                          <div className="dp-submenu-item">📍 Vehicle Tracking</div>
-                          <div className="dp-submenu-item">⚙️ Fleet Management</div>
-                        </>
-                      )}
-                    </div>
-                  )}
-
-                  {isIntake && intakeOpen && (
-                    <div className="dp-submenu">
-                      <a href="/quick-intake" className="dp-submenu-item">➕ Add Event</a>
-                      <a href="/beo-intake" className="dp-submenu-item">📋 Open BEO Full Intake</a>
-                      {role === "ops_admin" && (
-                        <>
-                          <a href="/quick-intake" className="dp-submenu-item">Quick Client Intake</a>
-                          <a href="/seed-demo" className="dp-submenu-item">🌱 Seed Demo Event</a>
-                          <div className="dp-submenu-item">Rentals</div>
-                          <div className="dp-submenu-item">Ops Vault</div>
-                          <a href="/invoice-intake" className="dp-submenu-item">Upload Invoice</a>
-                        </>
-                      )}
-                    </div>
-                  )}
-
-                  {isFlair && flairOpen && (
-                    <div className="dp-submenu">
-                      <a href="/quick-intake" className="dp-submenu-item">➕ Add Event</a>
-                      <a href="/beo-intake" className="dp-submenu-item">📋 Open BEO Full Intake</a>
-                      {role === "ops_admin" && (
-                        <>
-                          <div className="dp-submenu-item">✨ Flair Inventory</div>
-                          <div className="dp-submenu-item">🔧 Equipment Tracking</div>
-                          <div className="dp-submenu-item">📦 Pack-Out</div>
-                        </>
-                      )}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </section>
 
         {/* ── Tabs ── */}
         <div className="dp-tabs">
@@ -500,8 +377,8 @@ export default function DashboardPage() {
               <option value="date">Date</option>
               <option value="client">Client</option>
               <option value="venue">Venue</option>
-              <option value="guests">Guests</option>
-              <option value="category">Category</option>
+              <option value="eventType">Event Type</option>
+              <option value="serviceStyle">Service Style</option>
             </select>
             <button
               type="button"
@@ -513,6 +390,7 @@ export default function DashboardPage() {
             </button>
           </div>
           <div className="dp-toolbar-view">
+            <span className="dp-toolbar-view-label">View</span>
             <button
               type="button"
               className={`dp-toolbar-view-btn ${eventView === "grid" ? "active" : ""}`}
@@ -530,6 +408,15 @@ export default function DashboardPage() {
               aria-pressed={eventView === "list"}
             >
               ☰ List
+            </button>
+            <button
+              type="button"
+              className={`dp-toolbar-view-btn ${eventView === "calendar" ? "active" : ""}`}
+              onClick={() => setEventView("calendar")}
+              title="Calendar view"
+              aria-pressed={eventView === "calendar"}
+            >
+              📅 Calendar
             </button>
           </div>
         </div>
@@ -565,6 +452,93 @@ export default function DashboardPage() {
                   ))
                 )}
               </div>
+            ) : eventView === "calendar" ? (
+              (() => {
+                const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+                const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+                const firstDay = new Date(calendarYear, calendarMonth, 1);
+                const lastDay = new Date(calendarYear, calendarMonth + 1, 0);
+                const startOffset = firstDay.getDay();
+                const daysInMonth = lastDay.getDate();
+                const totalCells = Math.ceil((startOffset + daysInMonth) / 7) * 7;
+                const cells: { day: number | null; dateStr: string | null }[] = [];
+                for (let i = 0; i < startOffset; i++) cells.push({ day: null, dateStr: null });
+                for (let d = 1; d <= daysInMonth; d++) {
+                  const m = String(calendarMonth + 1).padStart(2, "0");
+                  const day = String(d).padStart(2, "0");
+                  cells.push({ day: d, dateStr: `${calendarYear}-${m}-${day}` });
+                }
+                while (cells.length < totalCells) cells.push({ day: null, dateStr: null });
+                const eventsInMonth = events.filter((e) => {
+                  const d = e.eventDate ?? "";
+                  return d.startsWith(`${calendarYear}-${String(calendarMonth + 1).padStart(2, "0")}`);
+                });
+                const byDate = eventsInMonth.reduce<Record<string, EventData[]>>((acc, evt) => {
+                  const d = evt.eventDate ?? "";
+                  if (!acc[d]) acc[d] = [];
+                  acc[d].push(evt);
+                  return acc;
+                }, {});
+                const goPrev = () => {
+                  if (calendarMonth === 0) {
+                    setCalendarMonth(11);
+                    setCalendarYear((y) => y - 1);
+                  } else setCalendarMonth((m) => m - 1);
+                };
+                const goNext = () => {
+                  if (calendarMonth === 11) {
+                    setCalendarMonth(0);
+                    setCalendarYear((y) => y + 1);
+                  } else setCalendarMonth((m) => m + 1);
+                };
+                return (
+                  <div className="dp-events-calendar">
+                    <div className="dp-calendar-header">
+                      <button type="button" className="dp-calendar-nav" onClick={goPrev} aria-label="Previous month">
+                        ‹
+                      </button>
+                      <h2 className="dp-calendar-title">{monthNames[calendarMonth]} {calendarYear}</h2>
+                      <button type="button" className="dp-calendar-nav" onClick={goNext} aria-label="Next month">
+                        ›
+                      </button>
+                    </div>
+                    <div className="dp-calendar-month">
+                      <div className="dp-calendar-weekdays">
+                        {dayNames.map((d) => (
+                          <div key={d} className="dp-calendar-weekday">{d}</div>
+                        ))}
+                      </div>
+                      <div className="dp-calendar-days">
+                        {cells.map((cell, i) => (
+                          <div key={i} className={`dp-calendar-cell ${cell.day === null ? "empty" : ""}`}>
+                            {cell.day !== null && (
+                              <>
+                                <div className="dp-calendar-day-num">{cell.day}</div>
+                                {cell.dateStr && byDate[cell.dateStr] && (
+                                  <div className="dp-calendar-day-events">
+                                    {byDate[cell.dateStr].map((evt) => (
+                                      <div
+                                        key={evt.id}
+                                        className="dp-calendar-event"
+                                        role="button"
+                                        tabIndex={0}
+                                        onClick={() => handleSelectEvent(evt.id)}
+                                        onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && handleSelectEvent(evt.id)}
+                                      >
+                                        {evt.name}
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                              </>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()
             ) : (
               <div className="dp-events-list">
                 {events.length === 0 ? (

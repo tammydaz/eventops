@@ -97,7 +97,7 @@ export default function FeedbackIssuesPage() {
             ← Dashboard
           </Link>
           <h1 style={{ margin: 0, fontSize: 22, color: "#e2e8f0" }}>
-            {isAdmin ? "All Feedback & Issues" : "My Issues"}
+            All Feedback & Issues
           </h1>
         </div>
         <button
