@@ -302,6 +302,17 @@ const s: Record<string, React.CSSProperties> = {
     fontSize: 14,
     fontWeight: 700,
   },
+  dispatchBannerComplete: {
+    background: "#0d1b2a",
+    border: "2px solid #22c55e",
+    padding: "12px 20px",
+    marginTop: 4,
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    fontSize: 14,
+    fontWeight: 700,
+  },
 };
 
 // ── Component ──
@@ -476,24 +487,30 @@ const KitchenPrepPage: React.FC = () => {
               )}
 
               {/* Dispatch deadline banner on day-of */}
-              {entry.phase === "dayOf" && (
-                <div style={s.dispatchBanner}>
-                  <span style={{ color: "#ff6b6b" }}>
-                    🚛 DISPATCH DEADLINE: Everything wrapped, labeled & staged by{" "}
-                    {entry.event.dispatchTime}
-                  </span>
-                  <span style={{ color: "#00e5ff" }}>{entry.event.jobNumber}</span>
-                </div>
-              )}
+              {entry.phase === "dayOf" && (() => {
+                const allComplete = entry.tasks.every((t) => t.checked);
+                return (
+                  <div style={allComplete ? s.dispatchBannerComplete : s.dispatchBanner}>
+                    <span style={{ color: allComplete ? "#22c55e" : "#ff6b6b" }}>
+                      {allComplete
+                        ? "✅ Completed on time"
+                        : `🚛 DISPATCH DEADLINE: Everything wrapped, labeled & staged by ${entry.event.dispatchTime}`}
+                    </span>
+                    <span style={{ color: "#00e5ff" }}>{entry.event.jobNumber}</span>
+                  </div>
+                );
+              })()}
 
-              {entry.tasks.map((task) =>
-                renderTaskRow(
-                  task,
-                  entry.eventIdx,
-                  entry.phase,
-                  task.itemName === "ALL ITEMS"
-                )
-              )}
+              {/* Task list — collapse when all day-of tasks complete */}
+              {!(entry.phase === "dayOf" && entry.tasks.every((t) => t.checked)) &&
+                entry.tasks.map((task) =>
+                  renderTaskRow(
+                    task,
+                    entry.eventIdx,
+                    entry.phase,
+                    task.itemName === "ALL ITEMS"
+                  )
+                )}
             </div>
           ))}
         </div>
@@ -550,23 +567,29 @@ const KitchenPrepPage: React.FC = () => {
                   </span>
                 </div>
 
-                {pc.key === "dayOf" && (
-                  <div style={s.dispatchBanner}>
-                    <span style={{ color: "#ff6b6b" }}>
-                      🚛 DISPATCH DEADLINE: Everything wrapped, labeled & staged by {ev.dispatchTime}
-                    </span>
-                    <span style={{ color: "#00e5ff" }}>{ev.jobNumber}</span>
-                  </div>
-                )}
+                {pc.key === "dayOf" && (() => {
+                  const allComplete = tasks.every((t) => t.checked);
+                  return (
+                    <div style={allComplete ? s.dispatchBannerComplete : s.dispatchBanner}>
+                      <span style={{ color: allComplete ? "#22c55e" : "#ff6b6b" }}>
+                        {allComplete
+                          ? "✅ Completed on time"
+                          : `🚛 DISPATCH DEADLINE: Everything wrapped, labeled & staged by ${ev.dispatchTime}`}
+                      </span>
+                      <span style={{ color: "#00e5ff" }}>{ev.jobNumber}</span>
+                    </div>
+                  );
+                })()}
 
-                {tasks.map((task) =>
-                  renderTaskRow(
-                    task,
-                    eventIdx,
-                    pc.key,
-                    task.itemName === "ALL ITEMS"
-                  )
-                )}
+                {!(pc.key === "dayOf" && tasks.every((t) => t.checked)) &&
+                  tasks.map((task) =>
+                    renderTaskRow(
+                      task,
+                      eventIdx,
+                      pc.key,
+                      task.itemName === "ALL ITEMS"
+                    )
+                  )}
               </div>
             </div>
           );
