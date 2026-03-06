@@ -407,6 +407,12 @@ const s: Record<string, React.CSSProperties> = {
     borderRadius: 12,
     padding: "20px 24px",
     textAlign: "center" as const,
+    cursor: "pointer",
+    transition: "all 0.2s ease",
+  },
+  roleCardPrimary: {
+    borderColor: "rgba(0,229,255,0.5)",
+    background: "linear-gradient(145deg, #0d1b2a 0%, #0a1520 100%)",
   },
   roleCardIcon: { fontSize: 32, marginBottom: 8 },
   roleCardTitle: { fontSize: 14, fontWeight: 700, color: "#fff", marginBottom: 4 },
@@ -482,6 +488,10 @@ const DeliveryCommandPage: React.FC = () => {
         @media (max-width: 480px) {
           .delivery-role-hub { grid-template-columns: 1fr !important; }
         }
+        .delivery-role-card-dispatch:hover {
+          border-color: rgba(0,229,255,0.8) !important;
+          box-shadow: 0 0 20px rgba(0,229,255,0.2);
+        }
       `}</style>
       <div style={s.page} className="delivery-page">
         <button style={s.backBtn} onClick={() => window.history.back()}>← Back</button>
@@ -497,10 +507,18 @@ const DeliveryCommandPage: React.FC = () => {
 
       {/* Role Overview — what delivery staff owns */}
       <div style={s.roleHub} className="delivery-role-hub">
-        <div style={s.roleCard}>
+        <div
+          role="button"
+          tabIndex={0}
+          style={{ ...s.roleCard, ...s.roleCardPrimary }}
+          onClick={() => document.getElementById("dispatch-deliveries-hub")?.scrollIntoView({ behavior: "smooth" })}
+          onKeyDown={(e) => e.key === "Enter" && document.getElementById("dispatch-deliveries-hub")?.scrollIntoView({ behavior: "smooth" })}
+          className="delivery-role-card-dispatch"
+        >
           <div style={s.roleCardIcon}>🚛</div>
           <div style={s.roleCardTitle}>Dispatch & Deliveries</div>
           <div style={s.roleCardDesc}>Route deliveries, assign drivers, track en-route</div>
+          <div style={{ fontSize: 10, color: "#00e5ff", marginTop: 8, opacity: 0.8 }}>Click to open →</div>
         </div>
         <div style={s.roleCard}>
           <div style={s.roleCardIcon}>🎪</div>
@@ -521,6 +539,7 @@ const DeliveryCommandPage: React.FC = () => {
 
       {/* ── DISPATCH & DELIVERIES HUB (main content) ── */}
       <div
+        id="dispatch-deliveries-hub"
         style={{
           background: "linear-gradient(180deg, rgba(15,20,30,0.6) 0%, rgba(10,10,15,0.8) 100%)",
           border: "2px solid rgba(0,229,255,0.3)",
