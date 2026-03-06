@@ -39,7 +39,11 @@ export const QuickIntake = () => {
       if (!isMounted) return;
       if (isErrorResult(result)) {
         const msg = result.message ?? "Unable to load select options.";
-        const isSchemaScope = msg.includes("Invalid permissions") || msg.includes("model was not found");
+        const isSchemaScope =
+          msg.includes("Invalid permissions") ||
+          msg.includes("model was not found") ||
+          msg.includes("Metadata API 403") ||
+          msg.includes("403");
         if (!isSchemaScope) setOptionsError(msg);
         setEventTypeOptions(FALLBACK_EVENT_TYPES);
         return;
