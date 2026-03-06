@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from "react";
-import { loadDispatchItems } from "../services/airtable/events";
+import React, { useState, useEffect, useCallback } from "react";
+import { loadDispatchItems, updateEventMultiple, FIELD_IDS } from "../services/airtable/events";
 import { DISPATCH_SERVER_NAME_FIELD, DISPATCH_VAN_NUMBER_FIELD } from "../constants/dispatchFields";
 import { isErrorResult } from "../services/airtable/selectors";
+import { twelveHourStringToSeconds } from "../utils/timeHelpers";
 
 // ── Types ──
 type DeliveryType = "delivery" | "pickup" | "full-service";
@@ -19,6 +20,7 @@ type DispatchItem = {
   guestCount: number;
   dispatchTime: string;
   eventStartTime: string;
+  eventDate?: string;
   assignedDriver: string;
   assignedVehicle: string;
   status: "staged" | "loaded" | "en-route" | "delivered" | "picked-up" | "conflict";
@@ -52,6 +54,7 @@ const SAMPLE_DISPATCHES: DispatchItem[] = [
     guestCount: 45,
     dispatchTime: "10:00 AM",
     eventStartTime: "12:00 PM",
+    eventDate: new Date().toISOString().slice(0, 10),
     assignedDriver: "Mike",
     assignedVehicle: "Van 1",
     status: "delivered",
@@ -71,6 +74,7 @@ const SAMPLE_DISPATCHES: DispatchItem[] = [
     guestCount: 25,
     dispatchTime: "10:30 AM",
     eventStartTime: "12:00 PM",
+    eventDate: new Date().toISOString().slice(0, 10),
     assignedDriver: "Mike",
     assignedVehicle: "Van 1",
     status: "conflict",
@@ -91,6 +95,7 @@ const SAMPLE_DISPATCHES: DispatchItem[] = [
     guestCount: 60,
     dispatchTime: "11:00 AM",
     eventStartTime: "1:00 PM",
+    eventDate: new Date().toISOString().slice(0, 10),
     assignedDriver: "Carlos",
     assignedVehicle: "Box Truck",
     status: "en-route",
@@ -110,6 +115,7 @@ const SAMPLE_DISPATCHES: DispatchItem[] = [
     guestCount: 30,
     dispatchTime: "11:30 AM",
     eventStartTime: "2:00 PM",
+    eventDate: new Date().toISOString().slice(0, 10),
     assignedDriver: "—",
     assignedVehicle: "—",
     status: "staged",
@@ -130,6 +136,7 @@ const SAMPLE_DISPATCHES: DispatchItem[] = [
     guestCount: 240,
     dispatchTime: "12:00 PM",
     eventStartTime: "5:00 PM",
+    eventDate: new Date().toISOString().slice(0, 10),
     assignedDriver: "Carlos",
     assignedVehicle: "Box Truck",
     status: "conflict",
@@ -150,6 +157,7 @@ const SAMPLE_DISPATCHES: DispatchItem[] = [
     guestCount: 35,
     dispatchTime: "10:15 AM",
     eventStartTime: "12:00 PM",
+    eventDate: new Date().toISOString().slice(0, 10),
     assignedDriver: "Mike",
     assignedVehicle: "Van 1",
     status: "conflict",
@@ -479,6 +487,55 @@ const DeliveryCommandPage: React.FC = () => {
   }, []);
   const [jobOverrides, setJobOverrides] = useState<Record<string, number>>({});
   const [editingJobId, setEditingJobId] = useState<string | null>(null);
+  const [editingField, setEditingField] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
+
+  const updateLocalDispatch = useCallback((id: string, patch: Partial<DispatchItem>) => {
+    setDispatches((prev) => prev.map((d) => (d.id === id ? { ...d, ...patch } : d)));
+  }, []);
+
+  const saveField = useCallback(async (id: string, fieldKey: string, value: unknown, eventDate?: string) => {
+    setSaveError(null);
+    let patch: Record<string, unknown> = {};
+    if (fieldKey === "dispatchTime") {
+      const sec = twelveHourStringToSeconds(String(value));
+      if (sec != null) {
+        patch[FIELD_IDS.DISPATCH_TIME] = sec;
+        if (eventDate) patch[FIELD_IDS.EVENT_DATE] = eventDate;
+      }
+    } else if (fieldKey === "eventStartTime") {
+      const sec = twelveHourStringToSeconds(String(value));
+      if (sec != null) patch[FIELD_IDS.EVENT_START_TIME] = sec;
+    } else if (fieldKey === "guestCount") {
+      const n = parseInt(String(value), 10);
+      if (!isNaN(n)) patch[FIELD_IDS.GUEST_COUNT] = n;
+    } else if (fieldKey === "venue") {
+      patch[FIELD_IDS.VENUE] = String(value || "").trim() || null;
+    } else if (fieldKey === "venueAddress") {
+      patch[FIELD_IDS.VENUE_ADDRESS] = String(value || "").trim() || null;
+    } else if (fieldKey === "assignedDriver") {
+      const serverField = DISPATCH_SERVER_NAME_FIELD || FIELD_IDS.CAPTAIN;
+      patch[serverField] = String(value || "").trim() || null;
+    } else if (fieldKey === "assignedVehicle") {
+      const vanField = DISPATCH_VAN_NUMBER_FIELD;
+      if (vanField) patch[vanField] = String(value || "").trim() || null;
+    } else if (fieldKey === "distanceFromKitchen" || fieldKey === "estimatedDriveTime" || fieldKey === "panCount" || fieldKey === "requiresExpeditor") {
+      updateLocalDispatch(id, { [fieldKey]: value });
+      setEditingField(null);
+      return;
+    }
+    if (Object.keys(patch).length === 0) {
+      setEditingField(null);
+      return;
+    }
+    const result = await updateEventMultiple(id, patch);
+    if (isErrorResult(result)) {
+      setSaveError(result.message ?? "Failed to save");
+    } else {
+      updateLocalDispatch(id, { [fieldKey]: value });
+    }
+    setEditingField(null);
+  }, [updateLocalDispatch]);
 
   const conflicts = dispatches.filter((d) => d.status === "conflict");
   const totalPans = dispatches.reduce((sum, d) => sum + d.panCount, 0);
@@ -588,6 +645,12 @@ const DeliveryCommandPage: React.FC = () => {
           marginBottom: 32,
         }}
       >
+        {saveError && (
+          <div style={{ marginBottom: 16, padding: "10px 16px", background: "#b91c1c", color: "#fff", borderRadius: 8, fontSize: 13, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+            <span>{saveError}</span>
+            <button type="button" onClick={() => setSaveError(null)} style={{ background: "none", border: "none", color: "#fff", cursor: "pointer", fontSize: 18 }}>✕</button>
+          </div>
+        )}
         <div
           style={{
             fontSize: 20,
@@ -780,47 +843,293 @@ const DeliveryCommandPage: React.FC = () => {
               {typeLabels[d.type]}
             </span>
 
-            {/* Details Grid */}
+            {/* Details Grid — all editable */}
             <div style={s.cardGrid} className="delivery-card-grid">
               <div>
                 <div style={s.cardLabel}>Dispatch Time</div>
-                <div style={{ ...s.cardValue, color: "#ff6b6b", fontSize: 16 }}>
-                  {d.dispatchTime}
-                </div>
+                {editingField === `${d.id}:dispatchTime` ? (
+                  <input
+                    type="text"
+                    defaultValue={d.dispatchTime}
+                    autoFocus
+                    onBlur={(e) => saveField(d.id, "dispatchTime", e.target.value, d.eventDate)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") saveField(d.id, "dispatchTime", (e.target as HTMLInputElement).value, d.eventDate);
+                      if (e.key === "Escape") setEditingField(null);
+                    }}
+                    style={{ ...s.cardValue, color: "#ff6b6b", fontSize: 16, background: "#111", border: "1px solid #00e5ff", borderRadius: 4, padding: "4px 8px", width: "100%", maxWidth: 120 }}
+                  />
+                ) : (
+                  <div
+                    role="button"
+                    tabIndex={0}
+                    style={{ ...s.cardValue, color: "#ff6b6b", fontSize: 16, cursor: "pointer", minHeight: 24 }}
+                    onClick={() => setEditingField(`${d.id}:dispatchTime`)}
+                    onKeyDown={(e) => e.key === "Enter" && setEditingField(`${d.id}:dispatchTime`)}
+                    title="Click to edit"
+                  >
+                    {d.dispatchTime}
+                  </div>
+                )}
               </div>
               <div>
                 <div style={s.cardLabel}>Event Start</div>
-                <div style={s.cardValue}>{d.eventStartTime}</div>
+                {editingField === `${d.id}:eventStartTime` ? (
+                  <input
+                    type="text"
+                    defaultValue={d.eventStartTime}
+                    autoFocus
+                    onBlur={(e) => saveField(d.id, "eventStartTime", e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") saveField(d.id, "eventStartTime", (e.target as HTMLInputElement).value);
+                      if (e.key === "Escape") setEditingField(null);
+                    }}
+                    style={{ ...s.cardValue, background: "#111", border: "1px solid #00e5ff", borderRadius: 4, padding: "4px 8px", width: "100%", maxWidth: 120 }}
+                  />
+                ) : (
+                  <div
+                    role="button"
+                    tabIndex={0}
+                    style={{ ...s.cardValue, cursor: "pointer", minHeight: 24 }}
+                    onClick={() => setEditingField(`${d.id}:eventStartTime`)}
+                    onKeyDown={(e) => e.key === "Enter" && setEditingField(`${d.id}:eventStartTime`)}
+                    title="Click to edit"
+                  >
+                    {d.eventStartTime}
+                  </div>
+                )}
               </div>
               <div>
                 <div style={s.cardLabel}>Guest Count</div>
-                <div style={s.cardValue}>{d.guestCount}</div>
+                {editingField === `${d.id}:guestCount` ? (
+                  <input
+                    type="number"
+                    min={0}
+                    defaultValue={d.guestCount}
+                    autoFocus
+                    onBlur={(e) => saveField(d.id, "guestCount", e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") saveField(d.id, "guestCount", (e.target as HTMLInputElement).value);
+                      if (e.key === "Escape") setEditingField(null);
+                    }}
+                    style={{ ...s.cardValue, background: "#111", border: "1px solid #00e5ff", borderRadius: 4, padding: "4px 8px", width: "100%", maxWidth: 80 }}
+                  />
+                ) : (
+                  <div
+                    role="button"
+                    tabIndex={0}
+                    style={{ ...s.cardValue, cursor: "pointer", minHeight: 24 }}
+                    onClick={() => setEditingField(`${d.id}:guestCount`)}
+                    onKeyDown={(e) => e.key === "Enter" && setEditingField(`${d.id}:guestCount`)}
+                    title="Click to edit"
+                  >
+                    {d.guestCount}
+                  </div>
+                )}
               </div>
               <div>
                 <div style={s.cardLabel}>Venue</div>
-                <div style={s.cardValue}>{d.venue}</div>
+                {editingField === `${d.id}:venue` ? (
+                  <input
+                    type="text"
+                    defaultValue={d.venue}
+                    autoFocus
+                    onBlur={(e) => saveField(d.id, "venue", e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") saveField(d.id, "venue", (e.target as HTMLInputElement).value);
+                      if (e.key === "Escape") setEditingField(null);
+                    }}
+                    style={{ ...s.cardValue, background: "#111", border: "1px solid #00e5ff", borderRadius: 4, padding: "4px 8px", width: "100%" }}
+                  />
+                ) : (
+                  <div
+                    role="button"
+                    tabIndex={0}
+                    style={{ ...s.cardValue, cursor: "pointer", minHeight: 24 }}
+                    onClick={() => setEditingField(`${d.id}:venue`)}
+                    onKeyDown={(e) => e.key === "Enter" && setEditingField(`${d.id}:venue`)}
+                    title="Click to edit"
+                  >
+                    {d.venue}
+                  </div>
+                )}
               </div>
               <div>
-                <div style={s.cardLabel}>Distance / Drive Time</div>
-                <div style={s.cardValue}>
-                  {d.distanceFromKitchen} • {d.estimatedDriveTime} min
-                </div>
+                <div style={s.cardLabel}>Venue Address</div>
+                {editingField === `${d.id}:venueAddress` ? (
+                  <input
+                    type="text"
+                    defaultValue={d.venueAddress}
+                    autoFocus
+                    onBlur={(e) => saveField(d.id, "venueAddress", e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") saveField(d.id, "venueAddress", (e.target as HTMLInputElement).value);
+                      if (e.key === "Escape") setEditingField(null);
+                    }}
+                    style={{ ...s.cardValue, background: "#111", border: "1px solid #00e5ff", borderRadius: 4, padding: "4px 8px", width: "100%" }}
+                  />
+                ) : (
+                  <div
+                    role="button"
+                    tabIndex={0}
+                    style={{ ...s.cardValue, cursor: "pointer", minHeight: 24, fontSize: 11 }}
+                    onClick={() => setEditingField(`${d.id}:venueAddress`)}
+                    onKeyDown={(e) => e.key === "Enter" && setEditingField(`${d.id}:venueAddress`)}
+                    title="Click to edit"
+                  >
+                    {d.venueAddress}
+                  </div>
+                )}
+              </div>
+              <div>
+                <div style={s.cardLabel}>Distance</div>
+                {editingField === `${d.id}:distanceFromKitchen` ? (
+                  <input
+                    type="text"
+                    placeholder="e.g. 28 mi"
+                    defaultValue={d.distanceFromKitchen}
+                    autoFocus
+                    onBlur={(e) => { updateLocalDispatch(d.id, { distanceFromKitchen: e.target.value }); setEditingField(null); }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") { updateLocalDispatch(d.id, { distanceFromKitchen: (e.target as HTMLInputElement).value }); setEditingField(null); }
+                      if (e.key === "Escape") setEditingField(null);
+                    }}
+                    style={{ ...s.cardValue, background: "#111", border: "1px solid #00e5ff", borderRadius: 4, padding: "4px 8px", width: "100%", maxWidth: 100 }}
+                  />
+                ) : (
+                  <div
+                    role="button"
+                    tabIndex={0}
+                    style={{ ...s.cardValue, cursor: "pointer", minHeight: 24 }}
+                    onClick={() => setEditingField(`${d.id}:distanceFromKitchen`)}
+                    onKeyDown={(e) => e.key === "Enter" && setEditingField(`${d.id}:distanceFromKitchen`)}
+                    title="Click to edit"
+                  >
+                    {d.distanceFromKitchen}
+                  </div>
+                )}
+              </div>
+              <div>
+                <div style={s.cardLabel}>Drive Time</div>
+                {editingField === `${d.id}:estimatedDriveTime` ? (
+                  <input
+                    type="number"
+                    min={0}
+                    placeholder="min"
+                    defaultValue={d.estimatedDriveTime}
+                    autoFocus
+                    onBlur={(e) => { updateLocalDispatch(d.id, { estimatedDriveTime: parseInt(e.target.value, 10) || 0 }); setEditingField(null); }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") { updateLocalDispatch(d.id, { estimatedDriveTime: parseInt((e.target as HTMLInputElement).value, 10) || 0 }); setEditingField(null); }
+                      if (e.key === "Escape") setEditingField(null);
+                    }}
+                    style={{ ...s.cardValue, background: "#111", border: "1px solid #00e5ff", borderRadius: 4, padding: "4px 8px", width: "100%", maxWidth: 80 }}
+                  />
+                ) : (
+                  <div
+                    role="button"
+                    tabIndex={0}
+                    style={{ ...s.cardValue, cursor: "pointer", minHeight: 24 }}
+                    onClick={() => setEditingField(`${d.id}:estimatedDriveTime`)}
+                    onKeyDown={(e) => e.key === "Enter" && setEditingField(`${d.id}:estimatedDriveTime`)}
+                    title="Click to edit"
+                  >
+                    {d.estimatedDriveTime} min
+                  </div>
+                )}
               </div>
               <div>
                 <div style={s.cardLabel}>Pan Count</div>
-                <div style={s.cardValue}>{d.panCount} pans</div>
+                {editingField === `${d.id}:panCount` ? (
+                  <input
+                    type="number"
+                    min={0}
+                    defaultValue={d.panCount}
+                    autoFocus
+                    onBlur={(e) => { updateLocalDispatch(d.id, { panCount: parseInt(e.target.value, 10) || 0 }); setEditingField(null); }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") { updateLocalDispatch(d.id, { panCount: parseInt((e.target as HTMLInputElement).value, 10) || 0 }); setEditingField(null); }
+                      if (e.key === "Escape") setEditingField(null);
+                    }}
+                    style={{ ...s.cardValue, background: "#111", border: "1px solid #00e5ff", borderRadius: 4, padding: "4px 8px", width: "100%", maxWidth: 80 }}
+                  />
+                ) : (
+                  <div
+                    role="button"
+                    tabIndex={0}
+                    style={{ ...s.cardValue, cursor: "pointer", minHeight: 24 }}
+                    onClick={() => setEditingField(`${d.id}:panCount`)}
+                    onKeyDown={(e) => e.key === "Enter" && setEditingField(`${d.id}:panCount`)}
+                    title="Click to edit"
+                  >
+                    {d.panCount} pans
+                  </div>
+                )}
               </div>
               <div>
                 <div style={s.cardLabel}>{d.type === "full-service" ? "Server Name" : "Driver"}</div>
-                <div style={s.cardValue}>{d.assignedDriver}</div>
+                {editingField === `${d.id}:assignedDriver` ? (
+                  <input
+                    type="text"
+                    defaultValue={d.assignedDriver}
+                    autoFocus
+                    onBlur={(e) => saveField(d.id, "assignedDriver", e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") saveField(d.id, "assignedDriver", (e.target as HTMLInputElement).value);
+                      if (e.key === "Escape") setEditingField(null);
+                    }}
+                    style={{ ...s.cardValue, background: "#111", border: "1px solid #00e5ff", borderRadius: 4, padding: "4px 8px", width: "100%" }}
+                  />
+                ) : (
+                  <div
+                    role="button"
+                    tabIndex={0}
+                    style={{ ...s.cardValue, cursor: "pointer", minHeight: 24 }}
+                    onClick={() => setEditingField(`${d.id}:assignedDriver`)}
+                    onKeyDown={(e) => e.key === "Enter" && setEditingField(`${d.id}:assignedDriver`)}
+                    title="Click to edit"
+                  >
+                    {d.assignedDriver}
+                  </div>
+                )}
               </div>
               <div>
                 <div style={s.cardLabel}>{d.type === "full-service" ? "Van #" : "Vehicle"}</div>
-                <div style={s.cardValue}>{d.assignedVehicle}</div>
+                {editingField === `${d.id}:assignedVehicle` ? (
+                  <input
+                    type="text"
+                    defaultValue={d.assignedVehicle}
+                    autoFocus
+                    onBlur={(e) => saveField(d.id, "assignedVehicle", e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") saveField(d.id, "assignedVehicle", (e.target as HTMLInputElement).value);
+                      if (e.key === "Escape") setEditingField(null);
+                    }}
+                    style={{ ...s.cardValue, background: "#111", border: "1px solid #00e5ff", borderRadius: 4, padding: "4px 8px", width: "100%" }}
+                  />
+                ) : (
+                  <div
+                    role="button"
+                    tabIndex={0}
+                    style={{ ...s.cardValue, cursor: "pointer", minHeight: 24 }}
+                    onClick={() => setEditingField(`${d.id}:assignedVehicle`)}
+                    onKeyDown={(e) => e.key === "Enter" && setEditingField(`${d.id}:assignedVehicle`)}
+                    title="Click to edit"
+                  >
+                    {d.assignedVehicle}
+                  </div>
+                )}
               </div>
               <div>
                 <div style={s.cardLabel}>Expeditor Needed</div>
-                <div style={{ ...s.cardValue, color: d.requiresExpeditor ? "#ff9800" : "#4caf50" }}>
+                <div
+                  role="button"
+                  tabIndex={0}
+                  style={{ ...s.cardValue, color: d.requiresExpeditor ? "#ff9800" : "#4caf50", cursor: "pointer", minHeight: 24 }}
+                  onClick={() => updateLocalDispatch(d.id, { requiresExpeditor: !d.requiresExpeditor })}
+                  onKeyDown={(e) => e.key === "Enter" && updateLocalDispatch(d.id, { requiresExpeditor: !d.requiresExpeditor })}
+                  title="Click to toggle"
+                >
                   {d.requiresExpeditor ? "YES" : "No"}
                 </div>
               </div>
