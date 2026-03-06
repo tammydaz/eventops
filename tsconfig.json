@@ -12,7 +12,10 @@
     "noEmit": true,
     "jsx": "react-jsx",
     "strict": true,
-    "types": ["vite/client"]
+    "forceConsistentCasingInFileNames": true,
+    "esModuleInterop": true,
+    "types": ["node", "vite/client"]
   },
-  "include": ["src"]
+  "include": ["src", "api"],
+  "exclude": ["node_modules"]
 }
