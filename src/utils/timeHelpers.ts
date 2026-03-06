@@ -89,5 +89,13 @@ export function timeStringToSeconds(timeStr: string): number | null {
   return h * 3600 + roundedM * 60;
 }
 
+/** Add minutes to a time string ("10:00 AM") and return formatted result */
+export function addMinutesToTimeString(timeStr: string, minutes: number): string {
+  const sec = twelveHourStringToSeconds(timeStr);
+  if (sec == null) return "—";
+  const totalSec = sec + minutes * 60;
+  return secondsTo12HourString(totalSec);
+}
+
 /** Minute options for 15-min increment picker */
 export const MINUTE_INCREMENTS = MINUTE_OPTIONS;
