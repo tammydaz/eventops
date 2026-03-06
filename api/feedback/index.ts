@@ -123,10 +123,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     if (req.method === "GET") {
-      const escaped = (user.sub || "").replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+      const escapedId = (user.sub || "").replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+      const escapedEmail = (user.email || "").replace(/\\/g, "\\\\").replace(/"/g, '\\"').toLowerCase();
       const filter = isAdmin
         ? ""
-        : encodeURIComponent(`{UserId}="${escaped}"`);
+        : encodeURIComponent(
+            escapedEmail
+              ? `OR({UserId}="${escapedId}", LOWER({UserEmail})="${escapedEmail}")`
+              : `{UserId}="${escapedId}"`
+          );
       const tablePath = encodeURIComponent(tableIdOrName);
       const url = `${AIRTABLE_API}/${baseId}/${tablePath}?sort[0][field]=createdTime&sort[0][direction]=desc`;
       const urlWithFilter = filter ? `${url}&filterByFormula=${filter}` : url;

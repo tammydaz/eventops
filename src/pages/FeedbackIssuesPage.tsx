@@ -88,16 +88,34 @@ export default function FeedbackIssuesPage() {
 
   return (
     <div className="feedback-issues-page" style={{ padding: 24, maxWidth: 900, margin: "0 auto" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 24 }}>
-        <Link
-          to="/"
-          style={{ color: "#94a3b8", textDecoration: "none", fontSize: 14 }}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, marginBottom: 24, flexWrap: "wrap" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+          <Link
+            to="/"
+            style={{ color: "#94a3b8", textDecoration: "none", fontSize: 14 }}
+          >
+            ← Dashboard
+          </Link>
+          <h1 style={{ margin: 0, fontSize: 22, color: "#e2e8f0" }}>
+            {isAdmin ? "All Feedback & Issues" : "My Issues"}
+          </h1>
+        </div>
+        <button
+          type="button"
+          onClick={() => load()}
+          disabled={loading}
+          style={{
+            padding: "8px 16px",
+            fontSize: 13,
+            background: "#334155",
+            border: "1px solid #475569",
+            borderRadius: 6,
+            color: "#e2e8f0",
+            cursor: loading ? "wait" : "pointer",
+          }}
         >
-          ← Dashboard
-        </Link>
-        <h1 style={{ margin: 0, fontSize: 22, color: "#e2e8f0" }}>
-          {isAdmin ? "All Feedback & Issues" : "My Issues"}
-        </h1>
+          {loading ? "Loading…" : "Refresh"}
+        </button>
       </div>
 
       {newlyResolvedCount > 0 && (
