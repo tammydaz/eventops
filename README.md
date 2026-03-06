@@ -29,6 +29,27 @@ If you are developing a production application, we recommend using TypeScript wi
 	- `VITE_AIRTABLE_EVENTS_TABLE`
 8) Deploy.
 
+## Airtable API Key Setup
+
+Create a token at [Airtable → Developer Hub → Create token](https://airtable.com/create/tokens).
+
+**Required scopes:**
+- `data.records:read` — read records
+- `data.records:write` — create/update records (stations, events)
+- `schema.bases:read` — read table schema (dropdowns, field resolution)
+
+**Ensure the token has access to your base.** If you see 403 errors or "No items found" in the station picker, run:
+
+```bash
+node scripts/testAirtableToken.js
+```
+
+This tests Meta API, Events, Stations, and Menu Items. Fix any 403s by updating your token scopes or base access.
+
+**Station Presets:** The app uses `/api/airtable/select` (server-side proxy) so the API key stays hidden. Run `npm run dev:full` (vercel dev) locally for the proxy to work. On Vercel, ensure `AIRTABLE_API_KEY` and `AIRTABLE_BASE_ID` are set.
+
+**Optional:** Copy `.env.example` to `.env`. Set `VITE_AIRTABLE_STATION_PRESETS_TABLE` to your table name (e.g. "Station Presets") or leave unset to use the default.
+
 Notes:
 - SPA routing is configured via [vercel.json](vercel.json).
 - After deployment, open the site and test /quick-intake and /beo-intake to confirm Airtable access.
