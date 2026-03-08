@@ -437,6 +437,17 @@
   -webkit-text-fill-color: transparent;
   animation: dp-tagline-swirl 3s ease-in-out infinite, dp-tagline-shimmer 2.5s linear infinite;
   filter: drop-shadow(0 0 8px rgba(0,188,212,0.5));
+  transition: color 0.4s ease, filter 0.4s ease;
+}
+
+.dp-werx-brand .dp-werx-tagline.dp-werx-tagline-settled {
+  animation: none;
+  background: none;
+  -webkit-background-clip: unset;
+  background-clip: unset;
+  -webkit-text-fill-color: #fff;
+  color: #fff;
+  filter: none;
 }
 
 @keyframes dp-tagline-swirl {

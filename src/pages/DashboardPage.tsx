@@ -116,9 +116,15 @@ export default function DashboardPage() {
   const [calendarYear, setCalendarYear] = useState(() => new Date().getFullYear());
   const [searchQuery, setSearchQuery] = useState("");
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [taglineSettled, setTaglineSettled] = useState(false);
   const searchWrapRef = useRef<HTMLDivElement>(null);
 
   const tabs = ["Live Events", "Upcoming", "Completed", "Archive"];
+
+  useEffect(() => {
+    const t = setTimeout(() => setTaglineSettled(true), 5000);
+    return () => clearTimeout(t);
+  }, []);
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -339,7 +345,7 @@ export default function DashboardPage() {
           </div>
           <div className="dp-header-title dp-werx-brand">
             <span className="dp-werx-logo">Werx</span>
-            <span className="dp-werx-tagline">The engine behind the excellence!!</span>
+            <span className={`dp-werx-tagline ${taglineSettled ? "dp-werx-tagline-settled" : ""}`}>The engine behind the excellence!!</span>
           </div>
           <div className="dp-header-spacer" aria-hidden="true" />
           </div>
