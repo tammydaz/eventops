@@ -64,7 +64,7 @@ export const PrimaryContactSection = () => {
   };
 
   return (
-    <FormSection title="Primary Contact" icon="☎️">
+    <FormSection title="Primary Contact">
       <div>
         <label style={labelStyle}>Primary Contact Name</label>
         <input 

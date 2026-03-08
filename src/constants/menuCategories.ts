@@ -2,8 +2,8 @@
 // Values below are the EXACT strings from Airtable's Category single-select field.
 
 export const CATEGORY_MAP: Record<string, string[]> = {
-  passed:       ['Passed App'],
-  presented:    ['Presented App'],
+  passed:       ['Passed App', 'Appetizer'],
+  presented:    ['Presented App', 'Presented App/metal', 'Presented App/china', 'Appetizer'],
   buffet_metal: [
     "Buffet Metal",
     "Buffet",
@@ -12,6 +12,10 @@ export const CATEGORY_MAP: Record<string, string[]> = {
     "Vegetable (Side)",
     "Starch (Side)",
     "Pasta (Side)",
+    "Entrée",
+    "Protein (Entrée)",
+    "Pasta (Entrée)",
+    "Component",
   ],
   buffet_china: [
     "Buffet China",
@@ -19,9 +23,10 @@ export const CATEGORY_MAP: Record<string, string[]> = {
     "Bread",
     "Side",
     "Vegetable (Side)",
+    "Component",
   ],
-  desserts:     ['Dessert'],
-  stations:     ['Station'],
+  desserts:     ['Dessert', 'Dessert/Metal', 'Dessert/China', 'Dessert (Individual)', 'Dessert (Display)'],
+  stations:     ['Station', 'Stations', 'Station Item'],
   dressing:     ['Dressing'],
   deli:         ['Deli/Sandwhiches', 'Deli/Breads', 'Deli/Sandwiches', 'Deli', 'Sandwich', 'Wrap'],
   room_temp:    ['Room Temp Display', 'Display', 'Buffet China'],

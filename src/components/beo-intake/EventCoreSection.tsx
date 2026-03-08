@@ -3,7 +3,7 @@ import { useEventStore } from "../../state/eventStore";
 import { useAuthStore } from "../../state/authStore";
 import { FIELD_IDS, getFoodwerxArrivalFieldId } from "../../services/airtable/events";
 import { asSingleSelectName, asString } from "../../services/airtable/selectors";
-import { FormSection, Helper } from "./FormSection";
+import { FormSection, Helper, inputStyle, labelStyle } from "./FormSection";
 import type { EventCore } from "./types";
 import { secondsToTimeString, MINUTE_INCREMENTS } from "../../utils/timeHelpers";
 
@@ -113,26 +113,8 @@ export const EventCoreSection = ({ isDelivery = false }: { isDelivery?: boolean 
     }
   };
 
-  const inputStyle = {
-    width: "100%",
-    padding: "12px",
-    borderRadius: "8px",
-    border: "1px solid #444",
-    backgroundColor: "#1a1a1a",
-    color: "#e0e0e0",
-    fontSize: "14px",
-  };
-
-  const labelStyle = {
-    display: "block",
-    fontSize: "11px",
-    color: "#999",
-    marginBottom: "6px",
-    fontWeight: "600",
-  };
-
   return (
-    <FormSection title={isDelivery ? "Delivery Event Details" : "Event Details"} icon={isDelivery ? "🚚" : "🎉"} dotColor={isDelivery ? "#22c55e" : undefined} isDelivery={isDelivery}>
+    <FormSection title={isDelivery ? "Delivery Event Details" : "Event Details"} dotColor={isDelivery ? "#22c55e" : undefined} isDelivery={isDelivery}>
       <div>
         <label style={labelStyle}>Event Date</label>
         <input

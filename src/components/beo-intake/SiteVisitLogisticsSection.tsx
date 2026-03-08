@@ -2,26 +2,8 @@ import { useEffect, useState, useCallback } from "react";
 import { useEventStore } from "../../state/eventStore";
 import { FIELD_IDS, loadSingleSelectOptions, type SingleSelectOption } from "../../services/airtable/events";
 import { asString, asSingleSelectName } from "../../services/airtable/selectors";
-import { FormSection, CollapsibleSubsection, Helper } from "./FormSection";
+import { FormSection, CollapsibleSubsection, Helper, inputStyle, labelStyle } from "./FormSection";
 import { KitchenLogisticsSection } from "./KitchenLogisticsSection";
-
-const inputStyle = {
-  width: "100%",
-  padding: "12px",
-  borderRadius: "8px",
-  border: "1px solid #444",
-  backgroundColor: "#1a1a1a",
-  color: "#e0e0e0",
-  fontSize: "14px",
-};
-
-const labelStyle = {
-  display: "block",
-  fontSize: "11px",
-  color: "#999",
-  marginBottom: "6px",
-  fontWeight: "600" as const,
-};
 
 const STAIRS_FALLBACK = ["None", "1–2 steps", "3–5 steps", "Full flight", "Multiple floors"];
 const ELEVATORS_FALLBACK = ["Yes", "No", "Freight elevator only"];
@@ -130,8 +112,8 @@ export const SiteVisitLogisticsSection = () => {
   const textareaStyle = { ...inputStyle, resize: "vertical" as const, fontFamily: "inherit" };
 
   return (
-    <FormSection title="Notes / Onsite event logistics" dotColor="#f59e0b" defaultOpen>
-      <CollapsibleSubsection title="Parking & Load-In" icon="🚗" defaultOpen={true}>
+    <FormSection title="Notes / Onsite event logistics" dotColor="#00bcd4">
+      <CollapsibleSubsection title="Parking & Load-In" defaultOpen={true}>
         <div style={{ gridColumn: "1 / -1" }}>
           <label style={labelStyle}>Parking Notes</label>
           <textarea
@@ -198,7 +180,7 @@ export const SiteVisitLogisticsSection = () => {
         </div>
       </CollapsibleSubsection>
 
-      <CollapsibleSubsection title="Venue & Setup" icon="🏠">
+      <CollapsibleSubsection title="Venue & Setup">
         <div style={{ gridColumn: "1 / -1" }}>
           <KitchenLogisticsSection embedded />
         </div>
@@ -264,7 +246,7 @@ export const SiteVisitLogisticsSection = () => {
         </div>
       </CollapsibleSubsection>
 
-      <CollapsibleSubsection title="Event & Service" icon="📋">
+      <CollapsibleSubsection title="Event & Service">
         <div style={{ gridColumn: "1 / -1" }}>
           <label style={labelStyle}>Event Purpose</label>
           <textarea
@@ -306,7 +288,7 @@ export const SiteVisitLogisticsSection = () => {
         </div>
       </CollapsibleSubsection>
 
-      <CollapsibleSubsection title="Dietary & Restrictions" icon="⚠️">
+      <CollapsibleSubsection title="Dietary & Restrictions">
         <div style={{ gridColumn: "1 / -1" }}>
           <label style={labelStyle}>Allergies / Dietary</label>
           <textarea
@@ -335,7 +317,7 @@ export const SiteVisitLogisticsSection = () => {
         </div>
       </CollapsibleSubsection>
 
-      <CollapsibleSubsection title="Designer / Theme" icon="🎨" defaultOpen={false}>
+      <CollapsibleSubsection title="Designer / Theme" defaultOpen={false}>
         <div style={{ gridColumn: "1 / -1" }}>
           <label style={labelStyle}>Theme / Color Scheme</label>
           <textarea
@@ -351,7 +333,7 @@ export const SiteVisitLogisticsSection = () => {
         </div>
       </CollapsibleSubsection>
 
-      <CollapsibleSubsection title="Other Notes" icon="📝">
+      <CollapsibleSubsection title="Other Notes">
         <div style={{ gridColumn: "1 / -1" }}>
           <label style={labelStyle}>Special Notes</label>
           <textarea
@@ -380,7 +362,7 @@ export const SiteVisitLogisticsSection = () => {
         </div>
       </CollapsibleSubsection>
 
-      <CollapsibleSubsection title="Timeline" icon="⏱️" defaultOpen={false}>
+      <CollapsibleSubsection title="Timeline" defaultOpen={false}>
         <div style={{ gridColumn: "1 / -1" }}>
           <label style={labelStyle}>Timeline / Flow Notes</label>
           <textarea

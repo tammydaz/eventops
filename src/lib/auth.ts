@@ -22,22 +22,22 @@ export const ROLE_LABELS: Record<Role, string> = {
 
 /** Routes each role can access. ops_admin can access all. */
 export const ROLE_ROUTES: Record<Role, string[]> = {
-  ops_admin: ["*"], // all
-  kitchen: ["/", "/home", "/beo-intake", "/quick-intake", "/invoice-intake", "/kitchen-prep", "/kitchen-beo-print", "/print-test", "/feedback-issues"],
+  ops_admin: ["*"], // all (includes /ops-chief, /ops-chief/alerts)
+  kitchen: ["/", "/home", "/beo-intake", "/quick-intake", "/invoice-intake", "/kitchen-prep", "/kitchen-beo-print", "/kitchen", "/print-test", "/feedback-issues"],
   logistics: ["/", "/home", "/beo-intake", "/quick-intake", "/invoice-intake", "/delivery-command", "/returned-equipment", "/feedback-issues"],
-  intake: ["/", "/home", "/beo-intake", "/quick-intake", "/invoice-intake", "/seed-demo", "/site-visit", "/beo-print", "/kitchen-beo-print", "/feedback-issues"],
-  flair: ["/", "/home", "/beo-intake", "/quick-intake", "/invoice-intake", "/returned-equipment", "/feedback-issues"],
-  foh: ["/foh", "/invoice-intake", "/feedback-issues"],
+  intake: ["/", "/home", "/beo-intake", "/quick-intake", "/invoice-intake", "/seed-demo", "/site-visit", "/beo-print", "/kitchen-beo-print", "/intake-foh", "/feedback-issues"],
+  flair: ["/", "/home", "/beo-intake", "/quick-intake", "/invoice-intake", "/returned-equipment", "/beo-print", "/flair", "/feedback-issues"],
+  foh: ["/foh", "/intake-foh", "/invoice-intake", "/feedback-issues"],
 };
 
-/** Landing page path for each role after login. All employees land on Dashboard to see sidebar + Add Event. */
+/** Landing page path for each role after login. */
 export const ROLE_LANDING: Record<Role, string> = {
   ops_admin: "/",
-  kitchen: "/",
-  logistics: "/",
+  kitchen: "/kitchen",
+  logistics: "/delivery-command",
   intake: "/",
-  flair: "/",
-  foh: "/foh",
+  flair: "/flair",
+  foh: "/intake-foh",
 };
 
 export function canAccessRoute(role: Role, pathname: string): boolean {
@@ -55,10 +55,10 @@ export function getLandingForRole(role: Role): string {
 
 /** Department circle IDs each role can see. ops_admin sees all. */
 export const ROLE_DEPARTMENTS: Record<Role, string[]> = {
-  ops_admin: ["kitchen", "logistics", "intake", "flair"],
+  ops_admin: ["kitchen", "logistics", "intake", "intake_foh", "flair"],
   kitchen: ["kitchen"],
   logistics: ["logistics"],
   intake: ["intake"],
   flair: ["flair"],
-  foh: [],
+  foh: ["intake_foh"],
 };

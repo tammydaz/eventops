@@ -60,7 +60,7 @@ export const DesignerNotesSection = () => {
   };
 
   return (
-    <FormSection title="Designer Notes" icon="🎨">
+    <FormSection title="Designer Notes">
       <div style={{ gridColumn: "1 / -1" }}>
         <label style={labelStyle}>Theme / Color Scheme</label>
         <textarea

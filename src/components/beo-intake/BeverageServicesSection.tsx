@@ -2,29 +2,11 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { useEventStore } from "../../state/eventStore";
 import { FIELD_IDS, getBarServiceFieldId, loadSingleSelectOptions, type SingleSelectOption } from "../../services/airtable/events";
 import { asSingleSelectName, asString, asStringArray } from "../../services/airtable/selectors";
-import { FormSection, CollapsibleSubsection, Helper } from "./FormSection";
+import { FormSection, CollapsibleSubsection, Helper, inputStyle, labelStyle } from "./FormSection";
 import { HydrationStationModal } from "./HydrationStationModal";
 
 const BAR_SERVICE_FALLBACK_OPTIONS = ["None", "Full Bar Package", "FoodWerx Bartender Only", "FoodWerx Mixers Only"];
 const ICE_PROVIDED_BY_FALLBACK_OPTIONS = ["Client", "Foodwerx", "Venue"];
-
-const inputStyle = {
-  width: "100%",
-  padding: "12px",
-  borderRadius: "8px",
-  border: "1px solid #444",
-  backgroundColor: "#1a1a1a",
-  color: "#e0e0e0",
-  fontSize: "14px",
-};
-
-const labelStyle = {
-  display: "block",
-  fontSize: "11px",
-  color: "#999",
-  marginBottom: "6px",
-  fontWeight: "600" as const,
-};
 
 type BeverageServicesSectionProps = { embedded?: boolean };
 
@@ -173,7 +155,6 @@ export const BeverageServicesSection = ({ embedded = false }: BeverageServicesSe
     <>
       <CollapsibleSubsection
         title="Bar Service"
-        icon="🍹"
         summary={hasBarService ? bar.barService : undefined}
         defaultOpen={true}
       >
@@ -310,7 +291,6 @@ export const BeverageServicesSection = ({ embedded = false }: BeverageServicesSe
 
       <CollapsibleSubsection
         title="Hydration Station"
-        icon="💧"
         summary={hasHydration ? [hydrationDrinkOptions.join(", "), hydrationNotes.trim()].filter(Boolean).join(" • ") || "Configured" : undefined}
         defaultOpen={hasHydration || hydrationProvided !== ""}
       >
@@ -405,7 +385,6 @@ export const BeverageServicesSection = ({ embedded = false }: BeverageServicesSe
 
       <CollapsibleSubsection
         title="Coffee / Tea Service"
-        icon="☕"
         summary={hasCoffeeTea ? (coffeeMugType ? `${coffeeMugType} mugs` : "Yes") : undefined}
         defaultOpen={hasCoffeeTea}
       >
@@ -475,7 +454,6 @@ export const BeverageServicesSection = ({ embedded = false }: BeverageServicesSe
 
       <CollapsibleSubsection
         title="Ice"
-        icon="🧊"
         summary={hasIce ? `Provided by ${iceProvidedBy}` : undefined}
         defaultOpen={hasIce}
       >
@@ -505,7 +483,7 @@ export const BeverageServicesSection = ({ embedded = false }: BeverageServicesSe
   );
 
   return embedded ? content : (
-    <FormSection title="Beverage Service" dotColor="#22c55e" defaultOpen>
+    <FormSection title="Beverage Service" dotColor="#00bcd4">
       {content}
     </FormSection>
   );

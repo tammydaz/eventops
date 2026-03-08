@@ -270,6 +270,14 @@ export type EventListItem = {
   serviceStyle?: string;
   guestCount?: number;
   dispatchTimeSeconds?: number; // seconds since midnight for sorting
+  /** Lockout / production state (from Approvals & Lockout fields) */
+  guestCountConfirmed?: boolean;
+  menuAcceptedByKitchen?: boolean;
+  /** Per-department acceptance: event blinks for each dept until that dept accepts */
+  productionAccepted?: boolean;       // Kitchen (legacy)
+  productionAcceptedFlair?: boolean;
+  productionAcceptedDelivery?: boolean;
+  productionAcceptedOpsChief?: boolean;
 };
 
 type AirtableFieldSchema = {
@@ -390,6 +398,7 @@ const LOCKOUT_FIELD_NAMES = [
   "Menu Accepted by Kitchen",
   "Menu Change Requested",
   "Menu Change Approved (Kitchen)",
+  "Production Accepted",
 ] as const;
 
 export type LockoutFieldIds = {
@@ -399,6 +408,11 @@ export type LockoutFieldIds = {
   menuAcceptedByKitchen: string;
   menuChangeRequested: string;
   menuChangeApprovedKitchen: string;
+  /** Per-department acceptance (resolved by name). Create via: npm run schema ensure-department-acceptance */
+  productionAccepted?: string;        // Kitchen
+  productionAcceptedFlair?: string;
+  productionAcceptedDelivery?: string;
+  productionAcceptedOpsChief?: string;
 };
 
 let cachedLockoutFieldIds: LockoutFieldIds | null | undefined = undefined;
@@ -422,18 +436,32 @@ export async function getLockoutFieldIds(): Promise<LockoutFieldIds | null> {
     return null;
   }
   const byName = Object.fromEntries(table.fields.map((f) => [f.name, f.id]));
-  const ids = {
+  const ids: LockoutFieldIds = {
     guestCountConfirmed: byName["Guest Count Confirmed"],
     guestCountChangeRequested: byName["Guest Count Change Requested"],
     guestCountChangeApprovedKitchen: byName["Guest Count Change Approved (Kitchen)"],
     menuAcceptedByKitchen: byName["Menu Accepted by Kitchen"],
     menuChangeRequested: byName["Menu Change Requested"],
     menuChangeApprovedKitchen: byName["Menu Change Approved (Kitchen)"],
+    productionAccepted: byName["Production Accepted"] || undefined,
+    productionAcceptedFlair: byName["Production Accepted (Flair)"] || undefined,
+    productionAcceptedDelivery: byName["Production Accepted (Delivery)"] || undefined,
+    productionAcceptedOpsChief: byName["Production Accepted (Ops Chief)"] || undefined,
   };
-  const allPresent = Object.values(ids).every(Boolean);
-  if (allPresent) {
-    Object.values(ids).forEach((id) => additionalAllowedFieldIds.add(id as string));
-    cachedLockoutFieldIds = ids as LockoutFieldIds;
+  const requiredPresent = [
+    ids.guestCountConfirmed,
+    ids.guestCountChangeRequested,
+    ids.guestCountChangeApprovedKitchen,
+    ids.menuAcceptedByKitchen,
+    ids.menuChangeRequested,
+    ids.menuChangeApprovedKitchen,
+  ].every(Boolean);
+  if (requiredPresent) {
+    [ids.guestCountConfirmed, ids.guestCountChangeRequested, ids.guestCountChangeApprovedKitchen, ids.menuAcceptedByKitchen, ids.menuChangeRequested, ids.menuChangeApprovedKitchen].forEach((id) => id && additionalAllowedFieldIds.add(id));
+    [ids.productionAccepted, ids.productionAcceptedFlair, ids.productionAcceptedDelivery, ids.productionAcceptedOpsChief]
+      .filter(Boolean)
+      .forEach((id) => id && additionalAllowedFieldIds.add(id));
+    cachedLockoutFieldIds = ids;
   } else {
     cachedLockoutFieldIds = null;
   }
@@ -484,6 +512,14 @@ export const loadEvents = async (): Promise<EventListItem[] | AirtableErrorResul
   params.append("fields[]", FIELD_IDS.EVENT_OCCASION);
   params.append("fields[]", FIELD_IDS.SERVICE_STYLE);
   params.append("fields[]", FIELD_IDS.GUEST_COUNT);
+  const lockoutIds = await getLockoutFieldIds();
+  if (lockoutIds) {
+    params.append("fields[]", lockoutIds.guestCountConfirmed);
+    params.append("fields[]", lockoutIds.menuAcceptedByKitchen);
+    [lockoutIds.productionAccepted, lockoutIds.productionAcceptedFlair, lockoutIds.productionAcceptedDelivery, lockoutIds.productionAcceptedOpsChief]
+      .filter(Boolean)
+      .forEach((id) => id && params.append("fields[]", id));
+  }
   const createdTimeFieldId = await getCreatedTimeFieldId();
   if (createdTimeFieldId) {
     params.append("sort[0][field]", createdTimeFieldId);
@@ -518,7 +554,7 @@ export const loadEvents = async (): Promise<EventListItem[] | AirtableErrorResul
         dispatchTimeSeconds = d.getUTCHours() * 3600 + d.getUTCMinutes() * 60 + d.getUTCSeconds();
       }
     }
-    return {
+    const item: EventListItem = {
       id: record.id,
       eventName: asString(fields[FIELD_IDS.EVENT_NAME]),
       eventDate:
@@ -531,6 +567,15 @@ export const loadEvents = async (): Promise<EventListItem[] | AirtableErrorResul
       guestCount: typeof fields[FIELD_IDS.GUEST_COUNT] === "number" ? (fields[FIELD_IDS.GUEST_COUNT] as number) : undefined,
       dispatchTimeSeconds,
     };
+    if (lockoutIds) {
+      item.guestCountConfirmed = fields[lockoutIds.guestCountConfirmed] === true;
+      item.menuAcceptedByKitchen = fields[lockoutIds.menuAcceptedByKitchen] === true;
+      if (lockoutIds.productionAccepted) item.productionAccepted = fields[lockoutIds.productionAccepted] === true;
+      if (lockoutIds.productionAcceptedFlair) item.productionAcceptedFlair = fields[lockoutIds.productionAcceptedFlair] === true;
+      if (lockoutIds.productionAcceptedDelivery) item.productionAcceptedDelivery = fields[lockoutIds.productionAcceptedDelivery] === true;
+      if (lockoutIds.productionAcceptedOpsChief) item.productionAcceptedOpsChief = fields[lockoutIds.productionAcceptedOpsChief] === true;
+    }
+    return item;
   });
 };
 

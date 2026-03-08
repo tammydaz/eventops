@@ -1,12 +1,39 @@
 import { useState, useRef, useEffect, type ReactNode } from "react";
 import { useEventStore } from "../../state/eventStore";
 
-/** Helper text below form fields — prominent and readable on dark backgrounds */
-export const helperStyle = {
+/** Shared compact input styling for BEO intake forms */
+export const inputStyle = {
+  width: "100%",
+  padding: "8px 10px",
+  borderRadius: "6px",
+  border: "1px solid rgba(255,255,255,0.12)",
+  backgroundColor: "rgba(0,0,0,0.25)",
+  color: "#e0e0e0",
   fontSize: "13px",
-  color: "#c4b5fd",
-  marginTop: "8px",
-  lineHeight: 1.5,
+} as const;
+
+/** For textareas - extends inputStyle with resize */
+export const textareaStyle = {
+  ...inputStyle,
+  resize: "vertical" as const,
+  fontFamily: "inherit",
+};
+
+/** Shared compact label styling */
+export const labelStyle = {
+  display: "block" as const,
+  fontSize: "10px",
+  color: "rgba(255,255,255,0.55)",
+  marginBottom: "4px",
+  fontWeight: "600" as const,
+};
+
+/** Helper text below form fields */
+export const helperStyle = {
+  fontSize: "11px",
+  color: "#a5b4fc",
+  marginTop: "4px",
+  lineHeight: 1.4,
   fontWeight: 500,
 } as const;
 
@@ -33,8 +60,6 @@ export const CollapsibleSubsection = ({
   isDelivery = false,
 }: CollapsibleSubsectionProps) => {
   const [isOpen, setIsOpen] = useState(defaultOpen);
-  const accentColor = isDelivery ? "#22c55e" : "#ff6b6b";
-
   // Sync open state when defaultOpen changes (e.g. when a service is picked)
   const prevDefaultOpen = useRef(defaultOpen);
   useEffect(() => {
@@ -53,11 +78,11 @@ export const CollapsibleSubsection = ({
           width: "100%",
           display: "flex",
           alignItems: "center",
-          gap: "8px",
-          marginTop: 16,
-          marginBottom: isOpen ? 12 : 0,
-          paddingBottom: 8,
-          borderBottom: `1px solid ${isDelivery ? "#22c55e" : "#444"}`,
+          gap: "6px",
+          marginTop: 10,
+          marginBottom: isOpen ? 8 : 0,
+          paddingBottom: 4,
+          borderBottom: `1px solid ${isDelivery ? "#22c55e" : "rgba(0,188,212,0.3)"}`,
           background: "none",
           border: "none",
           cursor: "pointer",
@@ -65,16 +90,16 @@ export const CollapsibleSubsection = ({
           textAlign: "left",
         }}
       >
-        <span style={{ fontSize: "12px", transform: isOpen ? "rotate(90deg)" : "rotate(0deg)", transition: "transform 0.3s ease", color: accentColor }}>
+        <span style={{ fontSize: "12px", transform: isOpen ? "rotate(90deg)" : "rotate(0deg)", transition: "transform 0.3s ease", color: "rgba(255,255,255,0.6)" }}>
           {icon}
         </span>
         <span
           style={{
             fontSize: "12px",
-            fontWeight: 700,
-            color: accentColor,
-            textTransform: "uppercase",
-            letterSpacing: "0.5px",
+            fontWeight: 600,
+            color: "#fff",
+            textTransform: "none",
+            letterSpacing: "0.3px",
           }}
         >
           {title}
@@ -89,8 +114,8 @@ export const CollapsibleSubsection = ({
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
-            gap: "20px",
+            gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+            gap: "12px",
           }}
         >
           {children}
@@ -105,6 +130,8 @@ type FormSectionProps = {
   children: ReactNode;
   defaultOpen?: boolean;
   icon?: string;
+  /** Hint shown on the pill (e.g. "If different from client address") */
+  subtitle?: string;
   /** Dot color for section header (e.g. #22c55e green, #a855f7 purple, #eab308 yellow, #3b82f6 blue) */
   dotColor?: string;
   /** When true, use green delivery theme (border, glow) */
@@ -116,6 +143,7 @@ export const FormSection = ({
   children,
   defaultOpen = false,
   icon = "📋",
+  subtitle,
   dotColor,
   isDelivery = false,
 }: FormSectionProps) => {
@@ -133,7 +161,7 @@ export const FormSection = ({
     }
   }, [defaultOpen]);
   const borderColor = isDelivery ? "#22c55e" : "#00bcd4";
-  const glowColor = isDelivery ? "rgba(34,197,94,0.2)" : "rgba(0,188,212,0.2)";
+  const glowColor = isDelivery ? "rgba(34,197,94,0.15)" : "rgba(0,188,212,0.2)";
 
   const handleSave = async () => {
     if (!selectedEventId) return;
@@ -143,19 +171,36 @@ export const FormSection = ({
     if (ok) {
       setShowSaved(true);
       setTimeout(() => setShowSaved(false), 2000);
+      setIsOpen(false);
     }
   };
 
+  const handleDoubleClick = (e: React.MouseEvent) => {
+    const target = e.target as HTMLElement;
+    if (target.closest("input, select, textarea, button")) return;
+    setIsOpen((prev) => !prev);
+  };
+
+  useEffect(() => {
+    const collapse = () => setIsOpen(false);
+    window.addEventListener("beo-collapse-all-pills", collapse);
+    return () => window.removeEventListener("beo-collapse-all-pills", collapse);
+  }, []);
+
   return (
     <div
+      className="beo-pill"
+      data-beo-pill
+      onDoubleClick={handleDoubleClick}
+      title={isOpen ? "Double-click to collapse" : "Double-click to expand"}
       style={{
-        backgroundColor: "#2a2a2a",
-        borderRadius: "16px",
-        padding: "24px",
-        marginBottom: "20px",
-        border: `2px solid ${borderColor}`,
-        boxShadow: `0 15px 35px rgba(0,0,0,0.4), 0 0 20px ${glowColor}, inset -2px -2px 8px rgba(0,0,0,0.2), inset 2px 2px 8px rgba(255,255,255,0.04)`,
-        transition: "all 0.4s cubic-bezier(0.34,1.56,0.64,1)",
+        gridColumn: isOpen ? "1 / -1" : undefined,
+        backgroundColor: "rgba(30,15,15,0.6)",
+        borderRadius: "10px",
+        padding: isOpen ? "16px 22px" : "14px 18px",
+        border: `1px solid ${borderColor}`,
+        boxShadow: `0 2px 12px rgba(0,0,0,0.25), 0 0 1px ${glowColor}`,
+        transition: "all 0.25s ease",
       }}
     >
       {/* Section Header - Collapsible */}
@@ -165,40 +210,47 @@ export const FormSection = ({
         style={{
           width: "100%",
           display: "flex",
-          alignItems: "center",
-          gap: "12px",
-          marginBottom: isOpen ? "20px" : "0",
+          flexDirection: "column",
+          alignItems: "flex-start",
+          gap: "2px",
+          marginBottom: isOpen ? "16px" : "0",
           background: "none",
           border: "none",
           cursor: "pointer",
           padding: 0,
         }}
       >
-        {!dotColor && <span style={{ fontSize: "20px", color: "#dc2626" }}>{icon}</span>}
-        <h2
+        <div style={{ display: "flex", alignItems: "center", gap: "8px", width: "100%" }}>
+          <h2
+            style={{
+              fontSize: "15px",
+              fontWeight: "600",
+              color: "#fff",
+              textTransform: "none",
+              letterSpacing: "0.2px",
+              flex: 1,
+              textAlign: "left",
+              margin: 0,
+            }}
+          >
+            {title}
+          </h2>
+          <span
           style={{
-            fontSize: "13px",
-            fontWeight: "bold",
-            color: "#dc2626",
-            textTransform: "uppercase",
-            letterSpacing: "1px",
-            flex: 1,
-            textAlign: "left",
-            margin: 0,
-          }}
-        >
-          {title}
-        </h2>
-        <span
-          style={{
-            color: "#dc2626",
-            fontSize: "12px",
+            color: "rgba(255,255,255,0.5)",
+            fontSize: "11px",
             transform: isOpen ? "rotate(90deg)" : "rotate(0deg)",
             transition: "transform 0.3s ease",
           }}
         >
           ▶
         </span>
+        </div>
+        {subtitle && (
+          <span style={{ fontSize: "10px", color: "rgba(255,255,255,0.5)", fontWeight: 400 }}>
+            {subtitle}
+          </span>
+        )}
       </button>
 
       {/* Section Content with Grid */}
@@ -207,28 +259,28 @@ export const FormSection = ({
           <div
             style={{
               display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
-              gap: "20px",
+              gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+              gap: "12px",
             }}
           >
             {children}
           </div>
           {selectedEventId && (
-            <div style={{ marginTop: 20, paddingTop: 16, borderTop: `1px solid ${borderColor}40` }}>
+            <div style={{ marginTop: 12, paddingTop: 10, borderTop: "1px solid rgba(255,255,255,0.08)" }}>
               <button
                 type="button"
                 onClick={handleSave}
                 disabled={isSaving}
                 style={{
-                  padding: "8px 20px",
-                  fontSize: "12px",
-                  fontWeight: 700,
-                  textTransform: "uppercase",
-                  letterSpacing: "0.5px",
-                  borderRadius: "8px",
-                  border: `2px solid ${isDelivery ? "#22c55e" : "#ff6b6b"}`,
-                  background: isSaving ? "rgba(255,255,255,0.05)" : (isDelivery ? "#22c55e" : "#ff6b6b"),
-                  color: "#fff",
+                  padding: "6px 14px",
+                  fontSize: "11px",
+                  fontWeight: 600,
+                  textTransform: "none",
+                  letterSpacing: "0.2px",
+                  borderRadius: "6px",
+                  border: `1px solid ${isDelivery ? "rgba(34,197,94,0.5)" : "rgba(255,107,107,0.5)"}`,
+                  background: isSaving ? "rgba(255,255,255,0.04)" : (isDelivery ? "rgba(34,197,94,0.15)" : "rgba(255,107,107,0.15)"),
+                  color: isDelivery ? "#4ade80" : "#ff6b6b",
                   cursor: isSaving ? "not-allowed" : "pointer",
                   opacity: isSaving ? 0.7 : 1,
                 }}

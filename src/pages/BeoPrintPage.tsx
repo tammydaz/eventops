@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { useEventStore } from "../state/eventStore";
 import { useBeoPrintStore } from "../state/beoPrintStore";
 import { FIELD_IDS, getBarServiceFieldId } from "../services/airtable/events";
-import { asSingleSelectName, asString, asStringArray } from "../services/airtable/selectors";
+import { asLinkedRecordIds, asSingleSelectName, asString, asStringArray } from "../services/airtable/selectors";
 import { secondsToTimeString, secondsTo12HourString } from "../utils/timeHelpers";
 import { sanitizeForHeader } from "../utils/httpHeaders";
 import { isDeliveryOrPickup } from "../lib/deliveryHelpers";
@@ -1112,10 +1112,282 @@ function BeveragePill({
   );
 }
 
+// ── S2-BEO header (reusable: CLIENT, CONTACT, PHONE, ADDRESS, etc.) ──
+function S2Header(props: {
+  eventDate: string;
+  clientName: string;
+  contactName: string;
+  cityState: string;
+  jobNumberDisplay: string;
+  dispatchTime: string;
+  eventArrival: string;
+  guestCount: string;
+  eventLocation: string;
+  venueAddress: string;
+  eventStart: string;
+  eventEnd: string;
+  fwStaff: string;
+  phoneStr: string;
+}) {
+  return (
+    <>
+      <div style={{ fontSize: 12, fontWeight: 600, color: "#111", marginBottom: 4 }}>{props.eventDate || "—"}</div>
+      <div className="beo-letterhead-bar" style={{
+        background: "#6b7280", color: "#fff", padding: "8px 14px",
+        display: "flex", alignItems: "center", justifyContent: "space-between",
+        fontSize: 13, fontWeight: 700, border: "2px solid #374151",
+      }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <div style={{ width: 22, height: 22, background: "#dc2626", display: "flex", alignItems: "center", justifyContent: "center", transform: "rotate(45deg)", flexShrink: 0 }}>
+            <span style={{ transform: "rotate(-45deg)", fontSize: 11, fontWeight: 800, color: "#fff" }}>f</span>
+          </div>
+          <span>BEO</span>
+        </div>
+        <span>JOB#: {props.jobNumberDisplay} — DISPATCH TIME {props.dispatchTime}</span>
+      </div>
+      <div className="beo-event-details-table" style={{ marginTop: 6, overflow: "hidden" }}>
+        <table style={KITCHEN_HEADER_TABLE}>
+          <colgroup>
+            <col style={{ width: "15%" }} />
+            <col style={{ width: "35%" }} />
+            <col style={{ width: "15%" }} />
+            <col style={{ width: "35%" }} />
+          </colgroup>
+          <tbody>
+            <tr>
+              <td style={{ ...KITCHEN_HEADER_CELL, fontWeight: 700 }}>CLIENT</td>
+              <td style={KITCHEN_HEADER_CELL}>{props.clientName || "—"}</td>
+              <td style={{ ...KITCHEN_HEADER_CELL, fontWeight: 700 }}>ORDER #</td>
+              <td style={{ ...KITCHEN_HEADER_CELL, color: "#c00", fontWeight: 700 }}>{props.jobNumberDisplay || "—"}</td>
+            </tr>
+            <tr>
+              <td style={{ ...KITCHEN_HEADER_CELL, fontWeight: 700 }}>CONTACT</td>
+              <td style={KITCHEN_HEADER_CELL}>{props.contactName || "—"}</td>
+              <td style={{ ...KITCHEN_HEADER_CELL, fontWeight: 700 }}>EVENT DATE</td>
+              <td style={KITCHEN_HEADER_CELL}>{props.eventDate || "—"}</td>
+            </tr>
+            <tr>
+              <td style={{ ...KITCHEN_HEADER_CELL, fontWeight: 700 }}>PHONE</td>
+              <td style={KITCHEN_HEADER_CELL}>{props.phoneStr || "—"}</td>
+              <td style={{ ...KITCHEN_HEADER_CELL, fontWeight: 700 }}>GUESTS</td>
+              <td style={{ ...KITCHEN_HEADER_CELL, color: "#c00", fontWeight: 700 }}>{props.guestCount || "—"}</td>
+            </tr>
+            <tr>
+              <td style={{ ...KITCHEN_HEADER_CELL, fontWeight: 700 }}>ADDRESS</td>
+              <td style={KITCHEN_HEADER_CELL}>{props.venueAddress || "—"}</td>
+              <td style={{ ...KITCHEN_HEADER_CELL, fontWeight: 700 }}>EVENT START</td>
+              <td style={{ ...KITCHEN_HEADER_CELL, color: "#c00", fontWeight: 700 }}>{props.eventStart || "—"}</td>
+            </tr>
+            <tr>
+              <td style={{ ...KITCHEN_HEADER_CELL, fontWeight: 700 }}>CITY, ST</td>
+              <td style={KITCHEN_HEADER_CELL}>{props.cityState || "—"}</td>
+              <td style={{ ...KITCHEN_HEADER_CELL, fontWeight: 700 }}>EVENT END</td>
+              <td style={{ ...KITCHEN_HEADER_CELL, color: "#c00", fontWeight: 700 }}>{props.eventEnd || "—"}</td>
+            </tr>
+            <tr>
+              <td style={{ ...KITCHEN_HEADER_CELL, fontWeight: 700 }}>VENUE</td>
+              <td style={KITCHEN_HEADER_CELL}>{props.eventLocation || "—"}</td>
+              <td style={{ ...KITCHEN_HEADER_CELL, fontWeight: 700 }}>EVENT ARRIVAL</td>
+              <td style={{ ...KITCHEN_HEADER_CELL, color: "#c00", fontWeight: 700 }}>{props.eventArrival || "—"}</td>
+            </tr>
+            <tr>
+              <td style={KITCHEN_HEADER_CELL} />
+              <td style={KITCHEN_HEADER_CELL} />
+              <td style={{ ...KITCHEN_HEADER_CELL, fontWeight: 700 }}>FW STAFF</td>
+              <td style={KITCHEN_HEADER_CELL}>{props.fwStaff || "—"}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </>
+  );
+}
+
+// ── S-BEO: S2 header + K-BEO body (food only, stops at desserts) — first part of Full BEO Packet ──
+function SBeoContent(props: {
+  eventDate: string;
+  clientName: string;
+  contactName: string;
+  cityState: string;
+  jobNumberDisplay: string;
+  dispatchTime: string;
+  eventArrival: string;
+  guestCount: string;
+  eventLocation: string;
+  venueAddress: string;
+  eventStart: string;
+  eventEnd: string;
+  fwStaff: string;
+  allergies: string;
+  notBuffetBanner: string;
+  religiousRestrictions?: string;
+  beoNotes?: string;
+  eventData: Record<string, unknown>;
+  kitchenPages: { pageNum: number; sections: Array<{ section: SectionData; items: MenuLineItem[]; isContinuation?: boolean }> }[];
+  expandItemToRows: (item: MenuLineItem) => { lineName: string; isChild: boolean; itemId: string }[];
+  specOverrides: Record<string, string>;
+  setSpecOverrides: React.Dispatch<React.SetStateAction<Record<string, string>>>;
+  checkState: Record<string, boolean>;
+  setCheckState: React.Dispatch<React.SetStateAction<Record<string, boolean>>>;
+  packOutEdits: Record<string, string>;
+  setPackOutEdits: React.Dispatch<React.SetStateAction<Record<string, string>>>;
+  isDelivery: boolean;
+}) {
+  const { kitchenPages, expandItemToRows, specOverrides, setSpecOverrides, checkState, setCheckState, packOutEdits, setPackOutEdits, isDelivery } = props;
+  const phoneStr = asString(props.eventData[FIELD_IDS.CONTACT_PHONE]) || asString(props.eventData[FIELD_IDS.CLIENT_PHONE]) || "";
+  const leftCheck = "server";
+  const gridTemplateColumns = "140px 1fr 40px";
+
+  return (
+    <>
+      {kitchenPages.length === 0 || (kitchenPages.length === 1 && kitchenPages[0].sections.length === 0) ? (
+        <div className="beo-print-content" style={styles.page}>
+          <div className="beo-event-header-block" style={{ marginBottom: 8 }}>
+            <S2Header
+              eventDate={props.eventDate}
+              clientName={props.clientName}
+              contactName={props.contactName}
+              cityState={props.cityState}
+              jobNumberDisplay={props.jobNumberDisplay}
+              dispatchTime={props.dispatchTime}
+              eventArrival={props.eventArrival}
+              guestCount={props.guestCount}
+              eventLocation={props.eventLocation}
+              venueAddress={props.venueAddress}
+              eventStart={props.eventStart}
+              eventEnd={props.eventEnd}
+              fwStaff={props.fwStaff}
+              phoneStr={phoneStr}
+            />
+          </div>
+          <div style={{ padding: 32, textAlign: "center", color: "#999", fontSize: 16 }}>
+            No menu items assigned to this event yet.
+          </div>
+        </div>
+      ) : (
+        kitchenPages.map((page, pageIdx) => (
+          <div
+            key={`s-beo-${page.pageNum}`}
+            className="beo-print-content kitchen-beo-page"
+            style={{
+              ...styles.page,
+              pageBreakAfter: pageIdx < kitchenPages.length - 1 ? "page" : "auto",
+            }}
+          >
+            {/* S2 header on every page */}
+            <div className="beo-event-header-block" style={{ marginBottom: page.pageNum === 1 ? 8 : 6 }}>
+              <S2Header
+                eventDate={props.eventDate}
+                clientName={props.clientName}
+                contactName={props.contactName}
+                cityState={props.cityState}
+                jobNumberDisplay={props.jobNumberDisplay}
+                dispatchTime={props.dispatchTime}
+                eventArrival={props.eventArrival}
+                guestCount={props.guestCount}
+                eventLocation={props.eventLocation}
+                venueAddress={props.venueAddress}
+                eventStart={props.eventStart}
+                eventEnd={props.eventEnd}
+                fwStaff={props.fwStaff}
+                phoneStr={phoneStr}
+              />
+            </div>
+            {page.pageNum > 1 && !isDelivery && (
+              <div className="kitchen-beo-page2-buffer" style={{ height: "10in", minHeight: "10in", flexShrink: 0 }} aria-hidden="true" />
+            )}
+            {page.pageNum === 1 && props.beoNotes?.trim() && (
+              <div className="beo-banner-block" style={styles.beoNotesBanner}>📋 BEO NOTES: {props.beoNotes.trim()}</div>
+            )}
+            {page.pageNum === 1 && props.notBuffetBanner && (
+              <div className="beo-banner-block" style={styles.notBuffetBanner}>{props.notBuffetBanner}</div>
+            )}
+            {page.pageNum === 1 && props.allergies && (
+              <div className="beo-banner-block" style={styles.allergyBanner}>⚠️ ALLERGIES / DIETARY RESTRICTIONS: {props.allergies.toUpperCase()}</div>
+            )}
+            {page.pageNum === 1 && props.religiousRestrictions?.trim() && (
+              <div className="beo-banner-block" style={styles.religiousBanner}>🕎 RELIGIOUS / DIETARY: {props.religiousRestrictions.trim().toUpperCase()}</div>
+            )}
+            {page.sections.map(({ section, items: sectionItems, isContinuation }, secIdx) => (
+              <div key={`${section.fieldId}-${page.pageNum}-${secIdx}`} className="beo-section-card" style={styles.sectionCard}>
+                <div className={sectionItems.length > 0 ? "beo-section-header-with-first-item" : undefined}>
+                  <div className="beo-section-header" style={styles.sectionHeader}>
+                    <span style={{ color: getSectionColor(section.title), fontSize: "22px", lineHeight: 0 }}>●</span>
+                    <span>{section.title}{isContinuation ? " (cont.)" : ""}</span>
+                    <span style={{ color: getSectionColor(section.title), fontSize: "22px", lineHeight: 0 }}>●</span>
+                  </div>
+                  {sectionItems.length > 0 && (() => {
+                    const item = sectionItems[0];
+                    const rows = expandItemToRows(item);
+                    return (
+                      <div key={`${item.id}-0`} className="beo-menu-item-block" style={{ borderBottom: "1px solid #ddd", paddingBottom: 2, marginTop: 0 }}>
+                        {rows.map((row, rowIdx) => (
+                          <div key={rowIdx} className="beo-line-item" style={{ ...styles.lineItem, borderBottom: "none", gridTemplateColumns, padding: row.isChild ? "0 8px 0 8px" : "0 8px", paddingLeft: row.isChild ? "calc(8px + 2ch)" : 8, lineHeight: 1.15, minHeight: "unset", alignItems: "flex-start", marginTop: row.isChild ? 0 : 0 }}>
+                            <div className="beo-spec-col" style={{ ...styles.specCol, lineHeight: 1.2 }}>
+                              {(() => {
+                                const overrideKey = `${section.fieldId}:${item.id}:${rowIdx}`;
+                                const overrideKeyLegacy = `${section.fieldId}:${item.id}`;
+                                const overrideVal = specOverrides[overrideKey] ?? (rowIdx === 0 ? specOverrides[overrideKeyLegacy] : undefined) ?? "";
+                                return <span>{overrideVal.trim() || "—"}</span>;
+                              })()}
+                            </div>
+                            <div className="beo-item-col" style={{ ...styles.itemCol, lineHeight: 1.25 }}>{row.lineName}</div>
+                            <div style={styles.checkboxCol} onClick={(e) => { e.stopPropagation(); if (document.activeElement instanceof HTMLButtonElement) document.activeElement.blur(); }}>
+                              <input
+                                type="checkbox"
+                                checked={checkState[`${leftCheck}:${section.fieldId}:${item.id}:${rowIdx}`] ?? item.loaded ?? false}
+                                onChange={(e) => {
+                                  const key = `${leftCheck}:${section.fieldId}:${item.id}:${rowIdx}`;
+                                  setCheckState((prev) => ({ ...prev, [key]: e.target.checked }));
+                                }}
+                                className="no-print"
+                              />
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })()}
+                </div>
+                {sectionItems.slice(1).map((item, itemIdx) => {
+                  const rows = expandItemToRows(item);
+                  return (
+                    <div key={`${item.id}-${itemIdx + 1}`} className="beo-menu-item-block" style={{ borderBottom: "1px solid #ddd", paddingBottom: 2, marginTop: 2 }}>
+                      {rows.map((row, rowIdx) => (
+                        <div key={rowIdx} className="beo-line-item" style={{ ...styles.lineItem, borderBottom: "none", gridTemplateColumns, padding: row.isChild ? "0 8px 0 8px" : "0 8px", paddingLeft: row.isChild ? "calc(8px + 2ch)" : 8, lineHeight: 1.15, minHeight: "unset", alignItems: "flex-start", marginTop: row.isChild ? 0 : 0 }}>
+                          <div className="beo-spec-col" style={{ ...styles.specCol, lineHeight: 1.2 }}>
+                            {(() => {
+                              const overrideKey = `${section.fieldId}:${item.id}:${rowIdx}`;
+                              const overrideKeyLegacy = `${section.fieldId}:${item.id}`;
+                              const overrideVal = specOverrides[overrideKey] ?? (rowIdx === 0 ? specOverrides[overrideKeyLegacy] : undefined) ?? "";
+                              return <span>{overrideVal.trim() || "—"}</span>;
+                            })()}
+                          </div>
+                          <div className="beo-item-col" style={{ ...styles.itemCol, lineHeight: 1.25 }}>{row.lineName}</div>
+                          <div style={styles.checkboxCol} onClick={(e) => { e.stopPropagation(); if (document.activeElement instanceof HTMLButtonElement) document.activeElement.blur(); }}>
+                            <input type="checkbox" checked={checkState[`${leftCheck}:${section.fieldId}:${item.id}:${rowIdx}`] ?? item.loaded ?? false} onChange={(e) => { setCheckState((prev) => ({ ...prev, [`${leftCheck}:${section.fieldId}:${item.id}:${rowIdx}`]: e.target.checked })); }} className="no-print" />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })}
+              </div>
+            ))}
+          </div>
+        ))
+      )}
+    </>
+  );
+}
+
 // ── Full BEO Packet — Beverages section (page 2) with collapsible pills ──
+// Uses same header as Server BEO 2nd page (CLIENT, CONTACT, PHONE, ADDRESS, etc.) — servers need full details
 function FullBeoPacketBeveragesContent(props: {
   eventDate: string;
   clientName: string;
+  contactName: string;
+  cityState: string;
   jobNumberDisplay: string;
   dispatchTime: string;
   eventArrival: string;
@@ -1133,6 +1405,7 @@ function FullBeoPacketBeveragesContent(props: {
   barServiceFieldId?: string | null;
 }) {
   const { eventData, barServiceFieldId } = props;
+  const phoneStr = asString(eventData[FIELD_IDS.CONTACT_PHONE]) || asString(eventData[FIELD_IDS.CLIENT_PHONE]) || "";
   const f = (id: string) => asString(eventData[id]);
   const barFid = barServiceFieldId ?? FIELD_IDS.BAR_SERVICE;
   const barService = asSingleSelectName(eventData[barFid]);
@@ -1151,54 +1424,72 @@ function FullBeoPacketBeveragesContent(props: {
 
   return (
     <div className="beo-print-content" style={styles.page}>
-      <div className="beo-event-header-block" style={{ marginBottom: 16 }}>
-        <div style={{ fontSize: 13, fontWeight: 600, color: "#111", marginBottom: 6 }}>{props.eventDate || "—"}</div>
+      {/* Same header as Server BEO 2nd page — servers need full details (CLIENT, CONTACT, PHONE, etc.) */}
+      <div className="beo-event-header-block" style={{ marginBottom: 6 }}>
+        <div style={{ fontSize: 12, fontWeight: 600, color: "#111", marginBottom: 4 }}>{props.eventDate || "—"}</div>
         <div className="beo-letterhead-bar" style={{
-          background: "#9ca3af", color: "#111", padding: "8px 16px",
+          background: "#6b7280", color: "#fff", padding: "8px 14px",
           display: "flex", alignItems: "center", justifyContent: "space-between",
-          fontSize: 13, fontWeight: 600, border: "3px double #374151",
+          fontSize: 13, fontWeight: 700, border: "2px solid #374151",
         }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <div style={{ width: 24, height: 24, background: "#dc2626", display: "flex", alignItems: "center", justifyContent: "center", transform: "rotate(45deg)", flexShrink: 0 }}>
-              <span style={{ transform: "rotate(-45deg)", fontSize: 12, fontWeight: 800, color: "#fff" }}>f</span>
+            <div style={{ width: 22, height: 22, background: "#dc2626", display: "flex", alignItems: "center", justifyContent: "center", transform: "rotate(45deg)", flexShrink: 0 }}>
+              <span style={{ transform: "rotate(-45deg)", fontSize: 11, fontWeight: 800, color: "#fff" }}>f</span>
             </div>
-            <span>BEO — Full Packet (Page 2)</span>
+            <span>BEO</span>
           </div>
-          <span>JOB#: {props.jobNumberDisplay} — DISPATCH: {props.dispatchTime}</span>
+          <span>JOB#: {props.jobNumberDisplay} — DISPATCH TIME {props.dispatchTime}</span>
         </div>
-        <div className="beo-event-details-table" style={{ background: "#e5e7eb", border: "3px double #374151", borderRadius: 8, marginTop: 12, overflow: "hidden" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, background: "#e5e7eb" }}>
+        <div className="beo-event-details-table" style={{ marginTop: 6, overflow: "hidden" }}>
+          <table style={KITCHEN_HEADER_TABLE}>
+            <colgroup>
+              <col style={{ width: "15%" }} />
+              <col style={{ width: "35%" }} />
+              <col style={{ width: "15%" }} />
+              <col style={{ width: "35%" }} />
+            </colgroup>
             <tbody>
               <tr>
-                <td style={{ padding: "10px 16px", borderRight: "1px solid #374151", borderBottom: "1px solid #374151", background: "#e5e7eb" }}>
-                  <HeaderFieldWithDivider label="Client" value={props.clientName} />
-                </td>
-                <td style={{ padding: "10px 16px", borderRight: "1px solid #374151", borderBottom: "1px solid #374151", background: "#e5e7eb" }}>
-                  <HeaderFieldWithDivider label="Event Arrival" value={props.eventArrival} highlight />
-                </td>
-                <td style={{ padding: "10px 16px", borderBottom: "1px solid #374151", background: "#e5e7eb" }}>
-                  <HeaderFieldWithDivider label="Guest Count" value={props.guestCount} />
-                </td>
+                <td style={{ ...KITCHEN_HEADER_CELL, fontWeight: 700 }}>CLIENT</td>
+                <td style={KITCHEN_HEADER_CELL}>{props.clientName || "—"}</td>
+                <td style={{ ...KITCHEN_HEADER_CELL, fontWeight: 700 }}>ORDER #</td>
+                <td style={{ ...KITCHEN_HEADER_CELL, color: "#c00", fontWeight: 700 }}>{props.jobNumberDisplay || "—"}</td>
               </tr>
               <tr>
-                <td style={{ padding: "10px 16px", borderRight: "1px solid #374151", borderBottom: "1px solid #374151", background: "#e5e7eb" }}>
-                  <HeaderFieldWithDivider label="Venue" value={props.eventLocation} />
-                </td>
-                <td style={{ padding: "10px 16px", borderRight: "1px solid #374151", borderBottom: "1px solid #374151", background: "#e5e7eb" }}>
-                  <HeaderFieldWithDivider label="Event Start" value={props.eventStart} highlight />
-                </td>
-                <td style={{ padding: "10px 16px", borderBottom: "1px solid #374151", background: "#e5e7eb" }}>
-                  <HeaderFieldWithDivider label="Event End" value={props.eventEnd} highlight />
-                </td>
+                <td style={{ ...KITCHEN_HEADER_CELL, fontWeight: 700 }}>CONTACT</td>
+                <td style={KITCHEN_HEADER_CELL}>{props.contactName || "—"}</td>
+                <td style={{ ...KITCHEN_HEADER_CELL, fontWeight: 700 }}>EVENT DATE</td>
+                <td style={KITCHEN_HEADER_CELL}>{props.eventDate || "—"}</td>
               </tr>
               <tr>
-                <td style={{ padding: "10px 16px", borderRight: "1px solid #374151", background: "#e5e7eb" }}>
-                  <HeaderFieldWithDivider label="Venue Address" value={props.venueAddress} />
-                </td>
-                <td style={{ padding: "10px 16px", borderRight: "1px solid #374151", background: "#e5e7eb" }}>
-                  <HeaderFieldWithDivider label="FW Staff" value={props.fwStaff} />
-                </td>
-                <td style={{ padding: "10px 16px", background: "#e5e7eb" }} />
+                <td style={{ ...KITCHEN_HEADER_CELL, fontWeight: 700 }}>PHONE</td>
+                <td style={KITCHEN_HEADER_CELL}>{phoneStr || "—"}</td>
+                <td style={{ ...KITCHEN_HEADER_CELL, fontWeight: 700 }}>GUESTS</td>
+                <td style={{ ...KITCHEN_HEADER_CELL, color: "#c00", fontWeight: 700 }}>{props.guestCount || "—"}</td>
+              </tr>
+              <tr>
+                <td style={{ ...KITCHEN_HEADER_CELL, fontWeight: 700 }}>ADDRESS</td>
+                <td style={KITCHEN_HEADER_CELL}>{props.venueAddress || "—"}</td>
+                <td style={{ ...KITCHEN_HEADER_CELL, fontWeight: 700 }}>EVENT START</td>
+                <td style={{ ...KITCHEN_HEADER_CELL, color: "#c00", fontWeight: 700 }}>{props.eventStart || "—"}</td>
+              </tr>
+              <tr>
+                <td style={{ ...KITCHEN_HEADER_CELL, fontWeight: 700 }}>CITY, ST</td>
+                <td style={KITCHEN_HEADER_CELL}>{props.cityState || "—"}</td>
+                <td style={{ ...KITCHEN_HEADER_CELL, fontWeight: 700 }}>EVENT END</td>
+                <td style={{ ...KITCHEN_HEADER_CELL, color: "#c00", fontWeight: 700 }}>{props.eventEnd || "—"}</td>
+              </tr>
+              <tr>
+                <td style={{ ...KITCHEN_HEADER_CELL, fontWeight: 700 }}>VENUE</td>
+                <td style={KITCHEN_HEADER_CELL}>{props.eventLocation || "—"}</td>
+                <td style={{ ...KITCHEN_HEADER_CELL, fontWeight: 700 }}>EVENT ARRIVAL</td>
+                <td style={{ ...KITCHEN_HEADER_CELL, color: "#c00", fontWeight: 700 }}>{props.eventArrival || "—"}</td>
+              </tr>
+              <tr>
+                <td style={KITCHEN_HEADER_CELL} />
+                <td style={KITCHEN_HEADER_CELL} />
+                <td style={{ ...KITCHEN_HEADER_CELL, fontWeight: 700 }}>FW STAFF</td>
+                <td style={KITCHEN_HEADER_CELL}>{props.fwStaff || "—"}</td>
               </tr>
             </tbody>
           </table>
@@ -1960,7 +2251,9 @@ const BeoPrintPage: React.FC = () => {
 
     const MENU_TABLE = "tbl0aN33DGG6R1sPZ";
     const ITEM_NAME = FIELD_IDS.MENU_ITEM_NAME;
-    const CHILD_ITEMS = FIELD_IDS.MENU_ITEM_CHILD_ITEMS;
+    // NON-NEGOTIABLE: Kitchen BEO and BEO Print MUST use THIS field ID for Child Items
+    const CHILD_ITEMS_FIELD_ID = "fldIu6qmlUwAEn2W9";
+    const CHILD_ITEMS = CHILD_ITEMS_FIELD_ID;
     const DESCRIPTION = FIELD_IDS.MENU_ITEM_DESCRIPTION;
     const DIETARY_TAGS = FIELD_IDS.MENU_ITEM_DIETARY_TAGS;
     const apiKey = (import.meta.env.VITE_AIRTABLE_API_KEY as string)?.trim() || "";
@@ -1987,12 +2280,13 @@ const BeoPrintPage: React.FC = () => {
         if (data.records) {
           data.records.forEach((rec: { id: string; fields: Record<string, unknown> }) => {
             const name = rec.fields[ITEM_NAME];
-            const childRaw = rec.fields[CHILD_ITEMS];
+            const rawChildItems = (rec.fields[CHILD_ITEMS_FIELD_ID] ?? rec.fields["Child Items"]) ?? [];
+            const childIds = Array.isArray(rawChildItems)
+              ? rawChildItems.map((item: unknown) => (typeof item === "string" ? item : (item && typeof item === "object" && "id" in item ? String((item as { id?: string }).id ?? "") : ""))).filter((id) => id.startsWith("rec"))
+              : [];
+            console.log("CHILD ITEMS (FINAL):", childIds);
             const descRaw = rec.fields[DESCRIPTION];
             const tagsRaw = rec.fields[DIETARY_TAGS];
-            const childIds = Array.isArray(childRaw)
-              ? childRaw.filter((c): c is string => typeof c === "string" && c.startsWith("rec"))
-              : [];
             const description = typeof descRaw === "string" ? descRaw : undefined;
             const dietaryTags = Array.isArray(tagsRaw)
               ? tagsRaw.map((t) => (typeof t === "string" ? t : (t && typeof t === "object" && "name" in t ? String((t as { name: string }).name) : ""))).filter(Boolean).join(" ")
@@ -3023,9 +3317,42 @@ const BeoPrintPage: React.FC = () => {
             />
           )}
           {topTab === "fullBeoPacket" && (
-            <FullBeoPacketBeveragesContent
+            <>
+              <SBeoContent
+                eventDate={eventDate}
+                clientName={clientName}
+                contactName={contactName}
+                cityState={cityState}
+                jobNumberDisplay={jobNumberDisplay}
+                dispatchTime={dispatchTime}
+                eventArrival={eventArrival}
+                guestCount={guestCount}
+                eventLocation={eventLocation}
+                venueAddress={venueAddress}
+                eventStart={eventStart}
+                eventEnd={eventEnd}
+                fwStaff={fwStaff}
+                allergies={allergies}
+                notBuffetBanner={notBuffetBanner}
+                religiousRestrictions={religiousRestrictions}
+                beoNotes={beoNotes}
+                eventData={eventData}
+                kitchenPages={kitchenPages}
+                expandItemToRows={expandItemToRows}
+                specOverrides={specOverrides}
+                setSpecOverrides={setSpecOverrides}
+                checkState={checkState}
+                setCheckState={setCheckState}
+                packOutEdits={packOutEdits}
+                setPackOutEdits={setPackOutEdits}
+                isDelivery={isDelivery}
+              />
+              <div style={{ pageBreakBefore: "always" }} />
+              <FullBeoPacketBeveragesContent
               eventDate={eventDate}
               clientName={clientName}
+              contactName={contactName}
+              cityState={cityState}
               jobNumberDisplay={jobNumberDisplay}
               dispatchTime={dispatchTime}
               eventArrival={eventArrival}
@@ -3042,6 +3369,7 @@ const BeoPrintPage: React.FC = () => {
               eventData={eventData}
               barServiceFieldId={barServiceFieldId}
             />
+            </>
           )}
           {topTab === "serverBeo2ndPage" && (
             <ServerBeo2ndPageContent

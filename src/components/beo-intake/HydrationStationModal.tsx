@@ -1,6 +1,7 @@
                                                                                                                                 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { FIELD_IDS, loadSingleSelectOptions, type SingleSelectOption } from "../../services/airtable/events";
+import { inputStyle, labelStyle, textareaStyle } from "./FormSection";
 
 type HydrationStationModalProps = {
   isOpen: boolean;
@@ -11,24 +12,6 @@ type HydrationStationModalProps = {
   onDrinkOptionsChange: (options: string[]) => void;
   onNotesChange: (notes: string) => void;
   canEdit: boolean;
-};
-
-const inputStyle = {
-  width: "100%",
-  padding: "12px",
-  borderRadius: "8px",
-  border: "1px solid #444",
-  backgroundColor: "#1a1a1a",
-  color: "#e0e0e0",
-  fontSize: "14px",
-};
-
-const labelStyle = {
-  display: "block",
-  fontSize: "11px",
-  color: "#999",
-  marginBottom: "6px",
-  fontWeight: "600" as const,
 };
 
 const FALLBACK_DRINK_OPTIONS: SingleSelectOption[] = [
@@ -172,7 +155,7 @@ export const HydrationStationModal = ({
               disabled={!canEdit}
               onChange={(e) => onNotesChange(e.target.value)}
               onBlur={(e) => onSave(FIELD_IDS.HYDRATION_STATION_NOTES, e.target.value)}
-              style={{ ...inputStyle, resize: "vertical", fontFamily: "inherit" }}
+              style={textareaStyle}
               placeholder="Additional hydration notes..."
             />
           </div>

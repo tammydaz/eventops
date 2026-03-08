@@ -1,7 +1,9 @@
 import { airtableFetch, getBaseId, getApiKey, getStationsTable, getMenuItemsTable, airtableMetaFetch, type AirtableListResponse, type AirtableErrorResult } from "./client";
 import { sanitizeForHeader } from "../../utils/httpHeaders";
+import { cleanDisplayName } from "../../utils/displayName";
 import { isErrorResult, asString, asSingleSelectName, asLinkedRecordIds } from "./selectors";
-import { STATION_ITEMS_FIELD_ID, STATION_EVENT_FIELD_ID, STATION_TYPE_FIELD_ID } from "../../constants/stations";
+import { STATION_ITEMS_FIELD_ID, STATION_EVENT_FIELD_ID, STATION_TYPE_FIELD_ID, STATION_NOTES_FIELD_ID } from "../../constants/stations";
+import { getStationItemIds, hasStationMapping, itemMatchesStation } from "../../constants/stationItemMapping";
 
 type StationsFieldIds = { stationType: string; stationItems: string; event: string; stationNotes: string; stationTypeFieldName: string };
 
@@ -27,7 +29,7 @@ async function getStationsFieldIds(): Promise<StationsFieldIds | null> {
     stationType: stationTypeId,
     stationItems: byName("Station Items") || STATION_ITEMS_FIELD_ID,
     event: byName("Event") || STATION_EVENT_FIELD_ID,
-    stationNotes: byName("Station Notes"),
+    stationNotes: byName("Station Notes") || STATION_NOTES_FIELD_ID,
     stationTypeFieldName: stationTypeField?.name ?? "Station Type",
   };
   return cachedStationsFieldIds;
@@ -51,11 +53,14 @@ export type LinkedRecordItem = {
   id: string;
   name: string;
   category?: string | null;
+  /** Child item names for picker label (e.g. "Marinara Sauce" for Mac & Cheese Melts) */
   childItems?: string[];
 };
 
 const MENU_ITEMS_TABLE_ID_DEFAULT = "tbl0aN33DGG6R1sPZ";
-const MENU_ITEMS_FORMATTED_NAME_FIELD_ID = "fldQ83gpgOmMxNMQw"; // Name field - verify in Airtable
+const MENU_ITEMS_FORMATTED_NAME_FIELD_ID = "fldQ83gpgOmMxNMQw"; // Description Name/Formula
+const MENU_ITEMS_CHILD_ITEMS_FIELD_ID = "fldIu6qmlUwAEn2W9"; // Child Items (linked)
+const MENU_ITEMS_ITEM_NAME_FIELD_ID = "fldW5gfSlHRTl01v1"; // Item Name (for child records)
 const MENU_ITEMS_SERVICE_TYPE_FIELD_ID = "fld2EhDP5GRalZJzQ"; // Service Type - verify in Airtable
 const MENU_ITEMS_CATEGORY_FIELD_ID = "fldM7lWvjH8S0YNSX"; // Category (alternate) - verify in Airtable
 const MENU_ITEMS_DIETARY_TAGS_FIELD_ID = "fldUSr1QgzP4nv9vs"; // Allergen Icons / dietary tags - verify in Airtable
@@ -119,6 +124,7 @@ export const loadMenuItems = async (): Promise<LinkedRecordItem[] | AirtableErro
   const allRecords: LinkedRecordItem[] = [];
   let offset: string | undefined = undefined;
 
+  const rawRecords: Array<{ id: string; fields: Record<string, unknown> }> = [];
   try {
     do {
       const params = new URLSearchParams();
@@ -126,6 +132,8 @@ export const loadMenuItems = async (): Promise<LinkedRecordItem[] | AirtableErro
       params.set("returnFieldsByFieldId", "true");
       params.append("fields[]", MENU_ITEMS_FORMATTED_NAME_FIELD_ID);
       params.append("fields[]", MENU_ITEMS_CATEGORY_FIELD_ID);
+      params.append("fields[]", MENU_ITEMS_CHILD_ITEMS_FIELD_ID);
+      params.append("fields[]", MENU_ITEMS_ITEM_NAME_FIELD_ID);
       if (offset) params.set("offset", offset);
 
       const tableId = getMenuItemsTable() || MENU_ITEMS_TABLE_ID_DEFAULT;
@@ -140,49 +148,45 @@ export const loadMenuItems = async (): Promise<LinkedRecordItem[] | AirtableErro
         error?: { type: string; message: string };
       };
 
-      console.log("MENU ITEMS RESPONSE:", data);
-
       if (data.error) {
         return { error: true, message: data.error.message ?? "Airtable API error" };
       }
 
-      if (data.records) {
-        const pageRecords = data.records.map((rec) => {
-          const nameRaw = rec.fields[MENU_ITEMS_FORMATTED_NAME_FIELD_ID];
-          const name = typeof nameRaw === "string" ? nameRaw : nameRaw && typeof nameRaw === "object" && "name" in nameRaw ? String((nameRaw as { name: string }).name) : "";
-
-          const categoryRaw = rec.fields[MENU_ITEMS_CATEGORY_FIELD_ID];
-
-          let category: string | undefined;
-
-          if (Array.isArray(categoryRaw)) {
-            category = categoryRaw[0] ?? undefined;
-          } else if (typeof categoryRaw === "string") {
-            category = categoryRaw;
-          } else if (
-            categoryRaw &&
-            typeof categoryRaw === "object" &&
-            "name" in categoryRaw
-          ) {
-            category = String((categoryRaw as { name: string }).name);
-          } else {
-            category = undefined;
-          }
-
-          return {
-            id: rec.id,
-            name: name || "",
-            category,
-          } as LinkedRecordItem;
-        });
-        allRecords.push(...pageRecords);
-        console.log(`📦 Loaded ${pageRecords.length} menu items (total: ${allRecords.length})`);
-      }
-
+      if (data.records) rawRecords.push(...data.records);
       offset = data.offset;
     } while (offset);
 
-    console.log(`✅ Finished loading ${allRecords.length} total menu items`);
+    const idToName: Record<string, string> = {};
+    for (const rec of rawRecords) {
+      const nameRaw = rec.fields[MENU_ITEMS_FORMATTED_NAME_FIELD_ID] ?? rec.fields[MENU_ITEMS_ITEM_NAME_FIELD_ID];
+      const name = typeof nameRaw === "string" ? nameRaw : nameRaw && typeof nameRaw === "object" && "name" in nameRaw ? String((nameRaw as { name: string }).name) : "";
+      idToName[rec.id] = cleanDisplayName(name || "") || rec.id;
+    }
+
+    for (const rec of rawRecords) {
+      const nameRaw = rec.fields[MENU_ITEMS_FORMATTED_NAME_FIELD_ID];
+      const name = typeof nameRaw === "string" ? nameRaw : nameRaw && typeof nameRaw === "object" && "name" in nameRaw ? String((nameRaw as { name: string }).name) : "";
+      const categoryRaw = rec.fields[MENU_ITEMS_CATEGORY_FIELD_ID];
+      let category: string | undefined;
+      if (Array.isArray(categoryRaw)) {
+        category = categoryRaw[0] ?? undefined;
+      } else if (typeof categoryRaw === "string") {
+        category = categoryRaw;
+      } else if (categoryRaw && typeof categoryRaw === "object" && "name" in categoryRaw) {
+        category = String((categoryRaw as { name: string }).name);
+      } else {
+        category = undefined;
+      }
+      const childIds = asLinkedRecordIds(rec.fields[MENU_ITEMS_CHILD_ITEMS_FIELD_ID]);
+      const childItems = childIds.map((id) => idToName[id]).filter(Boolean);
+      allRecords.push({
+        id: rec.id,
+        name: cleanDisplayName(name || ""),
+        category,
+        childItems: childItems.length ? childItems : undefined,
+      } as LinkedRecordItem);
+    }
+
     return allRecords;
   } catch (error) {
     console.error("❌ Failed to load menu items:", error);
@@ -241,6 +245,8 @@ async function loadMenuItemsByIds(
   params.append("fields[]", MENU_ITEMS_FORMATTED_NAME_FIELD_ID);
   params.append("fields[]", MENU_ITEMS_CATEGORY_FIELD_ID);
   params.append("fields[]", MENU_ITEMS_PARENT_FIELD_ID);
+  params.append("fields[]", MENU_ITEMS_CHILD_ITEMS_FIELD_ID);
+  params.append("fields[]", MENU_ITEMS_ITEM_NAME_FIELD_ID);
 
   const res = await fetch(
     `https://api.airtable.com/v0/${baseId}/${tableId}?${params.toString()}`,
@@ -252,22 +258,31 @@ async function loadMenuItemsByIds(
   };
   if (data.error) return { error: true, message: data.error.message ?? "Airtable API error" };
 
+  const allRecs = data.records ?? [];
+  const idToName: Record<string, string> = {};
+  for (const rec of allRecs) {
+    const nameRaw = rec.fields[MENU_ITEMS_FORMATTED_NAME_FIELD_ID] ?? rec.fields[MENU_ITEMS_ITEM_NAME_FIELD_ID];
+    const name = typeof nameRaw === "string" ? nameRaw : nameRaw && typeof nameRaw === "object" && "name" in nameRaw ? String((nameRaw as { name: string }).name) : "";
+    idToName[rec.id] = cleanDisplayName(name || "") || rec.id;
+  }
+
   const mapItem = (rec: { id: string; fields: Record<string, unknown> }) => {
     const nameRaw = rec.fields[MENU_ITEMS_FORMATTED_NAME_FIELD_ID];
     const name = typeof nameRaw === "string" ? nameRaw : nameRaw && typeof nameRaw === "object" && "name" in nameRaw ? String((nameRaw as { name: string }).name) : "";
     const categoryRaw = rec.fields[MENU_ITEMS_CATEGORY_FIELD_ID];
     const category = Array.isArray(categoryRaw) ? categoryRaw[0] : typeof categoryRaw === "string" ? categoryRaw : undefined;
-    return { id: rec.id, name: name || rec.id, category } as LinkedRecordItem;
+    const childIds = asLinkedRecordIds(rec.fields[MENU_ITEMS_CHILD_ITEMS_FIELD_ID]);
+    const childItems = childIds.map((id) => idToName[id]).filter(Boolean);
+    return { id: rec.id, name: cleanDisplayName(name || "") || rec.id, category, childItems: childItems.length ? childItems : undefined } as LinkedRecordItem;
   };
-  return filterToParentItems(data.records ?? [], MENU_ITEMS_PARENT_FIELD_ID, mapItem);
+  return filterToParentItems(allRecs, MENU_ITEMS_PARENT_FIELD_ID, mapItem);
 }
 
 /**
- * Fetch menu items for a station type. Uses Station Items link (per Airtable schema):
- * 1. Query Stations where Station Type = X, get their Station Items (linked menu item IDs)
- * 2. Fetch those Menu Items by ID
- * 3. Fallback: Filter Menu Items by Station Type field
- * 4. Fallback: Return all menu items if still empty (so user can add items)
+ * Fetch menu items for a station type.
+ * 1. If we have a code mapping for this station: filter all menu items by name (bypasses Airtable)
+ * 2. Else: Query Stations / Menu Items.Station Type from Airtable
+ * 3. Fallback: Return all parent menu items
  */
 export const loadMenuItemsByStationType = async (
   stationType: string
@@ -280,6 +295,25 @@ export const loadMenuItemsByStationType = async (
   const baseId = (baseIdResult as string).trim();
   const tableId = getMenuItemsTable() || MENU_ITEMS_TABLE_ID_DEFAULT;
   if (!apiKey || !baseId || !stationType.trim()) return [];
+
+  try {
+    // 1. Use code mapping first — no Airtable config needed
+    if (hasStationMapping(stationType)) {
+      const allResult = await loadMenuItems();
+      if (!isErrorResult(allResult)) {
+        const ids = getStationItemIds(stationType);
+        const filtered =
+          ids.length > 0
+            ? allResult.filter((item) => ids.includes(item.id))
+            : allResult.filter((item) => itemMatchesStation(item.name, stationType));
+        if (filtered.length > 0) {
+          return filtered;
+        }
+      }
+    }
+  } catch {
+    // Fall through to Airtable
+  }
 
   const escaped = stationType.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
 
@@ -338,6 +372,8 @@ export const loadMenuItemsByStationType = async (
     params.append("fields[]", MENU_ITEMS_FORMATTED_NAME_FIELD_ID);
     params.append("fields[]", MENU_ITEMS_CATEGORY_FIELD_ID);
     params.append("fields[]", MENU_ITEMS_PARENT_FIELD_ID);
+    params.append("fields[]", MENU_ITEMS_CHILD_ITEMS_FIELD_ID);
+    params.append("fields[]", MENU_ITEMS_ITEM_NAME_FIELD_ID);
 
     const res = await fetch(
       `https://api.airtable.com/v0/${baseId}/${tableId}?${params.toString()}`,
@@ -358,14 +394,23 @@ export const loadMenuItemsByStationType = async (
 
     let items: LinkedRecordItem[] = [];
     if (!data.error && data.records?.length) {
+      const allRecs = data.records;
+      const idToName: Record<string, string> = {};
+      for (const rec of allRecs) {
+        const nameRaw = rec.fields[MENU_ITEMS_FORMATTED_NAME_FIELD_ID] ?? rec.fields[MENU_ITEMS_ITEM_NAME_FIELD_ID];
+        const name = typeof nameRaw === "string" ? nameRaw : nameRaw && typeof nameRaw === "object" && "name" in nameRaw ? String((nameRaw as { name: string }).name) : "";
+        idToName[rec.id] = cleanDisplayName(name || "") || rec.id;
+      }
       const mapItem = (rec: { id: string; fields: Record<string, unknown> }) => {
         const nameRaw = rec.fields[MENU_ITEMS_FORMATTED_NAME_FIELD_ID];
         const name = typeof nameRaw === "string" ? nameRaw : nameRaw && typeof nameRaw === "object" && "name" in nameRaw ? String((nameRaw as { name: string }).name) : "";
         const categoryRaw = rec.fields[MENU_ITEMS_CATEGORY_FIELD_ID];
         const category = Array.isArray(categoryRaw) ? categoryRaw[0] : typeof categoryRaw === "string" ? categoryRaw : undefined;
-        return { id: rec.id, name: name || rec.id, category } as LinkedRecordItem;
+        const childIds = asLinkedRecordIds(rec.fields[MENU_ITEMS_CHILD_ITEMS_FIELD_ID]);
+        const childItems = childIds.map((id) => idToName[id]).filter(Boolean);
+        return { id: rec.id, name: cleanDisplayName(name || "") || rec.id, category, childItems: childItems.length ? childItems : undefined } as LinkedRecordItem;
       };
-      items = filterToParentItems(data.records, MENU_ITEMS_PARENT_FIELD_ID, mapItem);
+      items = filterToParentItems(allRecs, MENU_ITEMS_PARENT_FIELD_ID, mapItem);
       console.log(`[Station Picker] Station Type: ${stationType} | Parent items from Menu Items.Station Type: ${items.length}`);
     }
 
@@ -621,6 +666,29 @@ export const updateStationItems = async (
   }
   const tableId = getStationsTable();
   const fields: Record<string, unknown> = { [fieldIds.stationItems]: stationItems };
+  const data = await airtableFetch<{ id: string }>(
+    `/${tableId}`,
+    { method: "PATCH", body: JSON.stringify({ records: [{ id: stationId, fields }] }) }
+  );
+  if (isErrorResult(data)) return data;
+  return { success: true };
+};
+
+/** Update a station's Station Notes only. Used by config-driven stations (e.g. Viva La Pasta). */
+export const updateStationNotes = async (
+  stationId: string,
+  stationNotes: string
+): Promise<{ success: boolean } | AirtableErrorResult> => {
+  const apiKeyResult = getApiKey();
+  if (isErrorResult(apiKeyResult)) return apiKeyResult as AirtableErrorResult;
+  const baseIdResult = getBaseId();
+  if (isErrorResult(baseIdResult)) return baseIdResult as AirtableErrorResult;
+  const fieldIds = await getStationsFieldIds();
+  if (!fieldIds?.stationNotes) {
+    return { error: true, message: "Could not resolve Station Notes field" };
+  }
+  const tableId = getStationsTable();
+  const fields: Record<string, unknown> = { [fieldIds.stationNotes]: stationNotes.trim() || "" };
   const data = await airtableFetch<{ id: string }>(
     `/${tableId}`,
     { method: "PATCH", body: JSON.stringify({ records: [{ id: stationId, fields }] }) }

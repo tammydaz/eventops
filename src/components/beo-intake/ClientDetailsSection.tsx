@@ -78,7 +78,7 @@ export const ClientDetailsSection = () => {
   const isDelivery = eventType === "Delivery";
 
   return (
-    <FormSection title="Client Information" icon="👤">
+    <FormSection title="Client Information">
       <div>
         <label style={{ display: "block", fontSize: "11px", color: "#999", marginBottom: "6px", fontWeight: "600" }}>
           Client First Name *

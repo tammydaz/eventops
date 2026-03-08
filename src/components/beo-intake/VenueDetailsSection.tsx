@@ -3,7 +3,7 @@ import { useEventStore } from "../../state/eventStore";
 import { FIELD_IDS } from "../../services/airtable/events";
 import { asSingleSelectName, asString } from "../../services/airtable/selectors";
 import { isDeliveryOrPickup } from "../../lib/deliveryHelpers";
-import { FormSection, Helper } from "./FormSection";
+import { FormSection, inputStyle, labelStyle, textareaStyle } from "./FormSection";
 import type { VenueDetails } from "./types";
 
 const VENUE_STATE_OPTIONS = ["NJ", "PA", "DE", "NY"];
@@ -70,153 +70,90 @@ export const VenueDetailsSection = () => {
 
   const canEdit = Boolean(selectedEventId);
 
-  const inputStyle = {
-    width: "100%",
-    padding: "12px",
-    borderRadius: "8px",
-    border: "1px solid #444",
-    backgroundColor: "#1a1a1a",
-    color: "#e0e0e0",
-    fontSize: "14px",
-  };
-
-  const labelStyle = {
-    display: "block",
-    fontSize: "11px",
-    color: "#999",
-    marginBottom: "6px",
-    fontWeight: "600",
-  };
-
   return (
     <FormSection 
       title={isDelivery ? "Delivery Location" : "Venue"} 
-      icon={isDelivery ? "🚚" : "📍"}
+      subtitle="If different from client address"
       isDelivery={isDelivery}
     >
-      {isDelivery && (
-        <div style={{ gridColumn: "1 / -1", marginBottom: "12px", padding: "12px", backgroundColor: "rgba(34,197,94,0.08)", borderRadius: "8px", border: "1px solid rgba(34,197,94,0.3)" }}>
-          <div style={{ fontSize: "11px", color: "#86efac", fontWeight: "600", marginBottom: "6px" }}>Delivering to…</div>
-          <div style={{ fontSize: "11px", color: "#a7f3d0", lineHeight: 1.5 }}>
-            <strong>Client residence?</strong> Leave this section blank — client address (above) will be used.<br />
-            <strong>Business?</strong> Enter business name + delivery address below.<br />
-            <strong>Venue?</strong> Enter venue name + delivery address below.
-          </div>
+      <div style={{ gridColumn: "1 / -1", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+        <div>
+          <label style={labelStyle}>
+            {isDelivery ? "Business / Location Name" : "Venue"}
+          </label>
+          <input
+            type="text"
+            value={details.venue}
+            disabled={!canEdit}
+            onChange={(e) => handleChange("venue", e.target.value)}
+            onBlur={(e) => handleBlur(FIELD_IDS.VENUE, e.target.value)}
+            autoComplete="off"
+            style={inputStyle}
+            placeholder={isDelivery ? "e.g. ABC Corporation or The Merion" : "e.g. The Merion – Palazzo Room"}
+          />
         </div>
-      )}
-
-      <div style={{ gridColumn: "1 / -1" }}>
-        <label style={labelStyle}>
-          {isDelivery ? "Business / Location Name" : "Venue Name"}
-        </label>
-        <input
-          type="text"
-          value={details.venue}
-          disabled={!canEdit}
-          onChange={(e) => handleChange("venue", e.target.value)}
-          onBlur={(e) => handleBlur(FIELD_IDS.VENUE, e.target.value)}
-          autoComplete="off"
-          style={inputStyle}
-          placeholder={isDelivery ? "e.g. ABC Corporation or The Merion" : "e.g. The Merion – Palazzo Room"}
-        />
-        <Helper>
-          {isDelivery 
-            ? "Leave blank if delivering to client's home; otherwise enter business or venue name."
-            : "Only fill this if the event is at a venue different from the client's residence."
-          }
-        </Helper>
+        <div>
+          <label style={labelStyle}>Address</label>
+          <input
+            type="text"
+            value={details.venueAddress}
+            disabled={!canEdit}
+            onChange={(e) => handleChange("venueAddress", e.target.value)}
+            onBlur={(e) => handleBlur(FIELD_IDS.VENUE_ADDRESS, e.target.value)}
+            autoComplete="off"
+            style={inputStyle}
+            placeholder={isDelivery ? "e.g. 456 Business Blvd" : "e.g. 123 Main St"}
+          />
+        </div>
       </div>
 
-      <div style={{ gridColumn: "1 / -1" }}>
-        <label style={labelStyle}>
-          {isDelivery ? "Delivery Address" : "Venue Address"}
-        </label>
-        <input
-          type="text"
-          value={details.venueAddress}
-          disabled={!canEdit}
-          onChange={(e) => handleChange("venueAddress", e.target.value)}
-          onBlur={(e) => handleBlur(FIELD_IDS.VENUE_ADDRESS, e.target.value)}
-          autoComplete="off"
-          style={inputStyle}
-          placeholder={isDelivery ? "e.g. 456 Business Blvd — leave blank if client residence" : "e.g. 123 Main St"}
-        />
-        <Helper>Street address for delivery or venue. Leave blank for delivery if using client residence.</Helper>
-      </div>
-
-      <div>
-        <label style={labelStyle}>City</label>
-        <input
-          type="text"
-          value={details.venueCity}
-          disabled={!canEdit}
-          onChange={(e) => handleChange("venueCity", e.target.value)}
-          onBlur={(e) => handleBlur(FIELD_IDS.VENUE_CITY, e.target.value)}
-          autoComplete="off"
-          style={inputStyle}
-          placeholder="City"
-        />
-      </div>
-
-      <div>
-        <label style={labelStyle}>State</label>
-        <select
-          value={details.venueState}
-          disabled={!canEdit}
-          onChange={(e) => {
-            handleChange("venueState", e.target.value);
-            handleBlur(FIELD_IDS.VENUE_STATE, e.target.value || null);
-          }}
-          style={inputStyle}
-        >
-          <option value="">Select state</option>
-          {VENUE_STATE_OPTIONS.map((state) => (
-            <option key={state} value={state}>
-              {state}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      {/* READ-ONLY: Full Address (Computed by Airtable) */}
-      <div style={{ gridColumn: "1 / -1" }}>
-        <label style={labelStyle}>
-          Full Address (Auto-Computed) ⚙️
-        </label>
-        <input
-          type="text"
-          value={details.venueFullAddress}
-          disabled={true}
-          readOnly={true}
-          style={{
-            ...inputStyle,
-            backgroundColor: "#2a2a2a",
-            cursor: "not-allowed",
-            color: "#888",
-            fontStyle: "italic",
-          }}
-          placeholder="Auto-computed from venue or client address"
-        />
-        <Helper>This field is automatically computed by Airtable and cannot be edited.</Helper>
+      <div style={{ gridColumn: "1 / -1", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+        <div>
+          <label style={labelStyle}>City</label>
+          <input
+            type="text"
+            value={details.venueCity}
+            disabled={!canEdit}
+            onChange={(e) => handleChange("venueCity", e.target.value)}
+            onBlur={(e) => handleBlur(FIELD_IDS.VENUE_CITY, e.target.value)}
+            autoComplete="off"
+            style={inputStyle}
+            placeholder="City"
+          />
+        </div>
+        <div>
+          <label style={labelStyle}>State</label>
+          <select
+            value={details.venueState}
+            disabled={!canEdit}
+            onChange={(e) => {
+              handleChange("venueState", e.target.value);
+              handleBlur(FIELD_IDS.VENUE_STATE, e.target.value || null);
+            }}
+            style={inputStyle}
+          >
+            <option value="">Select state</option>
+            {VENUE_STATE_OPTIONS.map((state) => (
+              <option key={state} value={state}>
+                {state}
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
 
       {isDelivery && (
         <div style={{ gridColumn: "1 / -1" }}>
           <label style={labelStyle}>Delivery Notes</label>
           <textarea
-            rows={3}
+            rows={2}
             value={deliveryNotes}
             disabled={!canEdit}
             onChange={(e) => setDeliveryNotes(e.target.value)}
             onBlur={() => handleBlur(FIELD_IDS.LOAD_IN_NOTES, deliveryNotes)}
-            style={{
-              ...inputStyle,
-              resize: "vertical" as const,
-              fontFamily: "inherit",
-            }}
-            placeholder="Loading dock, call upon arrival, leave at front desk, etc."
+            style={textareaStyle}
+            placeholder="Loading dock, call on arrival, etc."
           />
-          <Helper>Load-in instructions: dock location, call-on-arrival, leave at front desk, etc.</Helper>
         </div>
       )}
     </FormSection>

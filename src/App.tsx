@@ -21,6 +21,10 @@ function App() {
   const isInvoiceIntake = pathname.startsWith("/invoice-intake");
   const isFeedbackIssues = pathname.startsWith("/feedback-issues");
   const isAdmin = pathname.startsWith("/admin");
+  const isKitchen = pathname.startsWith("/kitchen");
+  const isFlair = pathname === "/flair" || pathname.startsWith("/returned-equipment");
+  const isDeliveryCommand = pathname.startsWith("/delivery-command");
+  const isIntakeFOH = pathname.startsWith("/intake-foh");
 
   useEffect(() => {
     loadEvents();
@@ -36,7 +40,7 @@ function App() {
     }
   }, [pathname, selectedEventId, selectEvent]);
 
-  if (isPrintTest || isHome || isQuickIntake || isWatchtower || isPapaChulo || isFOH || isDashboardOld || isBeoIntake || isBeoPrint || isSeedDemo || isInvoiceIntake || isFeedbackIssues || isAdmin) {
+  if (isPrintTest || isHome || isQuickIntake || isWatchtower || isPapaChulo || isFOH || isDashboardOld || isBeoIntake || isBeoPrint || isSeedDemo || isInvoiceIntake || isFeedbackIssues || isAdmin || isKitchen || isFlair || isDeliveryCommand || isIntakeFOH) {
     return (
       <AuthGuard>
         <Router selectedEventId={selectedEventId} />

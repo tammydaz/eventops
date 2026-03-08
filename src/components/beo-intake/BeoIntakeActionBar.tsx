@@ -3,10 +3,12 @@ import { useEventStore } from "../../state/eventStore";
 
 type BeoIntakeActionBarProps = {
   eventId: string | null;
+  isLocked?: boolean;
+  onReopenRequest?: () => void;
 };
 
-export const BeoIntakeActionBar = ({ eventId }: BeoIntakeActionBarProps) => {
-  const { setFields, deleteEvent, saveCurrentEvent, saveError: storeSaveError, setSaveError: clearStoreError } = useEventStore();
+export const BeoIntakeActionBar = ({ eventId, isLocked, onReopenRequest }: BeoIntakeActionBarProps) => {
+  const { setFields, saveCurrentEvent, saveError: storeSaveError, setSaveError: clearStoreError } = useEventStore();
   const [isSaving, setIsSaving] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -18,6 +20,10 @@ export const BeoIntakeActionBar = ({ eventId }: BeoIntakeActionBarProps) => {
 
   const handleUpdate = async () => {
     if (!eventId) return;
+    if (isLocked && onReopenRequest) {
+      onReopenRequest();
+      return;
+    }
     setIsSaving(true);
     setSaveError(null);
     const succeeded = await saveCurrentEvent(eventId);
@@ -34,6 +40,10 @@ export const BeoIntakeActionBar = ({ eventId }: BeoIntakeActionBarProps) => {
 
   const handleReadyForSpec = async () => {
     if (!eventId) return;
+    if (isLocked && onReopenRequest) {
+      onReopenRequest();
+      return;
+    }
     setIsSaving(true);
     
     // TODO: Add SPEC_READY field ID to FIELD_IDS in events.ts
@@ -47,6 +57,10 @@ export const BeoIntakeActionBar = ({ eventId }: BeoIntakeActionBarProps) => {
 
   const handlePrintBeo = async () => {
     if (!eventId) return;
+    if (isLocked && onReopenRequest) {
+      onReopenRequest();
+      return;
+    }
     setIsSaving(true);
     setSaveError(null);
     const ok = await saveCurrentEvent(eventId);
@@ -61,18 +75,6 @@ export const BeoIntakeActionBar = ({ eventId }: BeoIntakeActionBarProps) => {
 
   const handleReturnToDashboard = () => {
     window.location.href = "/";
-  };
-
-  const handleDelete = async () => {
-    if (!eventId) return;
-    if (!window.confirm("Delete this event? This cannot be undone.")) return;
-    const ok = await deleteEvent(eventId);
-    if (ok) {
-      window.location.href = "/";
-    } else {
-      const err = useEventStore.getState().saveError;
-      setSaveError(err ?? "Failed to delete");
-    }
   };
 
   if (!eventId) return null;
@@ -122,33 +124,11 @@ export const BeoIntakeActionBar = ({ eventId }: BeoIntakeActionBarProps) => {
         <button
           style={{
             ...styles.button,
-            ...styles.buttonSecondary,
-          }}
-          onClick={() => { if (eventId) window.location.href = `/kitchen-beo-print/${eventId}`; }}
-        >
-          Excel-Style Kitchen BEO
-        </button>
-
-        <button
-          style={{
-            ...styles.button,
             ...styles.buttonBack,
           }}
           onClick={handleReturnToDashboard}
         >
           Return to Dashboard
-        </button>
-
-        <button
-          style={{
-            ...styles.button,
-            background: "transparent",
-            color: "#ef4444",
-            border: "2px solid #ef4444",
-          }}
-          onClick={handleDelete}
-        >
-          Delete Event
         </button>
       </div>
     </div>
@@ -188,10 +168,10 @@ const styles: Record<string, React.CSSProperties> = {
     left: 0,
     right: 0,
     zIndex: 1000,
-    background: "rgba(0, 0, 0, 0.95)",
-    borderTop: "3px solid #ff3333",
+    background: "rgba(10, 10, 15, 0.95)",
+    borderTop: "1px solid rgba(204, 0, 0, 0.25)",
     backdropFilter: "blur(10px)",
-    boxShadow: "0 -4px 20px rgba(0, 0, 0, 0.5)",
+    boxShadow: "0 -4px 20px rgba(0, 0, 0, 0.4)",
   },
   inner: {
     position: "relative",
@@ -205,40 +185,40 @@ const styles: Record<string, React.CSSProperties> = {
     flexWrap: "wrap",
   },
   button: {
-    padding: "12px 24px",
+    padding: "10px 20px",
     fontSize: "13px",
-    fontWeight: "700",
+    fontWeight: "600",
     borderRadius: "8px",
-    border: "2px solid transparent",
+    border: "1px solid transparent",
     cursor: "pointer",
     transition: "all 0.3s ease",
-    textTransform: "uppercase",
-    letterSpacing: "0.5px",
+    textTransform: "none",
+    letterSpacing: "0.3px",
     fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif",
     whiteSpace: "nowrap",
-    minWidth: "160px",
+    minWidth: "140px",
   },
   buttonPrimary: {
-    background: "linear-gradient(135deg, #ff3333, #cc0000)",
-    color: "#fff",
-    border: "2px solid #ff3333",
-    boxShadow: "0 4px 15px rgba(255, 51, 51, 0.3)",
+    background: "linear-gradient(135deg, rgba(204, 0, 0, 0.2), rgba(204, 0, 0, 0.08))",
+    color: "#ff6b6b",
+    border: "1px solid rgba(204, 0, 0, 0.4)",
+    boxShadow: "0 0 12px rgba(204, 0, 0, 0.1)",
   },
   buttonSpec: {
-    background: "linear-gradient(135deg, #ffc107, #ff9800)",
-    color: "#000",
-    border: "2px solid #ffc107",
-    boxShadow: "0 4px 15px rgba(255, 193, 7, 0.3)",
+    background: "linear-gradient(135deg, rgba(234, 179, 8, 0.2), rgba(234, 179, 8, 0.08))",
+    color: "#fbbf24",
+    border: "1px solid rgba(234, 179, 8, 0.4)",
+    boxShadow: "0 0 12px rgba(234, 179, 8, 0.1)",
   },
   buttonSecondary: {
-    background: "linear-gradient(135deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.05))",
-    color: "#fff",
-    border: "2px solid rgba(255, 255, 255, 0.2)",
+    background: "linear-gradient(135deg, rgba(0, 188, 212, 0.12), rgba(0, 188, 212, 0.04))",
+    color: "#4dd0e1",
+    border: "1px solid rgba(0, 188, 212, 0.3)",
   },
   buttonBack: {
-    background: "transparent",
-    color: "#888",
-    border: "2px solid #444",
+    background: "rgba(255, 255, 255, 0.04)",
+    color: "rgba(255, 255, 255, 0.7)",
+    border: "1px solid rgba(255, 255, 255, 0.15)",
   },
   buttonDisabled: {
     opacity: 0.5,

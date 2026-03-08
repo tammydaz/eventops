@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { isDelivery, isPickup } from "../../lib/deliveryHelpers";
 
 /* ── Health light colors ── */
 const HEALTH_COLORS = {
@@ -79,6 +80,9 @@ export function EventCard({
 }: EventCardProps) {
   const [hovered, setHovered] = useState(false);
   const pill = TYPE_COLORS[eventType] ?? TYPE_COLORS.default;
+  const outlineType = isDelivery(eventType) ? "delivery" : isPickup(eventType) ? "pickup" : "full-service";
+  const borderColor = outlineType === "delivery" ? "#eab308" : outlineType === "pickup" ? "#a855f7" : "#6b7280";
+  const glowColor = outlineType === "delivery" ? "rgba(234,179,8,0.3)" : outlineType === "pickup" ? "rgba(168,85,247,0.3)" : "rgba(100,100,100,0.2)";
 
   return (
     <article
@@ -86,16 +90,13 @@ export function EventCard({
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       className="event-card-premium group cursor-pointer"
+      data-outline={outlineType}
       style={{
         background: hovered
-          ? "linear-gradient(135deg, rgba(40,15,15,0.95), rgba(30,12,22,0.85))"
-          : "linear-gradient(135deg, rgba(28,10,10,0.85), rgba(22,8,16,0.65))",
-        border: "1px solid",
-        borderImage: hovered
-          ? "linear-gradient(135deg, rgba(0,188,212,0.8), rgba(204,0,0,0.6)) 1"
-          : "linear-gradient(135deg, rgba(0,188,212,0.35), rgba(204,0,0,0.2)) 1",
+          ? "linear-gradient(135deg, rgba(55,55,55,0.95), rgba(40,40,40,0.85))"
+          : "linear-gradient(135deg, rgba(45,45,45,0.85), rgba(35,35,35,0.65))",
+        border: `2px solid ${hovered ? (outlineType === "delivery" ? "#facc15" : outlineType === "pickup" ? "#c084fc" : "#9ca3af") : borderColor}`,
         borderRadius: "14px",
-        borderImageSlice: 1,
         padding: "22px",
         position: "relative",
         overflow: "hidden",
@@ -104,8 +105,8 @@ export function EventCard({
           ? "translateY(-10px) scale(1.015)"
           : "translateY(0) scale(1)",
         boxShadow: hovered
-          ? "0 24px 48px rgba(0,0,0,0.5), 0 0 40px rgba(0,188,212,0.3), 0 0 80px rgba(0,188,212,0.1)"
-          : "0 12px 28px rgba(0,0,0,0.4), 0 0 18px rgba(0,188,212,0.15)",
+          ? `0 24px 48px rgba(0,0,0,0.5), 0 0 30px ${glowColor}`
+          : `0 12px 28px rgba(0,0,0,0.4), 0 0 12px ${glowColor}`,
         backdropFilter: "blur(8px)",
       }}
     >
@@ -113,7 +114,7 @@ export function EventCard({
       <div
         className="absolute top-0 left-0 right-0 h-[1px]"
         style={{
-          background: "linear-gradient(90deg, transparent, rgba(0,188,212,0.6), transparent)",
+          background: `linear-gradient(90deg, transparent, ${outlineType === "delivery" ? "rgba(234,179,8,0.6)" : outlineType === "pickup" ? "rgba(168,85,247,0.6)" : "rgba(150,150,150,0.6)"}, transparent)`,
           opacity: hovered ? 1 : 0.4,
           transition: "opacity 0.4s ease",
         }}
@@ -123,7 +124,7 @@ export function EventCard({
       <div
         className="absolute top-0 right-0 w-16 h-16 pointer-events-none"
         style={{
-          background: "linear-gradient(225deg, rgba(0,188,212,0.08) 0%, transparent 60%)",
+          background: `linear-gradient(225deg, ${outlineType === "delivery" ? "rgba(234,179,8,0.08)" : outlineType === "pickup" ? "rgba(168,85,247,0.08)" : "rgba(120,120,120,0.08)"} 0%, transparent 60%)`,
         }}
       />
 
@@ -141,7 +142,7 @@ export function EventCard({
           >
             {eventName}
           </h3>
-          <p className="text-[12px] font-semibold mt-0.5" style={{ color: "#cc0000" }}>
+          <p className="text-[12px] font-semibold mt-0.5" style={{ color: "#9ca3af" }}>
             {dateTime}
           </p>
         </div>
@@ -172,7 +173,7 @@ export function EventCard({
       {/* ── Health Lights ── */}
       <div
         className="flex items-center gap-4 pt-3"
-        style={{ borderTop: "1px solid rgba(204,0,0,0.12)" }}
+        style={{ borderTop: `1px solid ${outlineType === "delivery" ? "rgba(234,179,8,0.25)" : outlineType === "pickup" ? "rgba(168,85,247,0.25)" : "rgba(120,120,120,0.25)"}` }}
       >
         {(viewMode === "owner" || viewMode === "foh") && (
           <HealthDot status={healthLightFOH} label="FOH" />
@@ -186,7 +187,7 @@ export function EventCard({
       <div
         className="absolute bottom-0 left-0 right-0 h-[1px]"
         style={{
-          background: "linear-gradient(90deg, transparent, rgba(204,0,0,0.5), transparent)",
+          background: `linear-gradient(90deg, transparent, ${outlineType === "delivery" ? "rgba(234,179,8,0.5)" : outlineType === "pickup" ? "rgba(168,85,247,0.5)" : "rgba(120,120,120,0.5)"}, transparent)`,
           opacity: hovered ? 1 : 0.3,
           transition: "opacity 0.4s ease",
         }}

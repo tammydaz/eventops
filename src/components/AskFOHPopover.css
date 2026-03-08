@@ -1,0 +1,260 @@
+/* AskFOHPopover — hover popup for questions to departments */
+.ask-foh-wrapper {
+  position: relative;
+  isolation: isolate;
+}
+
+/* Question badge — speech bubble with red circle (shows when department has pending question) */
+.ask-foh-badge {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 50;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+/* Click trigger — small "?" button to open Ask popover */
+.ask-foh-trigger-btn {
+  position: absolute;
+  bottom: 8px;
+  right: 8px;
+  z-index: 50;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border-radius: 50%;
+  background: rgba(0, 188, 212, 0.3);
+  border: 1px solid rgba(0, 188, 212, 0.5);
+  color: #4dd0e1;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.ask-foh-trigger-btn:hover:not(:disabled) {
+  background: rgba(0, 188, 212, 0.5);
+  border-color: #4dd0e1;
+  transform: scale(1.05);
+}
+
+.ask-foh-trigger-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.ask-foh-card-slot {
+  position: relative;
+  z-index: 0;
+}
+
+.ask-foh-badge-svg {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.ask-foh-popover {
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%) translateY(-8px);
+  z-index: 50;
+}
+
+/* Full-viewport overlay — centers popover, ensures it's never clipped */
+.ask-foh-portal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10001;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  box-sizing: border-box;
+  background: rgba(0, 0, 0, 0.4);
+  overflow-y: auto;
+}
+
+/* Centered modal popover — always fully visible */
+.ask-foh-popover-portal {
+  flex-shrink: 0;
+  width: 100%;
+  max-width: 360px;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+  box-sizing: border-box;
+  background: linear-gradient(180deg, rgba(25, 30, 40, 0.98), rgba(20, 25, 35, 0.98));
+  border: 1px solid rgba(0, 188, 212, 0.35);
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5), 0 0 20px rgba(0, 188, 212, 0.1);
+  padding: 16px 18px;
+  pointer-events: auto;
+}
+
+.ask-foh-header {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 10px;
+}
+
+.ask-foh-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: #4dd0e1;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.ask-foh-event {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.7);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ask-foh-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+.ask-foh-textarea {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  padding: 10px 12px;
+  background: rgba(15, 20, 25, 0.9);
+  border: 1px solid rgba(0, 188, 212, 0.25);
+  border-radius: 6px;
+  color: #e0e0e0;
+  font-size: 13px;
+  font-family: inherit;
+  resize: vertical;
+  min-height: 60px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.ask-foh-textarea:focus {
+  border-color: rgba(0, 188, 212, 0.5);
+}
+
+.ask-foh-textarea::placeholder {
+  color: #666;
+}
+
+.ask-foh-textarea:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.ask-foh-submit {
+  padding: 8px 16px;
+  background: linear-gradient(135deg, rgba(0, 188, 212, 0.4), rgba(0, 188, 212, 0.2));
+  border: 1px solid rgba(0, 188, 212, 0.5);
+  border-radius: 6px;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  align-self: flex-end;
+}
+
+.ask-foh-submit:hover:not(:disabled) {
+  background: linear-gradient(135deg, rgba(0, 188, 212, 0.5), rgba(0, 188, 212, 0.3));
+  border-color: #4dd0e1;
+  box-shadow: 0 0 12px rgba(0, 188, 212, 0.3);
+}
+
+.ask-foh-submit:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.ask-foh-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #888;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.ask-foh-select {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  padding: 8px 12px;
+  background: rgba(15, 20, 25, 0.9);
+  border: 1px solid rgba(0, 188, 212, 0.25);
+  border-radius: 6px;
+  color: #e0e0e0;
+  font-size: 13px;
+  cursor: pointer;
+  outline: none;
+}
+
+.ask-foh-select:focus {
+  border-color: rgba(0, 188, 212, 0.5);
+}
+
+.ask-foh-pending {
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  background: rgba(234, 179, 8, 0.1);
+  border: 1px solid rgba(234, 179, 8, 0.3);
+  border-radius: 6px;
+}
+
+.ask-foh-pending-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #eab308;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin: 0 0 8px 0;
+}
+
+.ask-foh-pending-item {
+  margin-top: 8px;
+}
+
+.ask-foh-pending-item:first-of-type {
+  margin-top: 0;
+}
+
+.ask-foh-pending-question {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.9);
+  margin: 0 0 4px 0;
+  font-style: italic;
+}
+
+.ask-foh-ack {
+  margin-top: 8px;
+  padding: 4px 10px;
+  background: rgba(234, 179, 8, 0.2);
+  border: 1px solid rgba(234, 179, 8, 0.4);
+  border-radius: 4px;
+  color: #eab308;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.ask-foh-ack:hover {
+  background: rgba(234, 179, 8, 0.3);
+}
+

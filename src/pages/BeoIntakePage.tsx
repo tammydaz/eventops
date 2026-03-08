@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useEventStore } from "../state/eventStore";
 import { EventSelector } from "../components/EventSelector";
 import {
@@ -12,13 +12,16 @@ import {
 } from "../components/beo-intake";
 import { ApprovalsLockoutSection } from "../components/beo-intake/ApprovalsLockoutSection";
 import { BeoIntakeActionBar } from "../components/beo-intake/BeoIntakeActionBar";
+import { ReopenLockedModal } from "../components/ReopenLockedModal";
 import { isDeliveryOrPickup } from "../lib/deliveryHelpers";
-import { asSingleSelectName } from "../services/airtable/selectors";
-import { FIELD_IDS } from "../services/airtable/events";
+import { asSingleSelectName, asString } from "../services/airtable/selectors";
+import { FIELD_IDS, getLockoutFieldIds } from "../services/airtable/events";
 import "./IntakePage.css";
 
 export const BeoIntakePage = () => {
-  const { loadEvents, selectedEventId, selectEvent, setSelectedEventId, setFields, eventDataLoading, selectedEventData } = useEventStore();
+  const { loadEvents, selectedEventId, selectEvent, setSelectedEventId, setFields, loadEventData, eventDataLoading, selectedEventData } = useEventStore();
+  const [lockoutIds, setLockoutIds] = useState<Awaited<ReturnType<typeof getLockoutFieldIds>>>(null);
+  const [showReopenModal, setShowReopenModal] = useState(false);
   const eventType = selectedEventData ? asSingleSelectName(selectedEventData[FIELD_IDS.EVENT_TYPE]) : "";
   const isDelivery = isDeliveryOrPickup(eventType);
 
@@ -50,22 +53,65 @@ export const BeoIntakePage = () => {
     loadEvents();
   }, [loadEvents]);
 
+  useEffect(() => {
+    getLockoutFieldIds().then(setLockoutIds);
+  }, []);
+
+  const isLocked =
+    lockoutIds &&
+    selectedEventId &&
+    selectedEventData &&
+    selectedEventData[lockoutIds.guestCountConfirmed] === true &&
+    selectedEventData[lockoutIds.menuAcceptedByKitchen] === true;
+
+  const eventName = selectedEventData ? asString(selectedEventData[FIELD_IDS.EVENT_NAME]) || "This event" : "This event";
+
+  const handleReopen = useCallback(
+    async (_initials: string) => {
+      if (!selectedEventId || !lockoutIds) return;
+      await setFields(selectedEventId, {
+        [lockoutIds.guestCountConfirmed]: false,
+        [lockoutIds.menuAcceptedByKitchen]: false,
+      });
+      loadEventData();
+      setShowReopenModal(false);
+    },
+    [selectedEventId, lockoutIds, setFields, loadEventData]
+  );
+
+  const handleFormInteraction = useCallback(() => {
+    if (isLocked) {
+      setShowReopenModal(true);
+    }
+  }, [isLocked]);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (!target.closest(".beo-pill")) {
+        window.dispatchEvent(new CustomEvent("beo-collapse-all-pills"));
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside, true);
+    return () => document.removeEventListener("mousedown", handleClickOutside, true);
+  }, []);
+
   const accentColor = isDelivery ? "#22c55e" : "#ff6b6b";
   const accentGlow = isDelivery ? "rgba(34,197,94,0.3)" : "rgba(255,107,107,0.3)";
 
   return (
-    <div className="beo-intake-page" style={{ minHeight: "100vh", backgroundColor: "#1a1a1a", color: "#e0e0e0", position: "relative", fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif" }}>
+    <div className="beo-intake-page" style={{ minHeight: "100vh", background: "linear-gradient(135deg, #0a0a0a 0%, #1a0a0a 50%, #0f0a15 100%)", color: "#e0e0e0", position: "relative", fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif" }}>
       <div style={{ position: "relative", zIndex: 10 }}>
-        <div className="beo-header" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "20px 40px", borderBottom: `3px solid ${accentColor}`, backdropFilter: "blur(10px)" }}>
+        <div className="beo-header" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 24px", borderBottom: "1px solid rgba(204,0,0,0.25)", backdropFilter: "blur(10px)" }}>
           <button type="button" style={{ display: "flex", alignItems: "center", gap: "12px", textDecoration: "none", background: "none", border: "none", cursor: "pointer", padding: 0 }} onClick={() => { window.location.pathname = "/"; }}>
-            <div style={{ width: "48px", height: "48px", background: accentColor, display: "flex", alignItems: "center", justifyContent: "center", borderRadius: "12px", fontSize: "24px", boxShadow: `0 4px 12px ${accentGlow}` }}>←</div>
-            <span style={{ fontSize: "14px", color: "#e0e0e0", fontWeight: "600" }}>Back to Dashboard</span>
+            <div style={{ width: "40px", height: "40px", background: "rgba(204,0,0,0.2)", border: "1px solid rgba(204,0,0,0.4)", display: "flex", alignItems: "center", justifyContent: "center", borderRadius: "8px", fontSize: "18px", color: "#e0e0e0" }}>←</div>
+            <span style={{ fontSize: "13px", color: "rgba(255,255,255,0.85)", fontWeight: "500", letterSpacing: "0.5px" }}>Back to Dashboard</span>
           </button>
           <div style={{ textAlign: "center", flex: 1 }}>
-            <h1 style={{ fontSize: "36px", fontWeight: "bold", color: accentColor, margin: "0 0 8px 0" }}>
-              {isDelivery ? "🚚 Delivery BEO Intake" : "🎯 BEO Intake"}
+            <h1 style={{ fontSize: "24px", fontWeight: "600", color: "#fff", margin: "0 0 4px 0", letterSpacing: "0.5px" }}>
+              {isDelivery ? "Delivery BEO Intake" : "BEO Intake"}
             </h1>
-            <p style={{ fontSize: "12px", color: "#888", margin: 0 }}>
+            <p style={{ fontSize: "12px", color: "rgba(255,255,255,0.5)", margin: 0, letterSpacing: "0.3px" }}>
               {isDelivery ? "Delivery order — simplified intake (all disposable)" : "Complete event details for operations"}
             </p>
             {!isDelivery && selectedEventId && (
@@ -96,9 +142,9 @@ export const BeoIntakePage = () => {
           <div
             className="beo-delivery-banner"
             style={{
-              background: "linear-gradient(90deg, rgba(34,197,94,0.15), rgba(34,197,94,0.05))",
-              borderBottom: "2px solid #22c55e",
-              padding: "12px 40px",
+              background: "linear-gradient(90deg, rgba(34,197,94,0.08), rgba(34,197,94,0.02))",
+              borderBottom: "1px solid rgba(34,197,94,0.3)",
+              padding: "10px 24px",
               display: "flex",
               alignItems: "center",
               justifyContent: "space-between",
@@ -131,7 +177,7 @@ export const BeoIntakePage = () => {
             </button>
           </div>
         )}
-        <div className="beo-content" style={{ position: "relative", zIndex: 1, padding: "40px", minHeight: "calc(100vh - 100px)", paddingBottom: "140px", maxWidth: "1200px", margin: "0 auto" }}>
+        <div className="beo-content" style={{ position: "relative", zIndex: 1, padding: "20px 24px", minHeight: "calc(100vh - 100px)", paddingBottom: "140px", maxWidth: "1400px", margin: "0 auto", color: "#e0e0e0" }}>
           {selectedEventId && eventDataLoading ? (
             <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "400px", textAlign: "center" }}>
               <div>
@@ -140,16 +186,28 @@ export const BeoIntakePage = () => {
               </div>
             </div>
           ) : selectedEventId ? (
-            <>
-              <ClientAndContactSection />
-              <EventCoreSection isDelivery={isDelivery} />
-              <VenueDetailsSection />
-              <MenuAndBeveragesSection isDelivery={isDelivery} />
-              {!isDelivery && <KitchenAndServicewareSection />}
-              {!isDelivery && <TimelineSection />}
-              {!isDelivery && <SiteVisitLogisticsSection />}
-              <ApprovalsLockoutSection eventId={selectedEventId} />
-            </>
+            <div key={selectedEventId} className="beo-sections-grid" style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "12px", alignItems: "start", maxWidth: "700px", margin: "0 auto" }}>
+              <div style={{ position: "relative", gridColumn: "1 / -1", display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "12px", alignItems: "start" }}>
+                {isLocked && (
+                  <div
+                    className="beo-locked-overlay"
+                    onClick={handleFormInteraction}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && handleFormInteraction()}
+                    aria-label="Event is locked. Click to reopen for editing."
+                  />
+                )}
+                <ClientAndContactSection />
+                <EventCoreSection isDelivery={isDelivery} />
+                <VenueDetailsSection />
+                <MenuAndBeveragesSection isDelivery={isDelivery} />
+                {!isDelivery && <KitchenAndServicewareSection />}
+                {!isDelivery && <TimelineSection />}
+                {!isDelivery && <SiteVisitLogisticsSection />}
+              </div>
+              <ApprovalsLockoutSection eventId={selectedEventId} eventName={eventName} />
+            </div>
           ) : (
             <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "400px", textAlign: "center" }}>
               <div>
@@ -159,10 +217,20 @@ export const BeoIntakePage = () => {
               </div>
             </div>
           )}
+          <ReopenLockedModal
+            open={showReopenModal}
+            onClose={() => setShowReopenModal(false)}
+            eventName={eventName}
+            onReopen={handleReopen}
+          />
         </div>
       </div>
       
-      <BeoIntakeActionBar eventId={selectedEventId} />
+      <BeoIntakeActionBar
+        eventId={selectedEventId}
+        isLocked={isLocked}
+        onReopenRequest={isLocked ? () => setShowReopenModal(true) : undefined}
+      />
     </div>
   );
 };

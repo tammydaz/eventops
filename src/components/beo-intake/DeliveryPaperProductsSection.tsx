@@ -293,7 +293,7 @@ export const DeliveryPaperProductsSection = ({ embedded = false }: DeliveryPaper
   );
 
   return embedded ? content : (
-    <FormSection title="Paper Products & Utensils" icon="📦" dotColor="#22c55e" isDelivery>
+    <FormSection title="Paper Products & Utensils" dotColor="#22c55e" isDelivery>
       {content}
     </FormSection>
   );

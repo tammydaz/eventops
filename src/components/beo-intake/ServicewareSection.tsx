@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { useEventStore } from "../../state/eventStore";
 import { FIELD_IDS } from "../../services/airtable/events";
 import { asString, asSingleSelectName, asLinkedRecordIds } from "../../services/airtable/selectors";
-import { FormSection, CollapsibleSubsection, Helper } from "./FormSection";
+import { FormSection, CollapsibleSubsection, Helper, inputStyle, labelStyle, textareaStyle } from "./FormSection";
 
 const SUPPLIER_OPTIONS = [
   "FoodWerx Standard",
@@ -505,24 +505,6 @@ export const ServicewareSection = ({ embedded = false }: ServicewareSectionProps
     !paperType ||
     !["Standard Paper", "Premium Paper", "China", "Standard", "Premium"].includes(paperType);
 
-  const labelStyle = {
-    display: "block",
-    fontSize: "11px",
-    color: "#999",
-    marginBottom: "6px",
-    fontWeight: "600" as const,
-  };
-
-  const inputStyle = {
-    width: "100%",
-    padding: "12px",
-    borderRadius: "8px",
-    border: "1px solid #444",
-    backgroundColor: "#1a1a1a",
-    color: "#e0e0e0",
-    fontSize: "14px",
-  };
-
   const addButtonStyle = {
     padding: "8px 16px",
     borderRadius: "8px",
@@ -545,7 +527,7 @@ export const ServicewareSection = ({ embedded = false }: ServicewareSectionProps
 
   const content = (
     <div style={{ gridColumn: "1 / -1" }}>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 20 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
           <div>
             <label style={labelStyle}>Serviceware Source</label>
             <select
@@ -585,7 +567,7 @@ export const ServicewareSection = ({ embedded = false }: ServicewareSectionProps
             <Helper>Standard/Premium = disposable. China = reusable plates and glassware.</Helper>
           </div>
         </div>
-        <div style={{ marginBottom: 16, display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center" }}>
+        <div style={{ marginBottom: 12, display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
           <button
             type="button"
             onClick={handleAutoFill}
@@ -798,7 +780,7 @@ export const ServicewareSection = ({ embedded = false }: ServicewareSectionProps
               disabled={!canEdit}
               onChange={(e) => setNotes(e.target.value)}
               onBlur={() => saveToAirtable(plates, cutlery, glassware, notes, carafesPerTable, servicewareSource, paperType)}
-              style={{ ...inputStyle, resize: "vertical", fontFamily: "inherit" }}
+              style={textareaStyle}
               placeholder="Additional serviceware notes..."
             />
           </div>
@@ -807,7 +789,7 @@ export const ServicewareSection = ({ embedded = false }: ServicewareSectionProps
   );
 
   return embedded ? content : (
-    <FormSection title="Paper Products/China - Cutlery - Glassware" dotColor="#a855f7">
+    <FormSection title="Plates • Cutlery • Glassware" dotColor="#00bcd4">
       {content}
     </FormSection>
   );

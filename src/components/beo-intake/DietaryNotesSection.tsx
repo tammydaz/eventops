@@ -2,7 +2,7 @@ import { useEffect, useState, useRef } from "react";
 import { useEventStore } from "../../state/eventStore";
 import { FIELD_IDS } from "../../services/airtable/events";
 import { asString } from "../../services/airtable/selectors";
-import { FormSection } from "./FormSection";
+import { FormSection, labelStyle, textareaStyle } from "./FormSection";
 
 export const DietaryNotesSection = () => {
   const { selectedEventId, selectedEventData, setFields } = useEventStore();
@@ -38,28 +38,8 @@ export const DietaryNotesSection = () => {
 
   const canEdit = Boolean(selectedEventId);
 
-  const inputStyle = {
-    width: "100%",
-    padding: "12px",
-    borderRadius: "8px",
-    border: "1px solid #444",
-    backgroundColor: "#1a1a1a",
-    color: "#e0e0e0",
-    fontSize: "14px",
-    resize: "vertical" as const,
-    fontFamily: "inherit",
-  };
-
-  const labelStyle = {
-    display: "block",
-    fontSize: "11px",
-    color: "#999",
-    marginBottom: "6px",
-    fontWeight: "600",
-  };
-
   return (
-    <FormSection title="Notes" dotColor="#eab308">
+    <FormSection title="Notes" dotColor="#00bcd4">
       <div style={{ gridColumn: "1 / -1" }}>
         <label style={labelStyle}>Dietary Notes</label>
         <textarea 
@@ -68,7 +48,7 @@ export const DietaryNotesSection = () => {
           disabled={!canEdit} 
           onChange={(e) => setDetails(p => ({ ...p, dietaryNotes: e.target.value }))} 
           onBlur={(e) => handleBlur(FIELD_IDS.DIETARY_NOTES, e.target.value)}
-          style={inputStyle} 
+          style={textareaStyle} 
           placeholder="Allergies, dietary restrictions, special requirements..." 
         />
       </div>
@@ -80,7 +60,7 @@ export const DietaryNotesSection = () => {
           disabled={!canEdit} 
           onChange={(e) => setDetails(p => ({ ...p, specialNotes: e.target.value }))} 
           onBlur={(e) => handleBlur(FIELD_IDS.SPECIAL_NOTES, e.target.value)}
-          style={inputStyle} 
+          style={textareaStyle} 
           placeholder="Any other special notes or considerations..." 
         />
       </div>
@@ -92,7 +72,7 @@ export const DietaryNotesSection = () => {
           disabled={!canEdit} 
           onChange={(e) => setDetails(p => ({ ...p, beoNotes: e.target.value }))} 
           onBlur={(e) => handleBlur(FIELD_IDS.BEO_NOTES, e.target.value)}
-          style={inputStyle} 
+          style={textareaStyle} 
           placeholder="Kitchen notes, special handling, venue setup instructions..." 
         />
       </div>

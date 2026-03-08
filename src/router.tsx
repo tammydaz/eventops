@@ -15,14 +15,30 @@ import Health from "./pages/health";
 import PapaChulo from "./pages/PapaChulo";
 import OpsChiefDashboard from "./pages/OpsChiefDashboard";
 import KitchenPrepPage from "./pages/KitchenPrepPage";
+import KitchenLandingPage from "./pages/KitchenLandingPage";
+import FlairLandingPage from "./pages/FlairLandingPage";
 import DeliveryCommandPage from "./pages/DeliveryCommandPage";
+import DeliveryLandingPage from "./pages/DeliveryLandingPage";
+import OpsChiefLandingPage from "./pages/OpsChiefLandingPage";
+import IntakeFOHLandingPage from "./pages/IntakeFOHLandingPage";
 import ReturnedEquipmentPage from "./pages/ReturnedEquipmentPage";
+import { DepartmentLayout } from "./components/DepartmentLayout";
 import PostEventDebriefPage from "./pages/PostEventDebriefPage";
 import KitchenBEOPrintPage from "./pages/KitchenBEOPrintPage";
 import SiteVisitPage from "./pages/SiteVisitPage";
 import InvoiceIntakePage from "./pages/InvoiceIntakePage";
 import FeedbackIssuesPage from "./pages/FeedbackIssuesPage";
 import AdminPage from "./pages/AdminPage";
+
+const DELIVERY_NAV = [
+  { label: "Delivery Home", href: "/delivery-command", icon: "🚚" },
+  { label: "Dispatch", href: "/delivery-command/dispatch", icon: "📋" },
+];
+
+const OPS_CHIEF_NAV = [
+  { label: "Ops Chief Home", href: "/ops-chief", icon: "🎯" },
+  { label: "Alerts Dashboard", href: "/ops-chief/alerts", icon: "⚠️" },
+];
 
 export const Router = ({ selectedEventId }: { selectedEventId: string | null }) => {
 	const { pathname } = useLocation();
@@ -67,8 +83,20 @@ export const Router = ({ selectedEventId }: { selectedEventId: string | null }) 
     return <Watchtower />;
   }
 
-  if (pathname.startsWith("/ops-chief")) {
-    return <OpsChiefDashboard />;
+  if (pathname.startsWith("/ops-chief/alerts")) {
+    return (
+      <DepartmentLayout title="Ops Chief" navItems={OPS_CHIEF_NAV}>
+        <OpsChiefDashboard />
+      </DepartmentLayout>
+    );
+  }
+
+  if (pathname === "/ops-chief") {
+    return <OpsChiefLandingPage />;
+  }
+
+  if (pathname.startsWith("/intake-foh")) {
+    return <IntakeFOHLandingPage />;
   }
 
   if (pathname.startsWith("/spec-engine-test")) {
@@ -95,20 +123,59 @@ export const Router = ({ selectedEventId }: { selectedEventId: string | null }) 
     return <Health />;
   }
 
+  const KITCHEN_NAV = [
+    { label: "Kitchen Home", href: "/kitchen", icon: "🍳" },
+    { label: "Kitchen Prep", href: "/kitchen-prep", icon: "📋" },
+  ];
+
+  const FLAIR_NAV = [
+    { label: "Flair Home", href: "/flair", icon: "🎪" },
+    { label: "Returned Equipment", href: "/returned-equipment", icon: "📦" },
+    { label: "Full BEO Packet", href: "/beo-print", icon: "📄" },
+  ];
+
+  if (pathname === "/kitchen") {
+    return <KitchenLandingPage />;
+  }
+
   if (pathname.startsWith("/kitchen-beo-print")) {
-    return <KitchenBEOPrintPage />;
+    return (
+      <DepartmentLayout title="Kitchen" navItems={KITCHEN_NAV}>
+        <KitchenBEOPrintPage />
+      </DepartmentLayout>
+    );
   }
 
   if (pathname.startsWith("/kitchen-prep")) {
-    return <KitchenPrepPage />;
+    return (
+      <DepartmentLayout title="Kitchen" navItems={KITCHEN_NAV}>
+        <KitchenPrepPage />
+      </DepartmentLayout>
+    );
   }
 
-  if (pathname.startsWith("/delivery-command")) {
-    return <DeliveryCommandPage />;
+  if (pathname === "/flair") {
+    return <FlairLandingPage />;
+  }
+
+  if (pathname.startsWith("/delivery-command/dispatch")) {
+    return (
+      <DepartmentLayout title="Deliveries / Expediting" navItems={DELIVERY_NAV}>
+        <DeliveryCommandPage />
+      </DepartmentLayout>
+    );
+  }
+
+  if (pathname === "/delivery-command") {
+    return <DeliveryLandingPage />;
   }
 
   if (pathname.startsWith("/returned-equipment")) {
-    return <ReturnedEquipmentPage />;
+    return (
+      <DepartmentLayout title="Flair / Equipment" navItems={FLAIR_NAV}>
+        <ReturnedEquipmentPage />
+      </DepartmentLayout>
+    );
   }
 
   if (pathname.startsWith("/post-event-debrief")) {

@@ -22,10 +22,29 @@ export const STATION_EVENT_FIELD_ID = "fldoOaZsMyXiSNKTc";
 /** Station Type (Stations table, single-select). From schema: fldQ1bGDg8jhJvqmJ */
 export const STATION_TYPE_FIELD_ID = "fldQ1bGDg8jhJvqmJ";
 
-/** Station Type single-select options (from Stations table). */
+/** Station Notes (Stations table, long text). From schema: fldCf9uvjWQdtJkZs */
+export const STATION_NOTES_FIELD_ID = "fldCf9uvjWQdtJkZs";
+
+/** Station Type single-select options (from Stations table). Fallback when Airtable returns none. */
 export const STATION_TYPE_OPTIONS = [
-  "Pasta Station",
   "Carving Station",
+  "Grande Charcuterie Display",
+  "Pasta Flight Presentation",
+  "Viva La Pasta",
+  "Tex-Mex",
+  "Make Your Own Ramen Noodle Bar",
+  "All-American",
+  "Street Food Station",
+  "Hi Bachi Station",
+  "Chicken & Waffle Station",
+  "Vegetable",
+  "Spreads & Breads",
+  "Farmers' Market Fruit",
+  "Cravin' Asian",
+  "BarWerx Appetizer Sampler",
+  "The Philly Jawn",
+  "Iced Raw Bar",
+  "Pasta Station",
   "Taco Station",
   "Kids Station",
   "Dessert Station",

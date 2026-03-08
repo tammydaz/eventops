@@ -1,0 +1,7 @@
+/* Demo cards: slightly muted, no hover lift */
+.pipeline-view .dp-card-demo {
+  opacity: 0.92;
+}
+.pipeline-view .dp-card-demo:hover {
+  transform: none;
+}

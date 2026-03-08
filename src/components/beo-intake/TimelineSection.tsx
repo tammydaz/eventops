@@ -2,7 +2,7 @@ import { useEffect, useState, useRef } from "react";
 import { useEventStore } from "../../state/eventStore";
 import { FIELD_IDS } from "../../services/airtable/events";
 import { asString, asSingleSelectName } from "../../services/airtable/selectors";
-import { FormSection } from "./FormSection";
+import { FormSection, labelStyle, textareaStyle } from "./FormSection";
 
 const WEDDING_KEY_MOMENTS = [
   "Grand Entrance",
@@ -79,16 +79,16 @@ export const TimelineSection = () => {
     .join(" / ");
 
   return (
-    <FormSection title="Timeline" dotColor="#3b82f6">
+    <FormSection title="Timeline" dotColor="#00bcd4">
       {showKeyMoments && (
-        <div style={{ gridColumn: "1 / -1", marginBottom: 16, padding: 12, backgroundColor: "rgba(59,130,246,0.08)", borderRadius: 8, border: "1px solid rgba(59,130,246,0.3)" }}>
-          <div style={{ fontSize: 12, color: "#93c5fd", marginBottom: 8, fontWeight: 600 }}>
+        <div style={{ gridColumn: "1 / -1", marginBottom: 10, padding: 8, backgroundColor: "rgba(59,130,246,0.08)", borderRadius: 6, border: "1px solid rgba(59,130,246,0.3)" }}>
+          <div style={{ fontSize: 11, color: "#93c5fd", marginBottom: 4, fontWeight: 600 }}>
             {isWedding ? "💒 Wedding" : "✡️ Bar/Bat Mitzvah"} — Key moments to capture
           </div>
-          <div style={{ fontSize: 11, color: "#94a3b8", marginBottom: 8 }}>
+          <div style={{ fontSize: 10, color: "#94a3b8", marginBottom: 4 }}>
             {keyMoments.join(" • ")}
           </div>
-          <div style={{ fontSize: 11, color: "#64748b" }}>
+          <div style={{ fontSize: 10, color: "#64748b" }}>
             Use the timeline below to enter times for each. This appears on the printed BEO.
           </div>
         </div>
@@ -104,7 +104,7 @@ export const TimelineSection = () => {
           disabled={!canEdit}
           onChange={(e) => setBeoTimeline(e.target.value)}
           onBlur={(e) => handleBlur(e.target.value)}
-          style={inputStyle}
+          style={textareaStyle}
           placeholder={
             showKeyMoments
               ? suggestedPlaceholder

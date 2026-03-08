@@ -2,522 +2,17 @@ import { useCallback, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { FIELD_IDS } from "../../services/airtable/events";
 import { CATEGORY_MAP, type MenuCategoryKey } from "../../constants/menuCategories";
-import { STATION_TYPE_OPTIONS } from "../../constants/stations";
 import {
   loadMenuItems,
-  loadMenuItemsByStationType,
-  loadStationPreset,
-  loadStationsByRecordIds,
-  createStation,
-  updateStationItems,
-  getStationTypeOptions,
   type LinkedRecordItem,
 } from "../../services/airtable/linkedRecords";
 import { asLinkedRecordIds, asString, isErrorResult } from "../../services/airtable/selectors";
 import { useEventStore } from "../../state/eventStore";
-import { FormSection, CollapsibleSubsection } from "./FormSection";
+import { FormSection, CollapsibleSubsection, inputStyle, labelStyle, textareaStyle } from "./FormSection";
 import { CustomFoodItemsBlock } from "./CustomFoodItemsBlock";
 import { sanitizeForHeader } from "../../utils/httpHeaders";
-
-/** Inline replace button — opens picker to swap one station item for another. */
-function StationItemReplaceButton(props: {
-  stationId: string;
-  stationType: string;
-  currentId: string;
-  stationItems: string[];
-  getItemName: (id: string) => string;
-  onReplaced: (newItems: string[]) => void;
-  updateStationItems: (stationId: string, items: string[]) => Promise<unknown>;
-  isErrorResult: (r: unknown) => r is { error: true };
-  buttonStyle: React.CSSProperties;
-}) {
-  const { stationId, stationType, currentId, stationItems, onReplaced, updateStationItems, isErrorResult, buttonStyle } = props;
-  const [open, setOpen] = useState(false);
-  const [search, setSearch] = useState("");
-  const [menuItems, setMenuItems] = useState<LinkedRecordItem[]>([]);
-  const [loading, setLoading] = useState(false);
-
-  useEffect(() => {
-    if (!stationType?.trim()) return;
-    setLoading(true);
-    loadMenuItemsByStationType(stationType)
-      .then((result) => {
-        if (!isErrorResult(result)) setMenuItems(result);
-        else setMenuItems([]);
-      })
-      .catch(() => setMenuItems([]))
-      .finally(() => setLoading(false));
-  }, [stationType]);
-
-  const hasStationType = Boolean(stationType?.trim());
-  const filtered = !search.trim()
-    ? menuItems.filter((m) => m.id !== currentId)
-    : menuItems.filter((m) => m.id !== currentId && m.name.toLowerCase().includes(search.trim().toLowerCase()));
-  return (
-    <>
-      <button type="button" onClick={() => setOpen(true)} disabled={!hasStationType} style={{ ...buttonStyle, padding: "2px 6px", fontSize: 10, opacity: hasStationType ? 1 : 0.5, cursor: hasStationType ? "pointer" : "not-allowed" }} title={hasStationType ? "Replace" : "Replace (requires station type)"}>↔</button>
-      {open &&
-        createPortal(
-          <div style={{ position: "fixed", inset: 0, zIndex: 99998, backgroundColor: "rgba(0,0,0,0.8)", display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }} onClick={() => setOpen(false)}>
-            <div style={{ backgroundColor: "#1a1a1a", borderRadius: 12, border: "2px solid #ff6b6b", maxWidth: 400, width: "100%", maxHeight: "70vh", overflow: "hidden" }} onClick={(e) => e.stopPropagation()}>
-              <div style={{ padding: 12, borderBottom: "1px solid #444" }}>
-                <h4 style={{ margin: "0 0 8px 0", fontSize: 14, color: "#e0e0e0" }}>Replace with</h4>
-                <input type="text" placeholder="Search..." value={search} onChange={(e) => setSearch(e.target.value)} style={{ width: "100%", padding: 8, borderRadius: 6, border: "1px solid #444", background: "#2a2a2a", color: "#e0e0e0", fontSize: 13 }} autoFocus />
-              </div>
-              <div style={{ maxHeight: 200, overflowY: "auto", padding: 12 }}>
-                {loading ? (
-                  <div style={{ color: "#999", fontSize: 13 }}>Loading items…</div>
-                ) : (
-                  <>
-                    {filtered.map((item) => (
-                      <div key={item.id} onClick={async () => { const idx = stationItems.indexOf(currentId); if (idx >= 0) { const newItems = [...stationItems]; newItems[idx] = item.id; const r = await updateStationItems(stationId, newItems); if (!isErrorResult(r)) onReplaced(newItems); setOpen(false); } }} style={{ padding: 10, marginBottom: 6, fontSize: 13, color: "#e0e0e0", background: "#2a2a2a", borderRadius: 6, cursor: "pointer" }}>{item.name}</div>
-                    ))}
-                    {filtered.length === 0 && <div style={{ color: "#666", fontSize: 13 }}>No other items</div>}
-                  </>
-                )}
-              </div>
-            </div>
-          </div>,
-          document.body
-        )}
-    </>
-  );
-}
-
-/** Picker to add a menu item to a station. */
-function StationItemPicker(props: {
-  stationId: string;
-  stationType: string;
-  existingIds: string[];
-  onSelect: (itemId: string) => void;
-  buttonStyle: React.CSSProperties;
-  labelStyle: React.CSSProperties;
-  /** Use higher z-index when picker is inside another modal (e.g. StationItemsConfigModal) */
-  portalZIndex?: number;
-}) {
-  const { existingIds, onSelect, buttonStyle, portalZIndex = 99998 } = props;
-  const [open, setOpen] = useState(false);
-  const [search, setSearch] = useState("");
-  const [menuItems, setMenuItems] = useState<LinkedRecordItem[]>([]);
-  const [loading, setLoading] = useState(false);
-
-  useEffect(() => {
-    if (!props.stationType?.trim()) return;
-    setLoading(true);
-    loadMenuItemsByStationType(props.stationType)
-      .then((result) => {
-        if (!isErrorResult(result)) setMenuItems(result);
-        else setMenuItems([]);
-      })
-      .catch(() => setMenuItems([]))
-      .finally(() => setLoading(false));
-  }, [props.stationType]);
-
-  const hasStationType = Boolean(props.stationType?.trim());
-  const filtered = !search.trim()
-    ? menuItems.filter((m) => !existingIds.includes(m.id))
-    : menuItems.filter((m) => !existingIds.includes(m.id) && m.name.toLowerCase().includes(search.trim().toLowerCase()));
-  return (
-    <>
-      <button type="button" onClick={() => setOpen(true)} disabled={!hasStationType} style={{ ...buttonStyle, padding: "6px 10px", fontSize: 12, opacity: hasStationType ? 1 : 0.5, cursor: hasStationType ? "pointer" : "not-allowed" }} title={hasStationType ? "Add item" : "Add item (requires station type)"}>
-        + Add Item
-      </button>
-      {open &&
-        createPortal(
-          <div style={{ position: "fixed", inset: 0, zIndex: portalZIndex, backgroundColor: "rgba(0,0,0,0.8)", display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }} onClick={() => setOpen(false)}>
-            <div style={{ backgroundColor: "#1a1a1a", borderRadius: 12, border: "2px solid #ff6b6b", maxWidth: 500, width: "100%", maxHeight: "80vh", overflow: "hidden" }} onClick={(e) => e.stopPropagation()}>
-              <div style={{ padding: 16, borderBottom: "1px solid #444" }}>
-                <h3 style={{ margin: "0 0 12px 0", fontSize: 16, color: "#e0e0e0" }}>Add menu item to station</h3>
-                <input
-                  type="text"
-                  placeholder="Search..."
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  style={{ width: "100%", padding: 10, borderRadius: 6, border: "1px solid #444", background: "#2a2a2a", color: "#e0e0e0", fontSize: 14 }}
-                  autoFocus
-                />
-              </div>
-              <div style={{ maxHeight: 300, overflowY: "auto", padding: 16 }}>
-                {loading ? (
-                  <div style={{ color: "#999", fontSize: 14 }}>Loading items…</div>
-                ) : (
-                  <>
-                    {filtered.map((item) => (
-                      <div
-                        key={item.id}
-                        onClick={() => {
-                          onSelect(item.id);
-                          setOpen(false);
-                        }}
-                        style={{ padding: 12, marginBottom: 8, fontSize: 14, color: "#e0e0e0", background: "#2a2a2a", borderRadius: 6, cursor: "pointer" }}
-                      >
-                        {item.name}
-                      </div>
-                    ))}
-                    {filtered.length === 0 && <div style={{ color: "#999", fontSize: 14 }}>No items found</div>}
-                  </>
-                )}
-              </div>
-            </div>
-          </div>,
-          document.body
-        )}
-    </>
-  );
-}
-
-/** Modal to configure station items when adding a station. Shows items for that station type with Replace/Remove options. */
-function StationItemsConfigModal(props: {
-  isOpen: boolean;
-  stationType: string;
-  stationNotes: string;
-  getItemName: (id: string) => string;
-  onConfirm: (itemIds: string[]) => void;
-  onCancel: () => void;
-  inputStyle: React.CSSProperties;
-  labelStyle: React.CSSProperties;
-  buttonStyle: React.CSSProperties;
-}) {
-  const { isOpen, stationType, stationNotes, getItemName, onConfirm, onCancel, inputStyle, labelStyle, buttonStyle } = props;
-  const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [menuItems, setMenuItems] = useState<LinkedRecordItem[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [replaceIdx, setReplaceIdx] = useState<number | null>(null);
-  const [search, setSearch] = useState("");
-
-  useEffect(() => {
-    if (!isOpen || !stationType.trim()) return;
-
-    let cancelled = false;
-    setLoading(true);
-
-    (async () => {
-      const [preset, typeResult] = await Promise.all([
-        loadStationPreset(stationType.trim()),
-        loadMenuItemsByStationType(stationType.trim()),
-      ]);
-
-      if (!cancelled) {
-        if (!isErrorResult(typeResult)) {
-          setMenuItems(typeResult);
-        } else {
-          setMenuItems([]);
-        }
-
-        if (preset) {
-          const combined = [...preset.line1, ...preset.line2, ...preset.individuals];
-          setSelectedIds(combined);
-        } else if (!isErrorResult(typeResult)) {
-          setSelectedIds(typeResult.map((r) => r.id));
-        } else {
-          setSelectedIds([]);
-        }
-      }
-
-      if (!cancelled) setLoading(false);
-    })();
-
-    return () => { cancelled = true; };
-  }, [isOpen, stationType]);
-
-  if (!isOpen) return null;
-
-  const removeItem = (idx: number) => {
-    setSelectedIds((prev) => prev.filter((_, i) => i !== idx));
-    if (replaceIdx !== null && replaceIdx >= idx) setReplaceIdx((r) => (r > idx ? r - 1 : null));
-  };
-
-  const replaceItem = (idx: number, newId: string) => {
-    setSelectedIds((prev) => prev.map((id, i) => (i === idx ? newId : id)));
-    setReplaceIdx(null);
-  };
-
-  const addItem = (itemId: string) => {
-    if (!selectedIds.includes(itemId)) setSelectedIds((prev) => [...prev, itemId]);
-  };
-
-  const filteredForReplace = !search.trim()
-    ? menuItems.filter((m) => !selectedIds.includes(m.id) || (replaceIdx !== null && selectedIds[replaceIdx] === m.id))
-    : menuItems.filter((m) => (!selectedIds.includes(m.id) || (replaceIdx !== null && selectedIds[replaceIdx] === m.id)) && m.name.toLowerCase().includes(search.trim().toLowerCase()));
-
-  return createPortal(
-    <div style={{ position: "fixed", inset: 0, zIndex: 99999, display: "flex", alignItems: "center", justifyContent: "center", padding: 16, pointerEvents: "auto" }}>
-      <div style={{ position: "absolute", inset: 0, backgroundColor: "rgba(0,0,0,0.85)", pointerEvents: "auto" }} onClick={onCancel} aria-hidden="true" />
-      <div role="dialog" style={{ position: "relative", zIndex: 1, backgroundColor: "#1a1a1a", borderRadius: 12, border: "2px solid #ff6b6b", maxWidth: 560, width: "100%", maxHeight: "85vh", overflow: "hidden", display: "flex", flexDirection: "column", pointerEvents: "auto" }}>
-        <div style={{ padding: 16, borderBottom: "1px solid #444", flexShrink: 0 }}>
-          <h3 style={{ margin: "0 0 8px 0", fontSize: 18, color: "#e0e0e0" }}>Configure {stationType}</h3>
-          <p style={{ margin: 0, fontSize: 12, color: "#999" }}>Review items, replace, or remove. Then confirm.</p>
-        </div>
-        <div style={{ flex: 1, overflowY: "auto", padding: 16 }}>
-          {loading ? (
-            <div style={{ color: "#999", padding: 24, textAlign: "center" }}>Loading items…</div>
-          ) : (
-            <>
-              <label style={labelStyle}>Station items</label>
-              <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 16 }}>
-                {selectedIds.map((id, idx) => (
-                  <div key={`${id}-${idx}`} style={{ display: "flex", alignItems: "center", gap: 8, padding: 10, backgroundColor: "#2a2a2a", borderRadius: 8, border: "1px solid #444" }}>
-                    <span style={{ flex: 1, color: "#e0e0e0", fontSize: 14 }}>{getItemName(id)}</span>
-                    {replaceIdx === idx ? (
-                      <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 6 }}>
-                        <input
-                          type="text"
-                          placeholder="Search to replace..."
-                          value={search}
-                          onChange={(e) => setSearch(e.target.value)}
-                          style={{ ...inputStyle, padding: 8, fontSize: 12 }}
-                          autoFocus
-                        />
-                        <div style={{ maxHeight: 120, overflowY: "auto" }}>
-                          {filteredForReplace.map((item) => (
-                            <div key={item.id} onClick={() => replaceItem(idx, item.id)} style={{ padding: 8, fontSize: 12, color: "#e0e0e0", cursor: "pointer", background: "#1a1a1a", borderRadius: 4, marginBottom: 4 }}>{item.name}</div>
-                          ))}
-                          {filteredForReplace.length === 0 && <div style={{ color: "#666", fontSize: 12 }}>No other items</div>}
-                        </div>
-                        <button type="button" onClick={() => setReplaceIdx(null)} style={{ ...buttonStyle, padding: 6, fontSize: 12 }}>Cancel</button>
-                      </div>
-                    ) : (
-                      <>
-                        <button type="button" onClick={() => setReplaceIdx(idx)} style={{ ...buttonStyle, padding: "6px 10px", fontSize: 11 }}>Replace</button>
-                        <button type="button" onClick={() => removeItem(idx)} style={{ padding: "6px 10px", fontSize: 11, background: "#444", color: "#e0e0e0", border: "1px solid #666", borderRadius: 6, cursor: "pointer" }}>Remove</button>
-                      </>
-                    )}
-                  </div>
-                ))}
-                {selectedIds.length === 0 && !loading && (
-                  <div style={{ marginBottom: 12 }}>
-                    <div style={{ color: "#666", fontSize: 13, marginBottom: 8 }}>No items for this station type. Click items below to add:</div>
-                    <div style={{ maxHeight: 180, overflowY: "auto", display: "flex", flexDirection: "column", gap: 4 }}>
-                      {menuItems.slice(0, 100).map((item) => (
-                        <div key={item.id} onClick={() => addItem(item.id)} style={{ padding: 8, fontSize: 13, color: "#e0e0e0", cursor: "pointer", background: "#2a2a2a", borderRadius: 6, border: "1px solid #444" }}>{item.name}</div>
-                      ))}
-                      {menuItems.length > 100 && <div style={{ color: "#666", fontSize: 12 }}>… or use + Add Item for full list</div>}
-                    </div>
-                  </div>
-                )}
-              </div>
-              <label style={labelStyle}>Add more items</label>
-              <StationItemPicker
-                stationId=""
-                stationType={stationType}
-                existingIds={selectedIds}
-                onSelect={(id) => { addItem(id); }}
-                buttonStyle={buttonStyle}
-                labelStyle={labelStyle}
-                portalZIndex={100001}
-              />
-            </>
-          )}
-        </div>
-        <div style={{ padding: 16, borderTop: "1px solid #444", display: "flex", gap: 12, justifyContent: "flex-end", flexShrink: 0 }}>
-          <button type="button" onClick={onCancel} style={{ padding: "10px 20px", background: "#444", color: "#e0e0e0", border: "none", borderRadius: 8, cursor: "pointer" }}>Cancel</button>
-          <button type="button" onClick={() => onConfirm(selectedIds)} disabled={loading} style={buttonStyle}>Confirm & Add Station</button>
-        </div>
-      </div>
-    </div>,
-    document.body
-  );
-}
-
-/** Creation Station subsection — Station Type, Station Items, Station Notes. */
-function CreationStationContent(props: {
-  selectedEventId: string | null;
-  canEdit: boolean;
-  menuItems: LinkedRecordItem[];
-  menuItemNames: Record<string, string>;
-  getItemName: (id: string) => string;
-  fetchItemNames: (recordIds: string[]) => void;
-  inputStyle: React.CSSProperties;
-  labelStyle: React.CSSProperties;
-  buttonStyle: React.CSSProperties;
-}) {
-  const { selectedEventId, canEdit, getItemName, fetchItemNames, inputStyle, labelStyle, buttonStyle } = props;
-  const { setFields, selectedEventData } = useEventStore();
-  const [stations, setStations] = useState<Array<{ id: string; stationType: string; stationItems: string[]; stationNotes: string }>>([]);
-  const [stationTypeOptions, setStationTypeOptions] = useState<string[]>([]);
-  const [newStationType, setNewStationType] = useState("");
-  const [newStationNotes, setNewStationNotes] = useState("");
-  const [showConfigModal, setShowConfigModal] = useState(false);
-  const stationIds = asLinkedRecordIds(selectedEventData?.[FIELD_IDS.STATIONS]) ?? [];
-
-  useEffect(() => {
-    getStationTypeOptions().then((opts) => setStationTypeOptions(opts.length > 0 ? opts : [...STATION_TYPE_OPTIONS]));
-  }, []);
-
-  useEffect(() => {
-    if (!stationIds?.length) {
-      setStations([]);
-      return;
-    }
-    let active = true;
-    loadStationsByRecordIds(stationIds).then((result) => {
-      if (active && !isErrorResult(result)) {
-        setStations(result);
-        const allStationItemIds = result.flatMap((s) => s.stationItems).filter((id) => id.startsWith("rec"));
-        if (allStationItemIds.length > 0 && selectedEventId) {
-          fetchItemNames(selectedEventId, allStationItemIds);
-        }
-      }
-    });
-    return () => { active = false; };
-  }, [stationIds?.join(","), fetchItemNames]);
-
-  const openAddStationModal = () => {
-    if (!newStationType.trim()) return;
-    setShowConfigModal(true);
-  };
-
-  const confirmAddStation = async (itemIds: string[]) => {
-    if (!selectedEventId || !newStationType.trim()) return;
-    const result = await createStation({
-      stationType: newStationType.trim(),
-      stationItems: itemIds,
-      stationNotes: newStationNotes.trim(),
-      eventId: selectedEventId,
-    });
-    if (isErrorResult(result)) {
-      console.error("Failed to create station:", result);
-      return;
-    }
-    setStations((prev) => [...prev, { id: result.id, stationType: newStationType.trim(), stationItems: itemIds, stationNotes: newStationNotes.trim() }]);
-    setNewStationType("");
-    setNewStationNotes("");
-    setShowConfigModal(false);
-    const updatedIds = [...stationIds, result.id];
-    await setFields(selectedEventId, { [FIELD_IDS.STATIONS]: updatedIds });
-    if (itemIds.length > 0 && selectedEventId) fetchItemNames(selectedEventId, itemIds);
-  };
-
-  const addStationItem = async (stationId: string, itemId: string) => {
-    const st = stations.find((s) => s.id === stationId);
-    if (!st || st.stationItems.includes(itemId)) return;
-    const newItems = [...st.stationItems, itemId];
-    const result = await updateStationItems(stationId, newItems);
-    if (isErrorResult(result)) {
-      console.error("Failed to update station items:", result);
-      return;
-    }
-    setStations((prev) => prev.map((s) => (s.id === stationId ? { ...s, stationItems: newItems } : s)));
-    if (selectedEventId) fetchItemNames(selectedEventId, [itemId]);
-  };
-
-  const selectStyle = { ...inputStyle, cursor: canEdit ? "pointer" : "not-allowed" };
-
-  return (
-    <div style={{ gridColumn: "1 / -1" }}>
-      {stations.map((st) => (
-        <div key={st.id} style={{ marginBottom: 16, padding: 12, backgroundColor: "#1a1a1a", borderRadius: 8, border: "1px solid #444" }}>
-          <div style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))" }}>
-            <div>
-              <label style={labelStyle}>Station Type</label>
-              <div style={{ color: "#e0e0e0", fontSize: 14 }}>{st.stationType || "—"}</div>
-            </div>
-            <div>
-              <label style={labelStyle}>Station Items</label>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center" }}>
-                {st.stationType === "Grande Charcuterie Display" ? (
-                  (() => {
-                    const line1 = st.stationItems.slice(0, 5);
-                    const line2 = st.stationItems.slice(5, 9);
-                    const individuals = st.stationItems.slice(9);
-                    return (
-                      <>
-                        {line1.length > 0 && (
-                          <div style={{ width: "100%", fontSize: 12, color: "#e0e0e0", marginBottom: 4 }}>
-                            Line 1: {line1.map((id) => getItemName(id)).join(", ")}
-                          </div>
-                        )}
-                        {line2.length > 0 && (
-                          <div style={{ width: "100%", fontSize: 12, color: "#e0e0e0", marginBottom: 4 }}>
-                            Line 2: {line2.map((id) => getItemName(id)).join(", ")}
-                          </div>
-                        )}
-                        {individuals.map((id) => (
-                            <span key={id} style={{ fontSize: 12, padding: "4px 8px", backgroundColor: "#2a2a2a", borderRadius: 4, display: "inline-flex", alignItems: "center", gap: 4 }}>
-                              {getItemName(id)}
-                              {canEdit && (
-                                <>
-                                  <button type="button" onClick={() => { const idx = st.stationItems.indexOf(id); if (idx >= 0) { const newItems = st.stationItems.filter((_, i) => i !== idx); updateStationItems(st.id, newItems).then((r) => { if (!isErrorResult(r)) setStations((prev) => prev.map((s) => (s.id === st.id ? { ...s, stationItems: newItems } : s))); }); } }} style={{ background: "none", border: "none", color: "#888", cursor: "pointer", fontSize: 10 }} title="Remove">✕</button>
-                                  <StationItemReplaceButton stationId={st.id} stationType={st.stationType} currentId={id} stationItems={st.stationItems} getItemName={getItemName} onReplaced={(newItems) => { setStations((prev) => prev.map((s) => (s.id === st.id ? { ...s, stationItems: newItems } : s))); if (selectedEventId) fetchItemNames(selectedEventId, newItems); }} updateStationItems={updateStationItems} isErrorResult={isErrorResult} buttonStyle={buttonStyle} />
-                                </>
-                              )}
-                            </span>
-                          ))}
-                      </>
-                    );
-                  })()
-                ) : (
-                  <>
-                    {st.stationItems.map((id) => (
-                      <span key={id} style={{ fontSize: 12, padding: "4px 8px", backgroundColor: "#2a2a2a", borderRadius: 4, display: "inline-flex", alignItems: "center", gap: 4 }}>
-                        {getItemName(id)}
-                        {canEdit && (
-                          <>
-                            <button type="button" onClick={() => { const idx = st.stationItems.indexOf(id); if (idx >= 0) { const newItems = st.stationItems.filter((_, i) => i !== idx); updateStationItems(st.id, newItems).then((r) => { if (!isErrorResult(r)) setStations((prev) => prev.map((s) => (s.id === st.id ? { ...s, stationItems: newItems } : s))); }); } }} style={{ background: "none", border: "none", color: "#888", cursor: "pointer", fontSize: 10 }} title="Remove">✕</button>
-                            <StationItemReplaceButton stationId={st.id} stationType={st.stationType} currentId={id} stationItems={st.stationItems} getItemName={getItemName} onReplaced={(newItems) => { setStations((prev) => prev.map((s) => (s.id === st.id ? { ...s, stationItems: newItems } : s))); if (selectedEventId) fetchItemNames(selectedEventId, newItems); }} updateStationItems={updateStationItems} isErrorResult={isErrorResult} buttonStyle={buttonStyle} />
-                          </>
-                        )}
-                      </span>
-                    ))}
-                  </>
-                )}
-                {st.stationItems.length === 0 && <span style={{ color: "#666", fontSize: 12 }}>No items</span>}
-                {canEdit && (
-                  <StationItemPicker
-                    stationId={st.id}
-                    stationType={st.stationType}
-                    existingIds={st.stationItems}
-                    onSelect={(itemId) => addStationItem(st.id, itemId)}
-                    buttonStyle={buttonStyle}
-                    labelStyle={labelStyle}
-                  />
-                )}
-              </div>
-            </div>
-            <div style={{ gridColumn: "1 / -1" }}>
-              <label style={labelStyle}>Station Notes</label>
-              <div style={{ color: "#e0e0e0", fontSize: 13, whiteSpace: "pre-wrap" }}>{st.stationNotes || "—"}</div>
-            </div>
-          </div>
-        </div>
-      ))}
-      {canEdit && (
-        <div style={{ marginTop: 16, padding: 12, border: "2px dashed #444", borderRadius: 8 }}>
-          <label style={labelStyle}>Add Creation Station</label>
-          <div style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))" }}>
-            <div>
-              <label style={labelStyle}>Station Type</label>
-              <select value={newStationType} onChange={(e) => setNewStationType(e.target.value)} disabled={!canEdit} style={selectStyle}>
-                <option value="">Select type</option>
-                {(stationTypeOptions.length > 0 ? stationTypeOptions : STATION_TYPE_OPTIONS).map((opt) => (
-                  <option key={opt} value={opt}>{opt}</option>
-                ))}
-              </select>
-            </div>
-            <div style={{ gridColumn: "1 / -1" }}>
-              <label style={labelStyle}>Station Notes</label>
-              <textarea rows={2} value={newStationNotes} onChange={(e) => setNewStationNotes(e.target.value)} disabled={!canEdit} style={inputStyle} placeholder="Special instructions or notes..." />
-            </div>
-            <button type="button" disabled={!canEdit || !newStationType.trim()} onClick={openAddStationModal} style={buttonStyle}>
-              + Add Station
-            </button>
-          </div>
-        </div>
-      )}
-      <StationItemsConfigModal
-        isOpen={showConfigModal}
-        stationType={newStationType}
-        stationNotes={newStationNotes}
-        getItemName={getItemName}
-        onConfirm={confirmAddStation}
-        onCancel={() => setShowConfigModal(false)}
-        inputStyle={inputStyle}
-        labelStyle={labelStyle}
-        buttonStyle={buttonStyle}
-      />
-    </div>
-  );
-}
+import { cleanDisplayName } from "../../utils/displayName";
+import { getPickerLabel } from "../../utils/pickerLabel";
 
 function norm(input: string | null | undefined): string {
   if (!input) return '';
@@ -605,6 +100,17 @@ export const MenuSection = ({ embedded = false, isDelivery = false }: MenuSectio
   const [showDressingPicker, setShowDressingPicker] = useState(false);
   const [dressingPickerSearch, setDressingPickerSearch] = useState("");
 
+  // Lock body scroll when picker modal is open to prevent scroll jumping between modal and background
+  useEffect(() => {
+    if (pickerState.isOpen || showDressingPicker) {
+      const prev = document.body.style.overflow;
+      document.body.style.overflow = "hidden";
+      return () => {
+        document.body.style.overflow = prev;
+      };
+    }
+  }, [pickerState.isOpen, showDressingPicker]);
+
   // Load menu items on mount
   useEffect(() => {
     let active = true;
@@ -652,7 +158,8 @@ export const MenuSection = ({ embedded = false, isDelivery = false }: MenuSectio
         const data = (await response.json()) as { records?: Array<{ id: string; fields: Record<string, unknown> }> };
         data.records?.forEach((rec) => {
           const name = rec.fields[MENU_NAME_FIELD_ID];
-          allNames[rec.id] = typeof name === "string" ? name : rec.id;
+          const raw = typeof name === "string" ? name : rec.id;
+          allNames[rec.id] = cleanDisplayName(raw);
         });
       } catch (err) {
         console.error("Failed to fetch item names:", err);
@@ -806,7 +313,9 @@ export const MenuSection = ({ embedded = false, isDelivery = false }: MenuSectio
   };
 
   const getItemName = (itemId: string) => {
-    return menuItemNames[itemId] || menuItems.find((i) => i.id === itemId)?.name || "Loading...";
+    const item = menuItems.find((i) => i.id === itemId);
+    if (item) return getPickerLabel(item);
+    return menuItemNames[itemId] || "Loading...";
   };
 
   const categoryKey = pickerState.categoryKey;
@@ -832,7 +341,7 @@ export const MenuSection = ({ embedded = false, isDelivery = false }: MenuSectio
 
   const filteredPickerItems = !searchLower
     ? effectiveCategoryFiltered
-    : effectiveCategoryFiltered.filter((item) => item.name.toLowerCase().includes(searchLower));
+    : effectiveCategoryFiltered.filter((item) => getPickerLabel(item).toLowerCase().includes(searchLower));
 
   // Dressing picker filtered items (categoryKey = "dressing")
   const dressingAllowed = CATEGORY_MAP.dressing || [];
@@ -844,38 +353,18 @@ export const MenuSection = ({ embedded = false, isDelivery = false }: MenuSectio
   });
   const dressingFilteredItems = !dressingSearchLower
     ? dressingCategoryFiltered
-    : dressingCategoryFiltered.filter((item) => item.name.toLowerCase().includes(dressingSearchLower));
+    : dressingCategoryFiltered.filter((item) => getPickerLabel(item).toLowerCase().includes(dressingSearchLower));
 
   // Y = total items (for "X of Y")
   const categoryFilteredCount = menuItems.length;
 
   const shownCount = filteredPickerItems.length;
 
-  const inputStyle = {
-    width: "100%",
-    padding: "12px",
-    borderRadius: "8px",
-    border: "1px solid #444",
-    backgroundColor: "#1a1a1a",
-    color: "#e0e0e0",
-    fontSize: "14px",
-    resize: "vertical" as const,
-    fontFamily: "inherit",
-  };
-
-  const labelStyle = {
-    display: "block",
-    fontSize: "11px",
-    color: "#999",
-    marginBottom: "6px",
-    fontWeight: "600" as const,
-  };
-
   const buttonStyle = {
     width: "100%",
-    padding: "10px",
-    border: "2px dashed #ff6b6b",
-    borderRadius: "8px",
+    padding: "8px",
+    border: "1px dashed rgba(255,107,107,0.5)",
+    borderRadius: "6px",
     backgroundColor: "transparent",
     color: "#ff6b6b",
     fontSize: "14px",
@@ -898,13 +387,13 @@ export const MenuSection = ({ embedded = false, isDelivery = false }: MenuSectio
       {isDelivery ? (
         /* ── DELIVERY: HOT, DELI, KITCHEN, SALADS, DESSERTS ── */
         <>
-          <CollapsibleSubsection title="HOT - DISPOSABLE" icon="🔥" defaultOpen isDelivery>
+          <CollapsibleSubsection title="HOT - DISPOSABLE" defaultOpen isDelivery>
             <div style={{ gridColumn: "1 / -1" }}>
               <label style={labelStyle}>Passed Appetizers</label>
-              <div style={{ marginBottom: "8px" }}>
+              <div style={{ marginBottom: "6px" }}>
                 {selections.passedAppetizers.map((itemId) => (
-                  <div key={itemId} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", backgroundColor: "#2a2a2a", border: deliveryItemBorder, borderRadius: "6px", padding: "8px 12px", marginBottom: "6px" }}>
-                    <span style={{ fontSize: "14px", color: "#e0e0e0" }}>{getItemName(itemId)}</span>
+                  <div key={itemId} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", backgroundColor: "rgba(0,0,0,0.2)", border: deliveryItemBorder, borderRadius: "6px", padding: "6px 10px", marginBottom: "4px" }}>
+                    <span style={{ fontSize: "13px", color: "#e0e0e0" }}>{getItemName(itemId)}</span>
                     <button type="button" disabled={!canEdit} onClick={() => removeMenuItem("passedAppetizers", itemId)} style={{ background: "none", border: "none", color: deliveryRemoveColor, cursor: "pointer", fontSize: "16px", fontWeight: "bold" }}>✕</button>
                   </div>
                 ))}
@@ -922,12 +411,12 @@ export const MenuSection = ({ embedded = false, isDelivery = false }: MenuSectio
                 labelStyle={labelStyle}
                 buttonStyle={deliveryButtonStyle}
               />
-              <div style={{ marginTop: "12px" }}>
+              <div style={{ marginTop: "8px" }}>
                 <label style={labelStyle}>Presented Appetizers</label>
-                <div style={{ marginBottom: "8px" }}>
+                <div style={{ marginBottom: "6px" }}>
                   {selections.presentedAppetizers.map((itemId) => (
-                    <div key={itemId} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", backgroundColor: "#2a2a2a", border: deliveryItemBorder, borderRadius: "6px", padding: "8px 12px", marginBottom: "6px" }}>
-                      <span style={{ fontSize: "14px", color: "#e0e0e0" }}>{getItemName(itemId)}</span>
+                    <div key={itemId} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", backgroundColor: "rgba(0,0,0,0.2)", border: deliveryItemBorder, borderRadius: "6px", padding: "6px 10px", marginBottom: "4px" }}>
+                      <span style={{ fontSize: "13px", color: "#e0e0e0" }}>{getItemName(itemId)}</span>
                       <button type="button" disabled={!canEdit} onClick={() => removeMenuItem("presentedAppetizers", itemId)} style={{ background: "none", border: "none", color: deliveryRemoveColor, cursor: "pointer", fontSize: "16px", fontWeight: "bold" }}>✕</button>
                     </div>
                   ))}
@@ -946,12 +435,12 @@ export const MenuSection = ({ embedded = false, isDelivery = false }: MenuSectio
                   buttonStyle={deliveryButtonStyle}
                 />
               </div>
-              <div style={{ marginTop: "12px" }}>
+              <div style={{ marginTop: "8px" }}>
                 <label style={labelStyle}>Buffet – Metal (hot items)</label>
-                <div style={{ marginBottom: "8px" }}>
+                <div style={{ marginBottom: "6px" }}>
                   {selections.buffetMetal.map((itemId) => (
-                    <div key={itemId} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", backgroundColor: "#2a2a2a", border: deliveryItemBorder, borderRadius: "6px", padding: "8px 12px", marginBottom: "6px" }}>
-                      <span style={{ fontSize: "14px", color: "#e0e0e0" }}>{getItemName(itemId)}</span>
+                    <div key={itemId} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", backgroundColor: "rgba(0,0,0,0.2)", border: deliveryItemBorder, borderRadius: "6px", padding: "6px 10px", marginBottom: "4px" }}>
+                      <span style={{ fontSize: "13px", color: "#e0e0e0" }}>{getItemName(itemId)}</span>
                       <button type="button" disabled={!canEdit} onClick={() => removeMenuItem("buffetMetal", itemId)} style={{ background: "none", border: "none", color: deliveryRemoveColor, cursor: "pointer", fontSize: "16px", fontWeight: "bold" }}>✕</button>
                     </div>
                   ))}
@@ -961,13 +450,13 @@ export const MenuSection = ({ embedded = false, isDelivery = false }: MenuSectio
             </div>
           </CollapsibleSubsection>
 
-          <CollapsibleSubsection title="DELI - DISPOSABLE" icon="🥪" defaultOpen isDelivery>
+          <CollapsibleSubsection title="DELI - DISPOSABLE" defaultOpen isDelivery>
             <div style={{ gridColumn: "1 / -1" }}>
               <label style={labelStyle}>Sandwiches & Wraps</label>
-              <div style={{ marginBottom: "8px" }}>
+              <div style={{ marginBottom: "6px" }}>
                 {selections.deliveryDeli.map((itemId) => (
-                  <div key={itemId} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", backgroundColor: "#2a2a2a", border: deliveryItemBorder, borderRadius: "6px", padding: "8px 12px", marginBottom: "6px" }}>
-                    <span style={{ fontSize: "14px", color: "#e0e0e0" }}>{getItemName(itemId)}</span>
+                  <div key={itemId} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", backgroundColor: "rgba(0,0,0,0.2)", border: deliveryItemBorder, borderRadius: "6px", padding: "6px 10px", marginBottom: "4px" }}>
+                    <span style={{ fontSize: "13px", color: "#e0e0e0" }}>{getItemName(itemId)}</span>
                     <button type="button" disabled={!canEdit} onClick={() => removeMenuItem("deliveryDeli", itemId)} style={{ background: "none", border: "none", color: deliveryRemoveColor, cursor: "pointer", fontSize: "16px", fontWeight: "bold" }}>✕</button>
                   </div>
                 ))}
@@ -988,13 +477,13 @@ export const MenuSection = ({ embedded = false, isDelivery = false }: MenuSectio
             </div>
           </CollapsibleSubsection>
 
-          <CollapsibleSubsection title="KITCHEN - DISPOSABLE" icon="🍳" defaultOpen={false} isDelivery>
+          <CollapsibleSubsection title="KITCHEN - DISPOSABLE" defaultOpen={false} isDelivery>
             <div style={{ gridColumn: "1 / -1" }}>
               <label style={labelStyle}>Buffet – China (cold/kitchen items)</label>
-              <div style={{ marginBottom: "8px" }}>
+              <div style={{ marginBottom: "6px" }}>
                 {selections.buffetChina.map((itemId) => (
-                  <div key={itemId} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", backgroundColor: "#2a2a2a", border: deliveryItemBorder, borderRadius: "6px", padding: "8px 12px", marginBottom: "6px" }}>
-                    <span style={{ fontSize: "14px", color: "#e0e0e0" }}>{getItemName(itemId)}</span>
+                  <div key={itemId} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", backgroundColor: "rgba(0,0,0,0.2)", border: deliveryItemBorder, borderRadius: "6px", padding: "6px 10px", marginBottom: "4px" }}>
+                    <span style={{ fontSize: "13px", color: "#e0e0e0" }}>{getItemName(itemId)}</span>
                     <button type="button" disabled={!canEdit} onClick={() => removeMenuItem("buffetChina", itemId)} style={{ background: "none", border: "none", color: deliveryRemoveColor, cursor: "pointer", fontSize: "16px", fontWeight: "bold" }}>✕</button>
                   </div>
                 ))}
@@ -1015,13 +504,13 @@ export const MenuSection = ({ embedded = false, isDelivery = false }: MenuSectio
             </div>
           </CollapsibleSubsection>
 
-          <CollapsibleSubsection title="SALADS - DISPOSABLE" icon="🥗" defaultOpen={false} isDelivery>
+          <CollapsibleSubsection title="SALADS - DISPOSABLE" defaultOpen={false} isDelivery>
             <div style={{ gridColumn: "1 / -1" }}>
               <label style={labelStyle}>Room Temp Display / Salads</label>
-              <div style={{ marginBottom: "8px" }}>
+              <div style={{ marginBottom: "6px" }}>
                 {selections.roomTempDisplay.map((itemId) => (
-                  <div key={itemId} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", backgroundColor: "#2a2a2a", border: deliveryItemBorder, borderRadius: "6px", padding: "8px 12px", marginBottom: "6px" }}>
-                    <span style={{ fontSize: "14px", color: "#e0e0e0" }}>{getItemName(itemId)}</span>
+                  <div key={itemId} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", backgroundColor: "rgba(0,0,0,0.2)", border: deliveryItemBorder, borderRadius: "6px", padding: "6px 10px", marginBottom: "4px" }}>
+                    <span style={{ fontSize: "13px", color: "#e0e0e0" }}>{getItemName(itemId)}</span>
                     <button type="button" disabled={!canEdit} onClick={() => removeMenuItem("roomTempDisplay", itemId)} style={{ background: "none", border: "none", color: deliveryRemoveColor, cursor: "pointer", fontSize: "16px", fontWeight: "bold" }}>✕</button>
                   </div>
                 ))}
@@ -1042,13 +531,13 @@ export const MenuSection = ({ embedded = false, isDelivery = false }: MenuSectio
             </div>
           </CollapsibleSubsection>
 
-          <CollapsibleSubsection title="DESSERTS - DISPOSABLE" icon="🍰" defaultOpen={false} isDelivery>
+          <CollapsibleSubsection title="DESSERTS - DISPOSABLE" defaultOpen={false} isDelivery>
             <div style={{ gridColumn: "1 / -1" }}>
               <label style={labelStyle}>Desserts</label>
-              <div style={{ marginBottom: "8px" }}>
+              <div style={{ marginBottom: "6px" }}>
                 {selections.desserts.map((itemId) => (
-                  <div key={itemId} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", backgroundColor: "#2a2a2a", border: deliveryItemBorder, borderRadius: "6px", padding: "8px 12px", marginBottom: "6px" }}>
-                    <span style={{ fontSize: "14px", color: "#e0e0e0" }}>{getItemName(itemId)}</span>
+                  <div key={itemId} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", backgroundColor: "rgba(0,0,0,0.2)", border: deliveryItemBorder, borderRadius: "6px", padding: "6px 10px", marginBottom: "4px" }}>
+                    <span style={{ fontSize: "13px", color: "#e0e0e0" }}>{getItemName(itemId)}</span>
                     <button type="button" disabled={!canEdit} onClick={() => removeMenuItem("desserts", itemId)} style={{ background: "none", border: "none", color: deliveryRemoveColor, cursor: "pointer", fontSize: "16px", fontWeight: "bold" }}>✕</button>
                   </div>
                 ))}
@@ -1076,10 +565,10 @@ export const MenuSection = ({ embedded = false, isDelivery = false }: MenuSectio
       <CollapsibleSubsection title="Passed Appetizers" icon="▶" defaultOpen={false}>
       <div style={{ gridColumn: "1 / -1" }}>
         <label style={labelStyle}>Passed Appetizers</label>
-        <div style={{ marginBottom: "8px" }}>
+        <div style={{ marginBottom: "6px" }}>
           {selections.passedAppetizers.map((itemId) => (
             <div key={itemId} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", backgroundColor: "#2a2a2a", border: "1px solid #ff6b6b", borderRadius: "6px", padding: "8px 12px", marginBottom: "6px" }}>
-              <span style={{ fontSize: "14px", color: "#e0e0e0" }}>{getItemName(itemId)}</span>
+              <span style={{ fontSize: "13px", color: "#e0e0e0" }}>{getItemName(itemId)}</span>
               <button type="button" disabled={!canEdit} onClick={() => removeMenuItem("passedAppetizers", itemId)} style={{ background: "none", border: "none", color: "#ff6b6b", cursor: "pointer", fontSize: "16px", fontWeight: "bold" }}>✕</button>
             </div>
           ))}
@@ -1106,10 +595,10 @@ export const MenuSection = ({ embedded = false, isDelivery = false }: MenuSectio
       <CollapsibleSubsection title="Presented Appetizers" icon="▶" defaultOpen={false}>
       <div style={{ gridColumn: "1 / -1" }}>
         <label style={labelStyle}>Presented Appetizers</label>
-        <div style={{ marginBottom: "8px" }}>
+        <div style={{ marginBottom: "6px" }}>
           {selections.presentedAppetizers.map((itemId) => (
             <div key={itemId} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", backgroundColor: "#2a2a2a", border: "1px solid #ff6b6b", borderRadius: "6px", padding: "8px 12px", marginBottom: "6px" }}>
-              <span style={{ fontSize: "14px", color: "#e0e0e0" }}>{getItemName(itemId)}</span>
+              <span style={{ fontSize: "13px", color: "#e0e0e0" }}>{getItemName(itemId)}</span>
               <button type="button" disabled={!canEdit} onClick={() => removeMenuItem("presentedAppetizers", itemId)} style={{ background: "none", border: "none", color: "#ff6b6b", cursor: "pointer", fontSize: "16px", fontWeight: "bold" }}>✕</button>
             </div>
           ))}
@@ -1132,29 +621,14 @@ export const MenuSection = ({ embedded = false, isDelivery = false }: MenuSectio
       </div>
       </CollapsibleSubsection>
 
-      {/* Creation Station */}
-      <CollapsibleSubsection title="Creation Station" icon="▶" defaultOpen={false}>
-        <CreationStationContent
-          selectedEventId={selectedEventId}
-          canEdit={canEdit}
-          menuItems={menuItems}
-          menuItemNames={menuItemNames}
-          getItemName={getItemName}
-          fetchItemNames={fetchItemNames}
-          inputStyle={inputStyle}
-          labelStyle={labelStyle}
-          buttonStyle={buttonStyle}
-        />
-      </CollapsibleSubsection>
-
       {/* Buffet - Metal */}
       <CollapsibleSubsection title="Buffet – Metal" icon="▶" defaultOpen={false}>
       <div style={{ gridColumn: "1 / -1" }}>
         <label style={labelStyle}>Buffet – Metal</label>
-        <div style={{ marginBottom: "8px" }}>
+        <div style={{ marginBottom: "6px" }}>
           {selections.buffetMetal.map((itemId) => (
             <div key={itemId} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", backgroundColor: "#2a2a2a", border: "1px solid #ff6b6b", borderRadius: "6px", padding: "8px 12px", marginBottom: "6px" }}>
-              <span style={{ fontSize: "14px", color: "#e0e0e0" }}>{getItemName(itemId)}</span>
+              <span style={{ fontSize: "13px", color: "#e0e0e0" }}>{getItemName(itemId)}</span>
               <button type="button" disabled={!canEdit} onClick={() => removeMenuItem("buffetMetal", itemId)} style={{ background: "none", border: "none", color: "#ff6b6b", cursor: "pointer", fontSize: "16px", fontWeight: "bold" }}>✕</button>
             </div>
           ))}
@@ -1181,10 +655,10 @@ export const MenuSection = ({ embedded = false, isDelivery = false }: MenuSectio
       <CollapsibleSubsection title="Buffet – China" icon="▶" defaultOpen={false}>
       <div style={{ gridColumn: "1 / -1" }}>
         <label style={labelStyle}>Buffet – China</label>
-        <div style={{ marginBottom: "8px" }}>
+        <div style={{ marginBottom: "6px" }}>
           {selections.buffetChina.map((itemId) => (
             <div key={itemId} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", backgroundColor: "#2a2a2a", border: "1px solid #ff6b6b", borderRadius: "6px", padding: "8px 12px", marginBottom: "6px" }}>
-              <span style={{ fontSize: "14px", color: "#e0e0e0" }}>{getItemName(itemId)}</span>
+              <span style={{ fontSize: "13px", color: "#e0e0e0" }}>{getItemName(itemId)}</span>
               <button type="button" disabled={!canEdit} onClick={() => removeMenuItem("buffetChina", itemId)} style={{ background: "none", border: "none", color: "#ff6b6b", cursor: "pointer", fontSize: "16px", fontWeight: "bold" }}>✕</button>
             </div>
           ))}
@@ -1211,10 +685,10 @@ export const MenuSection = ({ embedded = false, isDelivery = false }: MenuSectio
       <CollapsibleSubsection title="Desserts" icon="▶" defaultOpen={false}>
       <div style={{ gridColumn: "1 / -1" }}>
         <label style={labelStyle}>Desserts</label>
-        <div style={{ marginBottom: "8px" }}>
+        <div style={{ marginBottom: "6px" }}>
           {selections.desserts.map((itemId) => (
             <div key={itemId} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", backgroundColor: "#2a2a2a", border: "1px solid #ff6b6b", borderRadius: "6px", padding: "8px 12px", marginBottom: "6px" }}>
-              <span style={{ fontSize: "14px", color: "#e0e0e0" }}>{getItemName(itemId)}</span>
+              <span style={{ fontSize: "13px", color: "#e0e0e0" }}>{getItemName(itemId)}</span>
               <button type="button" disabled={!canEdit} onClick={() => removeMenuItem("desserts", itemId)} style={{ background: "none", border: "none", color: "#ff6b6b", cursor: "pointer", fontSize: "16px", fontWeight: "bold" }}>✕</button>
             </div>
           ))}
@@ -1295,7 +769,7 @@ export const MenuSection = ({ embedded = false, isDelivery = false }: MenuSectio
                   {shownCount} of {categoryFilteredCount} items
                 </div>
               </div>
-              <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "16px" }}>
+              <div style={{ flex: 1, minHeight: 0, overflowY: "auto", overscrollBehavior: "contain", padding: "16px" }}>
                 {filteredPickerItems.map((item) => (
                   <div
                     key={item.id}
@@ -1320,7 +794,7 @@ export const MenuSection = ({ embedded = false, isDelivery = false }: MenuSectio
                     }}
                   >
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                      <span>{item.name}</span>
+                      <span>{getPickerLabel(item)}</span>
                       {item.category && (
                         <span style={{ fontSize: "11px", color: "#777" }}>{item.category}</span>
                       )}
@@ -1394,7 +868,7 @@ export const MenuSection = ({ embedded = false, isDelivery = false }: MenuSectio
                   {dressingFilteredItems.length} of {dressingCategoryFiltered.length} dressings
                 </div>
               </div>
-              <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "16px" }}>
+              <div style={{ flex: 1, minHeight: 0, overflowY: "auto", overscrollBehavior: "contain", padding: "16px" }}>
                 {dressingFilteredItems.map((item) => (
                   <div
                     key={item.id}
@@ -1419,7 +893,7 @@ export const MenuSection = ({ embedded = false, isDelivery = false }: MenuSectio
                     }}
                   >
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                      <span>{item.name}</span>
+                      <span>{getPickerLabel(item)}</span>
                       {selections.buffetChina.includes(item.id) && (
                         <span style={{ fontSize: "11px", color: "#22c55e" }}>✓ Added</span>
                       )}
@@ -1440,7 +914,7 @@ export const MenuSection = ({ embedded = false, isDelivery = false }: MenuSectio
   );
 
   return embedded ? content : (
-    <FormSection title="Menu Sections" icon="🍽️">
+    <FormSection title="Menu Sections">
       {content}
     </FormSection>
   );

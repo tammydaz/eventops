@@ -95,7 +95,7 @@ export const KitchenLogisticsSection = ({ embedded = false }: KitchenLogisticsSe
   );
 
   return embedded ? content : (
-    <FormSection title="Kitchen & Hot Food Logic" icon="🔥">
+    <FormSection title="Kitchen & Hot Food Logic">
       {content}
     </FormSection>
   );

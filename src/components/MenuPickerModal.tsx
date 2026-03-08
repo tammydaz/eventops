@@ -1,11 +1,13 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { type MenuCategoryKey } from '../constants/menuCategories';
+import { getPickerLabel } from '../utils/pickerLabel';
 
 export interface MenuItemRecord {
   id: string;
   name: string;
   category?: string | null;
+  childItems?: string[];
 }
 
 interface MenuPickerModalProps {
@@ -114,7 +116,7 @@ export const MenuPickerModal: React.FC<MenuPickerModalProps> = ({
                     : 'bg-gray-800 border border-gray-700 hover:bg-red-900 hover:border-red-600'
                 }`}
               >
-                <span className="text-gray-300">{item.name}</span>
+                <span className="text-gray-300">{getPickerLabel(item)}</span>
                 {item.category && (
                   <span className="text-xs text-gray-500 ml-auto">{item.category}</span>
                 )}

@@ -1,34 +1,13 @@
 import { useEffect, useState } from "react";
 import { useEventStore } from "../../state/eventStore";
-import { FIELD_IDS, loadSingleSelectOptions, type SingleSelectOption } from "../../services/airtable/events";
+import { FIELD_IDS } from "../../services/airtable/events";
 import { asString, asSingleSelectName } from "../../services/airtable/selectors";
 import { isDeliveryOrPickup } from "../../lib/deliveryHelpers";
-import { FormSection, Helper } from "./FormSection";
+import { FormSection, Helper, inputStyle, labelStyle, textareaStyle } from "./FormSection";
 import type { ClientDetails, PrimaryContact } from "./types";
-
-const ROLE_OPTIONS_FALLBACK = ["Planner", "Venue Manager", "Mother of Bride", "Father of Groom", "Client Rep", "Other"];
-
-const inputStyle = {
-  width: "100%",
-  padding: "12px",
-  borderRadius: "8px",
-  border: "1px solid #444",
-  backgroundColor: "#1a1a1a",
-  color: "#e0e0e0",
-  fontSize: "14px",
-};
-
-const labelStyle = {
-  display: "block" as const,
-  fontSize: "11px",
-  color: "#999",
-  marginBottom: "6px",
-  fontWeight: "600" as const,
-};
 
 export const ClientAndContactSection = () => {
   const { selectedEventId, selectedEventData, setFields } = useEventStore();
-  const [roleOptions, setRoleOptions] = useState<string[]>(ROLE_OPTIONS_FALLBACK);
   const [client, setClient] = useState<ClientDetails & { businessName: string }>({
     clientFirstName: "",
     clientLastName: "",
@@ -46,6 +25,7 @@ export const ClientAndContactSection = () => {
     primaryContactPhone: "",
     primaryContactRole: "",
   });
+  const [contactNotes, setContactNotes] = useState("");
 
   useEffect(() => {
     if (!selectedEventId || !selectedEventData) {
@@ -61,6 +41,7 @@ export const ClientAndContactSection = () => {
         clientZip: "",
       });
       setContact({ primaryContactName: "", primaryContactPhone: "", primaryContactRole: "" });
+      setContactNotes("");
       return;
     }
 
@@ -81,6 +62,7 @@ export const ClientAndContactSection = () => {
       primaryContactPhone: asString(selectedEventData[FIELD_IDS.PRIMARY_CONTACT_PHONE]),
       primaryContactRole: asSingleSelectName(selectedEventData[FIELD_IDS.PRIMARY_CONTACT_ROLE]),
     };
+    const newContactNotes = asString(selectedEventData[FIELD_IDS.SPECIAL_NOTES]);
 
     setClient((prev) => {
       if (
@@ -109,17 +91,8 @@ export const ClientAndContactSection = () => {
       }
       return newContact;
     });
+    setContactNotes((prev) => (prev === newContactNotes ? prev : newContactNotes));
   }, [selectedEventId, selectedEventData]);
-
-  useEffect(() => {
-    let cancelled = false;
-    loadSingleSelectOptions([FIELD_IDS.PRIMARY_CONTACT_ROLE]).then((result) => {
-      if (cancelled || "error" in result) return;
-      const opts = (result[FIELD_IDS.PRIMARY_CONTACT_ROLE] ?? []).map((o: SingleSelectOption) => o.name);
-      if (opts.length > 0) setRoleOptions(opts);
-    });
-    return () => { cancelled = true; };
-  }, []);
 
   const handleBlur = async (fieldId: string, value: unknown) => {
     if (!selectedEventId) return;
@@ -131,7 +104,7 @@ export const ClientAndContactSection = () => {
   const isDelivery = isDeliveryOrPickup(eventType);
 
   return (
-    <FormSection title="Client & Day-of Contact" icon={isDelivery ? "🚚" : "👤"} isDelivery={isDelivery}>
+    <FormSection title="Client & Day-of Contact" isDelivery={isDelivery}>
       {/* Client info */}
       <div>
         <label style={labelStyle}>Client First Name *</label>
@@ -169,68 +142,6 @@ export const ClientAndContactSection = () => {
           placeholder="e.g. (555) 123-4567"
         />
       </div>
-      <div>
-        <label style={labelStyle}>Client Email</label>
-        <input
-          type="email"
-          value={client.clientEmail}
-          disabled={!canEdit}
-          onChange={(e) => setClient((p) => ({ ...p, clientEmail: e.target.value }))}
-          onBlur={(e) => handleBlur(FIELD_IDS.CLIENT_EMAIL, e.target.value)}
-          style={inputStyle}
-          placeholder="client@example.com"
-        />
-      </div>
-
-      {/* Primary contact (day-of) */}
-      <div>
-        <label style={labelStyle}>Primary Contact Name (day-of)</label>
-        <input
-          type="text"
-          value={contact.primaryContactName}
-          disabled={!canEdit}
-          onChange={(e) => setContact((p) => ({ ...p, primaryContactName: e.target.value }))}
-          onBlur={(e) => handleBlur(FIELD_IDS.PRIMARY_CONTACT_NAME, e.target.value)}
-          style={inputStyle}
-          placeholder="Contact person name"
-        />
-        <Helper>Person on-site day-of (planner, venue manager, client rep). Used for BEO and day-of contact.</Helper>
-      </div>
-      <div>
-        <label style={labelStyle}>Primary Contact Phone</label>
-        <input
-          type="tel"
-          value={contact.primaryContactPhone}
-          disabled={!canEdit}
-          onChange={(e) => setContact((p) => ({ ...p, primaryContactPhone: e.target.value }))}
-          onBlur={(e) => handleBlur(FIELD_IDS.PRIMARY_CONTACT_PHONE, e.target.value)}
-          style={inputStyle}
-          placeholder="(555) 555-5555"
-        />
-      </div>
-      {!isDelivery && (
-        <div>
-          <label style={labelStyle}>Primary Contact Role</label>
-          <select
-            value={contact.primaryContactRole}
-            disabled={!canEdit}
-            onChange={(e) => {
-              const v = e.target.value;
-              setContact((p) => ({ ...p, primaryContactRole: v }));
-              handleBlur(FIELD_IDS.PRIMARY_CONTACT_ROLE, v || null);
-            }}
-            style={inputStyle}
-          >
-            <option value="">Select role</option>
-            {[...new Set([...roleOptions, contact.primaryContactRole].filter(Boolean))].map((role) => (
-              <option key={role} value={role}>
-                {role}
-              </option>
-            ))}
-          </select>
-          <Helper>Who is this person to the event? (e.g. Mother of Bride, Venue Manager)</Helper>
-        </div>
-      )}
 
       {isDelivery && (
         <div style={{ gridColumn: "1 / -1" }}>
@@ -248,57 +159,112 @@ export const ClientAndContactSection = () => {
         </div>
       )}
 
-      <div style={{ gridColumn: "1 / -1" }}>
-        <label style={labelStyle}>Client Street</label>
-        <input
-          type="text"
-          value={client.clientStreet}
-          disabled={!canEdit}
-          onChange={(e) => setClient((p) => ({ ...p, clientStreet: e.target.value }))}
-          onBlur={(e) => handleBlur(FIELD_IDS.CLIENT_STREET, e.target.value)}
-          style={inputStyle}
-          placeholder="e.g. 123 Main St"
-        />
+      <div style={{ gridColumn: "1 / -1", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+        <div>
+          <label style={labelStyle}>Street</label>
+          <input
+            type="text"
+            value={client.clientStreet}
+            disabled={!canEdit}
+            onChange={(e) => setClient((p) => ({ ...p, clientStreet: e.target.value }))}
+            onBlur={(e) => handleBlur(FIELD_IDS.CLIENT_STREET, e.target.value)}
+            style={inputStyle}
+            placeholder="e.g. 123 Main St"
+          />
+        </div>
+        <div>
+          <label style={labelStyle}>City</label>
+          <input
+            type="text"
+            value={client.clientCity}
+            disabled={!canEdit}
+            onChange={(e) => setClient((p) => ({ ...p, clientCity: e.target.value }))}
+            onBlur={(e) => handleBlur(FIELD_IDS.CLIENT_CITY, e.target.value)}
+            style={inputStyle}
+            placeholder="City"
+          />
+        </div>
       </div>
-      <div>
-        <label style={labelStyle}>Client City</label>
-        <input
-          type="text"
-          value={client.clientCity}
-          disabled={!canEdit}
-          onChange={(e) => setClient((p) => ({ ...p, clientCity: e.target.value }))}
-          onBlur={(e) => handleBlur(FIELD_IDS.CLIENT_CITY, e.target.value)}
-          style={inputStyle}
-          placeholder="City"
-        />
-      </div>
-      <div>
-        <label style={labelStyle}>Client State</label>
-        <input
-          type="text"
-          value={client.clientState}
-          disabled={!canEdit}
-          onChange={(e) => setClient((p) => ({ ...p, clientState: e.target.value }))}
-          onBlur={(e) => handleBlur(FIELD_IDS.CLIENT_STATE, e.target.value)}
-          style={inputStyle}
-          placeholder="e.g. NJ"
-        />
-      </div>
-      <div>
-        <label style={labelStyle}>Client ZIP</label>
-        <input
-          type="text"
-          value={client.clientZip}
-          disabled={!canEdit}
-          onChange={(e) => setClient((p) => ({ ...p, clientZip: e.target.value }))}
-          onBlur={(e) => handleBlur(FIELD_IDS.CLIENT_ZIP, e.target.value)}
-          style={inputStyle}
-          placeholder="e.g. 08001"
-        />
+      <div style={{ gridColumn: "1 / -1", display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "12px" }}>
+        <div>
+          <label style={labelStyle}>State</label>
+          <input
+            type="text"
+            value={client.clientState}
+            disabled={!canEdit}
+            onChange={(e) => setClient((p) => ({ ...p, clientState: e.target.value }))}
+            onBlur={(e) => handleBlur(FIELD_IDS.CLIENT_STATE, e.target.value)}
+            style={inputStyle}
+            placeholder="e.g. NJ"
+          />
+        </div>
+        <div>
+          <label style={labelStyle}>ZIP</label>
+          <input
+            type="text"
+            value={client.clientZip}
+            disabled={!canEdit}
+            onChange={(e) => setClient((p) => ({ ...p, clientZip: e.target.value }))}
+            onBlur={(e) => handleBlur(FIELD_IDS.CLIENT_ZIP, e.target.value)}
+            style={inputStyle}
+            placeholder="e.g. 08001"
+          />
+        </div>
+        <div>
+          <label style={labelStyle}>Email</label>
+          <input
+            type="email"
+            value={client.clientEmail}
+            disabled={!canEdit}
+            onChange={(e) => setClient((p) => ({ ...p, clientEmail: e.target.value }))}
+            onBlur={(e) => handleBlur(FIELD_IDS.CLIENT_EMAIL, e.target.value)}
+            style={inputStyle}
+            placeholder="client@example.com"
+          />
+        </div>
       </div>
 
-      <div style={{ gridColumn: "1 / -1" }}>
-        <Helper>Client address used when venue is blank; venue address takes precedence for event location.</Helper>
+      {/* Primary contact (day-of) */}
+      <div style={{ marginTop: "40px", gridColumn: "1 / -1", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "24px", alignItems: "start" }}>
+        <div>
+          <label style={labelStyle}>Primary Contact Name (day-of)</label>
+          <input
+            type="text"
+            value={contact.primaryContactName}
+            disabled={!canEdit}
+            onChange={(e) => setContact((p) => ({ ...p, primaryContactName: e.target.value }))}
+            onBlur={(e) => handleBlur(FIELD_IDS.PRIMARY_CONTACT_NAME, e.target.value)}
+            style={inputStyle}
+            placeholder="Contact person name"
+          />
+          <Helper>Person on-site day-of (planner, venue manager, client rep). Used for BEO and day-of contact.</Helper>
+        </div>
+        <div>
+          <label style={labelStyle}>Primary Contact Phone</label>
+          <input
+            type="tel"
+            value={contact.primaryContactPhone}
+            disabled={!canEdit}
+            onChange={(e) => setContact((p) => ({ ...p, primaryContactPhone: e.target.value }))}
+            onBlur={(e) => handleBlur(FIELD_IDS.PRIMARY_CONTACT_PHONE, e.target.value)}
+            style={inputStyle}
+            placeholder="(555) 555-5555"
+          />
+        </div>
+      </div>
+
+      <div style={{ gridColumn: "1 / -1", marginTop: "16px" }}>
+        <label style={labelStyle}>Notes</label>
+        <textarea
+          value={contactNotes}
+          disabled={!canEdit}
+          onChange={(e) => setContactNotes(e.target.value)}
+          onBlur={(e) => handleBlur(FIELD_IDS.SPECIAL_NOTES, e.target.value)}
+          style={textareaStyle}
+          placeholder="e.g. call contact upon arrival; surprise party — call contact not client"
+          rows={3}
+        />
+        <Helper>e.g. call contact upon arrival; surprise party — call contact not client</Helper>
       </div>
     </FormSection>
   );

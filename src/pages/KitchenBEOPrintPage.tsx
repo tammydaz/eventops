@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from "react";
 import { useEventStore } from "../state/eventStore";
 import { FIELD_IDS, getFoodwerxArrivalFieldId } from "../services/airtable/events";
-import { asString, asSingleSelectName, asBoolean, asStringArray } from "../services/airtable/selectors";
+import { asString, asSingleSelectName, asBoolean, asStringArray, asLinkedRecordIds, isErrorResult } from "../services/airtable/selectors";
+import { loadStationsByRecordIds } from "../services/airtable/linkedRecords";
 import { EventSelector } from "../components/EventSelector";
 import { secondsTo12HourString } from "../utils/timeHelpers";
 import { sanitizeForHeader } from "../utils/httpHeaders";
@@ -928,7 +929,9 @@ const DELIVERY_MENU_SECTION_CONFIG: { title: string; fieldIds: string[]; customF
 
 const MENU_TABLE = "tbl0aN33DGG6R1sPZ";
 const ITEM_NAME = FIELD_IDS.MENU_ITEM_NAME;
-const CHILD_ITEMS = FIELD_IDS.MENU_ITEM_CHILD_ITEMS;
+// NON-NEGOTIABLE: Kitchen BEO and BEO Print MUST use THIS field ID for Child Items
+const CHILD_ITEMS_FIELD_ID = "fldIu6qmlUwAEn2W9";
+const CHILD_ITEMS = CHILD_ITEMS_FIELD_ID;
 
 const NOTES_SEP = " – ";
 
@@ -1058,6 +1061,7 @@ const KitchenBEOPrintPage: React.FC = () => {
   const { selectedEventId, selectedEventData, loadEvents, loadEventData, selectEvent, setFields } = useEventStore();
   const [loading, setLoading] = useState(true);
   const [menuItemData, setMenuItemData] = useState<Record<string, { name: string; childIds: string[] }>>({});
+  const [stationsData, setStationsData] = useState<Array<{ id: string; stationType: string; stationItems: string[]; stationNotes: string }>>([]);
   const [fwArrivalFieldId, setFwArrivalFieldId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -1085,14 +1089,28 @@ const KitchenBEOPrintPage: React.FC = () => {
     }
   }, [selectedEventId, loadEventData]);
 
+  // Fetch stations (STATIONS field links to Stations table, not Menu Items)
+  useEffect(() => {
+    const stationIds = asLinkedRecordIds(selectedEventData?.[FIELD_IDS.STATIONS]) ?? [];
+    if (stationIds.length === 0) {
+      setStationsData([]);
+      return;
+    }
+    loadStationsByRecordIds(stationIds).then((result) => {
+      if (!isErrorResult(result)) setStationsData(result);
+      else setStationsData([]);
+    });
+  }, [selectedEventData]);
+
   // Fetch menu items with Item Name + Child Items (linked records)
+  // Exclude STATIONS — those are station IDs; we fetch stations separately and add station item IDs here
   useEffect(() => {
     const parentIds = new Set<string>();
     const eventTypeRaw = asSingleSelectName(selectedEventData?.[FIELD_IDS.EVENT_TYPE])?.toLowerCase() ?? "";
     const isDelivery = eventTypeRaw.includes("delivery") || eventTypeRaw.includes("pick up") || eventTypeRaw.includes("pickup");
     const fieldIdsToFetch = isDelivery
       ? DELIVERY_MENU_SECTION_CONFIG.flatMap((c) => c.fieldIds)
-      : MENU_SECTION_CONFIG.map((c) => c.fieldId);
+      : MENU_SECTION_CONFIG.map((c) => c.fieldId).filter((fid) => fid !== FIELD_IDS.STATIONS);
     fieldIdsToFetch.forEach((fid) => {
       const val = selectedEventData[fid];
       if (Array.isArray(val)) {
@@ -1101,15 +1119,24 @@ const KitchenBEOPrintPage: React.FC = () => {
         });
       }
     });
-    if (parentIds.size === 0) return;
-
     const apiKey = (import.meta.env.VITE_AIRTABLE_API_KEY as string)?.trim() || "";
     const baseId = (import.meta.env.VITE_AIRTABLE_BASE_ID as string)?.trim() || "";
     if (!apiKey || !baseId) return;
 
     const fetchMenuItems = async () => {
+      const stationIds = asLinkedRecordIds(selectedEventData?.[FIELD_IDS.STATIONS]) ?? [];
+      let stationItemIds: string[] = [];
+      if (stationIds.length > 0) {
+        const stationsResult = await loadStationsByRecordIds(stationIds);
+        if (!isErrorResult(stationsResult)) {
+          stationItemIds = stationsResult.flatMap((s) => s.stationItems).filter((id) => id?.startsWith("rec"));
+        }
+      }
+      const allIds = [...new Set([...parentIds, ...stationItemIds])];
+      if (allIds.length === 0) return;
+
       const newData: Record<string, { name: string; childIds: string[] }> = {};
-      const toFetch = [...parentIds];
+      const toFetch = [...allIds];
 
       const fetchChunk = async (ids: string[]) => {
         const formula = `OR(${ids.map((id) => `RECORD_ID()='${id}'`).join(",")})`;
@@ -1127,10 +1154,11 @@ const KitchenBEOPrintPage: React.FC = () => {
           data.records.forEach((rec: { id: string; fields: Record<string, unknown> }) => {
             const nameRaw = rec.fields[ITEM_NAME];
             const name = typeof nameRaw === "string" && nameRaw.trim() ? nameRaw.trim() : "—";
-            const childRaw = rec.fields[CHILD_ITEMS];
-            const childIds = Array.isArray(childRaw)
-              ? childRaw.filter((c): c is string => typeof c === "string" && c.startsWith("rec"))
+            const rawChildItems = (rec.fields[CHILD_ITEMS_FIELD_ID] ?? rec.fields["Child Items"]) ?? [];
+            const childIds = Array.isArray(rawChildItems)
+              ? rawChildItems.map((item: unknown) => (typeof item === "string" ? item : (item && typeof item === "object" && "id" in item ? String((item as { id?: string }).id ?? "") : ""))).filter((id) => id.startsWith("rec"))
               : [];
+            console.log("CHILD ITEMS (FINAL):", childIds);
             newData[rec.id] = {
               name,
               childIds,
@@ -1238,7 +1266,26 @@ const KitchenBEOPrintPage: React.FC = () => {
       }
     } else {
       for (const config of MENU_SECTION_CONFIG) {
-        const items = processField(config.fieldId);
+        let items: MenuItem[];
+        if (config.fieldId === FIELD_IDS.STATIONS) {
+          items = stationsData.map((st) => {
+            const itemLines: string[] = st.stationItems
+              .map((id) => menuItemData[id]?.name)
+              .filter((n): n is string => !!n && n !== "—");
+            const notesLines = (st.stationNotes || "")
+              .split(/\r?\n/)
+              .map((l) => l.trim())
+              .filter(Boolean);
+            const allLines = [...itemLines, ...notesLines];
+            return {
+              qty: "—",
+              name: st.stationType || "Station",
+              subItems: allLines.length > 0 ? allLines.map((text) => ({ text })) : undefined,
+            };
+          });
+        } else {
+          items = processField(config.fieldId);
+        }
         const customItems = config.customFieldId
           ? customTextToItems(asString(selectedEventData[config.customFieldId]))
           : [];

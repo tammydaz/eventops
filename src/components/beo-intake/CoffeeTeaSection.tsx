@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useEventStore } from "../../state/eventStore";
 import { FIELD_IDS } from "../../services/airtable/events";
 import { asString } from "../../services/airtable/selectors";
-import { FormSection } from "./FormSection";
+import { FormSection, labelStyle, textareaStyle } from "./FormSection";
 import type { CoffeeTea } from "./types";
 
 export const CoffeeTeaSection = () => {
@@ -60,7 +60,7 @@ export const CoffeeTeaSection = () => {
   };
 
   return (
-    <FormSection title="Coffee / Tea Service" icon="☕">
+    <FormSection title="Coffee / Tea Service">
       <div style={{ gridColumn: "1 / -1" }}>
         <label style={labelStyle}>Coffee Service Needed</label>
         <textarea
@@ -69,7 +69,7 @@ export const CoffeeTeaSection = () => {
           disabled={!canEdit}
           onChange={(e) => handleChange("coffeeServiceNeeded", e.target.value)}
           onBlur={(e) => handleBlur(FIELD_IDS.COFFEE_SERVICE_NEEDED, e.target.value)}
-          style={inputStyle}
+          style={textareaStyle}
           placeholder="Describe coffee/tea service requirements (regular/decaf, hot/iced tea, service style, etc.)"
         />
       </div>

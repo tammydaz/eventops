@@ -197,6 +197,92 @@ const PLACEHOLDER_CLIENT_BUSINESS_NAME = 'fldPLACEHOLDER_CLIENT_BUSINESS_NAME';
 const EVENTS_TS_PATH = 'src/services/airtable/events.ts';
 
 /**
+ * Ensure "Production Accepted" checkbox exists on Events table (for production color/blink flow).
+ * When Hard Lock is clicked, events turn color and blink until department accepts by clicking.
+ */
+async function ensureProductionAccepted() {
+  console.log('\n🔧 Ensuring "Production Accepted" field exists on Events table...\n');
+
+  const data = await airtableMetaRequest(`/bases/${AIRTABLE_BASE_ID}/tables`);
+  const eventsTable = data.tables.find(t => t.id === AIRTABLE_EVENTS_TABLE_ID);
+  if (!eventsTable) {
+    console.error(`❌ Events table (${AIRTABLE_EVENTS_TABLE_ID}) not found`);
+    process.exit(1);
+  }
+
+  const fieldName = 'Production Accepted';
+  let fieldId = eventsTable.fields.find(f => f.name === fieldName)?.id;
+
+  if (fieldId) {
+    console.log(`✅ Field "${fieldName}" already exists.`);
+    console.log(`   ID: ${fieldId}\n`);
+  } else {
+    console.log(`⏳ Creating field "${fieldName}" (checkbox)...\n`);
+    const response = await airtableMetaRequest(
+      `/bases/${AIRTABLE_BASE_ID}/tables/${AIRTABLE_EVENTS_TABLE_ID}/fields`,
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          name: fieldName,
+          type: 'checkbox',
+          options: { icon: 'check', color: 'greenBright' },
+        }),
+      }
+    );
+    fieldId = response.id;
+    console.log(`✅ Field created. ID: ${fieldId}\n`);
+  }
+
+  console.log('📋 This field is used by getLockoutFieldIds() (resolved by name).');
+  console.log('   No code changes needed — the app looks up "Production Accepted" by name.\n');
+}
+
+/** Department acceptance field names (each department has its own). */
+const DEPT_ACCEPTANCE_FIELDS = [
+  'Production Accepted',           // Kitchen (legacy, keep as-is)
+  'Production Accepted (Flair)',
+  'Production Accepted (Delivery)',
+  'Production Accepted (Ops Chief)',
+];
+
+/**
+ * Ensure per-department Production Accepted checkboxes exist.
+ * Each department accepts independently; event blinks for a department until that department accepts.
+ */
+async function ensureDepartmentAcceptanceFields() {
+  console.log('\n🔧 Ensuring per-department Production Accepted fields exist...\n');
+
+  const data = await airtableMetaRequest(`/bases/${AIRTABLE_BASE_ID}/tables`);
+  const eventsTable = data.tables.find(t => t.id === AIRTABLE_EVENTS_TABLE_ID);
+  if (!eventsTable) {
+    console.error(`❌ Events table (${AIRTABLE_EVENTS_TABLE_ID}) not found`);
+    process.exit(1);
+  }
+
+  for (const fieldName of DEPT_ACCEPTANCE_FIELDS) {
+    const existing = eventsTable.fields.find(f => f.name === fieldName);
+    if (existing) {
+      console.log(`✅ "${fieldName}" already exists (${existing.id})`);
+    } else {
+      console.log(`⏳ Creating "${fieldName}" (checkbox)...`);
+      const response = await airtableMetaRequest(
+        `/bases/${AIRTABLE_BASE_ID}/tables/${AIRTABLE_EVENTS_TABLE_ID}/fields`,
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            name: fieldName,
+            type: 'checkbox',
+            options: { icon: 'check', color: 'greenBright' },
+          }),
+        }
+      );
+      console.log(`   Created. ID: ${response.id}`);
+    }
+  }
+  console.log('\n✅ Done. App resolves these by name via getLockoutFieldIds().\n');
+}
+
+/**
  * Ensure "Client Business Name" exists on Events table; create if not. Print or write field ID.
  */
 async function ensureClientBusinessName() {
@@ -253,6 +339,8 @@ async function main() {
     console.log('Usage:');
     console.log('  npm run schema read');
     console.log('  npm run schema add "Field Name" "fieldType"');
+    console.log('  npm run schema ensure-production-accepted');
+    console.log('  npm run schema ensure-department-acceptance');
     console.log('  npm run schema ensure-client-business-name\n');
     console.log('Examples:');
     console.log('  npm run schema read');
@@ -272,13 +360,21 @@ async function main() {
       await addField(fieldName, fieldType);
       break;
 
+    case 'ensure-production-accepted':
+      await ensureProductionAccepted();
+      break;
+
+    case 'ensure-department-acceptance':
+      await ensureDepartmentAcceptanceFields();
+      break;
+
     case 'ensure-client-business-name':
       await ensureClientBusinessName();
       break;
 
     default:
       console.error(`❌ Unknown command: ${command}`);
-      console.log('\nAvailable commands: read, add, ensure-client-business-name\n');
+      console.log('\nAvailable commands: read, add, ensure-production-accepted, ensure-department-acceptance, ensure-client-business-name\n');
       process.exit(1);
   }
 }

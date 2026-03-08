@@ -1,0 +1,25 @@
+{
+  "exportedAt": "2026-03-07T19:05:06.772Z",
+  "stations": [
+    {
+      "id": "rec2V3AGVNCJawev7",
+      "stationType": "",
+      "stationItems": [],
+      "stationNotes": ""
+    },
+    {
+      "id": "recbsxIgoHGTdWzy2",
+      "stationType": "",
+      "stationItems": [],
+      "stationNotes": ""
+    },
+    {
+      "id": "recjS9yy4yWOd9kjE",
+      "stationType": "Carving Station",
+      "stationItems": [],
+      "stationNotes": ""
+    }
+  ],
+  "presets": [],
+  "stationTypeToItemIds": {}
+}

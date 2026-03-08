@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useEventStore } from "../../state/eventStore";
 import { FIELD_IDS, loadSingleSelectOptions } from "../../services/airtable/events";
 import { asString } from "../../services/airtable/selectors";
-import { FormSection } from "./FormSection";
+import { FormSection, inputStyle, labelStyle } from "./FormSection";
 
 export const HydrationStationSection = () => {
   const { selectedEventId, selectedEventData, setFields } = useEventStore();
@@ -58,26 +58,8 @@ export const HydrationStationSection = () => {
 
   const canEdit = Boolean(selectedEventId);
 
-  const inputStyle = {
-    width: "100%",
-    padding: "12px",
-    borderRadius: "8px",
-    border: "1px solid #444",
-    backgroundColor: "#1a1a1a",
-    color: "#e0e0e0",
-    fontSize: "14px",
-  };
-
-  const labelStyle = {
-    display: "block",
-    fontSize: "11px",
-    color: "#999",
-    marginBottom: "6px",
-    fontWeight: "600",
-  };
-
   return (
-    <FormSection title="Hydration Station" icon="💧">
+    <FormSection title="Hydration Station">
       <div>
         <label style={labelStyle}>Infused Water</label>
         <input 

@@ -5,7 +5,11 @@ import type { ViewMode, HealthStatus } from "../components/dashboard/EventCard";
 import { useEventStore } from "../state/eventStore";
 import { useAuthStore } from "../state/authStore";
 import { canAccessRoute, ROLE_DEPARTMENTS } from "../lib/auth";
+import { getProductionColor, shouldBlink, shouldBlinkForDepartment, PRODUCTION_COLORS, type DepartmentKey } from "../lib/productionHelpers";
+import type { QuestionTargetDepartment } from "../state/questionStore";
 import type { EventListItem } from "../services/airtable/events";
+import { AcceptTransferModal } from "../components/AcceptTransferModal";
+import { AskFOHPopover } from "../components/AskFOHPopover";
 
 /* ═══════════════════════════════════════════
    EVENT DATA (from Airtable)
@@ -23,7 +27,30 @@ interface EventData {
   serviceStyle: string;
   healthFOH: HealthStatus;
   healthBOH: HealthStatus;
+  guestCountConfirmed?: boolean;
+  menuAcceptedByKitchen?: boolean;
+  productionAccepted?: boolean;
+  productionAcceptedFlair?: boolean;
+  productionAcceptedDelivery?: boolean;
+  productionAcceptedOpsChief?: boolean;
+  isDemo?: boolean;
 }
+
+/* ── Demo events for 10-Day Pipeline (fill when sparse) ── */
+const DEMO_TEMPLATES: Array<Omit<EventData, "eventDate" | "time" | "id"> & { dayOffset: number }> = [
+  { dayOffset: 0, name: "Smith Wedding – Riverside Manor", client: "Smith Family", venue: "Riverside Manor", guests: 180, category: "Wedding", eventType: "Full Service", serviceStyle: "Plated", healthFOH: "green", healthBOH: "green", isDemo: true },
+  { dayOffset: 0, name: "TechCorp Q1 Summit – Convention Center", client: "TechCorp", venue: "Convention Center", guests: 320, category: "Corporate", eventType: "Full Service", serviceStyle: "Buffet", healthFOH: "green", healthBOH: "green", isDemo: true },
+  { dayOffset: 1, name: "Holloway Anniversary – The Grand Ballroom", client: "Holloway Family", venue: "The Grand Ballroom", guests: 120, category: "Celebration", eventType: "Full Service", serviceStyle: "Plated", healthFOH: "green", healthBOH: "green", isDemo: true },
+  { dayOffset: 2, name: "Green Acres Box Lunch – Barn Venue", client: "Green Acres Org", venue: "Barn Venue", guests: 85, category: "Corporate", eventType: "Delivery", serviceStyle: "Drop-off", healthFOH: "green", healthBOH: "green", isDemo: true, guestCountConfirmed: true, menuAcceptedByKitchen: true, productionAcceptedDelivery: true },
+  { dayOffset: 3, name: "Rivera Quinceañera – La Fiesta Hall", client: "Rivera Family", venue: "La Fiesta Hall", guests: 200, category: "Celebration", eventType: "Full Service", serviceStyle: "Buffet", healthFOH: "green", healthBOH: "green", isDemo: true },
+  { dayOffset: 4, name: "Office Luncheon – Downtown Tower", client: "Downtown Corp", venue: "Downtown Tower", guests: 55, category: "Corporate", eventType: "Delivery", serviceStyle: "Drop-off", healthFOH: "green", healthBOH: "green", isDemo: true, guestCountConfirmed: true, menuAcceptedByKitchen: true, productionAcceptedDelivery: false },
+  { dayOffset: 5, name: "Apex Digital Awards – Hotel Grand", client: "Apex Digital", venue: "Hotel Grand", guests: 250, category: "Corporate", eventType: "Full Service", serviceStyle: "Plated", healthFOH: "green", healthBOH: "green", isDemo: true },
+  { dayOffset: 6, name: "Johnson Birthday – Private Residence", client: "Johnson Family", venue: "Private Residence", guests: 45, category: "Birthday", eventType: "Delivery", serviceStyle: "Drop-off", healthFOH: "green", healthBOH: "green", isDemo: true, guestCountConfirmed: true, menuAcceptedByKitchen: true, productionAcceptedDelivery: false },
+  { dayOffset: 7, name: "Spring Gala Fundraiser – Museum of Art", client: "Museum Foundation", venue: "Museum of Art", guests: 400, category: "Fundraiser", eventType: "Full Service", serviceStyle: "Stations", healthFOH: "green", healthBOH: "green", isDemo: true },
+  { dayOffset: 9, name: "Williams Rehearsal Dinner – Vineyard Estate", client: "Williams Family", venue: "Vineyard Estate", guests: 60, category: "Wedding", eventType: "Full Service", serviceStyle: "Plated", healthFOH: "green", healthBOH: "green", isDemo: true },
+];
+
+const MIN_EVENTS_TO_FILL = 6;
 
 function formatEventDate(d?: string): string {
   if (!d) return "—";
@@ -55,7 +82,47 @@ function listItemToEventData(e: EventListItem): EventData {
     serviceStyle: e.serviceStyle ?? "—",
     healthFOH: "green",
     healthBOH: "green",
+    guestCountConfirmed: e.guestCountConfirmed,
+    menuAcceptedByKitchen: e.menuAcceptedByKitchen,
+    productionAccepted: e.productionAccepted,
+    productionAcceptedFlair: e.productionAcceptedFlair,
+    productionAcceptedDelivery: e.productionAcceptedDelivery,
+    productionAcceptedOpsChief: e.productionAcceptedOpsChief,
   };
+}
+
+function getDemoEventsForPipeline(today: string, endDate: string, excludeIds: Set<string>): EventData[] {
+  const start = new Date(today);
+  return DEMO_TEMPLATES
+    .filter((_, i) => !excludeIds.has(`demo_${i + 1}`))
+    .map((t, i) => {
+      const d = new Date(start);
+      d.setDate(d.getDate() + t.dayOffset);
+      const eventDate = d.toISOString().slice(0, 10);
+      if (eventDate > endDate) return null;
+      return {
+        id: `demo_${i + 1}`,
+        eventDate,
+        name: t.name,
+        time: formatEventDate(eventDate),
+        client: t.client,
+        venue: t.venue,
+        guests: t.guests,
+        category: t.category,
+        eventType: t.eventType,
+        serviceStyle: t.serviceStyle,
+        healthFOH: t.healthFOH,
+        healthBOH: t.healthBOH,
+        isDemo: true,
+        guestCountConfirmed: t.guestCountConfirmed,
+        menuAcceptedByKitchen: t.menuAcceptedByKitchen,
+        productionAccepted: t.productionAccepted,
+        productionAcceptedFlair: t.productionAcceptedFlair,
+        productionAcceptedDelivery: t.productionAcceptedDelivery,
+        productionAcceptedOpsChief: t.productionAcceptedOpsChief,
+      } as EventData;
+    })
+    .filter((e): e is EventData => e !== null);
 }
 
 /* ── Health color map ── */
@@ -86,10 +153,11 @@ const NAV: NavItem[] = [
 
 /* ── Department sub-items (inside Departments expandable) ── */
 const DEPT_ITEMS = [
-  { id: "kitchen",   label: "Kitchen",                href: "/kitchen-prep" },
+  { id: "kitchen",   label: "Kitchen",                href: "/kitchen" },
   { id: "logistics", label: "Delivery & Operations Hub", href: "/delivery-command" },
   { id: "intake",    label: "Central Command Center", href: "/quick-intake" },
-  { id: "flair",     label: "Flair/Equipment",       href: "/returned-equipment" },
+  { id: "intake_foh", label: "Intake/FOH",            href: "/intake-foh" },
+  { id: "flair",     label: "Flair/Equipment",       href: "/flair" },
   { id: "feedback",  label: "Suggestions / Questions / Bugs", href: "/feedback-issues" },
 ];
 
@@ -101,13 +169,13 @@ const todayStr = () => new Date().toISOString().slice(0, 10);
 export default function DashboardPage() {
   const navigate = useNavigate();
   const { user, logout } = useAuthStore();
-  const { events: rawEvents, loadEvents, selectEvent, eventsLoading, eventsError } = useEventStore();
+  const { events: rawEvents, loadEvents, selectEvent, setFields, eventsLoading, eventsError } = useEventStore();
   const role = user?.role ?? "ops_admin";
   const allowedDepts = ROLE_DEPARTMENTS[role] ?? [];
   const visibleDeptItems = DEPT_ITEMS.filter((d) => role === "ops_admin" || allowedDepts.includes(d.id) || d.id === "feedback");
   const visibleNav = NAV.filter((item) => item.href.startsWith("#") || canAccessRoute(role, item.href));
   const [departmentsOpen, setDepartmentsOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState("Upcoming");
+  const [activeTab, setActiveTab] = useState("10-Day Pipeline");
   const viewMode: ViewMode = "owner";
   const [sortBy, setSortBy] = useState<"date" | "client" | "venue" | "eventType" | "serviceStyle">("date");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
@@ -117,9 +185,8 @@ export default function DashboardPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [taglineSettled, setTaglineSettled] = useState(false);
+  const [pendingAcceptEvent, setPendingAcceptEvent] = useState<EventData | null>(null);
   const searchWrapRef = useRef<HTMLDivElement>(null);
-
-  const tabs = ["Live Events", "Upcoming", "Completed", "Archive"];
 
   useEffect(() => {
     const t = setTimeout(() => setTaglineSettled(true), 5000);
@@ -142,12 +209,30 @@ export default function DashboardPage() {
 
   const eventDataList = useMemo(() => rawEvents.map(listItemToEventData), [rawEvents]);
   const today = todayStr();
+  const endDate10 = useMemo(() => {
+    const d = new Date(today);
+    d.setDate(d.getDate() + 10);
+    return d.toISOString().slice(0, 10);
+  }, [today]);
   const filteredEvents = useMemo(() => {
-    if (activeTab === "Live Events") return eventDataList.filter((e) => e.eventDate === today);
-    if (activeTab === "Upcoming") return eventDataList.filter((e) => (e.eventDate ?? "") >= today);
+    if (activeTab === "Today's Events") return eventDataList.filter((e) => e.eventDate === today);
+    if (activeTab === "10-Day Pipeline") {
+      const real = eventDataList.filter((e) => {
+        const d = e.eventDate ?? "";
+        return d >= today && d <= endDate10;
+      });
+      const realIds = new Set(real.map((e) => e.id));
+      const demos = getDemoEventsForPipeline(today, endDate10, realIds);
+      const combined = [...real, ...demos].sort((a, b) => (a.eventDate ?? "").localeCompare(b.eventDate ?? ""));
+      if (combined.length >= MIN_EVENTS_TO_FILL) return combined;
+      const usedIds = new Set(combined.map((e) => e.id));
+      const extra = getDemoEventsForPipeline(today, endDate10, usedIds).slice(0, MIN_EVENTS_TO_FILL - combined.length);
+      return [...combined, ...extra].sort((a, b) => (a.eventDate ?? "").localeCompare(b.eventDate ?? ""));
+    }
+    if (activeTab === "Upcoming Events") return eventDataList.filter((e) => (e.eventDate ?? "") >= today);
     if (activeTab === "Completed" || activeTab === "Archive") return eventDataList.filter((e) => (e.eventDate ?? "") < today);
     return eventDataList;
-  }, [eventDataList, activeTab, today]);
+  }, [eventDataList, activeTab, today, endDate10]);
 
   const events = useMemo(() => {
     const arr = [...filteredEvents];
@@ -176,14 +261,56 @@ export default function DashboardPage() {
     );
   }, [eventDataList, searchQuery]);
 
-  const handleSelectEvent = (id: string) => {
-    selectEvent(id);
+  const dashboardDept: DepartmentKey | null = role === "kitchen" ? "kitchen" : role === "flair" ? "flair" : role === "logistics" ? "delivery" : null;
+  const viewingDepartment: QuestionTargetDepartment | null = dashboardDept ?? (role === "intake" || role === "foh" ? "intake_foh" : null);
+  const handleSelectEvent = (evt: EventData) => {
+    if (evt.isDemo) return;
+    const blink = dashboardDept ? shouldBlinkForDepartment(evt, dashboardDept) : shouldBlink(evt);
+    if (blink) {
+      setPendingAcceptEvent(evt);
+      return;
+    }
+    selectEvent(evt.id);
     setSearchQuery("");
     navigate("/beo-intake");
   };
 
+  const handleAcceptTransfer = async (initials: string) => {
+    if (!pendingAcceptEvent) return;
+    const { getLockoutFieldIds } = await import("../services/airtable/events");
+    const ids = await getLockoutFieldIds();
+    if (ids) {
+      const userRole = user?.role ?? "ops_admin";
+      const fieldId = userRole === "kitchen" ? ids.productionAccepted
+        : userRole === "flair" ? ids.productionAcceptedFlair
+        : userRole === "logistics" ? ids.productionAcceptedDelivery
+        : ids.productionAccepted; // ops_admin defaults to kitchen
+      if (fieldId) {
+        await setFields(pendingAcceptEvent.id, { [fieldId]: true });
+        await loadEvents();
+      }
+    }
+    selectEvent(pendingAcceptEvent.id);
+    setSearchQuery("");
+    setPendingAcceptEvent(null);
+    const userRole = user?.role ?? "ops_admin";
+    if (userRole === "kitchen") {
+      navigate(`/beo-print/${pendingAcceptEvent.id}`);
+    } else if (userRole === "flair") {
+      navigate(`/beo-print/${pendingAcceptEvent.id}`);
+    } else {
+      navigate("/beo-intake");
+    }
+  };
+
   return (
     <div className="dp-container">
+      <AcceptTransferModal
+        open={!!pendingAcceptEvent}
+        onClose={() => setPendingAcceptEvent(null)}
+        eventName={pendingAcceptEvent?.name ?? ""}
+        onAccept={handleAcceptTransfer}
+      />
       {/* ═══ SIDEBAR ═══ */}
       <aside className="dp-sidebar">
         <div className="dp-logo-section">
@@ -332,7 +459,7 @@ export default function DashboardPage() {
                       key={evt.id}
                       type="button"
                       className="dp-search-item"
-                      onMouseDown={(e) => { e.preventDefault(); handleSelectEvent(evt.id); }}
+                      onMouseDown={(e) => { e.preventDefault(); handleSelectEvent(evt); }}
                     >
                       <span className="dp-search-item-name">{evt.name}</span>
                       <span className="dp-search-item-meta">{evt.time} · {evt.guests} guests</span>
@@ -351,83 +478,87 @@ export default function DashboardPage() {
           </div>
         </header>
 
-        {/* ── Tabs ── */}
-        <div className="dp-tabs">
-          {tabs.map((tab) => (
-            <button
-              key={tab}
-              className={`dp-tab ${tab === activeTab ? "active" : ""}`}
-              onClick={() => setActiveTab(tab)}
-            >
-              {tab}
-            </button>
-          ))}
-
-          {/* Quick health summary on right side of tabs */}
-          <div className="dp-tab-stats">
-            <span className="dp-stat-count">{events.length} events</span>
-            <span className="dp-stat-guests">{events.reduce((s, e) => s + e.guests, 0).toLocaleString()} guests</span>
+        {/* ── Filter + Sort (left) + View options (right) ── */}
+        <div className="dp-tabs-toolbar">
+          <div className="dp-tabs-left">
+            <div className="dp-toolbar-sort">
+              <label htmlFor="dp-view-select" className="dp-toolbar-label">View</label>
+              <select
+                id="dp-view-select"
+                className="dp-toolbar-select"
+                value={activeTab}
+                onChange={(e) => setActiveTab(e.target.value)}
+              >
+                <option value="Today's Events">Today's Events</option>
+                <option value="10-Day Pipeline">10 Day View</option>
+                <option value="Upcoming Events">Upcoming Events</option>
+                <option value="Completed">Completed</option>
+                <option value="Archive">Archive</option>
+              </select>
+            </div>
+            <div className="dp-toolbar-sort">
+              <label htmlFor="dp-sort-select" className="dp-toolbar-label">Sort by</label>
+              <select
+                id="dp-sort-select"
+                className="dp-toolbar-select"
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
+              >
+                <option value="date">Date</option>
+                <option value="client">Client</option>
+                <option value="venue">Venue</option>
+                <option value="eventType">Event Type</option>
+                <option value="serviceStyle">Service Style</option>
+              </select>
+              <button
+                type="button"
+                className="dp-toolbar-sort-dir"
+                onClick={() => setSortDir((d) => (d === "asc" ? "desc" : "asc"))}
+                title={sortDir === "asc" ? "Ascending (click for descending)" : "Descending (click for ascending)"}
+              >
+                {sortDir === "asc" ? "↑" : "↓"}
+              </button>
+            </div>
+          </div>
+          <div className="dp-tabs-right">
+            <div className="dp-toolbar-view">
+              <span className="dp-toolbar-view-label">View</span>
+              <button
+                type="button"
+                className={`dp-toolbar-view-btn ${eventView === "grid" ? "active" : ""}`}
+                onClick={() => setEventView("grid")}
+                title="Grid view"
+                aria-pressed={eventView === "grid"}
+              >
+                ⊞ Grid
+              </button>
+              <button
+                type="button"
+                className={`dp-toolbar-view-btn ${eventView === "list" ? "active" : ""}`}
+                onClick={() => setEventView("list")}
+                title="List view"
+                aria-pressed={eventView === "list"}
+              >
+                ☰ List
+              </button>
+              <button
+                type="button"
+                className={`dp-toolbar-view-btn ${eventView === "calendar" ? "active" : ""}`}
+                onClick={() => setEventView("calendar")}
+                title="Calendar view"
+                aria-pressed={eventView === "calendar"}
+              >
+                📅 Calendar
+              </button>
+            </div>
+            <div className="dp-tab-stats">
+              <span className="dp-stat-count">{events.length} events</span>
+              <span className="dp-stat-guests">{events.reduce((s, e) => s + e.guests, 0).toLocaleString()} guests</span>
+            </div>
           </div>
         </div>
 
-        {/* ── Sort & View Toolbar ── */}
-        <div className="dp-toolbar">
-          <div className="dp-toolbar-sort">
-            <label htmlFor="dp-sort-select" className="dp-toolbar-label">Sort by</label>
-            <select
-              id="dp-sort-select"
-              className="dp-toolbar-select"
-              value={sortBy}
-              onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
-            >
-              <option value="date">Date</option>
-              <option value="client">Client</option>
-              <option value="venue">Venue</option>
-              <option value="eventType">Event Type</option>
-              <option value="serviceStyle">Service Style</option>
-            </select>
-            <button
-              type="button"
-              className="dp-toolbar-sort-dir"
-              onClick={() => setSortDir((d) => (d === "asc" ? "desc" : "asc"))}
-              title={sortDir === "asc" ? "Ascending (click for descending)" : "Descending (click for ascending)"}
-            >
-              {sortDir === "asc" ? "↑" : "↓"}
-            </button>
-          </div>
-          <div className="dp-toolbar-view">
-            <span className="dp-toolbar-view-label">View</span>
-            <button
-              type="button"
-              className={`dp-toolbar-view-btn ${eventView === "grid" ? "active" : ""}`}
-              onClick={() => setEventView("grid")}
-              title="Grid view"
-              aria-pressed={eventView === "grid"}
-            >
-              ⊞ Grid
-            </button>
-            <button
-              type="button"
-              className={`dp-toolbar-view-btn ${eventView === "list" ? "active" : ""}`}
-              onClick={() => setEventView("list")}
-              title="List view"
-              aria-pressed={eventView === "list"}
-            >
-              ☰ List
-            </button>
-            <button
-              type="button"
-              className={`dp-toolbar-view-btn ${eventView === "calendar" ? "active" : ""}`}
-              onClick={() => setEventView("calendar")}
-              title="Calendar view"
-              aria-pressed={eventView === "calendar"}
-            >
-              📅 Calendar
-            </button>
-          </div>
-        </div>
-
-        {/* ── Events Grid / List ── */}
+        {/* ── Events Grid / List / Calendar ── */}
         <div className="dp-events-area">
           {eventsError && (
             <div className="dp-events-error">
@@ -447,14 +578,14 @@ export default function DashboardPage() {
                   <div className="dp-events-empty">
                     <p>No events in &quot;{activeTab}&quot;</p>
                     <p className="dp-events-empty-hint">
-                      {activeTab === "Live Events" && "Try the Upcoming tab, or add an event."}
-                      {activeTab === "Upcoming" && "Add an event via Quick Intake or Upload Invoice."}
+                      {activeTab === "Today's Events" && "Try the 10-Day Pipeline or Upcoming Events, or add an event."}
+                      {(activeTab === "10-Day Pipeline" || activeTab === "Upcoming Events") && "Add an event via Quick Intake or Upload Invoice."}
                       {(activeTab === "Completed" || activeTab === "Archive") && "Past events will appear here."}
                     </p>
                   </div>
                 ) : (
                   events.map((evt) => (
-                    <PremiumCard key={evt.id} event={evt} viewMode={viewMode} onSelect={() => handleSelectEvent(evt.id)} />
+                    <PremiumCard key={evt.id} event={evt} viewMode={viewMode} departmentKey={dashboardDept} viewingDepartment={viewingDepartment} onSelect={evt.isDemo ? undefined : () => handleSelectEvent(evt)} />
                   ))
                 )}
               </div>
@@ -517,23 +648,29 @@ export default function DashboardPage() {
                       <div className="dp-calendar-days">
                         {cells.map((cell, i) => (
                           <div key={i} className={`dp-calendar-cell ${cell.day === null ? "empty" : ""}`}>
-                            {cell.day !== null && (
+                                {cell.day !== null && (
                               <>
                                 <div className="dp-calendar-day-num">{cell.day}</div>
                                 {cell.dateStr && byDate[cell.dateStr] && (
                                   <div className="dp-calendar-day-events">
-                                    {byDate[cell.dateStr].map((evt) => (
-                                      <div
-                                        key={evt.id}
-                                        className="dp-calendar-event"
-                                        role="button"
-                                        tabIndex={0}
-                                        onClick={() => handleSelectEvent(evt.id)}
-                                        onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && handleSelectEvent(evt.id)}
-                                      >
-                                        {evt.name}
-                                      </div>
-                                    ))}
+                                    {byDate[cell.dateStr].map((evt) => {
+                                      const prodColor = getProductionColor(evt);
+                                      const canSelect = !evt.isDemo;
+                                      return (
+                                        <div
+                                          key={evt.id}
+                                          className={`dp-calendar-event ${!evt.isDemo && (dashboardDept ? shouldBlinkForDepartment(evt, dashboardDept) : shouldBlink(evt)) ? "dp-calendar-event-blink" : ""} ${evt.isDemo ? "dp-calendar-event-demo" : ""}`}
+                                          data-production={prodColor}
+                                          role={canSelect ? "button" : undefined}
+                                          tabIndex={canSelect ? 0 : undefined}
+                                          onClick={() => canSelect && handleSelectEvent(evt)}
+                                          onKeyDown={(e) => canSelect && (e.key === "Enter" || e.key === " ") && handleSelectEvent(evt)}
+                                        >
+                                          {evt.name}
+                                          {evt.isDemo && <span className="dp-calendar-event-demo-badge">Demo</span>}
+                                        </div>
+                                      );
+                                    })}
                                   </div>
                                 )}
                               </>
@@ -551,8 +688,8 @@ export default function DashboardPage() {
                   <div className="dp-events-empty">
                     <p>No events in &quot;{activeTab}&quot;</p>
                     <p className="dp-events-empty-hint">
-                      {activeTab === "Live Events" && "Try the Upcoming tab, or add an event."}
-                      {activeTab === "Upcoming" && "Add an event via Quick Intake or Upload Invoice."}
+                      {activeTab === "Today's Events" && "Try the 10-Day Pipeline or Upcoming Events, or add an event."}
+                      {(activeTab === "10-Day Pipeline" || activeTab === "Upcoming Events") && "Add an event via Quick Intake or Upload Invoice."}
                       {(activeTab === "Completed" || activeTab === "Archive") && "Past events will appear here."}
                     </p>
                   </div>
@@ -566,34 +703,40 @@ export default function DashboardPage() {
                       <div className="dp-list-col dp-list-col-guests">Guests</div>
                       <div className="dp-list-col dp-list-col-category">Category</div>
                     </div>
-                    {events.map((evt) => (
-                      <div
-                        key={evt.id}
-                        className="dp-list-row"
-                        role="button"
-                        tabIndex={0}
-                        onClick={() => handleSelectEvent(evt.id)}
-                        onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && handleSelectEvent(evt.id)}
-                      >
-                        <div className="dp-list-col dp-list-col-date">{evt.time}</div>
-                        <div className="dp-list-col dp-list-col-name">{evt.name}</div>
-                        <div className="dp-list-col dp-list-col-client">{evt.client}</div>
-                        <div className="dp-list-col dp-list-col-venue">{evt.venue}</div>
-                        <div className="dp-list-col dp-list-col-guests">{evt.guests}</div>
-                        <div className="dp-list-col dp-list-col-category">
-                          <span
-                            className="dp-list-pill"
-                            style={{
-                              color: CAT_COLORS[evt.category] ?? "#ff9999",
-                              backgroundColor: `${CAT_COLORS[evt.category] ?? "#ff9999"}18`,
-                              borderColor: `${CAT_COLORS[evt.category] ?? "#ff9999"}40`,
-                            }}
-                          >
-                            {evt.category}
-                          </span>
+                        {events.map((evt) => {
+                      const prodColor = getProductionColor(evt);
+                      const colorHex = PRODUCTION_COLORS[prodColor];
+                      const canSelect = !evt.isDemo;
+                      return (
+                        <div
+                          key={evt.id}
+                          className={`dp-list-row ${canSelect && (dashboardDept ? shouldBlinkForDepartment(evt, dashboardDept) : shouldBlink(evt)) ? "dp-list-row-blink" : ""} ${evt.isDemo ? "dp-list-row-demo" : ""}`}
+                          data-production={prodColor}
+                          role={canSelect ? "button" : undefined}
+                          tabIndex={canSelect ? 0 : undefined}
+                          onClick={() => canSelect && handleSelectEvent(evt)}
+                          onKeyDown={(e) => canSelect && (e.key === "Enter" || e.key === " ") && handleSelectEvent(evt)}
+                        >
+                          <div className="dp-list-col dp-list-col-date">{evt.time}</div>
+                          <div className="dp-list-col dp-list-col-name">{evt.name}</div>
+                          <div className="dp-list-col dp-list-col-client">{evt.client}</div>
+                          <div className="dp-list-col dp-list-col-venue">{evt.venue}</div>
+                          <div className="dp-list-col dp-list-col-guests">{evt.guests}</div>
+                          <div className="dp-list-col dp-list-col-category">
+                            <span
+                              className="dp-list-pill"
+                              style={{
+                                color: colorHex,
+                                backgroundColor: `${colorHex}18`,
+                                borderColor: `${colorHex}40`,
+                              }}
+                            >
+                              {evt.category}
+                            </span>
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </>
                 )}
               </div>
@@ -608,67 +751,40 @@ export default function DashboardPage() {
 /* ═══════════════════════════════════════════
    PREMIUM EVENT CARD (INLINE)
    ═══════════════════════════════════════════ */
-function PremiumCard({ event, viewMode, onSelect }: { event: EventData; viewMode: ViewMode; onSelect?: () => void }) {
-  const pillColor = CAT_COLORS[event.category] ?? "#ff9999";
+function PremiumCard({ event, viewMode, onSelect, departmentKey, viewingDepartment }: { event: EventData; viewMode: ViewMode; onSelect?: () => void; departmentKey?: DepartmentKey | null; viewingDepartment?: QuestionTargetDepartment | null }) {
+  const prodColor = getProductionColor(event);
+  const blinking = !event.isDemo && (departmentKey ? shouldBlinkForDepartment(event, departmentKey) : shouldBlink(event));
 
   return (
-    <article
-      className={`dp-card ${onSelect ? "dp-card-clickable" : ""}`}
-      role={onSelect ? "button" : undefined}
-      tabIndex={onSelect ? 0 : undefined}
-      onClick={onSelect}
-      onKeyDown={(e) => onSelect && (e.key === "Enter" || e.key === " ") && onSelect()}
-    >
-      {/* Top neon line */}
-      <div className="dp-card-neon-top" />
-
-      {/* Header */}
-      <div className="dp-card-header">
-        <div className="dp-card-info">
-          <div className="dp-card-name">{event.name}</div>
-          <div className="dp-card-time">{event.time}</div>
-        </div>
-        <div className="dp-card-menu">⋮</div>
-      </div>
-
-      {/* Category pill */}
-      <span
-        className="dp-card-pill"
-        style={{
-          color: pillColor,
-          backgroundColor: `${pillColor}18`,
-          borderColor: `${pillColor}40`,
-        }}
+    <AskFOHPopover eventId={event.id} eventName={event.name} viewingDepartment={viewingDepartment ?? null} disabled={event.isDemo}>
+      <article
+        className={`dp-card dp-card-production dp-card-${prodColor} ${blinking ? "dp-card-blink" : ""} ${onSelect ? "dp-card-clickable" : ""} ${event.isDemo ? "dp-card-demo" : ""}`}
+        data-production={prodColor}
+        role={onSelect ? "button" : undefined}
+        tabIndex={onSelect ? 0 : undefined}
+        onClick={onSelect}
+        onKeyDown={(e) => onSelect && (e.key === "Enter" || e.key === " ") && onSelect()}
       >
-        {event.category}
-      </span>
+        {/* Top neon line */}
+        <div className="dp-card-neon-top" />
 
-      {/* Details */}
-      <div className="dp-card-details">
-        <div className="dp-card-row">
-          <span className="dp-card-label">Client:</span>
-          <span className="dp-card-value">{event.client}</span>
+        {/* Client + Event name */}
+        <div className="dp-card-header dp-card-header-tight">
+          <div className="dp-card-client">{event.client}</div>
+          <div className="dp-card-name">{event.name}</div>
         </div>
-        <div className="dp-card-row">
-          <span className="dp-card-label">Venue:</span>
-          <span className="dp-card-value">{event.venue}</span>
-        </div>
-        <div className="dp-card-row">
-          <span className="dp-card-label">Guests:</span>
-          <span className="dp-card-value">{event.guests}</span>
-        </div>
-      </div>
 
-      {/* Health Lights */}
-      <div className="dp-card-health">
-        {(viewMode === "owner" || viewMode === "foh") && (
-          <HealthLight status={event.healthFOH} label={viewMode === "owner" ? "FOH" : HEALTH[event.healthFOH].label} />
-        )}
-        {(viewMode === "owner" || viewMode === "boh") && (
-          <HealthLight status={event.healthBOH} label={viewMode === "owner" ? "BOH" : HEALTH[event.healthBOH].label} />
-        )}
-      </div>
-    </article>
+        {/* Health Lights */}
+        <div className="dp-card-health">
+          {(viewMode === "owner" || viewMode === "foh") && (
+            <HealthLight status={event.healthFOH} label={viewMode === "owner" ? "FOH" : HEALTH[event.healthFOH].label} />
+          )}
+          {(viewMode === "owner" || viewMode === "boh") && (
+            <HealthLight status={event.healthBOH} label={viewMode === "owner" ? "BOH" : HEALTH[event.healthBOH].label} />
+          )}
+        </div>
+      </article>
+    </AskFOHPopover>
   );
 }
 

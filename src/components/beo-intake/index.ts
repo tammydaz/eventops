@@ -7,3 +7,4 @@ export { KitchenAndServicewareSection } from "./KitchenAndServicewareSection";
 export { SiteVisitLogisticsSection } from "./SiteVisitLogisticsSection";
 export { BeoIntakeActionBar } from "./BeoIntakeActionBar";
 export { FormSection } from "./FormSection";
+export { StationBuilder } from "./StationBuilder";
