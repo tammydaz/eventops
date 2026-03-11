@@ -212,6 +212,44 @@ const EventOverviewPage: React.FC = () => {
     });
   }, [id]);
 
+  const beoNotesFromStore = asString(selectedEventData?.[FIELD_IDS.BEO_NOTES]) || "";
+  useEffect(() => {
+    setNoteDraft(beoNotesFromStore);
+  }, [beoNotesFromStore]);
+
+  const handleFollowUpSave = useCallback(
+    async (result: FollowUpResult) => {
+      if (!id || !followUpTask) return;
+      const currentNotes = asString(selectedEventData?.[FIELD_IDS.BEO_NOTES]) || "";
+      if (result.note) {
+        const ts = formatNoteTimestamp();
+        const line = `[${ts}] [task ${followUpTask.taskId}] ${result.note}`;
+        const updated = currentNotes ? `${line}\n${currentNotes}` : line;
+        await setFields(id, { [FIELD_IDS.BEO_NOTES]: updated });
+      }
+      if (result.markComplete) {
+        await updateTask(followUpTask.taskId, { status: "Completed" });
+        setTasks((prev) => prev.filter((t) => t.taskId !== followUpTask.taskId));
+      } else if (result.newDueDate) {
+        await updateTask(followUpTask.taskId, { status: "Completed" });
+        await createTask({
+          eventId: id,
+          taskName: followUpTask.taskName,
+          taskType: followUpTask.taskType,
+          dueDate: result.newDueDate,
+          status: "Pending",
+        });
+        const refreshed = await loadTasksForEvent(id);
+        if (Array.isArray(refreshed)) {
+          setTasks(sortOutstandingTasks(refreshed));
+        }
+      }
+      loadEventData();
+      setFollowUpTask(null);
+    },
+    [id, followUpTask, selectedEventData, setFields, loadEventData]
+  );
+
   const isCorrectEvent = selectedEventId === id;
   const isLoading = eventDataLoading || (id && !isCorrectEvent);
   const hasData = isCorrectEvent && selectedEventData && Object.keys(selectedEventData).length > 0;
@@ -286,45 +324,7 @@ const EventOverviewPage: React.FC = () => {
     e.target.value = "";
   };
 
-  const handleFollowUpSave = useCallback(
-    async (result: FollowUpResult) => {
-      if (!id || !followUpTask) return;
-      const currentNotes = asString(eventData?.[FIELD_IDS.BEO_NOTES]) || "";
-      if (result.note) {
-        const ts = formatNoteTimestamp();
-        const line = `[${ts}] [task ${followUpTask.taskId}] ${result.note}`;
-        const updated = currentNotes ? `${line}\n${currentNotes}` : line;
-        await setFields(id, { [FIELD_IDS.BEO_NOTES]: updated });
-      }
-      if (result.markComplete) {
-        await updateTask(followUpTask.taskId, { status: "Completed" });
-        setTasks((prev) => prev.filter((t) => t.taskId !== followUpTask.taskId));
-      } else if (result.newDueDate) {
-        await updateTask(followUpTask.taskId, { status: "Completed" });
-        await createTask({
-          eventId: id,
-          taskName: followUpTask.taskName,
-          taskType: followUpTask.taskType,
-          dueDate: result.newDueDate,
-          status: "Pending",
-        });
-        const refreshed = await loadTasksForEvent(id);
-        if (Array.isArray(refreshed)) {
-          setTasks(sortOutstandingTasks(refreshed));
-        }
-      }
-      loadEventData();
-      setFollowUpTask(null);
-    },
-    [id, followUpTask, eventData, setFields, loadEventData]
-  );
-
-  const beoNotes = asString(eventData?.[FIELD_IDS.BEO_NOTES]) || "";
-  const noteLines = beoNotes.split(/\r?\n/).filter(Boolean);
-
-  useEffect(() => {
-    setNoteDraft(beoNotes);
-  }, [beoNotes]);
+  const noteLines = beoNotesFromStore.split(/\r?\n/).filter(Boolean);
 
   const s = SECTION_COLORS;
 
@@ -503,7 +503,7 @@ const EventOverviewPage: React.FC = () => {
             value={noteDraft}
             onChange={(e) => setNoteDraft(e.target.value)}
             onBlur={async () => {
-              if (noteDraft !== beoNotes && id) {
+              if (noteDraft !== beoNotesFromStore && id) {
                 await setFields(id, { [FIELD_IDS.BEO_NOTES]: noteDraft });
                 loadEventData();
               }
