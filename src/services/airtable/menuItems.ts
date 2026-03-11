@@ -1,5 +1,6 @@
 import { airtableFetch, getMenuItemsTable } from "./client";
 import { isErrorResult } from "./selectors";
+import { cleanDisplayName } from "../../utils/displayName";
 import { CATEGORY_MAP } from "../../constants/menuCategories";
 
 const MENU_ITEMS_TABLE_ID_DEFAULT = "tbl0aN33DGG6R1sPZ";
@@ -22,28 +23,37 @@ export async function fetchMenuItemsByCategory(categoryKey: string): Promise<Men
 
   const orParts = allowedCategories.map((cat) => {
     const escaped = String(cat).replace(/"/g, '\\"');
-    return `{Category}="${escaped}"`;
+    return `FIND("${escaped}", {Category})`;
   });
   const filterByFormula = `OR(${orParts.join(",")})`;
 
-  const params = new URLSearchParams();
-  params.set("filterByFormula", filterByFormula);
-  params.set("maxRecords", "200");
-  params.set("returnFieldsByFieldId", "true");
-  params.append("fields[]", MENU_ITEMS_FORMATTED_NAME_FIELD_ID);
-  params.append("fields[]", MENU_ITEMS_ITEM_NAME_FIELD_ID);
+  const allRecords: Array<{ id: string; fields: Record<string, unknown> }> = [];
+  let offset: string | undefined;
 
-  const path = `/${tableId}?${params.toString()}`;
-  const data = await airtableFetch<{
-    records?: Array<{ id: string; fields: Record<string, unknown> }>;
-    error?: { message?: string };
-  }>(path);
+  do {
+    const params = new URLSearchParams();
+    params.set("filterByFormula", filterByFormula);
+    params.set("pageSize", "100");
+    params.set("returnFieldsByFieldId", "true");
+    params.append("fields[]", MENU_ITEMS_FORMATTED_NAME_FIELD_ID);
+    params.append("fields[]", MENU_ITEMS_ITEM_NAME_FIELD_ID);
+    if (offset) params.set("offset", offset);
 
-  if (isErrorResult(data) || !data?.records) {
-    return [];
-  }
+    const path = `/${tableId}?${params.toString()}`;
+    const data = await airtableFetch<{
+      records?: Array<{ id: string; fields: Record<string, unknown> }>;
+      offset?: string;
+      error?: { message?: string };
+    }>(path);
 
-  return data.records.map((rec) => {
+    if (isErrorResult(data) || !data?.records) {
+      break;
+    }
+    allRecords.push(...data.records);
+    offset = data.offset;
+  } while (offset);
+
+  return allRecords.map((rec) => {
     const nameRaw =
       rec.fields[MENU_ITEMS_FORMATTED_NAME_FIELD_ID] ?? rec.fields[MENU_ITEMS_ITEM_NAME_FIELD_ID];
     const name =
@@ -52,6 +62,6 @@ export async function fetchMenuItemsByCategory(categoryKey: string): Promise<Men
         : nameRaw && typeof nameRaw === "object" && "name" in nameRaw
           ? String((nameRaw as { name: string }).name)
           : rec.id;
-    return { id: rec.id, name: name || rec.id };
+    return { id: rec.id, name: cleanDisplayName(name || "") || rec.id };
   });
 }
