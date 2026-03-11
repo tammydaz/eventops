@@ -13,10 +13,12 @@ export const MenuPickerModal: React.FC<MenuPickerModalProps> = ({ onAdd, already
 
   const [items, setItems] = useState<{ id: string; name: string }[]>([]);
   const [loading, setLoading] = useState(false);
+  const [search, setSearch] = useState("");
 
   useEffect(() => {
     if (!isOpen || !pickerType) return;
 
+    setSearch("");
     setLoading(true);
     fetchMenuItemsByCategory(pickerType)
       .then((results) => {
@@ -25,6 +27,11 @@ export const MenuPickerModal: React.FC<MenuPickerModalProps> = ({ onAdd, already
       .catch(() => setItems([]))
       .finally(() => setLoading(false));
   }, [isOpen, pickerType]);
+
+  const searchLower = search.trim().toLowerCase();
+  const filteredItems = !searchLower
+    ? items
+    : items.filter((item) => item.name.toLowerCase().includes(searchLower));
 
   if (!isOpen) return null;
 
@@ -62,12 +69,36 @@ export const MenuPickerModal: React.FC<MenuPickerModalProps> = ({ onAdd, already
           {pickerTitle}
         </h2>
 
+        {!loading && items.length > 0 && (
+          <div style={{ padding: "0 16px 12px" }}>
+            <input
+              type="text"
+              placeholder="Search items..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              autoFocus
+              style={{
+                width: "100%",
+                padding: "10px 12px",
+                borderRadius: "6px",
+                border: "1px solid #444",
+                background: "#2a2a2a",
+                color: "#e0e0e0",
+                fontSize: "14px",
+              }}
+            />
+            <div style={{ marginTop: 8, fontSize: 12, color: "#888" }}>
+              {filteredItems.length} of {items.length} items
+            </div>
+          </div>
+        )}
+
         <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "16px" }}>
           {loading ? (
             <div style={{ color: "#999", fontSize: "14px" }}>Loading items…</div>
           ) : (
             <div className="picker-list" style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-              {items.map((item) => {
+              {filteredItems.map((item) => {
                 const isAdded = alreadyAddedIds.includes(item.id);
                 return (
                   <div
@@ -95,8 +126,10 @@ export const MenuPickerModal: React.FC<MenuPickerModalProps> = ({ onAdd, already
                   </div>
                 );
               })}
-              {items.length === 0 && !loading && (
-                <div style={{ textAlign: "center", padding: "32px", color: "#999" }}>No items found</div>
+              {filteredItems.length === 0 && !loading && (
+                <div style={{ textAlign: "center", padding: "32px", color: "#999" }}>
+                  {items.length === 0 ? "No items found" : "No matching items"}
+                </div>
               )}
             </div>
           )}

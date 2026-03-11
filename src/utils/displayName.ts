@@ -2,7 +2,8 @@
 export function cleanDisplayName(name: string): string {
   if (!name || typeof name !== "string") return name;
   let s = name.trim();
-  s = s.replace(/^[\s\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]+/gu, "");
-  s = s.replace(/\s*[–—]\s*$/g, "").trim();
+  // Strip leading emojis (covers 🍽️🍤🍰 etc.) and variation selectors
+  s = s.replace(/^[\s\p{Emoji}\uFE00-\uFE0F]+/gu, "");
+  s = s.replace(/\s*[-–—]\s*$/g, "").trim();
   return s || name;
 }

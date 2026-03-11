@@ -636,7 +636,7 @@ export const ServicewareSection = ({ embedded = false }: ServicewareSectionProps
           )}
         </div>
         {(paperType === "China" || paperType === "china") && (
-          <CollapsibleSubsection title="China Setup (S&P, Bread Baskets, Carafes)" icon="▶" defaultOpen={true}>
+          <CollapsibleSubsection title="China Setup (S&P, Bread Baskets, Carafes)" icon="▶" defaultOpen={false}>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16 }}>
               <div>
                 <label style={labelStyle}>Carafes per table (for B&B under carafes)</label>
@@ -705,7 +705,7 @@ export const ServicewareSection = ({ embedded = false }: ServicewareSectionProps
             </div>
           </CollapsibleSubsection>
         )}
-        <CollapsibleSubsection title="Plates" icon="▶" defaultOpen={plates.length > 0}>
+        <CollapsibleSubsection title="Plates" icon="▶" defaultOpen={false}>
           {plates.map((item) => (
             <ItemRow
               key={item.id}
@@ -727,7 +727,7 @@ export const ServicewareSection = ({ embedded = false }: ServicewareSectionProps
           </button>
         </CollapsibleSubsection>
 
-        <CollapsibleSubsection title="Cutlery" icon="▶" defaultOpen={cutlery.length > 0}>
+        <CollapsibleSubsection title="Cutlery" icon="▶" defaultOpen={false}>
           {cutlery.map((item) => (
             <ItemRow
               key={item.id}
@@ -749,7 +749,7 @@ export const ServicewareSection = ({ embedded = false }: ServicewareSectionProps
           </button>
         </CollapsibleSubsection>
 
-        <CollapsibleSubsection title="Glassware" icon="▶" defaultOpen={glassware.length > 0}>
+        <CollapsibleSubsection title="Glassware" icon="▶" defaultOpen={false}>
           {glassware.map((item) => (
             <ItemRow
               key={item.id}
@@ -771,7 +771,7 @@ export const ServicewareSection = ({ embedded = false }: ServicewareSectionProps
           </button>
         </CollapsibleSubsection>
 
-        <CollapsibleSubsection title="Other Serviceware Notes" icon="▶" defaultOpen={notes.trim() !== ""}>
+        <CollapsibleSubsection title="Other Serviceware Notes" icon="▶" defaultOpen={false}>
           <div style={{ gridColumn: "1 / -1" }}>
             <label style={labelStyle}>Serviceware Notes</label>
             <textarea

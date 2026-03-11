@@ -817,7 +817,7 @@ export const MenuSection = ({ embedded = false, isDelivery = false }: MenuSectio
       {isDelivery ? (
         /* ── DELIVERY: HOT, DELI, KITCHEN, SALADS, DESSERTS ── */
         <>
-          <CollapsibleSubsection title="HOT - DISPOSABLE" icon="🔥" defaultOpen isDelivery>
+          <CollapsibleSubsection title="HOT - DISPOSABLE" icon="🔥" defaultOpen={false} isDelivery>
             <div style={{ gridColumn: "1 / -1" }}>
               <label style={labelStyle}>Passed Appetizers</label>
               <div style={{ marginBottom: "8px" }}>
@@ -880,7 +880,7 @@ export const MenuSection = ({ embedded = false, isDelivery = false }: MenuSectio
             </div>
           </CollapsibleSubsection>
 
-          <CollapsibleSubsection title="DELI - DISPOSABLE" icon="🥪" defaultOpen isDelivery>
+          <CollapsibleSubsection title="DELI - DISPOSABLE" icon="🥪" defaultOpen={false} isDelivery>
             <div style={{ gridColumn: "1 / -1" }}>
               <label style={labelStyle}>Sandwiches & Wraps</label>
               <div style={{ marginBottom: "8px" }}>

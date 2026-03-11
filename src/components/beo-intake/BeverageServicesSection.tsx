@@ -156,7 +156,7 @@ export const BeverageServicesSection = ({ embedded = false }: BeverageServicesSe
       <CollapsibleSubsection
         title="Bar Service"
         summary={hasBarService ? bar.barService : undefined}
-        defaultOpen={true}
+        defaultOpen={false}
       >
         <div style={{ gridColumn: "1 / -1", maxWidth: 400 }}>
           <label style={labelStyle}>Bar Service Needed</label>
@@ -292,7 +292,7 @@ export const BeverageServicesSection = ({ embedded = false }: BeverageServicesSe
       <CollapsibleSubsection
         title="Hydration Station"
         summary={hasHydration ? [hydrationDrinkOptions.join(", "), hydrationNotes.trim()].filter(Boolean).join(" • ") || "Configured" : undefined}
-        defaultOpen={hasHydration || hydrationProvided !== ""}
+        defaultOpen={false}
       >
         <div style={{ gridColumn: "1 / -1" }}>
           <label style={labelStyle}>Hydration station provided?</label>
@@ -386,7 +386,7 @@ export const BeverageServicesSection = ({ embedded = false }: BeverageServicesSe
       <CollapsibleSubsection
         title="Coffee / Tea Service"
         summary={hasCoffeeTea ? (coffeeMugType ? `${coffeeMugType} mugs` : "Yes") : undefined}
-        defaultOpen={hasCoffeeTea}
+        defaultOpen={false}
       >
         <div style={{ gridColumn: "1 / -1" }}>
           <label style={labelStyle}>Coffee service needed?</label>
@@ -455,7 +455,7 @@ export const BeverageServicesSection = ({ embedded = false }: BeverageServicesSe
       <CollapsibleSubsection
         title="Ice"
         summary={hasIce ? `Provided by ${iceProvidedBy}` : undefined}
-        defaultOpen={hasIce}
+        defaultOpen={false}
       >
         <div style={{ gridColumn: "1 / -1", maxWidth: 400 }}>
           <label style={labelStyle}>Ice provided by</label>

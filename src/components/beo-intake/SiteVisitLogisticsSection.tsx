@@ -113,7 +113,7 @@ export const SiteVisitLogisticsSection = () => {
 
   return (
     <FormSection title="Notes / Onsite event logistics" dotColor="#00bcd4">
-      <CollapsibleSubsection title="Parking & Load-In" defaultOpen={true}>
+      <CollapsibleSubsection title="Parking & Load-In" defaultOpen={false}>
         <div style={{ gridColumn: "1 / -1" }}>
           <label style={labelStyle}>Parking Notes</label>
           <textarea

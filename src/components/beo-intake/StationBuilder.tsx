@@ -684,7 +684,7 @@ export const StationBuilder = ({
       <CollapsibleSubsection
         title="Main Items (Line 1 Defaults)"
         icon="▶"
-        defaultOpen={mainItems.length > 0}
+        defaultOpen={false}
       >
         <div style={{ gridColumn: "1 / -1" }}>
           {mainItems.map((item) => (
@@ -704,7 +704,7 @@ export const StationBuilder = ({
       <CollapsibleSubsection
         title="Components (Line 2 Defaults + Child Items)"
         icon="▶"
-        defaultOpen={components.length > 0}
+        defaultOpen={false}
       >
         <div style={{ gridColumn: "1 / -1" }}>
           {components.map((item) => (
@@ -721,7 +721,7 @@ export const StationBuilder = ({
         </div>
       </CollapsibleSubsection>
 
-      <CollapsibleSubsection title="Notes" icon="▶" defaultOpen={notes.trim() !== ""}>
+      <CollapsibleSubsection title="Notes" icon="▶" defaultOpen={false}>
         <div style={{ gridColumn: "1 / -1" }}>
           <label style={labelStyle}>Station Notes</label>
           <textarea

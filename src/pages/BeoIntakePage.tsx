@@ -230,6 +230,7 @@ export const BeoIntakePage = () => {
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       const target = e.target as HTMLElement;
+      if (target.closest(".picker-modal-backdrop") || target.closest(".picker-modal")) return;
       if (!target.closest(".beo-pill")) {
         window.dispatchEvent(new CustomEvent("beo-collapse-all-pills"));
       }
