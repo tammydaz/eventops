@@ -816,11 +816,11 @@
 }
 
 .dp-list-row[data-production="blue"] {
-  color: #3b82f6;
+  color: #00bcd4;
 }
 
 .dp-list-row[data-production="blue"] .dp-list-col-name {
-  color: #3b82f6;
+  color: #00bcd4;
 }
 
 .dp-list-row[data-production="yellow"] {
@@ -846,6 +846,10 @@
 
 .dp-list-row-blink {
   animation: dp-blink 1.2s ease-in-out infinite;
+}
+
+.dp-list-row-frozen {
+  box-shadow: 0 0 12px rgba(239, 68, 68, 0.6), inset 0 0 0 1px rgba(239, 68, 68, 0.4);
 }
 
 .dp-list-row:last-child {
@@ -1022,9 +1026,9 @@
 }
 
 .dp-calendar-event[data-production="blue"] {
-  background: rgba(59, 130, 246, 0.15);
-  border-color: #3b82f6;
-  border-left-color: #3b82f6;
+  background: rgba(0, 188, 212, 0.15);
+  border-color: #00bcd4;
+  border-left-color: #00bcd4;
 }
 
 .dp-calendar-event[data-production="yellow"] {
@@ -1044,7 +1048,7 @@
 }
 
 .dp-calendar-event[data-production="blue"]:hover {
-  background: rgba(59, 130, 246, 0.25);
+  background: rgba(0, 188, 212, 0.25);
 }
 
 .dp-calendar-event[data-production="yellow"]:hover {
@@ -1090,31 +1094,35 @@
   border-color: #6b7280;
 }
 
-/* Blue — full-service ready */
+/* Blue — full-service ready (turquoise) */
 .dp-card[data-production="blue"] {
-  border-color: #3b82f6;
+  background: linear-gradient(135deg, rgba(0,188,212,0.06), rgba(0,188,212,0.02)),
+    linear-gradient(135deg, rgba(45,45,45,0.85), rgba(35,35,35,0.65));
+  border-color: #00bcd4;
   box-shadow:
     0 15px 35px rgba(0,0,0,0.4),
-    0 0 20px rgba(59,130,246,0.25),
+    0 0 20px rgba(0,188,212,0.25),
     inset -2px -2px 8px rgba(0,0,0,0.2),
     inset 2px 2px 8px rgba(255,255,255,0.04);
 }
 .dp-card[data-production="blue"]::before,
-.dp-card[data-production="blue"]::after { border-top-color: rgba(59,130,246,0.5); }
+.dp-card[data-production="blue"]::after { border-top-color: rgba(0,188,212,0.5); }
 .dp-card[data-production="blue"] .dp-card-neon-top {
-  background: linear-gradient(90deg, transparent, rgba(59,130,246,0.6), transparent);
+  background: linear-gradient(90deg, transparent, rgba(0,188,212,0.6), transparent);
 }
 .dp-card[data-production="blue"]:hover {
-  border-color: #60a5fa;
+  border-color: #4dd0e1;
   box-shadow:
-    0 25px 50px rgba(59,130,246,0.3),
-    0 0 35px rgba(59,130,246,0.3),
+    0 25px 50px rgba(0,188,212,0.3),
+    0 0 35px rgba(0,188,212,0.3),
     inset -2px -2px 12px rgba(0,0,0,0.3),
     inset 2px 2px 12px rgba(255,255,255,0.06);
 }
 
 /* Yellow — delivery ready */
 .dp-card[data-production="yellow"] {
+  background: linear-gradient(135deg, rgba(234,179,8,0.06), rgba(234,179,8,0.02)),
+    linear-gradient(135deg, rgba(45,45,45,0.85), rgba(35,35,35,0.65));
   border-color: #eab308;
   box-shadow:
     0 15px 35px rgba(0,0,0,0.4),
@@ -1138,6 +1146,8 @@
 
 /* Purple — pickup ready */
 .dp-card[data-production="purple"] {
+  background: linear-gradient(135deg, rgba(168,85,247,0.06), rgba(168,85,247,0.02)),
+    linear-gradient(135deg, rgba(45,45,45,0.85), rgba(35,35,35,0.65));
   border-color: #a855f7;
   box-shadow:
     0 15px 35px rgba(0,0,0,0.4),
@@ -1161,6 +1171,31 @@
 
 .dp-card-blink {
   animation: dp-blink 1.2s ease-in-out infinite;
+}
+
+.dp-card-frozen {
+  box-shadow: 0 0 20px rgba(239, 68, 68, 0.6), inset 0 0 0 2px rgba(239, 68, 68, 0.5);
+}
+
+/* BEO Updated — change requested, BOH must confirm */
+.dp-card-beo-updated .dp-card-beo-updated-badge {
+  animation: dp-blink 1.2s ease-in-out infinite;
+}
+
+.dp-card-beo-updated-badge {
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 10px;
+  font-weight: 700;
+  color: #eab308;
+  background: rgba(234, 179, 8, 0.2);
+  border: 1px solid rgba(234, 179, 8, 0.5);
+  padding: 4px 10px;
+  border-radius: 6px;
+  white-space: nowrap;
+  z-index: 5;
 }
 
 .dp-card::before {
@@ -1929,6 +1964,18 @@
   color: #aaa;
   font-size: 14px;
   margin: 0 0 16px 0;
+}
+
+.accept-transfer-warning {
+  margin: 0 0 16px 0;
+  padding: 12px 14px;
+  background: rgba(234, 179, 8, 0.15);
+  border: 1px solid rgba(234, 179, 8, 0.4);
+  border-radius: 8px;
+  color: #facc15;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.4;
 }
 
 .accept-transfer-label {

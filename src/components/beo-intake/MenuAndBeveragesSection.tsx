@@ -4,7 +4,7 @@ import { BeverageServicesSection } from "./BeverageServicesSection";
 import { DeliveryPaperProductsSection } from "./DeliveryPaperProductsSection";
 
 export const MenuAndBeveragesSection = ({ isDelivery = false }: { isDelivery?: boolean }) => (
-  <FormSection title="Menu & Beverages" dotColor={isDelivery ? "#22c55e" : undefined} isDelivery={isDelivery}>
+  <FormSection title="Menu & Beverages" dotColor={isDelivery ? "#22c55e" : undefined} isDelivery={isDelivery} defaultOpen={true}>
     <MenuSection embedded isDelivery={isDelivery} />
     <CollapsibleSubsection title="Beverage Service" defaultOpen={true} isDelivery={isDelivery}>
       <BeverageServicesSection embedded />

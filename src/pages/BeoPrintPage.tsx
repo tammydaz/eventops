@@ -1,12 +1,15 @@
 import React, { useEffect, useState } from "react";
 import { useEventStore } from "../state/eventStore";
+import { useAuthStore } from "../state/authStore";
 import { useBeoPrintStore } from "../state/beoPrintStore";
-import { FIELD_IDS, getBarServiceFieldId } from "../services/airtable/events";
+import { FIELD_IDS, getBarServiceFieldId, getLockoutFieldIds, getBOHProductionFieldIds } from "../services/airtable/events";
 import { asLinkedRecordIds, asSingleSelectName, asString, asStringArray } from "../services/airtable/selectors";
 import { secondsToTimeString, secondsTo12HourString } from "../utils/timeHelpers";
 import { sanitizeForHeader } from "../utils/httpHeaders";
 import { isDeliveryOrPickup } from "../lib/deliveryHelpers";
 import { FULL_BAR_PACKAGE, FULL_BAR_PACKAGE_SPECK_ROWS, getFullBarPackagePackoutItems, getSignatureCocktailGreeting } from "../constants/fullBarPackage";
+import { ConfirmSendToBOHModal } from "../components/ConfirmSendToBOHModal";
+import { AcceptTransferModal } from "../components/AcceptTransferModal";
 
 // ── Types ──
 type MenuLineItem = {
@@ -86,13 +89,13 @@ function HeaderFieldWithDivider({ label, value, highlight }: { label: string; va
   );
 }
 
-// ── BEO header table: Kitchen BEO style (7 rows, 15/35/15/35 cols, uniform cells) ──
+// ── BEO header table: Kitchen BEO style (condensed for ticket rail) ──
 const LABEL_BG = "#f5f5f0";
-const LABEL_CELL = { fontSize: 11, fontWeight: 700, color: "#000", padding: "4px 10px", border: "1px solid #000", verticalAlign: "middle" as const, background: LABEL_BG, lineHeight: 1.2 };
-const DATA_CELL = { fontSize: 12, fontWeight: 400, color: "#000", padding: "4px 10px", border: "1px solid #000", background: "#fff", verticalAlign: "middle" as const, lineHeight: 1.2 };
-// Kitchen BEO header style: 2px table border, single-spaced, 15/35/15/35 cols
+const LABEL_CELL = { fontSize: 10, fontWeight: 700, color: "#000", padding: "1px 6px", border: "1px solid #000", verticalAlign: "middle" as const, background: LABEL_BG, lineHeight: 1 };
+const DATA_CELL = { fontSize: 11, fontWeight: 400, color: "#000", padding: "1px 6px", border: "1px solid #000", background: "#fff", verticalAlign: "middle" as const, lineHeight: 1 };
+// Kitchen BEO header style: 2px table border, condensed, 15/35/15/35 cols
 const KITCHEN_HEADER_TABLE = { width: "100%", borderCollapse: "collapse" as const, border: "2px solid #000", marginBottom: 0 };
-const KITCHEN_HEADER_CELL = { padding: "2px 8px", fontSize: 12, border: "1px solid #000", verticalAlign: "top" as const, background: "#fff", lineHeight: 1 };
+const KITCHEN_HEADER_CELL = { padding: "1px 6px", fontSize: 11, border: "1px solid #000", verticalAlign: "middle" as const, background: "#fff", lineHeight: 1 };
 
 // ── Extract eventId from URL ──
 const getEventIdFromUrl = (): string | null => {
@@ -186,8 +189,8 @@ const printStyles = `
       font-weight: 600 !important;
     }
     .beo-section-card {
-      break-inside: auto !important;
-      page-break-inside: auto !important;
+      break-inside: avoid !important;
+      page-break-inside: avoid !important;
       overflow: visible !important;
     }
     .beo-section-header-with-first-item {
@@ -204,8 +207,8 @@ const printStyles = `
       font-size: 14pt !important;
     }
     .beo-menu-item-block {
-      break-inside: auto !important;
-      page-break-inside: auto !important;
+      break-inside: avoid !important;
+      page-break-inside: avoid !important;
     }
     .beo-banner-block {
       break-inside: avoid !important;
@@ -247,14 +250,13 @@ const printStyles = `
     }
     .kitchen-beo-page:not(:first-child) { break-before: page !important; }
     .kitchen-beo-page:last-child { break-after: auto; }
-    .kitchen-beo-page2-buffer { height: 10in !important; min-height: 10in !important; flex-shrink: 0 !important; }
     .meeting-beo-notes-section { break-before: page !important; }
     .menu-section-page { break-after: page !important; width: 8in !important; min-height: 10in !important; box-sizing: border-box !important; }
   }
   @page {
     size: 8.5in 11in;
     margin: 0.4in;
-    margin-top: 0.5in;
+    margin-top: 2in;
     @top-center {
       font-size: 18pt;
       font-weight: 800;
@@ -263,7 +265,7 @@ const printStyles = `
     }
   }
   @page :first {
-    margin-top: 0.25in;
+    margin-top: 0.4in;
     @top-center {
       content: none;
     }
@@ -1071,6 +1073,7 @@ function SpeckItemTableWithRightCol(props: {
                   checked={checkState[checkKey] ?? false}
                   onChange={(e) => setCheckState((prev) => ({ ...prev, [checkKey]: e.target.checked }))}
                   className="no-print"
+                  style={{ width: "20px", height: "20px", accentColor: "#333", cursor: "pointer" }}
                 />
               </div>
             )}
@@ -1341,6 +1344,7 @@ function SBeoContent(props: {
                                   setCheckState((prev) => ({ ...prev, [key]: e.target.checked }));
                                 }}
                                 className="no-print"
+                                style={{ width: "20px", height: "20px", accentColor: "#333", cursor: "pointer" }}
                               />
                             </div>
                           </div>
@@ -1365,7 +1369,7 @@ function SBeoContent(props: {
                           </div>
                           <div className="beo-item-col" style={{ ...styles.itemCol, lineHeight: 1.25 }}>{row.lineName}</div>
                           <div style={styles.checkboxCol} onClick={(e) => { e.stopPropagation(); if (document.activeElement instanceof HTMLButtonElement) document.activeElement.blur(); }}>
-                            <input type="checkbox" checked={checkState[`${leftCheck}:${section.fieldId}:${item.id}:${rowIdx}`] ?? item.loaded ?? false} onChange={(e) => { setCheckState((prev) => ({ ...prev, [`${leftCheck}:${section.fieldId}:${item.id}:${rowIdx}`]: e.target.checked })); }} className="no-print" />
+                            <input type="checkbox" checked={checkState[`${leftCheck}:${section.fieldId}:${item.id}:${rowIdx}`] ?? item.loaded ?? false} onChange={(e) => { setCheckState((prev) => ({ ...prev, [`${leftCheck}:${section.fieldId}:${item.id}:${rowIdx}`]: e.target.checked })); }} className="no-print" style={{ width: "20px", height: "20px", accentColor: "#333", cursor: "pointer" }} />
                           </div>
                         </div>
                       ))}
@@ -2107,16 +2111,27 @@ function MeetingBeoNotesContent(props: {
 }
 
 const BeoPrintPage: React.FC = () => {
+  const { user } = useAuthStore();
   const {
     selectedEventId,
     selectEvent,
     eventData,
     loadEventData,
+    loadEvents,
     updateEvent,
+    setFields,
     events,
   } = useEventStore();
+  const isKitchenDept = (user?.role ?? "") === "kitchen";
   const [topTab, setTopTab] = useState<TopTab>("kitchenBEO");
   const [leftCheck, setLeftCheck] = useState<LeftCheck>("spec");
+
+  useEffect(() => {
+    if (isKitchenDept) {
+      setTopTab("kitchenBEO");
+      setLeftCheck("kitchen");
+    }
+  }, [isKitchenDept]);
   const [printModalOpen, setPrintModalOpen] = useState(false);
   const [printModalFormat, setPrintModalFormat] = useState<"menu" | "tent">("menu");
   const [printModalTheme, setPrintModalTheme] = useState<string>("Classic European");
@@ -2142,11 +2157,71 @@ const BeoPrintPage: React.FC = () => {
   const CHECK_STORAGE_KEY = (eid: string) => `beo-check-state-${eid}`;
   const [hiddenMenuItems, setHiddenMenuItems] = useState<Set<string>>(new Set());
   const [barServiceFieldId, setBarServiceFieldId] = useState<string | null>(null);
+  const [lockoutIds, setLockoutIds] = useState<Awaited<ReturnType<typeof getLockoutFieldIds>>>(null);
+  const [bohIds, setBohIds] = useState<Awaited<ReturnType<typeof getBOHProductionFieldIds>>>(null);
+  const [showSendToBOHModal, setShowSendToBOHModal] = useState(false);
   const eventId = selectedEventId ?? getEventIdFromUrl();
 
   useEffect(() => {
     getBarServiceFieldId().then(setBarServiceFieldId);
   }, []);
+
+  useEffect(() => {
+    getLockoutFieldIds().then(setLockoutIds);
+  }, []);
+
+  useEffect(() => {
+    getBOHProductionFieldIds().then(setBohIds);
+  }, []);
+
+  const eventTypeRaw = asSingleSelectName(eventData[FIELD_IDS.EVENT_TYPE])?.toLowerCase() ?? "";
+  const isDeliveryEvent = eventTypeRaw.includes("delivery") || eventTypeRaw.includes("pick up") || eventTypeRaw.includes("pickup");
+  const beoSentToBOH = bohIds?.beoSentToBOH ? eventData[bohIds.beoSentToBOH] === true : false;
+  const isLockedLegacy = lockoutIds
+    ? (eventData[lockoutIds.guestCountConfirmed] === true && eventData[lockoutIds.menuAcceptedByKitchen] === true)
+    : false;
+  const isLocked = beoSentToBOH || isLockedLegacy;
+  const productionFrozen = bohIds?.productionFrozen ? eventData[bohIds.productionFrozen] === true : false;
+  const role = user?.role ?? "";
+  const canSendToBOH = (role === "foh" || role === "intake" || role === "ops_admin") && !isDeliveryEvent && !isLocked && !!selectedEventId && (bohIds?.beoSentToBOH || lockoutIds);
+  const isBOHDept = role === "kitchen" || role === "flair" || role === "logistics" || role === "ops_admin";
+
+  const handleSendToBOH = async (_initials: string) => {
+    if (!selectedEventId) return;
+    const patch: Record<string, unknown> = {};
+    if (bohIds?.beoSentToBOH) {
+      patch[bohIds.beoSentToBOH] = true;
+      if (bohIds.eventChangeRequested) patch[bohIds.eventChangeRequested] = false;
+      if (bohIds.changeConfirmedByBOH) patch[bohIds.changeConfirmedByBOH] = false;
+    }
+    if (lockoutIds) {
+      if (lockoutIds.productionAccepted) patch[lockoutIds.productionAccepted] = false;
+      if (lockoutIds.productionAcceptedFlair) patch[lockoutIds.productionAcceptedFlair] = false;
+      if (lockoutIds.productionAcceptedDelivery) patch[lockoutIds.productionAcceptedDelivery] = false;
+      if (lockoutIds.productionAcceptedOpsChief) patch[lockoutIds.productionAcceptedOpsChief] = false;
+    }
+    if (!bohIds?.beoSentToBOH && lockoutIds) {
+      patch[lockoutIds.guestCountConfirmed] = true;
+      patch[lockoutIds.menuAcceptedByKitchen] = true;
+    }
+    if (Object.keys(patch).length > 0) {
+      await setFields(selectedEventId, patch);
+      await loadEvents();
+      loadEventData();
+    }
+    setShowSendToBOHModal(false);
+  };
+
+  const [showConfirmChangeModal, setShowConfirmChangeModal] = useState(false);
+  const handleConfirmChangeReceived = async (_initials: string) => {
+    if (!selectedEventId || !bohIds?.changeConfirmedByBOH) return;
+    await setFields(selectedEventId, { [bohIds.changeConfirmedByBOH]: true });
+    await loadEvents();
+    loadEventData();
+    setShowConfirmChangeModal(false);
+  };
+
+  const eventName = asString(eventData[FIELD_IDS.EVENT_NAME]) || "Untitled";
 
   // ── Step 1: Grab event ID from URL and select it ──
   useEffect(() => {
@@ -2239,12 +2314,10 @@ const BeoPrintPage: React.FC = () => {
 
     const parentIds = new Set<string>();
     menuFieldIds.forEach((fid) => {
-      const val = eventData[fid];
-      if (Array.isArray(val)) {
-        val.forEach((id: unknown) => {
-          if (typeof id === "string" && id.startsWith("rec")) parentIds.add(id);
-        });
-      }
+      const ids = asLinkedRecordIds(eventData[fid]);
+      ids.forEach((id) => {
+        if (id.startsWith("rec")) parentIds.add(id);
+      });
     });
 
     if (parentIds.size === 0) return;
@@ -2280,7 +2353,7 @@ const BeoPrintPage: React.FC = () => {
         if (data.records) {
           data.records.forEach((rec: { id: string; fields: Record<string, unknown> }) => {
             const name = rec.fields[ITEM_NAME];
-            const rawChildItems = (rec.fields[CHILD_ITEMS_FIELD_ID] ?? rec.fields["Child Items"]) ?? [];
+            const rawChildItems = rec.fields[CHILD_ITEMS_FIELD_ID] ?? [];
             const childIds = Array.isArray(rawChildItems)
               ? rawChildItems.map((item: unknown) => (typeof item === "string" ? item : (item && typeof item === "object" && "id" in item ? String((item as { id?: string }).id ?? "") : ""))).filter((id) => id.startsWith("rec"))
               : [];
@@ -2790,6 +2863,24 @@ const BeoPrintPage: React.FC = () => {
         </div>
       )}
 
+      {/* ── Send to BOH modal ── */}
+      <ConfirmSendToBOHModal
+        open={showSendToBOHModal}
+        onClose={() => setShowSendToBOHModal(false)}
+        eventName={eventName}
+        onConfirm={handleSendToBOH}
+      />
+
+      {/* ── Confirm Change Received modal (production frozen) ── */}
+      <AcceptTransferModal
+        open={showConfirmChangeModal}
+        onClose={() => setShowConfirmChangeModal(false)}
+        eventName={eventName}
+        onAccept={handleConfirmChangeReceived}
+        isChangeConfirmation
+        isProductionFrozen
+      />
+
       {/* ── Note modal (for Meeting BEO Notes) ── */}
       {noteModal.open && (
         <div className="no-print" style={styles.noteModalOverlay} onClick={() => setNoteModal((m) => ({ ...m, open: false }))}>
@@ -2818,75 +2909,124 @@ const BeoPrintPage: React.FC = () => {
 
       {/* ── Layout: left sidebar + main area ── */}
       <div className={`beo-print-layout${topTab === "buffetMenuSigns" ? " print-menu-mode" : ""}`} style={styles.layout}>
-        {/* Left column: checklist boxes (hidden when printing) */}
+        {/* Left column: checklist boxes (hidden when printing). Kitchen dept: Print only */}
         <div className="no-print" style={styles.leftSidebar}>
-          <button
-            type="button"
-            style={{
-              ...styles.leftBox,
-              ...(leftCheck === "spec" ? styles.leftBoxActive : {}),
-            }}
-            onClick={() => { setLeftCheck("spec"); setTopTab("kitchenBEO"); }}
-          >
-            ☑️ Spec check
-          </button>
-          <button
-            type="button"
-            style={{
-              ...styles.leftBox,
-              ...(leftCheck === "packout" ? styles.leftBoxActive : {}),
-            }}
-            onClick={() => { setLeftCheck("packout"); setTopTab("kitchenBEO"); }}
-          >
-            ☑️ Pack-out check
-          </button>
-          <button
-            type="button"
-            style={{
-              ...styles.leftBox,
-              ...(leftCheck === "kitchen" ? styles.leftBoxActive : {}),
-            }}
-            onClick={() => { setLeftCheck("kitchen"); setTopTab("kitchenBEO"); }}
-          >
-            ☑️ Kitchen check
-          </button>
-          <button
-            type="button"
-            style={{
-              ...styles.leftBox,
-              ...(leftCheck === "expeditor" ? styles.leftBoxActive : {}),
-            }}
-            onClick={() => { setLeftCheck("expeditor"); setTopTab("kitchenBEO"); }}
-          >
-            ☑️ Expeditor check
-          </button>
-          <button
-            type="button"
-            style={{
-              ...styles.leftBox,
-              ...(leftCheck === "server" ? styles.leftBoxActive : {}),
-            }}
-            onClick={() => { setLeftCheck("server"); setTopTab("kitchenBEO"); }}
-          >
-            ☑️ Server check
-          </button>
+          {!isKitchenDept && (
+            <>
+              <button
+                type="button"
+                style={{
+                  ...styles.leftBox,
+                  ...(leftCheck === "spec" ? styles.leftBoxActive : {}),
+                }}
+                onClick={() => { setLeftCheck("spec"); setTopTab("kitchenBEO"); }}
+              >
+                ☑️ Spec check
+              </button>
+              <button
+                type="button"
+                style={{
+                  ...styles.leftBox,
+                  ...(leftCheck === "packout" ? styles.leftBoxActive : {}),
+                }}
+                onClick={() => { setLeftCheck("packout"); setTopTab("kitchenBEO"); }}
+              >
+                ☑️ Pack-out check
+              </button>
+              <button
+                type="button"
+                style={{
+                  ...styles.leftBox,
+                  ...(leftCheck === "kitchen" ? styles.leftBoxActive : {}),
+                }}
+                onClick={() => { setLeftCheck("kitchen"); setTopTab("kitchenBEO"); }}
+              >
+                ☑️ Kitchen check
+              </button>
+              <button
+                type="button"
+                style={{
+                  ...styles.leftBox,
+                  ...(leftCheck === "expeditor" ? styles.leftBoxActive : {}),
+                }}
+                onClick={() => { setLeftCheck("expeditor"); setTopTab("kitchenBEO"); }}
+              >
+                ☑️ Expeditor check
+              </button>
+              <button
+                type="button"
+                style={{
+                  ...styles.leftBox,
+                  ...(leftCheck === "server" ? styles.leftBoxActive : {}),
+                }}
+                onClick={() => { setLeftCheck("server"); setTopTab("kitchenBEO"); }}
+              >
+                ☑️ Server check
+              </button>
+            </>
+          )}
           <div style={{ flex: 1 }} />
+          {canSendToBOH && (
+            <button
+              type="button"
+              style={{ ...styles.leftBox, background: "#22c55e", borderColor: "#22c55e", color: "#fff" }}
+              onClick={() => setShowSendToBOHModal(true)}
+            >
+              Send to BOH
+            </button>
+          )}
           <button
             style={{ ...styles.leftBox, background: "#2d8cf0", borderColor: "#2d8cf0" }}
             onClick={() => topTab === "buffetMenuSigns" ? (setPrintModalTheme(menuTheme), setPrintModalFormat(printMode), setPrintModalOpen(true)) : window.print()}
           >
             {topTab === "buffetMenuSigns" ? "Print Menu" : "Print"}
           </button>
-          <button
-            style={{ ...styles.leftBox, background: "#555", borderColor: "#555" }}
-            onClick={() => window.history.back()}
-          >
-            ← Back
-          </button>
+          {!isKitchenDept && (
+            <button
+              style={{ ...styles.leftBox, background: "#555", borderColor: "#555" }}
+              onClick={() => window.history.back()}
+            >
+              ← Back
+            </button>
+          )}
         </div>
 
-        {/* Main area: top tabs + content */}
+        {/* Main area: top tabs + content. Kitchen dept: no tabs, Kitchen BEO only */}
         <div className="beo-print-main" style={styles.mainArea}>
+          {productionFrozen && (
+            <div className="no-print" style={{
+              background: "#7f1d1d",
+              color: "#fff",
+              padding: "12px 16px",
+              marginBottom: 12,
+              borderRadius: 8,
+              fontWeight: 600,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 12,
+            }}>
+              <span>Event information was changed. Production is frozen until BOH confirms.</span>
+              {isBOHDept && bohIds?.changeConfirmedByBOH && (
+                <button
+                  type="button"
+                  onClick={() => setShowConfirmChangeModal(true)}
+                  style={{
+                    background: "#22c55e",
+                    border: "none",
+                    borderRadius: 6,
+                    padding: "8px 16px",
+                    color: "#fff",
+                    fontWeight: 600,
+                    cursor: "pointer",
+                  }}
+                >
+                  Confirm Change Received
+                </button>
+              )}
+            </div>
+          )}
+          {!isKitchenDept && (
           <div className="no-print" style={styles.topTabs}>
             <button
               style={{
@@ -2958,6 +3098,7 @@ const BeoPrintPage: React.FC = () => {
               {topTab === "buffetMenuSigns" ? "Print Menu" : "Print"}
             </button>
           </div>
+          )}
 
           {/* ── Content (based on top tab) ── */}
           {topTab === "kitchenBEO" && (
@@ -2982,69 +3123,47 @@ const BeoPrintPage: React.FC = () => {
           >
             {/* Page marker (PAGE 2, 3, …) is rendered via @page @top-center in print CSS — not in DOM */}
 
-            {/* Grey BEO letterhead bar at top of every page (noticeable header) */}
-            <div className="beo-letterhead-bar" style={{
-              background: "#6b7280", color: "#fff", padding: "12px 16px",
+            {/* Grey bar: Order # and Dispatch Time — same header on every page, sits under ticket rail via @page margin-top */}
+            <div className="beo-letterhead-bar kitchen-beo-page-header" style={{
+              background: "#6b7280", color: "#fff", padding: "6px 12px",
               display: "flex", alignItems: "center", justifyContent: "space-between",
-              fontSize: 14, fontWeight: 700, border: "2px solid #374151",
-              marginBottom: page.pageNum === 1 ? 8 : 0,
+              fontSize: 12, fontWeight: 700, border: "2px solid #374151",
+              marginBottom: page.pageNum === 1 ? 6 : 0,
             }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <div style={{ width: 24, height: 24, background: "#dc2626", display: "flex", alignItems: "center", justifyContent: "center", transform: "rotate(45deg)", flexShrink: 0 }}>
-                  <span style={{ transform: "rotate(-45deg)", fontSize: 12, fontWeight: 800, color: "#fff" }}>f</span>
+                <div style={{ width: 20, height: 20, background: "#dc2626", display: "flex", alignItems: "center", justifyContent: "center", transform: "rotate(45deg)", flexShrink: 0 }}>
+                  <span style={{ transform: "rotate(-45deg)", fontSize: 11, fontWeight: 800, color: "#fff" }}>f</span>
                 </div>
                 <span>BEO</span>
               </div>
-              <span>JOB#: {jobNumberDisplay}-----------------DISPATCH TIME {dispatchTime}</span>
+              <span>ORDER #: {jobNumberDisplay} — DISPATCH TIME: {dispatchTime || "—"}</span>
             </div>
 
-            {/* Page 2+: 10in buffer for ticket hanger (full service only) */}
-            {page.pageNum > 1 && !isDelivery && (
-              <div className="kitchen-beo-page2-buffer" style={{ height: "10in", minHeight: "10in", flexShrink: 0 }} aria-hidden="true" />
-            )}
-
-            {/* Page 1 only: date + event details table under grey box */}
-            {page.pageNum === 1 && (
-              <div className="beo-event-header-block" style={{ marginBottom: 8 }}>
-                <div style={{ fontSize: 12, fontWeight: 600, color: "#111", marginBottom: 4 }}>{eventDate || "—"}</div>
-                <div className="beo-event-details-table" style={{ marginTop: 6, overflow: "hidden", border: "1px solid #000" }}>
-                  <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                    <colgroup>
-                      <col style={{ width: "12%" }} />
-                      <col style={{ width: "38%" }} />
-                      <col style={{ width: "12%" }} />
-                      <col style={{ width: "38%" }} />
-                    </colgroup>
-                    <tbody>
-                      <tr>
-                        <td style={{ ...LABEL_CELL }}>CLIENT</td>
-                        <td style={{ ...DATA_CELL }}>{clientName || "—"}</td>
-                        <td style={{ ...LABEL_CELL, whiteSpace: "nowrap" }}>ORDER #</td>
-                        <td style={{ ...DATA_CELL, whiteSpace: "nowrap" }}>{jobNumberDisplay || "—"}</td>
-                      </tr>
-                      <tr>
-                        <td style={{ ...LABEL_CELL }}>CONTACT</td>
-                        <td style={{ ...DATA_CELL }}>{contactName || "—"}</td>
-                        <td style={{ ...LABEL_CELL }}>EVENT DATE</td>
-                        <td style={{ ...DATA_CELL }}>{eventDate || "—"}</td>
-                      </tr>
-                      <tr>
-                        <td style={{ ...LABEL_CELL }}>VENUE</td>
-                        <td style={{ ...DATA_CELL }}>{eventLocation || "—"}</td>
-                        <td style={{ ...LABEL_CELL }}>GUESTS</td>
-                        <td style={{ ...DATA_CELL, color: "#c00", fontWeight: 600 }}>{guestCount || "—"}</td>
-                      </tr>
-                      <tr>
-                        <td style={{ ...LABEL_CELL }} />
-                        <td style={{ ...DATA_CELL }} />
-                        <td style={{ ...LABEL_CELL }}>FW STAFF</td>
-                        <td style={{ ...DATA_CELL }}>{fwStaff || "—"}</td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
+            {/* First 2 lines of header block under grey box */}
+            <div className="beo-event-details-table" style={{ marginTop: 4, marginBottom: 6, overflow: "hidden" }}>
+              <table style={KITCHEN_HEADER_TABLE}>
+                <colgroup>
+                  <col style={{ width: "15%" }} />
+                  <col style={{ width: "35%" }} />
+                  <col style={{ width: "15%" }} />
+                  <col style={{ width: "35%" }} />
+                </colgroup>
+                <tbody>
+                  <tr>
+                    <td style={LABEL_CELL}>CLIENT</td>
+                    <td style={DATA_CELL}>{clientName || "—"}</td>
+                    <td style={LABEL_CELL}>ORDER #</td>
+                    <td style={{ ...DATA_CELL, color: "#c00", fontWeight: 700 }}>{jobNumberDisplay || "—"}</td>
+                  </tr>
+                  <tr>
+                    <td style={LABEL_CELL}>CONTACT</td>
+                    <td style={DATA_CELL}>{contactName || "—"}</td>
+                    <td style={LABEL_CELL}>EVENT DATE</td>
+                    <td style={DATA_CELL}>{eventDate || "—"}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
 
             {page.pageNum === 1 && beoNotes.trim() && (
               <div className="beo-banner-block" style={styles.beoNotesBanner}>📋 BEO NOTES: {beoNotes.trim()}</div>
@@ -3068,6 +3187,13 @@ const BeoPrintPage: React.FC = () => {
                 <span>{section.title}{isContinuation ? " (cont.)" : ""}</span>
                 <span style={{ color: getSectionColor(section.title), fontSize: "22px", lineHeight: 0 }}>●</span>
               </div>
+              {(leftCheck === "kitchen" || leftCheck === "expeditor" || leftCheck === "server") && sectionItems.length > 0 && secIdx === 0 && (
+                <div className="beo-line-item" style={{ ...styles.lineItem, borderBottom: "1px solid #ddd", gridTemplateColumns, padding: "4px 8px", lineHeight: 1.2, minHeight: "unset", alignItems: "center", fontWeight: 600, fontSize: 11, color: "#333" }}>
+                  <div style={styles.specCol}>—</div>
+                  <div style={styles.itemCol}>—</div>
+                  <div style={{ ...styles.checkboxCol, justifyContent: "center" }}>✓ when complete</div>
+                </div>
+              )}
               {sectionItems.length > 0 && (() => {
                 const item = sectionItems[0];
                 const rows = expandItemToRows(item);
@@ -3128,6 +3254,7 @@ const BeoPrintPage: React.FC = () => {
                         setCheckState((prev) => ({ ...prev, [key]: e.target.checked }));
                       }}
                       className="no-print"
+                      style={{ width: "20px", height: "20px", accentColor: "#333", cursor: "pointer" }}
                     />
                   </div>
                 )}
@@ -3192,7 +3319,7 @@ const BeoPrintPage: React.FC = () => {
                 )}
                 {(leftCheck === "kitchen" || leftCheck === "expeditor" || leftCheck === "server") && (
                   <div style={styles.checkboxCol} onClick={(e) => { e.stopPropagation(); if (document.activeElement instanceof HTMLButtonElement) document.activeElement.blur(); }}>
-                    <input type="checkbox" checked={checkState[`${leftCheck}:${section.fieldId}:${item.id}:${rowIdx}`] ?? item.loaded ?? false} onChange={(e) => { setCheckState((prev) => ({ ...prev, [`${leftCheck}:${section.fieldId}:${item.id}:${rowIdx}`]: e.target.checked })); }} className="no-print" />
+                    <input type="checkbox" checked={checkState[`${leftCheck}:${section.fieldId}:${item.id}:${rowIdx}`] ?? item.loaded ?? false} onChange={(e) => { setCheckState((prev) => ({ ...prev, [`${leftCheck}:${section.fieldId}:${item.id}:${rowIdx}`]: e.target.checked })); }} className="no-print" style={{ width: "20px", height: "20px", accentColor: "#333", cursor: "pointer" }} />
                   </div>
                 )}
                 {leftCheck === "packout" && (

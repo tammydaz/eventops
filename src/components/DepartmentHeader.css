@@ -1,0 +1,234 @@
+@import url("https://fonts.googleapis.com/css2?family=Great+Vibes&family=Dancing+Script:wght@600&display=swap");
+
+.dept-header {
+  background: linear-gradient(180deg, rgba(15, 8, 8, 0.95), rgba(10, 5, 10, 0.7));
+  border-bottom: 1px solid rgba(204, 0, 0, 0.2);
+  backdrop-filter: blur(14px);
+  position: relative;
+  z-index: 10;
+}
+
+.dept-header-inner {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  padding: 16px 24px;
+  gap: 24px;
+}
+
+/* Left section */
+.dept-header-left {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  min-width: 0;
+  justify-self: start;
+}
+
+.dept-header-logo-link {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  text-decoration: none;
+  flex-shrink: 0;
+}
+
+.dept-header-logo-link:hover .dept-header-werx-small,
+.dept-header-logo-link:hover .dept-header-tagline-small {
+  color: #fff;
+}
+
+.dept-header-logo-diamond {
+  width: 36px;
+  height: 36px;
+  background: linear-gradient(135deg, #cc0000, #ff3333);
+  transform: rotate(45deg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  flex-shrink: 0;
+  box-shadow: 0 0 14px rgba(204, 0, 0, 0.35);
+}
+
+.dept-header-logo-letter {
+  transform: rotate(-45deg);
+  font-family: "Great Vibes", cursive;
+  font-size: 22px;
+  color: #fff;
+  font-weight: 400;
+  text-shadow: 0 0 12px rgba(255, 255, 255, 0.9);
+}
+
+.dept-header-brand-small {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.dept-header-werx-small {
+  font-family: "Great Vibes", cursive;
+  font-size: 22px;
+  color: #fff;
+  line-height: 1.1;
+  text-shadow: 0 0 12px rgba(255, 255, 255, 0.8);
+  transition: color 0.2s;
+}
+
+.dept-header-tagline-small {
+  font-family: "Dancing Script", cursive;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.85);
+  font-weight: 600;
+  margin-top: -2px;
+  transition: color 0.2s;
+}
+
+.dept-header-search-wrap {
+  position: relative;
+}
+
+.dept-header-search {
+  background: linear-gradient(135deg, rgba(30, 35, 40, 0.9), rgba(25, 30, 35, 0.8));
+  border: 1px solid rgba(0, 188, 212, 0.25);
+  padding: 8px 14px;
+  border-radius: 6px;
+  color: #b0b0b0;
+  font-size: 13px;
+  width: 180px;
+  transition: all 0.3s ease;
+  outline: none;
+}
+
+.dept-header-search::placeholder {
+  color: #6b7280;
+}
+
+.dept-header-search:focus {
+  border-color: rgba(0, 188, 212, 0.5);
+  background: linear-gradient(135deg, rgba(40, 45, 50, 0.95), rgba(35, 40, 45, 0.9));
+  box-shadow: 0 0 15px rgba(0, 188, 212, 0.15);
+}
+
+.dept-header-search-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  margin-top: 4px;
+  min-width: 260px;
+  max-height: 300px;
+  overflow-y: auto;
+  background: linear-gradient(180deg, rgba(25, 30, 35, 0.98), rgba(20, 25, 30, 0.98));
+  border: 1px solid rgba(0, 188, 212, 0.2);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  z-index: 100;
+}
+
+.dept-header-search-item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  width: 100%;
+  padding: 10px 14px;
+  background: none;
+  border: none;
+  color: #e0e0e0;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.dept-header-search-item:hover {
+  background: rgba(0, 188, 212, 0.1);
+}
+
+.dept-header-search-item-name {
+  font-weight: 600;
+  color: #fff;
+}
+
+.dept-header-search-item-meta {
+  font-size: 11px;
+  color: #a0a0a0;
+  margin-top: 2px;
+}
+
+.dept-header-search-empty {
+  padding: 12px 14px;
+  color: #888;
+  font-style: italic;
+  cursor: default;
+}
+
+/* Center section */
+.dept-header-center {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  justify-self: center;
+  pointer-events: none;
+}
+
+.dept-header-werx-large {
+  font-family: "Great Vibes", cursive;
+  font-size: 3rem;
+  font-weight: 400;
+  color: #fff;
+  text-shadow: 0 0 20px rgba(255, 255, 255, 0.9), 0 0 40px rgba(255, 255, 255, 0.6);
+  line-height: 1.1;
+}
+
+.dept-header-tagline-large {
+  font-family: "Dancing Script", cursive;
+  font-size: 1.35rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.95);
+  text-shadow: 0 0 12px rgba(255, 255, 255, 0.5);
+  margin-top: 2px;
+}
+
+/* Right section */
+.dept-header-right {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-width: 0;
+  justify-self: end;
+}
+
+.dept-header-copyright {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.5);
+  white-space: nowrap;
+}
+
+@media (max-width: 900px) {
+  .dept-header-inner {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto auto auto;
+  }
+
+  .dept-header-center {
+    order: -1;
+    grid-column: 1;
+  }
+
+  .dept-header-left {
+    grid-column: 1;
+  }
+
+  .dept-header-right {
+    grid-column: 1;
+    justify-self: end;
+  }
+
+  .dept-header-copyright {
+    font-size: 10px;
+    white-space: normal;
+    text-align: right;
+  }
+}

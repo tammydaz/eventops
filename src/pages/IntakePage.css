@@ -1,3 +1,5 @@
+@import url("https://fonts.googleapis.com/css2?family=Great+Vibes&display=swap");
+
 /* Section styling matching Airtable Blocks interface - red with blue accents */
 
 /* All panels - consistent dark style, more compact */
@@ -223,8 +225,17 @@
   border-radius: 8px;
 }
 
-.beo-locked-overlay::after {
-  content: "🔒 Event is locked. Click to reopen for editing.";
+.beo-locked-overlay.beo-locked-foh::after {
+  content: "🔒 Event is locked. Click to submit a change request.";
+  color: #fff;
+  font-size: 16px;
+  font-weight: 600;
+  text-align: center;
+  padding: 20px;
+}
+
+.beo-locked-overlay.beo-locked-boh::after {
+  content: "🔒 Event is locked. Only FOH can submit a change request to unlock.";
   color: #fff;
   font-size: 16px;
   font-weight: 600;

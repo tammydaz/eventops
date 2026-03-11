@@ -373,6 +373,13 @@ const print: Record<string, React.CSSProperties> = {
     borderTop: "2px solid #000",
     borderBottom: "2px solid #000",
   },
+  sectionPill: {
+    borderRadius: 9999,
+    border: "2px solid #333",
+    padding: "12px 20px",
+    marginBottom: 16,
+    background: "#fafafa",
+  },
   redSectionBanner: {
     background: "#ff0000",
     color: "#fff",
@@ -474,7 +481,7 @@ const print: Record<string, React.CSSProperties> = {
     padding: "4px 0",
     textAlign: "center" as const,
   },
-  spacer: { height: 2, borderTop: "1px solid #ddd" },
+  spacer: { height: "2em", marginTop: 0 },
   notesSection: {
     padding: "8px 24px",
     textAlign: "center" as const,
@@ -712,27 +719,38 @@ const renderHeader = (beo: BEOData) => {
   );
 };
 
-const renderMenuItem = (item: MenuItem, idx: number) => {
+const renderMenuItem = (
+  item: MenuItem,
+  idx: number,
+  sectionKey: string,
+  checkState: Record<string, boolean>,
+  setCheckState: React.Dispatch<React.SetStateAction<Record<string, boolean>>>
+) => {
+  const checkKey = `${sectionKey}-${idx}`;
+  const itemRowCols = "120px 1fr 48px";
+
   if (item.groupHeader) {
     return (
-      <div key={idx} style={{ ...print.itemRow, gridTemplateColumns: "120px 1fr" }}>
+      <div key={idx} style={{ ...print.itemRow, gridTemplateColumns: itemRowCols }}>
         <div style={print.itemQty}></div>
         <div style={print.groupHeader}>{item.groupHeader}</div>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "center" }} />
       </div>
     );
   }
 
   if (item.isCallout) {
     return (
-      <div key={idx} style={print.callout}>
-        ***{item.name}***
+      <div key={idx} style={{ ...print.callout, display: "grid", gridTemplateColumns: itemRowCols, gap: 8, alignItems: "center" }}>
+        <span style={{ gridColumn: "1 / -2" }}>***{item.name}***</span>
+        <div />
       </div>
     );
   }
 
   return (
     <React.Fragment key={idx}>
-      <div style={print.itemRow}>
+      <div style={{ ...print.itemRow, gridTemplateColumns: itemRowCols }}>
         <div style={print.itemQty}>{item.qty}</div>
         <div style={print.itemName}>
           {item.name}
@@ -747,9 +765,29 @@ const renderMenuItem = (item: MenuItem, idx: number) => {
             </span>
           )}
         </div>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <input
+            type="checkbox"
+            checked={checkState[checkKey] ?? false}
+            onChange={(e) => setCheckState((prev) => ({ ...prev, [checkKey]: e.target.checked }))}
+            style={{
+              width: "24px",
+              height: "24px",
+              minWidth: "24px",
+              minHeight: "24px",
+              background: "#fff",
+              border: "2px solid #333",
+              borderRadius: "2px",
+              accentColor: "#16a34a",
+              cursor: "pointer",
+              WebkitPrintColorAdjust: "exact",
+              printColorAdjust: "exact",
+            }}
+          />
+        </div>
       </div>
       {item.subItems?.map((sub, sIdx) => (
-        <div key={`${idx}-sub-${sIdx}`} style={print.subItemRow}>
+        <div key={`${idx}-sub-${sIdx}`} style={{ ...print.subItemRow, gridTemplateColumns: itemRowCols }}>
           <div style={{ ...print.itemQty, color: sub.color === "red" ? "#ff0000" : "#000" }}>
             {sub.text.startsWith("w/") ? "#" : ""}
           </div>
@@ -762,6 +800,7 @@ const renderMenuItem = (item: MenuItem, idx: number) => {
           >
             {sub.text}
           </div>
+          <div />
         </div>
       ))}
       {/* Skip spacer for child rows (indented with "  ") so parent/child stay grouped */}
@@ -770,14 +809,31 @@ const renderMenuItem = (item: MenuItem, idx: number) => {
   );
 };
 
-const renderSection = (section: MenuSection, idx: number, isDelivery = false) => (
-  <div key={idx} className="kitchen-beo-section">
-    <div style={isDelivery ? { ...print.sectionBanner, background: "#dcfce7", color: "#166534", borderColor: "#16a34a" } : print.sectionBanner}>
-      {section.title} {section.vessel ? `- ${section.vessel}` : ""}
+const renderSection = (
+  section: MenuSection,
+  idx: number,
+  isDelivery: boolean,
+  checkState: Record<string, boolean>,
+  setCheckState: React.Dispatch<React.SetStateAction<Record<string, boolean>>>
+) => {
+  const sectionKey = `${section.title}-${idx}`;
+  const itemRowCols = "120px 1fr 48px";
+  return (
+    <div key={idx} className="kitchen-beo-section" style={print.sectionPill}>
+      <div style={isDelivery ? { ...print.sectionBanner, background: "#dcfce7", color: "#166534", borderColor: "#16a34a", margin: "0 0 8px 0" } : { ...print.sectionBanner, margin: "0 0 8px 0" }}>
+        {section.title} {section.vessel ? `- ${section.vessel}` : ""}
+      </div>
+      {idx === 0 && section.items.length > 0 && (
+        <div style={{ ...print.itemRow, gridTemplateColumns: itemRowCols, padding: "4px 0", fontWeight: 600, fontSize: 11, color: "#333", borderBottom: "1px solid #ddd" }}>
+          <div style={print.itemQty}>—</div>
+          <div style={print.itemName}>—</div>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>✓ when complete</div>
+        </div>
+      )}
+      {section.items.map((item, iIdx) => renderMenuItem(item, iIdx, sectionKey, checkState, setCheckState))}
     </div>
-    {section.items.map((item, iIdx) => renderMenuItem(item, iIdx))}
-  </div>
-);
+  );
+};
 
 const renderPage2FullService = (beo: BEOData) => (
   <>
@@ -962,6 +1018,34 @@ function dedupeBeverageLines(lines: string[]): string[] {
   });
 }
 
+/** Safely parse beverage lines from BAR_SERVICE_KITCHEN_BEO (formula) or fallback to BAR_SERVICE. Avoids "cannot parse" errors from malformed/object values. */
+function safeBeveragesFoodwerx(fields: Record<string, unknown> | null): string[] | undefined {
+  if (!fields) return undefined;
+  try {
+    const raw = fields[FIELD_IDS.BAR_SERVICE_KITCHEN_BEO];
+    if (raw == null) {
+      const fallback = asSingleSelectName(fields[FIELD_IDS.BAR_SERVICE]);
+      return fallback ? [fallback] : undefined;
+    }
+    if (typeof raw === "string") {
+      const lines = raw.split("\n").map((s) => s.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, "").trim()).filter(Boolean);
+      return lines.length > 0 ? lines : undefined;
+    }
+    if (typeof raw === "object" && "name" in raw) {
+      const name = String((raw as { name?: string }).name ?? "");
+      return name ? [name] : undefined;
+    }
+    if (typeof raw === "object" && "error" in raw) {
+      return undefined;
+    }
+    const fallback = asSingleSelectName(fields[FIELD_IDS.BAR_SERVICE]);
+    return fallback ? [fallback] : undefined;
+  } catch {
+    const fallback = asSingleSelectName(fields[FIELD_IDS.BAR_SERVICE]);
+    return fallback ? [fallback] : undefined;
+  }
+}
+
 /** Format EVENT_DATE (YYYY-MM-DD) to "Saturday, March 15, 2025" or "3/15/2025" */
 function formatEventDate(dateStr: string | null | undefined): string {
   if (!dateStr) return "";
@@ -1057,12 +1141,15 @@ function parseBEOTimeline(text: string | null | undefined): TimelineEntry[] {
 }
 
 // ── Main Component ──
+const CHECK_STORAGE_KEY = (eid: string) => `kitchen-beo-check-${eid}`;
+
 const KitchenBEOPrintPage: React.FC = () => {
   const { selectedEventId, selectedEventData, loadEvents, loadEventData, selectEvent, setFields } = useEventStore();
   const [loading, setLoading] = useState(true);
   const [menuItemData, setMenuItemData] = useState<Record<string, { name: string; childIds: string[] }>>({});
   const [stationsData, setStationsData] = useState<Array<{ id: string; stationType: string; stationItems: string[]; stationNotes: string }>>([]);
   const [fwArrivalFieldId, setFwArrivalFieldId] = useState<string | null>(null);
+  const [checkState, setCheckState] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     getFoodwerxArrivalFieldId().then(setFwArrivalFieldId);
@@ -1071,6 +1158,28 @@ const KitchenBEOPrintPage: React.FC = () => {
   useEffect(() => {
     loadEvents().then(() => setLoading(false));
   }, [loadEvents]);
+
+  useEffect(() => {
+    if (!selectedEventId) return;
+    try {
+      const raw = localStorage.getItem(CHECK_STORAGE_KEY(selectedEventId));
+      if (raw) {
+        const parsed = JSON.parse(raw) as Record<string, boolean>;
+        if (parsed && typeof parsed === "object") setCheckState(parsed);
+      }
+    } catch {
+      /* ignore */
+    }
+  }, [selectedEventId]);
+
+  useEffect(() => {
+    if (!selectedEventId) return;
+    try {
+      localStorage.setItem(CHECK_STORAGE_KEY(selectedEventId), JSON.stringify(checkState));
+    } catch {
+      /* ignore quota */
+    }
+  }, [selectedEventId, checkState]);
 
   // Parse event ID from URL: /kitchen-beo-print/recXXX
   useEffect(() => {
@@ -1154,11 +1263,10 @@ const KitchenBEOPrintPage: React.FC = () => {
           data.records.forEach((rec: { id: string; fields: Record<string, unknown> }) => {
             const nameRaw = rec.fields[ITEM_NAME];
             const name = typeof nameRaw === "string" && nameRaw.trim() ? nameRaw.trim() : "—";
-            const rawChildItems = (rec.fields[CHILD_ITEMS_FIELD_ID] ?? rec.fields["Child Items"]) ?? [];
+            const rawChildItems = rec.fields[CHILD_ITEMS_FIELD_ID] ?? [];
             const childIds = Array.isArray(rawChildItems)
               ? rawChildItems.map((item: unknown) => (typeof item === "string" ? item : (item && typeof item === "object" && "id" in item ? String((item as { id?: string }).id ?? "") : ""))).filter((id) => id.startsWith("rec"))
               : [];
-            console.log("CHILD ITEMS (FINAL):", childIds);
             newData[rec.id] = {
               name,
               childIds,
@@ -1360,7 +1468,7 @@ const KitchenBEOPrintPage: React.FC = () => {
     sections: buildSectionsFromEvent(isDelivery),
     notes: asString(selectedEventData[FIELD_IDS.BEO_NOTES]) ? asString(selectedEventData[FIELD_IDS.BEO_NOTES]).split("\n").filter(Boolean) : [],
     timeline: parseBEOTimeline(asString(selectedEventData[FIELD_IDS.BEO_TIMELINE])),
-    beveragesFoodwerx: asString(selectedEventData[FIELD_IDS.BAR_SERVICE_KITCHEN_BEO]) ? asString(selectedEventData[FIELD_IDS.BAR_SERVICE_KITCHEN_BEO]).split("\n").filter(Boolean) : undefined,
+    beveragesFoodwerx: safeBeveragesFoodwerx(selectedEventData),
     serviceware: buildServicewareFromEvent(selectedEventData),
     paperProducts: buildPaperProductsFromEvent(selectedEventData),
     paperProductsIncluded: (() => {
@@ -1452,6 +1560,14 @@ const KitchenBEOPrintPage: React.FC = () => {
             break-inside: avoid !important;
             page-break-inside: avoid !important;
           }
+          /* White checkboxes on the right — print with white background and border */
+          .kitchen-beo-print-page input[type="checkbox"] {
+            background: #fff !important;
+            border: 2px solid #333 !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
+          .no-print { display: none !important; }
         }
         @page {
           size: 8.5in 11in;
@@ -1525,7 +1641,7 @@ const KitchenBEOPrintPage: React.FC = () => {
           </div>
         )}
 
-        {beo.sections.map((section, idx) => renderSection(section, idx, beo.serviceType === "delivery"))}
+        {beo.sections.map((section, idx) => renderSection(section, idx, beo.serviceType === "delivery", checkState, setCheckState))}
 
         {beo.serviceType === "delivery" && renderPaperProductsDelivery(beo)}
 

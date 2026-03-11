@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type ChangeEvent, type FormEvent } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { FIELD_IDS, createEvent, loadSingleSelectOptions, type SingleSelectOption } from "../services/airtable/events";
 import { isErrorResult } from "../services/airtable/selectors";
 import { useEventStore } from "../state/eventStore";
@@ -22,6 +22,7 @@ const initialForm = {
 };
 
 export const QuickIntake = () => {
+  const navigate = useNavigate();
   const { loadEvents, selectEvent } = useEventStore();
   const [form, setForm] = useState(initialForm);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -137,12 +138,10 @@ export const QuickIntake = () => {
     }
     console.log("✅ Create Event Success:", result);
 
-    setSubmitMessage("✅ Event created successfully!");
-    setCreatedId(result.id);
-    setOptionsError(null);
     setForm(initialForm);
-    await loadEvents();
     setIsSubmitting(false);
+    loadEvents(); // refresh list in background
+    navigate(`/event/${result.id}`);
   };
 
   const handleOpenFullIntake = async () => {

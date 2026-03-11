@@ -1,0 +1,137 @@
+/* Accept Transfer / Confirm Change Received Modal */
+.accept-transfer-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(6px);
+}
+
+.accept-transfer-modal {
+  background: linear-gradient(135deg, rgba(20, 10, 10, 0.98), rgba(15, 10, 15, 0.98));
+  border: 2px solid rgba(59, 130, 246, 0.4);
+  border-radius: 12px;
+  padding: 24px;
+  max-width: 360px;
+  width: 90%;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+}
+
+.accept-transfer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.accept-transfer-header h2 {
+  color: #fff;
+  font-size: 18px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.accept-transfer-close {
+  background: none;
+  border: none;
+  color: #888;
+  font-size: 24px;
+  cursor: pointer;
+  padding: 0 4px;
+  line-height: 1;
+}
+
+.accept-transfer-close:hover {
+  color: #fff;
+}
+
+.accept-transfer-event {
+  color: #aaa;
+  font-size: 14px;
+  margin: 0 0 16px 0;
+}
+
+.accept-transfer-warning {
+  margin: 0 0 16px 0;
+  padding: 12px 14px;
+  background: rgba(234, 179, 8, 0.15);
+  border: 1px solid rgba(234, 179, 8, 0.4);
+  border-radius: 8px;
+  color: #facc15;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.accept-transfer-label {
+  display: block;
+  color: #ccc;
+  font-size: 12px;
+  margin-bottom: 6px;
+}
+
+.accept-transfer-initials {
+  width: 100%;
+  padding: 10px 12px;
+  font-size: 16px;
+  letter-spacing: 0.15em;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+  color: #fff;
+  margin-bottom: 20px;
+  box-sizing: border-box;
+}
+
+.accept-transfer-initials:focus {
+  outline: none;
+  border-color: rgba(59, 130, 246, 0.6);
+}
+
+.accept-transfer-initials::placeholder {
+  color: #666;
+}
+
+.accept-transfer-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+}
+
+.accept-transfer-cancel {
+  padding: 10px 18px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+  color: #ccc;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.accept-transfer-cancel:hover {
+  background: rgba(255, 255, 255, 0.15);
+  color: #fff;
+}
+
+.accept-transfer-confirm {
+  padding: 10px 18px;
+  background: linear-gradient(135deg, #2563eb, #3b82f6);
+  border: none;
+  border-radius: 8px;
+  color: #fff;
+  font-weight: 600;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.accept-transfer-confirm:hover:not(:disabled) {
+  background: linear-gradient(135deg, #1d4ed8, #2563eb);
+}
+
+.accept-transfer-confirm:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

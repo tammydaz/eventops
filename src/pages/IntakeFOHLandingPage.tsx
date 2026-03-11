@@ -1,15 +1,36 @@
+import { useLocation } from "react-router-dom";
 import { DepartmentLayout } from "../components/DepartmentLayout";
 import { EventsPipeline } from "../components/EventsPipeline";
+import LeadsLandingPage from "./LeadsLandingPage";
 
-/** Placeholder nav — user will specify side buttons later */
+export type FOHViewMode = "leads" | "events";
+
 const INTAKE_FOH_NAV = [
-  { label: "Intake/FOH Home", href: "/intake-foh", icon: "📋" },
+  { label: "Add Event", href: "/quick-intake" },
+  { label: "Open Event", href: "/beo-intake" },
+  { label: "Leads", href: "/foh/leads" },
+  { label: "Events", href: "/intake-foh" },
 ];
 
-export default function IntakeFOHLandingPage() {
+type IntakeFOHLandingPageProps = {
+  defaultView?: FOHViewMode;
+};
+
+export default function IntakeFOHLandingPage({ defaultView = "events" }: IntakeFOHLandingPageProps) {
+  const { pathname } = useLocation();
+  const isLeadsRoute = pathname.startsWith("/foh/leads");
+
   return (
-    <DepartmentLayout title="Intake / FOH" navItems={INTAKE_FOH_NAV}>
-      <EventsPipeline title="Intake/FOH — 10-Day Pipeline" departmentContext="intake_foh" />
+    <DepartmentLayout
+      title="Intake / FOH"
+      navItems={INTAKE_FOH_NAV}
+      departmentContext="intake_foh"
+    >
+      {isLeadsRoute ? (
+        <LeadsLandingPage />
+      ) : (
+        <EventsPipeline title="Intake/FOH — 10-Day Pipeline" departmentContext="intake_foh" />
+      )}
     </DepartmentLayout>
   );
 }

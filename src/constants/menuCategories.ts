@@ -31,6 +31,9 @@ export const CATEGORY_MAP: Record<string, string[]> = {
   deli:         ['Deli/Sandwhiches', 'Deli/Breads', 'Deli/Sandwiches', 'Deli', 'Sandwich', 'Wrap'],
   room_temp:    ['Room Temp Display', 'Display', 'Buffet China'],
   displays:     ['Display', 'Buffet China'],
+  beverage_service: ['Beverage', 'Beverages', 'Drink'],
+  bar_service:     ['Bar', 'Bar Item', 'Beverage', 'Beverages'],
+  creation_station: ['Station', 'Stations', 'Station Item'],
 };
 
 export type MenuCategoryKey = keyof typeof CATEGORY_MAP;

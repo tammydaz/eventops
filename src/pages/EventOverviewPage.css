@@ -1,0 +1,16 @@
+@import url("https://fonts.googleapis.com/css2?family=Great+Vibes&display=swap");
+
+/* Event Overview — matches app theme */
+.ev-overview-btn:hover {
+  opacity: 0.9;
+  filter: brightness(1.1);
+}
+
+.ev-overview-btn-green:hover {
+  background: rgba(34, 197, 94, 0.2) !important;
+  border-color: rgba(34, 197, 94, 0.5) !important;
+}
+
+.ev-overview-back:hover {
+  color: #fff !important;
+}

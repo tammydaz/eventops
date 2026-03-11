@@ -1,4 +1,8 @@
-const OPENAI_API_KEY = (import.meta.env.VITE_OPENAI_API_KEY as string)?.replace(/[^\x00-\x7F]/g, "").trim() ?? "";
+const OPENAI_KEY = import.meta.env.VITE_OPENAI_API_KEY;
+
+if (!OPENAI_KEY && import.meta.env.DEV) {
+  console.warn("[invoiceParser] VITE_OPENAI_API_KEY not set. Invoice parsing disabled.");
+}
 
 /** Exclude vendor/caterer emails (info@, sales@, @foodwerx) from being used as client email */
 function isVendorEmail(email: string): boolean {
@@ -14,10 +18,6 @@ export function isVendorOrPlaceholderName(name: string): boolean {
   if (!lower || lower.length < 2) return true;
   const vendorWords = ["info", "infor", "information", "contact", "bill", "sales", "support", "admin", "foodwerx", "hospitality"];
   return vendorWords.includes(lower) || vendorWords.some((w) => lower.startsWith(w + " ") || lower === w);
-}
-
-if (!OPENAI_API_KEY) {
-  console.warn("[invoiceParser] VITE_OPENAI_API_KEY is not set. Invoice parsing will be disabled.");
 }
 
 export async function extractTextFromPdf(file: File): Promise<string> {
@@ -313,7 +313,7 @@ export async function parseInvoiceText(text: string): Promise<ParsedInvoice | nu
   if (minimal) return minimal;
 
   // Fall back to OpenAI if available
-  if (!OPENAI_API_KEY || OPENAI_API_KEY === "sk-your-openai-key-here") {
+  if (!OPENAI_KEY || OPENAI_KEY === "sk-your-openai-key-here" || OPENAI_KEY === "sk-your-real-key-here") {
     return ruleBased;
   }
 
@@ -362,7 +362,7 @@ INVOICE TEXT:
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${OPENAI_API_KEY}`,
+      Authorization: `Bearer ${OPENAI_KEY}`,
     },
     body: JSON.stringify({
       model: "gpt-4o-mini",

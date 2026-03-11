@@ -5,9 +5,11 @@ type BeoIntakeActionBarProps = {
   eventId: string | null;
   isLocked?: boolean;
   onReopenRequest?: () => void;
+  /** Show Send to BOH button (full intake only, when not locked) */
+  onSendToBOH?: () => void;
 };
 
-export const BeoIntakeActionBar = ({ eventId, isLocked, onReopenRequest }: BeoIntakeActionBarProps) => {
+export const BeoIntakeActionBar = ({ eventId, isLocked, onReopenRequest, onSendToBOH }: BeoIntakeActionBarProps) => {
   const { setFields, saveCurrentEvent, saveError: storeSaveError, setSaveError: clearStoreError } = useEventStore();
   const [isSaving, setIsSaving] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
@@ -112,6 +114,20 @@ export const BeoIntakeActionBar = ({ eventId, isLocked, onReopenRequest }: BeoIn
           Ready for Spec
         </button>
 
+        {onSendToBOH && !isLocked && (
+          <button
+            style={{
+              ...styles.button,
+              ...styles.buttonSendBOH,
+              ...(isSaving ? styles.buttonDisabled : {}),
+            }}
+            onClick={onSendToBOH}
+            disabled={isSaving}
+          >
+            Send to BOH
+          </button>
+        )}
+
         <button
           style={{
             ...styles.button,
@@ -209,6 +225,12 @@ const styles: Record<string, React.CSSProperties> = {
     color: "#fbbf24",
     border: "1px solid rgba(234, 179, 8, 0.4)",
     boxShadow: "0 0 12px rgba(234, 179, 8, 0.1)",
+  },
+  buttonSendBOH: {
+    background: "linear-gradient(135deg, rgba(34, 197, 94, 0.2), rgba(34, 197, 94, 0.08))",
+    color: "#22c55e",
+    border: "1px solid rgba(34, 197, 94, 0.4)",
+    boxShadow: "0 0 12px rgba(34, 197, 94, 0.1)",
   },
   buttonSecondary: {
     background: "linear-gradient(135deg, rgba(0, 188, 212, 0.12), rgba(0, 188, 212, 0.04))",

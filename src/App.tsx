@@ -25,6 +25,8 @@ function App() {
   const isFlair = pathname === "/flair" || pathname.startsWith("/returned-equipment");
   const isDeliveryCommand = pathname.startsWith("/delivery-command");
   const isIntakeFOH = pathname.startsWith("/intake-foh");
+  const isEventOverview = pathname.startsWith("/event/");
+  const isEarlyEventSections = pathname.startsWith("/early-event-sections");
 
   useEffect(() => {
     loadEvents();
@@ -40,7 +42,7 @@ function App() {
     }
   }, [pathname, selectedEventId, selectEvent]);
 
-  if (isPrintTest || isHome || isQuickIntake || isWatchtower || isPapaChulo || isFOH || isDashboardOld || isBeoIntake || isBeoPrint || isSeedDemo || isInvoiceIntake || isFeedbackIssues || isAdmin || isKitchen || isFlair || isDeliveryCommand || isIntakeFOH) {
+  if (isPrintTest || isHome || isQuickIntake || isWatchtower || isPapaChulo || isFOH || isDashboardOld || isBeoIntake || isBeoPrint || isSeedDemo || isInvoiceIntake || isFeedbackIssues || isAdmin || isKitchen || isFlair || isDeliveryCommand || isIntakeFOH || isEventOverview || isEarlyEventSections) {
     return (
       <AuthGuard>
         <Router selectedEventId={selectedEventId} />
@@ -58,19 +60,12 @@ function App() {
           </div>
         ) : null}
         {!isBeoIntake && (
-          <header className="fwx-header rounded-lg p-8 mb-8">
-            <h1 className="fwx-title fwx-werx-brand">
-              <span className="fwx-werx-logo">Werx</span>
-              <span className="fwx-werx-tagline">The engine behind the excellence!!</span>
-            </h1>
-            <p className="fwx-subtitle text-sm mt-2 uppercase tracking-[0.35em]">BEO Intake</p>
-            {!selectedEventId ? (
-              <div className="mt-4">
-                <EventSelector />
-              </div>
-            ) : null}
-            <div className="mt-4 text-xs text-gray-400">
-              Selected Event ID: {selectedEventId ?? "None"}
+          <header className="fwx-header rounded-lg p-8 mb-8 flex flex-wrap items-center justify-between gap-4">
+            <a href="/" className="inline-flex items-center gap-2 px-4 py-2 rounded-md border border-gray-600 bg-gray-800/60 text-gray-200 hover:bg-gray-700/60 transition text-sm font-medium">
+              ← Back to Dashboard
+            </a>
+            <div className="flex items-center gap-2">
+              <EventSelector />
             </div>
           </header>
         )}

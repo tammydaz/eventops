@@ -6,13 +6,6 @@
  * Print fields calculate automatically from source fields.
  */
 
-export async function fetchEvents() {
-  const response = await fetch("/api/events");
-  if (!response.ok) {
-    throw new Error(`Failed to fetch events: ${response.status}`);
-  }
-  return await response.json();
-}
 import {
   airtableFetch,
   airtableMetaFetch,
@@ -34,6 +27,14 @@ import {
 } from "./selectors";
 
 export type { AttachmentItem } from "./selectors";
+
+export async function fetchEvents() {
+  const response = await fetch("/api/events");
+  if (!response.ok) {
+    throw new Error(`Failed to fetch events: ${response.status}`);
+  }
+  return await response.json();
+}
 
 export const FIELD_IDS = {
   // ── Event Core ──
@@ -278,6 +279,19 @@ export type EventListItem = {
   productionAcceptedFlair?: boolean;
   productionAcceptedDelivery?: boolean;
   productionAcceptedOpsChief?: boolean;
+  /** Client-facing change requested — BOH lights go yellow until all departments confirm */
+  guestCountChangeRequested?: boolean;
+  menuChangeRequested?: boolean;
+  /** BOH production (from Airtable formulas/checkboxes) */
+  beoSentToBOH?: boolean;
+  productionColor?: string;           // hex from formula
+  kitchenBlink?: boolean;
+  flairBlink?: boolean;
+  deliveryBlink?: boolean;
+  opsChiefBlink?: boolean;
+  eventChangeRequested?: boolean;
+  changeConfirmedByBOH?: boolean;
+  productionFrozen?: boolean;
 };
 
 type AirtableFieldSchema = {
@@ -415,7 +429,21 @@ export type LockoutFieldIds = {
   productionAcceptedOpsChief?: string;
 };
 
+/** BOH production fields (beoSentToBOH, blink formulas, freeze, etc.) — resolved by name */
+export type BOHProductionFieldIds = {
+  beoSentToBOH?: string;
+  productionColor?: string;
+  kitchenBlink?: string;
+  flairBlink?: string;
+  deliveryBlink?: string;
+  opsChiefBlink?: string;
+  eventChangeRequested?: string;
+  changeConfirmedByBOH?: string;
+  productionFrozen?: string;
+};
+
 let cachedLockoutFieldIds: LockoutFieldIds | null | undefined = undefined;
+let cachedBOHProductionFieldIds: BOHProductionFieldIds | null | undefined = undefined;
 
 /** Resolve Guest Count / Menu lockout field IDs from Airtable Meta API by name (cached). */
 export async function getLockoutFieldIds(): Promise<LockoutFieldIds | null> {
@@ -468,6 +496,44 @@ export async function getLockoutFieldIds(): Promise<LockoutFieldIds | null> {
   return cachedLockoutFieldIds;
 }
 
+/** Resolve BOH production field IDs from Airtable Meta API by name (cached). */
+export async function getBOHProductionFieldIds(): Promise<BOHProductionFieldIds | null> {
+  if (cachedBOHProductionFieldIds !== undefined) return cachedBOHProductionFieldIds;
+  const tableKey = getEventsTable();
+  if (typeof tableKey !== "string") {
+    cachedBOHProductionFieldIds = null;
+    return null;
+  }
+  const data = await airtableMetaFetch<AirtableTablesResponse>("");
+  if (isErrorResult(data)) {
+    cachedBOHProductionFieldIds = null;
+    return null;
+  }
+  const table = data.tables.find((t) => t.id === tableKey || t.name === tableKey);
+  if (!table) {
+    cachedBOHProductionFieldIds = null;
+    return null;
+  }
+  const byName = Object.fromEntries(table.fields.map((f) => [f.name, f.id]));
+  const findField = (...names: string[]): string | undefined =>
+    names.map((n) => byName[n]).find(Boolean) as string | undefined;
+  const ids: BOHProductionFieldIds = {
+    beoSentToBOH: findField("BEO Sent to BOH", "beoSentToBOH") ?? undefined,
+    productionColor: findField("Production Color", "productionColor") ?? undefined,
+    kitchenBlink: findField("Kitchen Blink", "KitchenBlink") ?? undefined,
+    flairBlink: findField("Flair Blink", "FlairBlink") ?? undefined,
+    deliveryBlink: findField("Delivery Blink", "DeliveryBlink") ?? undefined,
+    opsChiefBlink: findField("Ops Chief Blink", "OpsChiefBlink") ?? undefined,
+    eventChangeRequested: findField("Event Change Requested", "eventChangeRequested") ?? undefined,
+    changeConfirmedByBOH: findField("Change Confirmed by BOH", "changeConfirmedByBOH") ?? undefined,
+    productionFrozen: findField("Production Frozen", "productionFrozen") ?? undefined,
+  };
+  if (ids.beoSentToBOH) additionalAllowedFieldIds.add(ids.beoSentToBOH);
+  [ids.eventChangeRequested, ids.changeConfirmedByBOH].filter(Boolean).forEach((id) => id && additionalAllowedFieldIds.add(id));
+  cachedBOHProductionFieldIds = ids;
+  return ids;
+}
+
 /** Field IDs resolved at runtime (e.g. Bar Service by name) — allowed in PATCH */
 const additionalAllowedFieldIds = new Set<string>([
   FIELD_IDS.FOODWERX_ARRIVAL,  // Placeholder; updateEventMultiple/createEvent replace with resolved ID
@@ -516,7 +582,15 @@ export const loadEvents = async (): Promise<EventListItem[] | AirtableErrorResul
   if (lockoutIds) {
     params.append("fields[]", lockoutIds.guestCountConfirmed);
     params.append("fields[]", lockoutIds.menuAcceptedByKitchen);
+    params.append("fields[]", lockoutIds.guestCountChangeRequested);
+    params.append("fields[]", lockoutIds.menuChangeRequested);
     [lockoutIds.productionAccepted, lockoutIds.productionAcceptedFlair, lockoutIds.productionAcceptedDelivery, lockoutIds.productionAcceptedOpsChief]
+      .filter(Boolean)
+      .forEach((id) => id && params.append("fields[]", id));
+  }
+  const bohIds = await getBOHProductionFieldIds();
+  if (bohIds) {
+    [bohIds.beoSentToBOH, bohIds.productionColor, bohIds.kitchenBlink, bohIds.flairBlink, bohIds.deliveryBlink, bohIds.opsChiefBlink, bohIds.eventChangeRequested, bohIds.changeConfirmedByBOH, bohIds.productionFrozen]
       .filter(Boolean)
       .forEach((id) => id && params.append("fields[]", id));
   }
@@ -570,10 +644,26 @@ export const loadEvents = async (): Promise<EventListItem[] | AirtableErrorResul
     if (lockoutIds) {
       item.guestCountConfirmed = fields[lockoutIds.guestCountConfirmed] === true;
       item.menuAcceptedByKitchen = fields[lockoutIds.menuAcceptedByKitchen] === true;
+      item.guestCountChangeRequested = fields[lockoutIds.guestCountChangeRequested] === true;
+      item.menuChangeRequested = fields[lockoutIds.menuChangeRequested] === true;
       if (lockoutIds.productionAccepted) item.productionAccepted = fields[lockoutIds.productionAccepted] === true;
       if (lockoutIds.productionAcceptedFlair) item.productionAcceptedFlair = fields[lockoutIds.productionAcceptedFlair] === true;
       if (lockoutIds.productionAcceptedDelivery) item.productionAcceptedDelivery = fields[lockoutIds.productionAcceptedDelivery] === true;
       if (lockoutIds.productionAcceptedOpsChief) item.productionAcceptedOpsChief = fields[lockoutIds.productionAcceptedOpsChief] === true;
+    }
+    if (bohIds) {
+      if (bohIds.beoSentToBOH) item.beoSentToBOH = fields[bohIds.beoSentToBOH] === true;
+      if (bohIds.productionColor) {
+        const hex = fields[bohIds.productionColor];
+        item.productionColor = typeof hex === "string" && /^#[0-9a-fA-F]{6}$/.test(hex) ? hex : undefined;
+      }
+      if (bohIds.kitchenBlink) item.kitchenBlink = fields[bohIds.kitchenBlink] === true;
+      if (bohIds.flairBlink) item.flairBlink = fields[bohIds.flairBlink] === true;
+      if (bohIds.deliveryBlink) item.deliveryBlink = fields[bohIds.deliveryBlink] === true;
+      if (bohIds.opsChiefBlink) item.opsChiefBlink = fields[bohIds.opsChiefBlink] === true;
+      if (bohIds.eventChangeRequested) item.eventChangeRequested = fields[bohIds.eventChangeRequested] === true;
+      if (bohIds.changeConfirmedByBOH) item.changeConfirmedByBOH = fields[bohIds.changeConfirmedByBOH] === true;
+      if (bohIds.productionFrozen) item.productionFrozen = fields[bohIds.productionFrozen] === true;
     }
     return item;
   });

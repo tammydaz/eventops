@@ -8,7 +8,7 @@ const OPS_CHIEF_NAV = [
 
 export default function OpsChiefLandingPage() {
   return (
-    <DepartmentLayout title="Ops Chief" navItems={OPS_CHIEF_NAV}>
+    <DepartmentLayout title="Ops Chief" navItems={OPS_CHIEF_NAV} departmentContext="ops_chief">
       <EventsPipeline title="Ops Chief — 10-Day Pipeline" departmentContext="ops_chief" />
     </DepartmentLayout>
   );

@@ -1,0 +1,136 @@
+.missing-fields-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+  backdrop-filter: blur(4px);
+}
+
+.missing-fields-modal {
+  background: linear-gradient(135deg, #1a0f0f 0%, #0f0a0a 100%);
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  border-radius: 12px;
+  padding: 24px;
+  min-width: 400px;
+  max-width: 500px;
+  box-shadow: 0 0 40px rgba(239, 68, 68, 0.15);
+}
+
+.missing-fields-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.missing-fields-header h2 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+  color: #ef4444;
+}
+
+.missing-fields-close {
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 24px;
+  cursor: pointer;
+  padding: 0 4px;
+  line-height: 1;
+}
+
+.missing-fields-close:hover {
+  color: #fff;
+}
+
+.missing-fields-message {
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.85);
+  margin-bottom: 16px;
+}
+
+.missing-fields-list {
+  margin: 0 0 20px 0;
+  padding-left: 24px;
+  font-size: 14px;
+  color: #fca5a5;
+}
+
+.missing-fields-label {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.7);
+  margin-bottom: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.missing-fields-date {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: #0f0a0a;
+  border: 1px solid #333;
+  color: #fff;
+  font-size: 14px;
+  box-sizing: border-box;
+  margin-bottom: 16px;
+}
+
+.missing-fields-date:focus {
+  outline: none;
+  border-color: #ef4444;
+}
+
+.missing-fields-error {
+  font-size: 13px;
+  color: #ef4444;
+  margin-bottom: 12px;
+}
+
+.missing-fields-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+  margin-top: 20px;
+}
+
+.missing-fields-cancel {
+  padding: 10px 20px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: transparent;
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.missing-fields-cancel:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.missing-fields-confirm {
+  padding: 10px 20px;
+  border-radius: 8px;
+  border: 1px solid rgba(239, 68, 68, 0.5);
+  background: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.missing-fields-confirm:hover:not(:disabled) {
+  background: rgba(239, 68, 68, 0.25);
+}
+
+.missing-fields-confirm:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

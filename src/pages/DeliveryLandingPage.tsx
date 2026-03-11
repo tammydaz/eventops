@@ -8,7 +8,7 @@ const DELIVERY_NAV = [
 
 export default function DeliveryLandingPage() {
   return (
-    <DepartmentLayout title="Deliveries / Expediting" navItems={DELIVERY_NAV}>
+    <DepartmentLayout title="Deliveries / Expediting" navItems={DELIVERY_NAV} departmentContext="delivery">
       <EventsPipeline title="Deliveries — 10-Day Pipeline" departmentContext="delivery" />
     </DepartmentLayout>
   );

@@ -1,4 +1,8 @@
-import { Link, useLocation } from "react-router-dom";
+import { useState } from "react";
+import { Link, NavLink, useLocation } from "react-router-dom";
+import { useAuthStore } from "../state/authStore";
+import { DepartmentHeader } from "./DepartmentHeader";
+import "../pages/DashboardPage.css";
 
 type NavItem = {
   label: string;
@@ -6,114 +10,135 @@ type NavItem = {
   icon?: string;
 };
 
+type DepartmentContext = "kitchen" | "flair" | "delivery" | "ops_chief" | "intake_foh";
+
 type DepartmentLayoutProps = {
-  title: string;
+  title?: string;
   navItems: NavItem[];
   children: React.ReactNode;
+  /** Department context for header search navigation */
+  departmentContext?: DepartmentContext;
+  /** Optional header actions (e.g. Sign out, Upload Invoice) */
+  headerActions?: React.ReactNode;
 };
 
-export function DepartmentLayout({ title, navItems, children }: DepartmentLayoutProps) {
+export function DepartmentLayout({ title, navItems, children, departmentContext, headerActions }: DepartmentLayoutProps) {
   const { pathname } = useLocation();
+  const { user, logout } = useAuthStore();
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   return (
-    <div className="dept-layout" style={styles.container}>
-      <aside className="dept-sidebar" style={styles.sidebar}>
-        <div style={styles.sidebarHeader}>
-          <Link to="/" style={styles.backLink}>
-            ← Dashboard
-          </Link>
-        </div>
-        <h2 style={styles.deptTitle}>{title}</h2>
-        <nav style={styles.nav}>
+    <div className="dp-container">
+      {/* Sidebar — matches Dashboard exactly */}
+      <aside className="dp-sidebar">
+        <Link to="/" className="dp-logo-section" style={{ textDecoration: "none" }}>
+          <div className="dp-logo-diamond">
+            <span className="dp-logo-letter">W</span>
+          </div>
+          <div>
+            <div className="dp-logo-title dp-logo-werx">Werx</div>
+            <div className="dp-logo-subtitle">The engine behind the excellence!!</div>
+          </div>
+        </Link>
+        <ul className="dp-nav" style={{ listStyle: "none", margin: 0, padding: 0 }}>
+          <li>
+            <NavLink to="/" className={({ isActive }) => `dp-nav-link ${isActive ? "active" : ""}`}>
+              <span className="dp-nav-dot" />
+              Dashboard
+            </NavLink>
+          </li>
+          {title && (
+            <li style={{ marginTop: 16, marginBottom: 8 }}>
+              <span style={{ fontSize: 11, fontWeight: 700, color: "#888", textTransform: "uppercase", letterSpacing: 1, paddingLeft: 12 }}>
+                {title}
+              </span>
+            </li>
+          )}
           {navItems.map((item) => {
             const isActive = pathname === item.href || pathname.startsWith(item.href + "/");
             return (
-              <Link
-                key={item.href}
-                to={item.href}
-                style={{
-                  ...styles.navItem,
-                  ...(isActive ? styles.navItemActive : {}),
-                }}
-              >
-                {item.icon && <span style={styles.navIcon}>{item.icon}</span>}
-                {item.label}
-              </Link>
+              <li key={item.href}>
+                <Link
+                  to={item.href}
+                  className={`dp-nav-link ${isActive ? "active" : ""}`}
+                >
+                  <span className="dp-nav-dot" />
+                  {item.icon && <span style={{ fontSize: 16 }}>{item.icon}</span>}
+                  {item.label}
+                </Link>
+              </li>
             );
           })}
-        </nav>
+        </ul>
+
+        {user && (
+          <div className="dp-user-section">
+            <span className="dp-user-role">{user.name}</span>
+            <button type="button" onClick={() => { logout(); window.location.href = "/login"; }} className="dp-signout">
+              Sign out
+            </button>
+          </div>
+        )}
       </aside>
-      <main className="dept-main" style={styles.main}>
-        {children}
+
+      {/* Mobile nav overlay & drawer — matches Dashboard */}
+      <div className={`dp-mobile-nav-overlay ${mobileNavOpen ? "open" : ""}`} onClick={() => setMobileNavOpen(false)} aria-hidden="true" />
+      <aside className={`dp-mobile-nav-drawer ${mobileNavOpen ? "open" : ""}`}>
+        <div className="dp-mobile-nav-header">
+          <div className="dp-logo-section">
+            <div className="dp-logo-diamond"><span className="dp-logo-letter">W</span></div>
+            <div><div className="dp-logo-title dp-logo-werx">Werx</div><div className="dp-logo-subtitle">The engine behind the excellence!!</div></div>
+          </div>
+          <button type="button" className="dp-mobile-nav-close" onClick={() => setMobileNavOpen(false)} aria-label="Close menu">✕</button>
+        </div>
+        <ul className="dp-nav">
+          <li>
+            <NavLink to="/" className={({ isActive }) => `dp-nav-link ${isActive ? "active" : ""}`} onClick={() => setMobileNavOpen(false)}>
+              <span className="dp-nav-dot" />
+              Dashboard
+            </NavLink>
+          </li>
+          {title && (
+            <li style={{ marginTop: 16, marginBottom: 8 }}>
+              <span style={{ fontSize: 11, fontWeight: 700, color: "#888", textTransform: "uppercase", letterSpacing: 1, paddingLeft: 12 }}>
+                {title}
+              </span>
+            </li>
+          )}
+          {navItems.map((item) => (
+            <li key={item.href}>
+              <Link to={item.href} className={`dp-nav-link ${pathname === item.href || pathname.startsWith(item.href + "/") ? "active" : ""}`} onClick={() => setMobileNavOpen(false)}>
+                <span className="dp-nav-dot" />
+                {item.icon && <span style={{ fontSize: 16 }}>{item.icon}</span>}
+                {item.label}
+              </Link>
+            </li>
+          ))}
+        </ul>
+        {user && (
+          <div className="dp-user-section">
+            <span className="dp-user-role">{user.name}</span>
+            <button type="button" onClick={() => { logout(); window.location.href = "/login"; }} className="dp-signout">Sign out</button>
+          </div>
+        )}
+      </aside>
+
+      {/* Main — matches Dashboard: header inside main, then content */}
+      <main className="dp-main">
+        <DepartmentHeader
+          departmentContext={departmentContext}
+          rightActions={headerActions}
+          embedded
+          leftSlot={
+            <button type="button" className="dp-mobile-hamburger" onClick={() => setMobileNavOpen(true)} aria-label="Open menu">
+              <span /><span /><span />
+            </button>
+          }
+        />
+        <div className="dp-events-area" style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0, overflow: "auto" }}>
+          {children}
+        </div>
       </main>
     </div>
   );
 }
-
-const styles: Record<string, React.CSSProperties> = {
-  container: {
-    display: "flex",
-    minHeight: "100vh",
-    background: "linear-gradient(135deg, #0a0a0a 0%, #1a0a0a 50%, #0f0a15 100%)",
-    color: "#e0e0e0",
-    fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif",
-  },
-  sidebar: {
-    width: 220,
-    flexShrink: 0,
-    background: "linear-gradient(180deg, #0f0f0f 0%, #1a0a0a 50%, #0f0505 100%)",
-    borderRight: "1px solid rgba(204,0,0,0.2)",
-    padding: "20px 16px",
-    display: "flex",
-    flexDirection: "column",
-  },
-  sidebarHeader: {
-    marginBottom: 20,
-  },
-  backLink: {
-    color: "rgba(255,255,255,0.7)",
-    fontSize: 13,
-    textDecoration: "none",
-  },
-  backLinkHover: {
-    color: "#fff",
-  },
-  deptTitle: {
-    fontSize: 16,
-    fontWeight: 700,
-    color: "#fff",
-    margin: "0 0 20px 0",
-    textTransform: "uppercase",
-    letterSpacing: 1,
-  },
-  nav: {
-    display: "flex",
-    flexDirection: "column",
-    gap: 4,
-  },
-  navItem: {
-    display: "flex",
-    alignItems: "center",
-    gap: 10,
-    padding: "12px 14px",
-    borderRadius: 8,
-    color: "rgba(255,255,255,0.8)",
-    textDecoration: "none",
-    fontSize: 14,
-    fontWeight: 500,
-    transition: "all 0.2s",
-  },
-  navItemActive: {
-    background: "rgba(204,0,0,0.2)",
-    color: "#ff6b6b",
-    borderLeft: "3px solid #cc0000",
-  },
-  navIcon: {
-    fontSize: 18,
-  },
-  main: {
-    flex: 1,
-    overflow: "auto",
-    padding: 24,
-  },
-};

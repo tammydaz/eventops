@@ -2,6 +2,13 @@ import { useEffect, useMemo, useState } from "react";
 import { FIELD_IDS, type StatusDetails } from "../../services/airtable/events";
 import { asBoolean, asSingleSelectName } from "../../services/airtable/selectors";
 import { useEventStore } from "../../state/eventStore";
+import { createTask } from "../../services/airtable/tasks";
+
+function addDays(date: Date, days: number): string {
+  const d = new Date(date);
+  d.setDate(d.getDate() + days);
+  return d.toISOString().slice(0, 10);
+}
 
 const STATUS_OPTIONS = [
   "Pending",
@@ -199,8 +206,18 @@ export const StatusPanel = () => {
             checked={details.contractSent}
             disabled={!canEdit}
             onChange={(event) => {
-              handleChange("contractSent", event.target.checked);
-              saveField(FIELD_IDS.CONTRACT_SENT, event.target.checked);
+              const newVal = event.target.checked;
+              handleChange("contractSent", newVal);
+              saveField(FIELD_IDS.CONTRACT_SENT, newVal);
+              if (newVal && !details.contractSent && selectedEventId) {
+                createTask({
+                  eventId: selectedEventId,
+                  taskName: "Follow up on proposal",
+                  taskType: "Follow-up",
+                  dueDate: addDays(new Date(), 2),
+                  status: "Pending",
+                });
+              }
             }}
             className="h-4 w-4"
           />
@@ -231,8 +248,18 @@ export const StatusPanel = () => {
             checked={details.invoiceSent}
             disabled={!canEdit}
             onChange={(event) => {
-              handleChange("invoiceSent", event.target.checked);
-              saveField(FIELD_IDS.INVOICE_SENT, event.target.checked);
+              const newVal = event.target.checked;
+              handleChange("invoiceSent", newVal);
+              saveField(FIELD_IDS.INVOICE_SENT, newVal);
+              if (newVal && !details.invoiceSent && selectedEventId) {
+                createTask({
+                  eventId: selectedEventId,
+                  taskName: "Follow up on invoice",
+                  taskType: "Follow-up",
+                  dueDate: addDays(new Date(), 2),
+                  status: "Pending",
+                });
+              }
             }}
             className="h-4 w-4"
           />

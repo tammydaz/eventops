@@ -19,12 +19,16 @@ type AirtableApiError = {
 };
 
 const AIRTABLE_API_URL = "https://api.airtable.com/v0";
-const AIRTABLE_API_KEY = (import.meta.env.VITE_AIRTABLE_API_KEY as string | undefined)?.trim();
-const AIRTABLE_BASE_ID = (import.meta.env.VITE_AIRTABLE_BASE_ID as string | undefined)?.trim();
-const AIRTABLE_EVENTS_TABLE = (import.meta.env.VITE_AIRTABLE_EVENTS_TABLE as string | undefined)?.trim();
-const AIRTABLE_STATIONS_TABLE = (import.meta.env.VITE_AIRTABLE_STATIONS_TABLE as string | undefined)?.trim() || "tblhFwUfREbpfFXhv";
-const AIRTABLE_MASTER_MENU_SPECS_TABLE = (import.meta.env.VITE_AIRTABLE_MASTER_MENU_SPECS_TABLE as string | undefined)?.trim();
-const AIRTABLE_MENU_ITEMS_TABLE = (import.meta.env.VITE_AIRTABLE_MENU_ITEMS_TABLE as string | undefined)?.trim();
+
+/** Lazy env reads to avoid "Cannot access before initialization" in bundled chunks. */
+const _getBaseId = () => (import.meta.env.VITE_AIRTABLE_BASE_ID as string | undefined)?.trim();
+const _getApiKey = () => (import.meta.env.VITE_AIRTABLE_API_KEY as string | undefined)?.trim();
+const _getEventsTable = () => (import.meta.env.VITE_AIRTABLE_EVENTS_TABLE as string | undefined)?.trim();
+const _getStationsTable = () => (import.meta.env.VITE_AIRTABLE_STATIONS_TABLE as string | undefined)?.trim();
+const _getMasterMenuSpecsTable = () => (import.meta.env.VITE_AIRTABLE_MASTER_MENU_SPECS_TABLE as string | undefined)?.trim();
+const _getMenuItemsTable = () => (import.meta.env.VITE_AIRTABLE_MENU_ITEMS_TABLE as string | undefined)?.trim();
+const _getLeadsTable = () => (import.meta.env.VITE_AIRTABLE_LEADS_TABLE as string | undefined)?.trim();
+const _getTasksTable = () => (import.meta.env.VITE_AIRTABLE_TASKS_TABLE as string | undefined)?.trim();
 
 const getEnvValue = (value: string | undefined, name: string): string | AirtableErrorResult => {
   if (!value) {
@@ -43,46 +47,46 @@ const getHeaders = (apiKey: string) => {
 };
 
 export const getEventsTable = (): string | AirtableErrorResult =>
-  getEnvValue(AIRTABLE_EVENTS_TABLE, "VITE_AIRTABLE_EVENTS_TABLE");
+  getEnvValue(_getEventsTable(), "VITE_AIRTABLE_EVENTS_TABLE");
 
 export const getStationsTable = (): string =>
-  AIRTABLE_STATIONS_TABLE || "Stations";
+  _getStationsTable() || "Stations";
 
 export const getMasterMenuSpecsTable = (): string =>
-  AIRTABLE_MASTER_MENU_SPECS_TABLE || "tblGeCmzJscnocs1T";
+  _getMasterMenuSpecsTable() || "tblGeCmzJscnocs1T";
 
 export const getMenuItemsTable = (): string =>
-  AIRTABLE_MENU_ITEMS_TABLE || "tbl0aN33DGG6R1sPZ";
+  _getMenuItemsTable() || "tbl0aN33DGG6R1sPZ";
+
+/** Leads table for FOH lead pipeline. When unset, leads service returns demo data. */
+export const getLeadsTable = (): string | undefined =>
+  _getLeadsTable() || undefined;
+
+/** Tasks table for FOH task management. Fields: Task Name, Event, Task Type, Due Date, Status, Notes, Created At, Updated At. */
+export const getTasksTable = (): string | undefined =>
+  _getTasksTable() || undefined;
 
 export const getBaseId = (): string | AirtableErrorResult =>
-  getEnvValue(AIRTABLE_BASE_ID, "VITE_AIRTABLE_BASE_ID");
+  getEnvValue(_getBaseId(), "VITE_AIRTABLE_BASE_ID");
 
 export const getApiKey = (): string | AirtableErrorResult =>
-  getEnvValue(AIRTABLE_API_KEY, "VITE_AIRTABLE_API_KEY");
+  getEnvValue(_getApiKey(), "VITE_AIRTABLE_API_KEY");
 
 export const airtableFetch = async <T>(
   path: string,
   init?: RequestInit
 ): Promise<T | AirtableErrorResult> => {
-  const baseId = getEnvValue(AIRTABLE_BASE_ID, "VITE_AIRTABLE_BASE_ID");
+  const baseId = getEnvValue(_getBaseId(), "VITE_AIRTABLE_BASE_ID");
   if (typeof baseId !== "string") {
     return baseId;
   }
 
-  const apiKey = getEnvValue(AIRTABLE_API_KEY, "VITE_AIRTABLE_API_KEY");
+  const apiKey = getEnvValue(_getApiKey(), "VITE_AIRTABLE_API_KEY");
   if (typeof apiKey !== "string") {
     return apiKey;
   }
 
   const url = `${AIRTABLE_API_URL}/${baseId}${path}`;
-
-  console.log("🔍 Airtable Fetch Debug:", {
-    baseId,
-    path,
-    fullUrl: url,
-    method: init?.method || "GET",
-    body: init?.body,
-  });
 
   try {
     const headers = getHeaders(apiKey);
@@ -119,7 +123,6 @@ export const airtableFetch = async <T>(
       };
     }
 
-    console.log("🔍 Airtable Fetch Response:", JSON.stringify(data, null, 2));
     return data as T;
   } catch (error) {
     return {
@@ -136,7 +139,7 @@ export const airtableMetaFetch = async <T>(
   path: string,
   init?: RequestInit
 ): Promise<T | AirtableErrorResult> => {
-  const baseId = getEnvValue(AIRTABLE_BASE_ID, "VITE_AIRTABLE_BASE_ID");
+  const baseId = getEnvValue(_getBaseId(), "VITE_AIRTABLE_BASE_ID");
   if (typeof baseId !== "string") {
     return baseId;
   }

@@ -1,146 +1,121 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { createPortal } from 'react-dom';
-import { type MenuCategoryKey } from '../constants/menuCategories';
-import { getPickerLabel } from '../utils/pickerLabel';
-
-export interface MenuItemRecord {
-  id: string;
-  name: string;
-  category?: string | null;
-  childItems?: string[];
-}
+import React, { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
+import { usePickerStore } from "../state/usePickerStore";
+import { fetchMenuItemsByCategory } from "../services/airtable/menuItems";
 
 interface MenuPickerModalProps {
-  isOpen: boolean;
-  categoryKey: MenuCategoryKey | null;
-  label: string;
-  menuItems: MenuItemRecord[];
-  currentlySelected: MenuItemRecord[];
-  onSelect: (item: MenuItemRecord) => void;
-  onClose: () => void;
+  onAdd: (item: { id: string; name: string }) => void;
+  alreadyAddedIds: string[];
 }
 
-export const MenuPickerModal: React.FC<MenuPickerModalProps> = ({
-  isOpen,
-  categoryKey,
-  label,
-  menuItems,
-  currentlySelected,
-  onSelect,
-  onClose,
-}) => {
-  const [searchTerm, setSearchTerm] = useState('');
+export const MenuPickerModal: React.FC<MenuPickerModalProps> = ({ onAdd, alreadyAddedIds }) => {
+  const { isOpen, pickerType, pickerTitle, closePicker } = usePickerStore();
+
+  const [items, setItems] = useState<{ id: string; name: string }[]>([]);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (isOpen) {
-      setSearchTerm('');
-    }
-  }, [isOpen]);
+    if (!isOpen || !pickerType) return;
 
-  // TEMP HARD FIX — DO NOT FILTER
-  const filteredItems = Array.isArray(menuItems)
-    ? menuItems
-    : [];
-
-  const selectedIds = useMemo(
-    () => new Set(currentlySelected.map((item) => item.id)),
-    [currentlySelected]
-  );
+    setLoading(true);
+    fetchMenuItemsByCategory(pickerType)
+      .then((results) => {
+        setItems(results || []);
+      })
+      .catch(() => setItems([]))
+      .finally(() => setLoading(false));
+  }, [isOpen, pickerType]);
 
   if (!isOpen) return null;
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[99998] bg-black bg-opacity-70 flex items-center justify-center p-4"
-      onClick={onClose}
+      className="picker-modal-backdrop"
+      style={{
+        position: "fixed",
+        inset: 0,
+        zIndex: 2147483647,
+        backgroundColor: "rgba(0,0,0,0.8)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: "16px",
+      }}
+      onClick={closePicker}
     >
       <div
-        className="bg-gray-900 rounded-lg shadow-2xl max-w-2xl w-full max-h-[80vh] flex flex-col border-2 border-red-600"
+        className="picker-modal"
+        style={{
+          backgroundColor: "#1a1a1a",
+          borderRadius: "12px",
+          border: "2px solid #ff6b6b",
+          maxWidth: "600px",
+          width: "100%",
+          maxHeight: "80vh",
+          display: "flex",
+          flexDirection: "column",
+          overflow: "hidden",
+        }}
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Header */}
-        <div className="border-b border-red-600 p-4">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="text-lg font-bold text-gray-300">{label}</h3>
-            <button
-              onClick={onClose}
-              className="text-red-400 hover:text-red-600 text-xl font-bold"
-            >
-              ✕
-            </button>
-          </div>
-          <div className="relative">
-            <svg
-              style={{
-                position: 'absolute',
-                left: '12px',
-                top: '50%',
-                transform: 'translateY(-50%)',
-                width: '16px',
-                height: '16px',
-                color: '#ff3333',
-              }}
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-            >
-              <circle cx="11" cy="11" r="8" />
-              <path d="m21 21-4.35-4.35" />
-            </svg>
-            <input
-              type="text"
-              placeholder="Search menu items..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 rounded-md bg-gray-800 border border-gray-700 text-gray-300 px-3 py-2"
-              autoFocus
-            />
-          </div>
-          <p className="text-xs text-gray-500 mt-2">
-            {filteredItems.length} of {menuItems.length} items
-          </p>
-        </div>
+        <h2 style={{ margin: "0 0 12px 0", fontSize: "18px", fontWeight: "bold", color: "#e0e0e0", padding: "16px 16px 0" }}>
+          {pickerTitle}
+        </h2>
 
-        {/* Items List */}
-        <div className="flex-1 overflow-y-auto p-4">
-          {filteredItems.map((item) => {
-            const isSelected = selectedIds.has(item.id);
-            return (
-              <div
-                key={item.id}
-                onClick={() => onSelect(item)}
-                className={`flex items-center gap-3 px-4 py-3 mb-2 rounded-md cursor-pointer transition ${
-                  isSelected
-                    ? 'bg-red-900 border-2 border-red-600'
-                    : 'bg-gray-800 border border-gray-700 hover:bg-red-900 hover:border-red-600'
-                }`}
-              >
-                <span className="text-gray-300">{getPickerLabel(item)}</span>
-                {item.category && (
-                  <span className="text-xs text-gray-500 ml-auto">{item.category}</span>
-                )}
-              </div>
-            );
-          })}
-          {filteredItems.length === 0 && (
-            <div className="text-center py-8 text-gray-400">
-              <p>No items found</p>
-              <p className="text-xs mt-2">Check browser console for debug output</p>
+        <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "16px" }}>
+          {loading ? (
+            <div style={{ color: "#999", fontSize: "14px" }}>Loading items…</div>
+          ) : (
+            <div className="picker-list" style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+              {items.map((item) => {
+                const isAdded = alreadyAddedIds.includes(item.id);
+                return (
+                  <div
+                    key={item.id}
+                    className={`picker-item ${isAdded ? "active" : ""}`}
+                    style={{
+                      padding: "12px",
+                      backgroundColor: isAdded ? "#2a3a2a" : "#2a2a2a",
+                      border: `1px solid ${isAdded ? "#22c55e" : "#444"}`,
+                      borderRadius: "6px",
+                      cursor: isAdded ? "default" : "pointer",
+                      color: "#e0e0e0",
+                      transition: "all 0.2s",
+                    }}
+                    onClick={() => {
+                      if (!isAdded) {
+                        onAdd(item);
+                      }
+                    }}
+                  >
+                    <span style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                      {isAdded && <span style={{ color: "#22c55e" }}>✓</span>}
+                      {item.name}
+                    </span>
+                  </div>
+                );
+              })}
+              {items.length === 0 && !loading && (
+                <div style={{ textAlign: "center", padding: "32px", color: "#999" }}>No items found</div>
+              )}
             </div>
           )}
         </div>
 
-        {/* Footer */}
-        <div className="border-t border-red-600 p-4 flex items-center justify-between">
-          <span className="text-sm text-gray-400">
-            {filteredItems.length} item{filteredItems.length !== 1 ? 's' : ''} available
-          </span>
+        <div className="picker-actions" style={{ padding: "16px", borderTop: "1px solid #ff6b6b", display: "flex", gap: "12px", justifyContent: "flex-end" }}>
           <button
-            onClick={onClose}
-            className="px-4 py-2 rounded-md border border-gray-600 text-gray-300 hover:bg-gray-800 transition"
+            onClick={closePicker}
+            style={{
+              padding: "10px 20px",
+              background: "rgba(255,107,107,0.2)",
+              color: "#ff6b6b",
+              border: "2px solid #ff6b6b",
+              borderRadius: "8px",
+              cursor: "pointer",
+              fontWeight: 600,
+            }}
           >
-            Close
+            Done
           </button>
         </div>
       </div>

@@ -5,7 +5,7 @@ import type { ViewMode, HealthStatus } from "../components/dashboard/EventCard";
 import { useEventStore } from "../state/eventStore";
 import { useAuthStore } from "../state/authStore";
 import { canAccessRoute, ROLE_DEPARTMENTS } from "../lib/auth";
-import { getProductionColor, shouldBlink, shouldBlinkForDepartment, PRODUCTION_COLORS, type DepartmentKey } from "../lib/productionHelpers";
+import { getProductionColor, getProductionColorHex, getHealthBOH, shouldBlink, shouldBlinkForDepartment, needsChangeConfirmation, isProductionFrozen, PRODUCTION_COLORS, type DepartmentKey } from "../lib/productionHelpers";
 import type { QuestionTargetDepartment } from "../state/questionStore";
 import type { EventListItem } from "../services/airtable/events";
 import { AcceptTransferModal } from "../components/AcceptTransferModal";
@@ -33,6 +33,17 @@ interface EventData {
   productionAcceptedFlair?: boolean;
   productionAcceptedDelivery?: boolean;
   productionAcceptedOpsChief?: boolean;
+  guestCountChangeRequested?: boolean;
+  menuChangeRequested?: boolean;
+  beoSentToBOH?: boolean;
+  productionColor?: string;
+  kitchenBlink?: boolean;
+  flairBlink?: boolean;
+  deliveryBlink?: boolean;
+  opsChiefBlink?: boolean;
+  productionFrozen?: boolean;
+  eventChangeRequested?: boolean;
+  changeConfirmedByBOH?: boolean;
   isDemo?: boolean;
 }
 
@@ -69,6 +80,7 @@ function listItemToEventData(e: EventListItem): EventData {
   const parts = (e.eventName ?? "").split(/\s*[–—-]\s*/);
   const client = parts[0]?.trim() || "—";
   const venue = parts[1]?.trim() || "—";
+  const healthBOH = getHealthBOH(e);
   return {
     id: e.id,
     eventDate: e.eventDate,
@@ -81,13 +93,24 @@ function listItemToEventData(e: EventListItem): EventData {
     eventType: e.eventType ?? "—",
     serviceStyle: e.serviceStyle ?? "—",
     healthFOH: "green",
-    healthBOH: "green",
+    healthBOH,
     guestCountConfirmed: e.guestCountConfirmed,
     menuAcceptedByKitchen: e.menuAcceptedByKitchen,
+    guestCountChangeRequested: e.guestCountChangeRequested,
+    menuChangeRequested: e.menuChangeRequested,
     productionAccepted: e.productionAccepted,
     productionAcceptedFlair: e.productionAcceptedFlair,
     productionAcceptedDelivery: e.productionAcceptedDelivery,
     productionAcceptedOpsChief: e.productionAcceptedOpsChief,
+    beoSentToBOH: e.beoSentToBOH,
+    productionColor: e.productionColor,
+    kitchenBlink: e.kitchenBlink,
+    flairBlink: e.flairBlink,
+    deliveryBlink: e.deliveryBlink,
+    opsChiefBlink: e.opsChiefBlink,
+    productionFrozen: e.productionFrozen,
+    eventChangeRequested: e.eventChangeRequested,
+    changeConfirmedByBOH: e.changeConfirmedByBOH,
   };
 }
 
@@ -265,39 +288,61 @@ export default function DashboardPage() {
   const viewingDepartment: QuestionTargetDepartment | null = dashboardDept ?? (role === "intake" || role === "foh" ? "intake_foh" : null);
   const handleSelectEvent = (evt: EventData) => {
     if (evt.isDemo) return;
-    const blink = dashboardDept ? shouldBlinkForDepartment(evt, dashboardDept) : shouldBlink(evt);
-    if (blink) {
+    const frozen = isProductionFrozen(evt);
+    const blink = dashboardDept ? shouldBlinkForDepartment(evt, dashboardDept) : false;
+    const needsConfirm = dashboardDept && needsChangeConfirmation(evt, dashboardDept);
+    if (dashboardDept && (frozen || blink || needsConfirm)) {
       setPendingAcceptEvent(evt);
       return;
     }
     selectEvent(evt.id);
     setSearchQuery("");
-    navigate("/beo-intake");
+    // Intake/FOH/ops_admin -> BEO full intake; Kitchen -> Kitchen BEO (checkboxes); Flair -> BEO print
+    if (role === "kitchen") {
+      navigate(`/kitchen-beo-print/${evt.id}`);
+    } else if (role === "flair") {
+      navigate(`/beo-print/${evt.id}`);
+    } else if (role === "delivery") {
+      navigate(`/beo-intake/${evt.id}`);
+    } else {
+      navigate(`/beo-intake/${evt.id}`);
+    }
   };
 
   const handleAcceptTransfer = async (initials: string) => {
     if (!pendingAcceptEvent) return;
-    const { getLockoutFieldIds } = await import("../services/airtable/events");
-    const ids = await getLockoutFieldIds();
-    if (ids) {
-      const userRole = user?.role ?? "ops_admin";
-      const fieldId = userRole === "kitchen" ? ids.productionAccepted
-        : userRole === "flair" ? ids.productionAcceptedFlair
-        : userRole === "logistics" ? ids.productionAcceptedDelivery
-        : ids.productionAccepted; // ops_admin defaults to kitchen
-      if (fieldId) {
-        await setFields(pendingAcceptEvent.id, { [fieldId]: true });
+    const eventId = pendingAcceptEvent.id;
+    const frozen = isProductionFrozen(pendingAcceptEvent);
+    if (frozen) {
+      const { getBOHProductionFieldIds } = await import("../services/airtable/events");
+      const bohIds = await getBOHProductionFieldIds();
+      if (bohIds?.changeConfirmedByBOH) {
+        await setFields(eventId, { [bohIds.changeConfirmedByBOH]: true });
         await loadEvents();
       }
+    } else {
+      const { getLockoutFieldIds } = await import("../services/airtable/events");
+      const ids = await getLockoutFieldIds();
+      if (ids) {
+        const userRole = user?.role ?? "ops_admin";
+        const fieldId = userRole === "kitchen" ? ids.productionAccepted
+          : userRole === "flair" ? ids.productionAcceptedFlair
+          : userRole === "logistics" ? ids.productionAcceptedDelivery
+          : ids.productionAccepted;
+        if (fieldId) {
+          await setFields(eventId, { [fieldId]: true });
+          await loadEvents();
+        }
+      }
     }
-    selectEvent(pendingAcceptEvent.id);
+    selectEvent(eventId);
     setSearchQuery("");
     setPendingAcceptEvent(null);
     const userRole = user?.role ?? "ops_admin";
     if (userRole === "kitchen") {
-      navigate(`/beo-print/${pendingAcceptEvent.id}`);
+      navigate(`/kitchen-beo-print/${eventId}`);
     } else if (userRole === "flair") {
-      navigate(`/beo-print/${pendingAcceptEvent.id}`);
+      navigate(`/beo-print/${eventId}`);
     } else {
       navigate("/beo-intake");
     }
@@ -310,6 +355,8 @@ export default function DashboardPage() {
         onClose={() => setPendingAcceptEvent(null)}
         eventName={pendingAcceptEvent?.name ?? ""}
         onAccept={handleAcceptTransfer}
+        isChangeConfirmation={!!pendingAcceptEvent && !!dashboardDept && (isProductionFrozen(pendingAcceptEvent) || needsChangeConfirmation(pendingAcceptEvent, dashboardDept))}
+        isProductionFrozen={!!pendingAcceptEvent && isProductionFrozen(pendingAcceptEvent)}
       />
       {/* ═══ SIDEBAR ═══ */}
       <aside className="dp-sidebar">
@@ -705,12 +752,12 @@ export default function DashboardPage() {
                     </div>
                         {events.map((evt) => {
                       const prodColor = getProductionColor(evt);
-                      const colorHex = PRODUCTION_COLORS[prodColor];
+                      const colorHex = getProductionColorHex(evt);
                       const canSelect = !evt.isDemo;
                       return (
                         <div
                           key={evt.id}
-                          className={`dp-list-row ${canSelect && (dashboardDept ? shouldBlinkForDepartment(evt, dashboardDept) : shouldBlink(evt)) ? "dp-list-row-blink" : ""} ${evt.isDemo ? "dp-list-row-demo" : ""}`}
+                          className={`dp-list-row ${canSelect && (dashboardDept ? shouldBlinkForDepartment(evt, dashboardDept) : shouldBlink(evt)) ? "dp-list-row-blink" : ""} ${canSelect && isProductionFrozen(evt) ? "dp-list-row-frozen" : ""} ${evt.isDemo ? "dp-list-row-demo" : ""}`}
                           data-production={prodColor}
                           role={canSelect ? "button" : undefined}
                           tabIndex={canSelect ? 0 : undefined}
@@ -754,11 +801,13 @@ export default function DashboardPage() {
 function PremiumCard({ event, viewMode, onSelect, departmentKey, viewingDepartment }: { event: EventData; viewMode: ViewMode; onSelect?: () => void; departmentKey?: DepartmentKey | null; viewingDepartment?: QuestionTargetDepartment | null }) {
   const prodColor = getProductionColor(event);
   const blinking = !event.isDemo && (departmentKey ? shouldBlinkForDepartment(event, departmentKey) : shouldBlink(event));
+  const needsChangeConfirm = !event.isDemo && departmentKey && needsChangeConfirmation(event, departmentKey);
+  const frozen = !event.isDemo && isProductionFrozen(event);
 
   return (
     <AskFOHPopover eventId={event.id} eventName={event.name} viewingDepartment={viewingDepartment ?? null} disabled={event.isDemo}>
       <article
-        className={`dp-card dp-card-production dp-card-${prodColor} ${blinking ? "dp-card-blink" : ""} ${onSelect ? "dp-card-clickable" : ""} ${event.isDemo ? "dp-card-demo" : ""}`}
+        className={`dp-card dp-card-production dp-card-${prodColor} ${blinking ? "dp-card-blink" : ""} ${needsChangeConfirm ? "dp-card-beo-updated" : ""} ${frozen ? "dp-card-frozen" : ""} ${onSelect ? "dp-card-clickable" : ""} ${event.isDemo ? "dp-card-demo" : ""}`}
         data-production={prodColor}
         role={onSelect ? "button" : undefined}
         tabIndex={onSelect ? 0 : undefined}
@@ -767,6 +816,9 @@ function PremiumCard({ event, viewMode, onSelect, departmentKey, viewingDepartme
       >
         {/* Top neon line */}
         <div className="dp-card-neon-top" />
+        {needsChangeConfirm && (
+          <div className="dp-card-beo-updated-badge">BEO Updated — Acceptance Required</div>
+        )}
 
         {/* Client + Event name */}
         <div className="dp-card-header dp-card-header-tight">
