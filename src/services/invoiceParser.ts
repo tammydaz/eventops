@@ -1,8 +1,3 @@
-const OPENAI_KEY = import.meta.env.VITE_OPENAI_API_KEY;
-
-if (!OPENAI_KEY && import.meta.env.DEV) {
-  console.warn("[invoiceParser] VITE_OPENAI_API_KEY not set. Invoice parsing disabled.");
-}
 
 /** Exclude vendor/caterer emails (info@, sales@, @foodwerx) from being used as client email */
 function isVendorEmail(email: string): boolean {
@@ -312,98 +307,23 @@ export async function parseInvoiceText(text: string): Promise<ParsedInvoice | nu
   const minimal = parseInvoiceTextMinimal(text);
   if (minimal) return minimal;
 
-  // Fall back to OpenAI if available
-  if (!OPENAI_KEY || OPENAI_KEY === "sk-your-openai-key-here" || OPENAI_KEY === "sk-your-real-key-here") {
-    return ruleBased;
-  }
-
-  const prompt = `
-You are helping a catering company populate a BEO intake form from a PDF invoice.
-
-Given the raw invoice text below, extract the key fields and return STRICT JSON only.
-Do NOT extract any food/menu items — those will be added manually.
-
-JSON shape:
-{
-  "clientFirstName": string | null,
-  "clientLastName": string | null,
-  "clientEmail": string | null,
-  "clientPhone": string | null,
-  "clientOrganization": string | null,
-  "guestCount": number | null,
-  "eventDate": string | null,
-  "eventStartTime": string | null,
-  "eventEndTime": string | null,
-  "venueName": string | null,
-  "notes": string | null,
-  "menuText": null,
-  "customPassedApp": null,
-  "customPresentedApp": null,
-  "customBuffetMetal": null,
-  "customBuffetChina": null,
-  "customDessert": null,
-  "fwStaff": string | null,
-  "staffArrivalTime": string | null
-}
-
-Rules:
-- If you are unsure about a field, use null.
-- ALWAYS set menuText, customPassedApp, customPresentedApp, customBuffetMetal, customBuffetChina, customDessert to null — do not parse food items.
-- "fwStaff": staff counts from line items, e.g. "2 Server, 1 Bartender" from "2 Server (5 Hours of Service)" and "1 Bartender (5 Hours of Service)".
-- "staffArrivalTime": time staff arrives, e.g. "13:00" for 1pm from "Staff on-site 1pm-6pm".
-- Do NOT include any extra keys.
-- Respond with JSON ONLY, no explanation.
-
-INVOICE TEXT:
-"""${text}"""`;
-
+  // Fall back to OpenAI via server proxy (key stays server-side)
   try {
-  const response = await fetch("https://api.openai.com/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${OPENAI_KEY}`,
-    },
-    body: JSON.stringify({
-      model: "gpt-4o-mini",
-      messages: [
-        {
-          role: "user",
-          content: prompt,
-        },
-      ],
-      temperature: 0.2,
-    }),
-  });
+    const response = await fetch("/api/openai/parse-invoice", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text }),
+    });
 
-  if (!response.ok) {
-    const body = await response.text();
-    let errMsg = `OpenAI API error (${response.status})`;
-    try {
-      const j = JSON.parse(body);
-      if (j.error?.message) errMsg = j.error.message;
-    } catch {
-      if (body) errMsg += ": " + body.slice(0, 150);
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({ error: response.statusText }));
+      throw new Error(err.error || err.message || `API error (${response.status})`);
     }
-    console.error("[invoiceParser]", errMsg);
-    throw new Error(errMsg);
-  }
 
-  const data = await response.json();
-  const content = data.choices?.[0]?.message?.content;
-  if (!content || typeof content !== "string") {
-    console.error("[invoiceParser] Unexpected OpenAI response format", data);
-    throw new Error("OpenAI returned an empty or unexpected response. Try again.");
-  }
-
-  const parsed = extractJsonFromText(content);
-  if (!parsed) {
-    console.error("[invoiceParser] No JSON found in response. Content sample:", content?.slice(0, 300));
-    throw new Error("Could not read extracted data from OpenAI. Try a different invoice or try again.");
-  }
-  return parsed as ParsedInvoice;
+    const parsed = (await response.json()) as ParsedInvoice;
+    return parsed;
   } catch (err) {
-    console.warn("[invoiceParser] OpenAI failed, using rule-based result:", err);
+    console.warn("[invoiceParser] OpenAI proxy failed, using rule-based result:", err);
     return ruleBased;
   }
 }

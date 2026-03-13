@@ -23,14 +23,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  const apiKey = process.env.AIRTABLE_API_KEY?.trim() || process.env.VITE_AIRTABLE_API_KEY?.trim();
-  const baseId = process.env.AIRTABLE_BASE_ID?.trim() || process.env.VITE_AIRTABLE_BASE_ID?.trim();
+  const apiKey = process.env.AIRTABLE_API_KEY?.trim();
+  const baseId = process.env.AIRTABLE_BASE_ID?.trim();
   const path = (req.query.path as string)?.trim() || "";
 
   if (!baseId) {
     return res.status(500).json({
       error: "Server config",
-      message: "AIRTABLE_BASE_ID (or VITE_AIRTABLE_BASE_ID) must be set.",
+      message: "AIRTABLE_BASE_ID must be set.",
     });
   }
 

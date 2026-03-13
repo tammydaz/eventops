@@ -3,9 +3,9 @@ import { useEventStore } from "../state/eventStore";
 import { FIELD_IDS, getFoodwerxArrivalFieldId } from "../services/airtable/events";
 import { asString, asSingleSelectName, asBoolean, asStringArray, asLinkedRecordIds, isErrorResult } from "../services/airtable/selectors";
 import { loadStationsByRecordIds } from "../services/airtable/linkedRecords";
+import { airtableFetch } from "../services/airtable/client";
 import { EventSelector } from "../components/EventSelector";
 import { secondsTo12HourString } from "../utils/timeHelpers";
-import { sanitizeForHeader } from "../utils/httpHeaders";
 
 // ── Types ──
 type SubItem = {
@@ -1254,12 +1254,10 @@ const KitchenBEOPrintPage: React.FC = () => {
         params.set("returnFieldsByFieldId", "true");
         params.append("fields[]", ITEM_NAME);
         params.append("fields[]", CHILD_ITEMS);
-        const res = await fetch(
-          `https://api.airtable.com/v0/${baseId}/${MENU_TABLE}?${params.toString()}`,
-          { headers: { Authorization: `Bearer ${sanitizeForHeader(apiKey)}` } }
+        const data = await airtableFetch<{ records?: Array<{ id: string; fields: Record<string, unknown> }> }>(
+          `/${MENU_TABLE}?${params.toString()}`
         );
-        const data = await res.json();
-        if (data.records) {
+        if (!isErrorResult(data) && data?.records) {
           data.records.forEach((rec: { id: string; fields: Record<string, unknown> }) => {
             const nameRaw = rec.fields[ITEM_NAME];
             const name = typeof nameRaw === "string" && nameRaw.trim() ? nameRaw.trim() : "—";
@@ -1290,13 +1288,11 @@ const KitchenBEOPrintPage: React.FC = () => {
           childParams.set("filterByFormula", `OR(${[...childIdsToFetch].map((id) => `RECORD_ID()='${id}'`).join(",")})`);
           childParams.set("returnFieldsByFieldId", "true");
           childParams.append("fields[]", ITEM_NAME);
-          const res = await fetch(
-            `https://api.airtable.com/v0/${baseId}/${MENU_TABLE}?${childParams.toString()}`,
-            { headers: { Authorization: `Bearer ${sanitizeForHeader(apiKey)}` } }
+          const childData = await airtableFetch<{ records?: Array<{ id: string; fields: Record<string, unknown> }> }>(
+            `/${MENU_TABLE}?${childParams.toString()}`
           );
-          const childData = await res.json();
-          if (childData.records) {
-            childData.records.forEach((rec: { id: string; fields: Record<string, unknown> }) => {
+          if (!isErrorResult(childData) && childData?.records) {
+            (childData as { records: Array<{ id: string; fields: Record<string, unknown> }> }).records.forEach((rec) => {
               const nameRaw = rec.fields[ITEM_NAME];
               const name = typeof nameRaw === "string" && nameRaw.trim() ? nameRaw.trim() : "—";
               if (!newData[rec.id]) {

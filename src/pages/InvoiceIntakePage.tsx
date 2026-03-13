@@ -75,7 +75,7 @@ export default function InvoiceIntakePage() {
         console.error("[InvoiceIntake]", err);
         const msg = err instanceof Error ? err.message : String(err);
         if (msg.includes("OPENAI") || msg.includes("API key") || msg.includes("model") || msg.includes("permissions")) {
-          setError("Invoice parsing fell back to rule-based extraction. Remove or fix VITE_OPENAI_API_KEY in .env if you see this.");
+          setError("Invoice parsing fell back to rule-based extraction. Set OPENAI_API_KEY (server-side) in .env or Vercel if you see this.");
         } else {
           setError(msg.slice(0, 150));
         }
@@ -124,7 +124,7 @@ export default function InvoiceIntakePage() {
         console.error("[InvoiceIntake]", err);
         const msg = err instanceof Error ? err.message : String(err);
         if (msg.includes("OPENAI") || msg.includes("API key") || msg.includes("model") || msg.includes("permissions")) {
-          setError("Invoice parsing fell back to rule-based extraction. Remove or fix VITE_OPENAI_API_KEY in .env if you see this—or try a different invoice.");
+          setError("Invoice parsing fell back to rule-based extraction. Set OPENAI_API_KEY (server-side) in .env or Vercel if you see this—or try a different invoice.");
         } else {
           setError(msg.slice(0, 150));
         }

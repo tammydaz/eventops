@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
+import { airtableFetch } from "../services/airtable/client";
+import { isErrorResult } from "../services/airtable/selectors";
 
-const AIRTABLE_API_KEY = (import.meta.env.VITE_AIRTABLE_API_KEY as string)?.replace(/[^\x00-\x7F]/g, "").trim() || "";
-const AIRTABLE_BASE_ID = (import.meta.env.VITE_AIRTABLE_BASE_ID as string)?.trim() || "";
 const AIRTABLE_EVENTS_TABLE = (import.meta.env.VITE_AIRTABLE_EVENTS_TABLE as string)?.trim() || "";
 
 const FIELD_MAP = {
@@ -19,20 +19,14 @@ const FIELD_MAP = {
 };
 
 async function fetchAllAirtableRecords() {
-  let records: any[] = [];
+  const records: any[] = [];
   let offset = "";
   const view = encodeURIComponent("API View (Unfiltered)");
   do {
-    const url = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${AIRTABLE_EVENTS_TABLE}?pageSize=100&view=${view}${offset ? `&offset=${offset}` : ""}`;
-    const res = await fetch(url, {
-      headers: {
-        Authorization: `Bearer ${AIRTABLE_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-    });
-    if (!res.ok) throw new Error("Failed to fetch events from Airtable.");
-    const data = await res.json();
-    records = records.concat(data.records || []);
+    const path = `/${AIRTABLE_EVENTS_TABLE}?pageSize=100&view=${view}${offset ? `&offset=${offset}` : ""}`;
+    const data = await airtableFetch<{ records?: any[]; offset?: string }>(path);
+    if (isErrorResult(data)) throw new Error("Failed to fetch events from Airtable.");
+    records.push(...(data.records || []));
     offset = data.offset || "";
   } while (offset);
   return records;

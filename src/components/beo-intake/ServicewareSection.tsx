@@ -78,6 +78,16 @@ function generateId() {
 const SERVICEWARE_SOURCE_OPTIONS = ["FoodWerx", "Client", "Rentals", "Mixed"] as const;
 const PAPER_TYPE_OPTIONS = ["Standard Paper", "Premium Paper", "China"] as const;
 
+/** Map legacy serviceware source values to new options */
+function mapLegacySource(legacy: string): string {
+  if (!legacy?.trim()) return "";
+  const lower = legacy.toLowerCase();
+  if (lower.includes("in house") || lower.includes("foodwerx")) return "FoodWerx";
+  if (lower.includes("rented") || lower.includes("rentals")) return "Rentals";
+  if (lower.includes("client")) return "Client";
+  return legacy;
+}
+
 const GUEST_COUNT_BUFFER = 15;
 
 function autoFillServiceware(
@@ -95,9 +105,10 @@ function autoFillServiceware(
   const withIds = <T extends { item: string; supplier: string; qty: number | null }>(arr: T[]) =>
     arr.map((row) => ({ ...row, id: generateId() }));
 
-  switch (paperType) {
-    case "Standard Paper":
-    case "Standard":
+  const pt = paperType.trim().toLowerCase();
+  switch (pt) {
+    case "standard paper":
+    case "standard":
       return {
         plates: withIds([
           { item: "Small Plates – Standard (app + dessert)", supplier: "FoodWerx Standard", qty: appetizerQty },
@@ -136,7 +147,7 @@ function autoFillServiceware(
         ]),
       };
 
-    case "China":
+    case "china":
       const sAndPDefault = Math.ceil(count / 10);
       const breadBasketsDefault = Math.ceil(count / 8);
       return {
@@ -183,7 +194,7 @@ function autoFillClientServiceware(
   const withIds = <T extends { item: string; qty: number | null }>(arr: T[]) =>
     arr.map((row) => ({ ...row, id: generateId(), supplier: "Client" }));
 
-  const isChina = paperType === "China";
+  const isChina = paperType.trim().toLowerCase() === "china";
   if (isChina) {
     return {
       plates: withIds([
@@ -235,12 +246,12 @@ type ItemRowProps = {
 
 function ItemRow({ item, onUpdate, onRemove, onBlur, canEdit }: ItemRowProps) {
   const inputStyle = {
-    padding: "8px 10px",
-    borderRadius: "6px",
+    padding: "5px 8px",
+    borderRadius: "5px",
     border: "1px solid #444",
     backgroundColor: "#1a1a1a",
     color: "#e0e0e0",
-    fontSize: "13px",
+    fontSize: "12px",
     minWidth: 0,
   };
 
@@ -250,10 +261,10 @@ function ItemRow({ item, onUpdate, onRemove, onBlur, canEdit }: ItemRowProps) {
     <div
       style={{
         display: "grid",
-        gridTemplateColumns: "80px 90px 1fr 36px",
-        gap: "8px",
+        gridTemplateColumns: "52px 72px 1fr 26px",
+        gap: "6px",
         alignItems: "center",
-        marginBottom: "8px",
+        marginBottom: "6px",
       }}
     >
       <input
@@ -294,14 +305,14 @@ function ItemRow({ item, onUpdate, onRemove, onBlur, canEdit }: ItemRowProps) {
         onClick={() => onRemove(item.id)}
         disabled={!canEdit}
         style={{
-          width: 32,
-          height: 32,
+          width: 26,
+          height: 26,
           padding: 0,
-          borderRadius: "6px",
+          borderRadius: "5px",
           border: "1px solid #555",
           background: "#333",
           color: "#ff6b6b",
-          fontSize: "16px",
+          fontSize: "13px",
           fontWeight: "bold",
           cursor: canEdit ? "pointer" : "default",
           display: "flex",
@@ -326,6 +337,8 @@ export const ServicewareSection = ({ embedded = false }: ServicewareSectionProps
   const [glassware, setGlassware] = useState<ServicewareItem[]>([]);
   const [notes, setNotes] = useState("");
   const [carafesPerTable, setCarafesPerTable] = useState<number | "">("");
+  const [sectionsExpanded, setSectionsExpanded] = useState(false);
+  const lastFillParamsRef = useRef<{ source: "FoodWerx" | "Client"; guestCount: number; paperType: string; carafes: number; hasApps: boolean } | null>(null);
   const hasLoadedRef = useRef(false);
   const skipLoadRef = useRef(false);
 
@@ -352,6 +365,7 @@ export const ServicewareSection = ({ embedded = false }: ServicewareSectionProps
       setGlassware([]);
       setNotes("");
       setCarafesPerTable("");
+      setSectionsExpanded(false);
       hasLoadedRef.current = false;
       return;
     }
@@ -363,8 +377,12 @@ export const ServicewareSection = ({ embedded = false }: ServicewareSectionProps
     const cutleryRaw = asString(selectedEventData[FIELD_IDS.CUTLERY_LIST]);
     const glasswareRaw = asString(selectedEventData[FIELD_IDS.GLASSWARE_LIST]);
     const notesRaw = asString(selectedEventData[FIELD_IDS.SERVICEWARE_NOTES]);
-    const src = asSingleSelectName(selectedEventData[FIELD_IDS.SERVICEWARE_SOURCE]);
-    const pType = asSingleSelectName(selectedEventData[FIELD_IDS.SERVICEWARE_PAPER_TYPE]);
+    const srcNew = asSingleSelectName(selectedEventData[FIELD_IDS.SERVICEWARE_SOURCE]);
+    const srcLegacy = asSingleSelectName(selectedEventData[FIELD_IDS.SERVICE_WARE_SOURCE_ALT]) || asSingleSelectName(selectedEventData[FIELD_IDS.SERVICE_WARE_SOURCE]);
+    const src = srcNew || mapLegacySource(srcLegacy);
+    const pTypeNew = asSingleSelectName(selectedEventData[FIELD_IDS.SERVICEWARE_PAPER_TYPE]);
+    const pTypeLegacy = asSingleSelectName(selectedEventData[FIELD_IDS.PAPER_TYPE]);
+    const pType = pTypeNew || pTypeLegacy;
 
     setServicewareSource(src);
     setPaperType(pType);
@@ -377,6 +395,8 @@ export const ServicewareSection = ({ embedded = false }: ServicewareSectionProps
     setGlassware(parseLines(glasswareRaw));
     setNotes(notesRaw);
     setCarafesPerTable(carafesVal);
+    setSectionsExpanded(false);
+    lastFillParamsRef.current = null;
     hasLoadedRef.current = true;
   }, [selectedEventId, selectedEventData]);
 
@@ -469,49 +489,78 @@ export const ServicewareSection = ({ embedded = false }: ServicewareSectionProps
   const canEdit = Boolean(selectedEventId);
 
   const handleAutoFill = () => {
+    const effectivePaperType = (paperType || "Standard Paper").trim();
     const carafes = typeof carafesPerTable === "number" ? carafesPerTable : (parseInt(String(carafesPerTable), 10) || 0);
-    const defaults = autoFillServiceware(paperType, guestCount, hasAppetizersAndDesserts, carafes);
+    const hasItems = plates.length > 0 || cutlery.length > 0 || glassware.length > 0;
+    const paramsChanged =
+      !lastFillParamsRef.current ||
+      lastFillParamsRef.current.source !== "FoodWerx" ||
+      lastFillParamsRef.current.guestCount !== guestCount ||
+      lastFillParamsRef.current.paperType !== effectivePaperType ||
+      lastFillParamsRef.current.carafes !== carafes ||
+      lastFillParamsRef.current.hasApps !== hasAppetizersAndDesserts;
+    if (hasItems && !paramsChanged) {
+      setSectionsExpanded((prev) => !prev);
+      return;
+    }
+    const defaults = autoFillServiceware(effectivePaperType, guestCount, hasAppetizersAndDesserts, carafes);
+    lastFillParamsRef.current = { source: "FoodWerx", guestCount, paperType: effectivePaperType, carafes, hasApps: hasAppetizersAndDesserts };
+    if (!servicewareSource) setServicewareSource("FoodWerx");
+    if (!paperType) setPaperType("Standard Paper");
     setPlates(defaults.plates);
     setCutlery(defaults.cutlery);
     setGlassware(defaults.glassware);
+    setSectionsExpanded(true);
   };
 
   const handleClearAll = () => {
     setPlates([]);
     setCutlery([]);
     setGlassware([]);
+    setSectionsExpanded(false);
+    lastFillParamsRef.current = null;
   };
 
   const handleAutoFillClient = () => {
+    const effectivePaperType = (paperType || "Standard Paper").trim();
     const carafes = typeof carafesPerTable === "number" ? carafesPerTable : (parseInt(String(carafesPerTable), 10) || 0);
-    const defaults = autoFillClientServiceware(paperType, guestCount, hasAppetizersAndDesserts, carafes);
+    const hasItems = plates.length > 0 || cutlery.length > 0 || glassware.length > 0;
+    const paramsChanged =
+      !lastFillParamsRef.current ||
+      lastFillParamsRef.current.source !== "Client" ||
+      lastFillParamsRef.current.guestCount !== guestCount ||
+      lastFillParamsRef.current.paperType !== effectivePaperType ||
+      lastFillParamsRef.current.carafes !== carafes ||
+      lastFillParamsRef.current.hasApps !== hasAppetizersAndDesserts;
+    if (hasItems && !paramsChanged) {
+      setSectionsExpanded((prev) => !prev);
+      return;
+    }
+    const defaults = autoFillClientServiceware(effectivePaperType, guestCount, hasAppetizersAndDesserts, carafes);
+    lastFillParamsRef.current = { source: "Client", guestCount, paperType: effectivePaperType, carafes, hasApps: hasAppetizersAndDesserts };
+    if (!servicewareSource) setServicewareSource("Client");
+    if (!paperType) setPaperType("Standard Paper");
     setPlates(defaults.plates);
     setCutlery(defaults.cutlery);
     setGlassware(defaults.glassware);
+    setSectionsExpanded(true);
   };
 
   const hasAnyItems = plates.length > 0 || cutlery.length > 0 || glassware.length > 0;
 
   const isAutoFillClientDisabled =
-    !canEdit ||
-    servicewareSource !== "Client" ||
-    !paperType ||
-    !["Standard Paper", "Premium Paper", "China", "Standard", "Premium"].includes(paperType);
+    !canEdit || (servicewareSource !== "" && servicewareSource !== "Client");
 
   const isAutoFillDisabled =
-    !canEdit ||
-    servicewareSource === "Client" ||
-    servicewareSource === "Rentals" ||
-    !paperType ||
-    !["Standard Paper", "Premium Paper", "China", "Standard", "Premium"].includes(paperType);
+    !canEdit || servicewareSource === "Client" || servicewareSource === "Rentals";
 
   const addButtonStyle = {
-    padding: "8px 16px",
-    borderRadius: "8px",
+    padding: "5px 10px",
+    borderRadius: "6px",
     border: "1px solid #444",
     background: "rgba(255,107,107,0.15)",
     color: "#ff6b6b",
-    fontSize: "12px",
+    fontSize: "11px",
     fontWeight: 600,
     cursor: canEdit ? "pointer" : "default",
     opacity: canEdit ? 1 : 0.6,
@@ -705,7 +754,7 @@ export const ServicewareSection = ({ embedded = false }: ServicewareSectionProps
             </div>
           </CollapsibleSubsection>
         )}
-        <CollapsibleSubsection title="Plates" icon="▶" defaultOpen={false}>
+        <CollapsibleSubsection title="Plates" icon="▶" defaultOpen={plates.length > 0 && sectionsExpanded}>
           {plates.map((item) => (
             <ItemRow
               key={item.id}
@@ -727,7 +776,7 @@ export const ServicewareSection = ({ embedded = false }: ServicewareSectionProps
           </button>
         </CollapsibleSubsection>
 
-        <CollapsibleSubsection title="Cutlery" icon="▶" defaultOpen={false}>
+        <CollapsibleSubsection title="Cutlery" icon="▶" defaultOpen={cutlery.length > 0 && sectionsExpanded}>
           {cutlery.map((item) => (
             <ItemRow
               key={item.id}
@@ -749,7 +798,7 @@ export const ServicewareSection = ({ embedded = false }: ServicewareSectionProps
           </button>
         </CollapsibleSubsection>
 
-        <CollapsibleSubsection title="Glassware" icon="▶" defaultOpen={false}>
+        <CollapsibleSubsection title="Glassware" icon="▶" defaultOpen={glassware.length > 0 && sectionsExpanded}>
           {glassware.map((item) => (
             <ItemRow
               key={item.id}

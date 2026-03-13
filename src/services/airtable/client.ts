@@ -18,11 +18,11 @@ type AirtableApiError = {
   };
 };
 
-const AIRTABLE_API_URL = "https://api.airtable.com/v0";
+/** Server proxy — keeps API key server-side. Never use VITE_AIRTABLE_API_KEY. */
+const PROXY_URL = "/api/airtable/proxy";
 
 /** Lazy env reads to avoid "Cannot access before initialization" in bundled chunks. */
 const _getBaseId = () => (import.meta.env.VITE_AIRTABLE_BASE_ID as string | undefined)?.trim();
-const _getApiKey = () => (import.meta.env.VITE_AIRTABLE_API_KEY as string | undefined)?.trim();
 const _getEventsTable = () => (import.meta.env.VITE_AIRTABLE_EVENTS_TABLE as string | undefined)?.trim();
 const _getStationsTable = () => (import.meta.env.VITE_AIRTABLE_STATIONS_TABLE as string | undefined)?.trim();
 const _getMasterMenuSpecsTable = () => (import.meta.env.VITE_AIRTABLE_MASTER_MENU_SPECS_TABLE as string | undefined)?.trim();
@@ -69,8 +69,12 @@ export const getTasksTable = (): string | undefined =>
 export const getBaseId = (): string | AirtableErrorResult =>
   getEnvValue(_getBaseId(), "VITE_AIRTABLE_BASE_ID");
 
-export const getApiKey = (): string | AirtableErrorResult =>
-  getEnvValue(_getApiKey(), "VITE_AIRTABLE_API_KEY");
+/** When using server proxy, returns "proxy" if baseId is set. Legacy checks use this. */
+export const getApiKey = (): string | AirtableErrorResult => {
+  const baseId = _getBaseId();
+  if (baseId) return "proxy";
+  return { error: true, message: "VITE_AIRTABLE_BASE_ID must be set" };
+};
 
 export const airtableFetch = async <T>(
   path: string,
@@ -81,33 +85,14 @@ export const airtableFetch = async <T>(
     return baseId;
   }
 
-  const apiKey = getEnvValue(_getApiKey(), "VITE_AIRTABLE_API_KEY");
-  if (typeof apiKey !== "string") {
-    return apiKey;
-  }
-
-  const url = `${AIRTABLE_API_URL}/${baseId}${path}`;
-
   try {
-    const headers = getHeaders(apiKey);
-    
-    // Debug: Check for non-ASCII in Authorization header
-    const authHeader = headers.Authorization;
-    const hasNonAscii = /[^\x00-\x7F]/.test(authHeader);
-    if (hasNonAscii) {
-      console.error("Non-ASCII character found in Authorization header:", authHeader);
-      return {
-        error: true,
-        message: `Authorization header contains non-ASCII characters. Please check your API key.`,
-      };
-    }
+    const method = (init?.method as string) || "GET";
+    const body = init?.body != null ? (typeof init.body === "string" ? init.body : JSON.stringify(init.body)) : undefined;
 
-    const response = await fetch(url, {
-      ...init,
-      headers: {
-        ...headers,
-        ...(init?.headers ?? {}),
-      },
+    const response = await fetch(PROXY_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ path, method, body }),
     });
 
     const data = (await response.json()) as T & AirtableApiError;
@@ -115,11 +100,11 @@ export const airtableFetch = async <T>(
     if (!response.ok || data?.error) {
       const errMsg = (data as { error?: { message?: string; type?: string } })?.error?.message;
       const errType = (data as { error?: { message?: string; type?: string } })?.error?.type;
-      console.error('❌ AIRTABLE ERROR (422 = invalid field value):', response.status, errType || '', errMsg || JSON.stringify(data));
-      console.error('Request body:', init?.body);
+      console.error("❌ AIRTABLE ERROR (422 = invalid field value):", response.status, errType || "", errMsg || JSON.stringify(data));
+      console.error("Request body:", body);
       return {
         error: true,
-        message: data?.error?.message || `Airtable request failed: ${response.status}`,
+        message: (data as { error?: { message?: string } })?.error?.message || `Airtable request failed: ${response.status}`,
       };
     }
 

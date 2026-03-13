@@ -1,11 +1,20 @@
 import { airtableFetch, getBaseId, getApiKey, getStationsTable, getMenuItemsTable, airtableMetaFetch, type AirtableListResponse, type AirtableErrorResult } from "./client";
-import { sanitizeForHeader } from "../../utils/httpHeaders";
 import { cleanDisplayName } from "../../utils/displayName";
 import { isErrorResult, asString, asSingleSelectName, asLinkedRecordIds } from "./selectors";
 import { STATION_ITEMS_FIELD_ID, STATION_EVENT_FIELD_ID, STATION_TYPE_FIELD_ID, STATION_NOTES_FIELD_ID } from "../../constants/stations";
 import { getStationItemIds, hasStationMapping, itemMatchesStation } from "../../constants/stationItemMapping";
 
-type StationsFieldIds = { stationType: string; stationItems: string; event: string; stationNotes: string; stationTypeFieldName: string };
+type StationsFieldIds = {
+  stationType: string;
+  stationItems: string;
+  event: string;
+  stationNotes: string;
+  stationTypeFieldName: string;
+  stationPreset?: string;
+  stationComponents?: string;
+  customComponents?: string;
+  customItems?: string;
+};
 
 let cachedStationsFieldIds: StationsFieldIds | null | undefined = undefined;
 
@@ -31,6 +40,10 @@ async function getStationsFieldIds(): Promise<StationsFieldIds | null> {
     event: byName("Event") || STATION_EVENT_FIELD_ID,
     stationNotes: byName("Station Notes") || STATION_NOTES_FIELD_ID,
     stationTypeFieldName: stationTypeField?.name ?? "Station Type",
+    stationPreset: byName("Station Preset") || byName("Station Presets") || undefined,
+    stationComponents: byName("Station Components") || undefined,
+    customComponents: byName("Custom Components") || undefined,
+    customItems: byName("Custom Items") || byName("Additional Components") || undefined,
   };
   return cachedStationsFieldIds;
 }
@@ -111,16 +124,6 @@ const listLinkedTableItems = async (
 };
 
 export const loadMenuItems = async (): Promise<LinkedRecordItem[] | AirtableErrorResult> => {
-  const apiKeyResult = getApiKey();
-  const baseIdResult = getBaseId();
-  if (isErrorResult(apiKeyResult)) return apiKeyResult;
-  if (isErrorResult(baseIdResult)) return baseIdResult;
-  const apiKey = (apiKeyResult as string).trim();
-  const baseId = (baseIdResult as string).trim();
-  if (!apiKey || !baseId) {
-    return { error: true, message: "Missing Airtable API key or base ID" };
-  }
-
   const allRecords: LinkedRecordItem[] = [];
   let offset: string | undefined = undefined;
 
@@ -130,24 +133,19 @@ export const loadMenuItems = async (): Promise<LinkedRecordItem[] | AirtableErro
       const params = new URLSearchParams();
       params.set("pageSize", "100");
       params.set("returnFieldsByFieldId", "true");
-      params.append("fields[]", MENU_ITEMS_FORMATTED_NAME_FIELD_ID);
+      params.append("fields[]", MENU_ITEMS_ITEM_NAME_FIELD_ID);
       params.append("fields[]", MENU_ITEMS_CATEGORY_FIELD_ID);
       params.append("fields[]", MENU_ITEMS_CHILD_ITEMS_FIELD_ID);
-      params.append("fields[]", MENU_ITEMS_ITEM_NAME_FIELD_ID);
       if (offset) params.set("offset", offset);
 
       const tableId = getMenuItemsTable() || MENU_ITEMS_TABLE_ID_DEFAULT;
-      const res = await fetch(
-        `https://api.airtable.com/v0/${baseId}/${tableId}?${params.toString()}`,
-        { headers: { Authorization: `Bearer ${sanitizeForHeader(apiKey)}` } }
-      );
-
-      const data = (await res.json()) as {
+      const data = await airtableFetch<{
         records?: Array<{ id: string; fields: Record<string, unknown> }>;
         offset?: string;
         error?: { type: string; message: string };
-      };
+      }>(`/${tableId}?${params.toString()}`);
 
+      if (isErrorResult(data)) return data;
       if (data.error) {
         return { error: true, message: data.error.message ?? "Airtable API error" };
       }
@@ -158,13 +156,13 @@ export const loadMenuItems = async (): Promise<LinkedRecordItem[] | AirtableErro
 
     const idToName: Record<string, string> = {};
     for (const rec of rawRecords) {
-      const nameRaw = rec.fields[MENU_ITEMS_FORMATTED_NAME_FIELD_ID] ?? rec.fields[MENU_ITEMS_ITEM_NAME_FIELD_ID];
+      const nameRaw = rec.fields[MENU_ITEMS_ITEM_NAME_FIELD_ID];
       const name = typeof nameRaw === "string" ? nameRaw : nameRaw && typeof nameRaw === "object" && "name" in nameRaw ? String((nameRaw as { name: string }).name) : "";
       idToName[rec.id] = cleanDisplayName(name || "") || rec.id;
     }
 
     for (const rec of rawRecords) {
-      const nameRaw = rec.fields[MENU_ITEMS_FORMATTED_NAME_FIELD_ID];
+      const nameRaw = rec.fields[MENU_ITEMS_ITEM_NAME_FIELD_ID];
       const name = typeof nameRaw === "string" ? nameRaw : nameRaw && typeof nameRaw === "object" && "name" in nameRaw ? String((nameRaw as { name: string }).name) : "";
       const categoryRaw = rec.fields[MENU_ITEMS_CATEGORY_FIELD_ID];
       let category: string | undefined;
@@ -227,12 +225,6 @@ async function loadMenuItemsByIds(
   ids: string[]
 ): Promise<LinkedRecordItem[] | AirtableErrorResult> {
   if (ids.length === 0) return [];
-  const apiKeyResult = getApiKey();
-  const baseIdResult = getBaseId();
-  if (isErrorResult(apiKeyResult)) return apiKeyResult;
-  if (isErrorResult(baseIdResult)) return baseIdResult;
-  const apiKey = (apiKeyResult as string).trim();
-  const baseId = (baseIdResult as string).trim();
   const tableId = getMenuItemsTable() || MENU_ITEMS_TABLE_ID_DEFAULT;
   const uniqueIds = [...new Set(ids)].filter((id) => id?.startsWith("rec"));
   if (uniqueIds.length === 0) return [];
@@ -248,14 +240,11 @@ async function loadMenuItemsByIds(
   params.append("fields[]", MENU_ITEMS_CHILD_ITEMS_FIELD_ID);
   params.append("fields[]", MENU_ITEMS_ITEM_NAME_FIELD_ID);
 
-  const res = await fetch(
-    `https://api.airtable.com/v0/${baseId}/${tableId}?${params.toString()}`,
-    { headers: { Authorization: `Bearer ${sanitizeForHeader(apiKey)}` } }
-  );
-  const data = (await res.json()) as {
+  const data = await airtableFetch<{
     records?: Array<{ id: string; fields: Record<string, unknown> }>;
     error?: { message?: string };
-  };
+  }>(`/${tableId}?${params.toString()}`);
+  if (isErrorResult(data)) return data;
   if (data.error) return { error: true, message: data.error.message ?? "Airtable API error" };
 
   const allRecs = data.records ?? [];
@@ -287,14 +276,8 @@ async function loadMenuItemsByIds(
 export const loadMenuItemsByStationType = async (
   stationType: string
 ): Promise<LinkedRecordItem[] | AirtableErrorResult> => {
-  const apiKeyResult = getApiKey();
-  const baseIdResult = getBaseId();
-  if (isErrorResult(apiKeyResult)) return apiKeyResult;
-  if (isErrorResult(baseIdResult)) return baseIdResult;
-  const apiKey = (apiKeyResult as string).trim();
-  const baseId = (baseIdResult as string).trim();
   const tableId = getMenuItemsTable() || MENU_ITEMS_TABLE_ID_DEFAULT;
-  if (!apiKey || !baseId || !stationType.trim()) return [];
+  if (!stationType.trim()) return [];
 
   try {
     // 1. Use code mapping first — no Airtable config needed
@@ -327,21 +310,15 @@ export const loadMenuItemsByStationType = async (
     stationsParams.set("returnFieldsByFieldId", "true");
     stationsParams.append("fields[]", fieldIds?.stationItems ?? STATION_ITEMS_FIELD_ID);
 
-    const stationsRes = await fetch(
-      `https://api.airtable.com/v0/${baseId}/${stationsTableId}?${stationsParams.toString()}`,
-      { headers: { Authorization: `Bearer ${sanitizeForHeader(apiKey)}` } }
-    );
-    let stationsData: { records?: Array<{ fields: Record<string, unknown> }>; error?: { message?: string } };
-    try {
-      stationsData = (await stationsRes.json()) as typeof stationsData;
-    } catch {
-      stationsData = { error: { message: "Invalid response" } };
-    }
-    if (stationsRes.status === 403) {
-      console.warn("[Station Picker] 403 on Stations table - check API key has access to base");
+    const stationsData = await airtableFetch<{
+      records?: Array<{ fields: Record<string, unknown> }>;
+      error?: { message?: string };
+    }>(`/${stationsTableId}?${stationsParams.toString()}`);
+    if (isErrorResult(stationsData)) {
+      console.warn("[Station Picker] Airtable error - check API key has access to base");
     }
 
-    if (!stationsData.error && stationsData.records?.length) {
+    if (!isErrorResult(stationsData) && !stationsData.error && stationsData.records?.length) {
       const allItemIds = stationsData.records.flatMap((r) =>
         asLinkedRecordIds(r.fields[fieldIds?.stationItems ?? STATION_ITEMS_FIELD_ID])
       );
@@ -375,25 +352,20 @@ export const loadMenuItemsByStationType = async (
     params.append("fields[]", MENU_ITEMS_CHILD_ITEMS_FIELD_ID);
     params.append("fields[]", MENU_ITEMS_ITEM_NAME_FIELD_ID);
 
-    const res = await fetch(
-      `https://api.airtable.com/v0/${baseId}/${tableId}?${params.toString()}`,
-      { headers: { Authorization: `Bearer ${sanitizeForHeader(apiKey)}` } }
-    );
-    let data: { records?: Array<{ id: string; fields: Record<string, unknown> }>; error?: { message?: string } };
-    try {
-      data = (await res.json()) as typeof data;
-    } catch {
-      data = { error: { message: "Invalid JSON response" } };
+    const data = await airtableFetch<{
+      records?: Array<{ id: string; fields: Record<string, unknown> }>;
+      error?: { message?: string };
+    }>(`/${tableId}?${params.toString()}`);
+    if (isErrorResult(data)) {
+      console.warn("[Station Picker] Airtable error on Menu Items - check API key has access to base");
     }
-    if (res.status === 403) {
-      console.warn("[Station Picker] 403 on Menu Items - check API key has access to base");
-    }
-    if (data.error) {
+    if (!isErrorResult(data) && data.error) {
       console.warn(`[Station Picker] Station Type: ${stationType} | Menu Items filter error: ${data.error.message}`);
     }
 
     let items: LinkedRecordItem[] = [];
-    if (!data.error && data.records?.length) {
+    const recordsData = isErrorResult(data) ? null : data;
+    if (recordsData && !recordsData.error && recordsData.records?.length) {
       const allRecs = data.records;
       const idToName: Record<string, string> = {};
       for (const rec of allRecs) {
@@ -438,13 +410,6 @@ export async function fetchLinkedRecordOptions(
   tableId: string,
   fieldId: string
 ): Promise<FetchLinkedRecordItem[]> {
-  const baseId = getBaseId();
-  const apiKey = getApiKey();
-  if (typeof baseId !== "string" || typeof apiKey !== "string") {
-    console.error("[fetchLinkedRecordOptions] Missing baseId or apiKey");
-    return [];
-  }
-
   console.log("[fetchLinkedRecordOptions] Fetching for field:", fieldId);
 
   try {
@@ -456,16 +421,13 @@ export async function fetchLinkedRecordOptions(
     params.append("fields[]", MENU_ITEMS_CATEGORY_FIELD_ID);
     params.append("fields[]", MENU_ITEMS_DIETARY_TAGS_FIELD_ID);
 
-    const url = `https://api.airtable.com/v0/${baseId}/${tableId}?${params.toString()}`;
-    console.log("[fetchLinkedRecordOptions] Request URL:", url);
-
-    const response = await fetch(url, {
-      headers: {
-        Authorization: `Bearer ${sanitizeForHeader(apiKey)}`,
-      },
-    });
-
-    const data = (await response.json()) as { records?: Array<{ id: string; fields: Record<string, unknown> }> };
+    const data = await airtableFetch<{ records?: Array<{ id: string; fields: Record<string, unknown> }> }>(
+      `/${tableId}?${params.toString()}`
+    );
+    if (isErrorResult(data)) {
+      console.error("[fetchLinkedRecordOptions] Airtable error");
+      return [];
+    }
     console.log("[fetchLinkedRecordOptions] Raw response:", JSON.stringify(data, null, 2));
 
     if (!data.records) {
@@ -526,6 +488,9 @@ export type StationRecord = {
   stationType: string;
   stationItems: string[];
   stationNotes: string;
+  stationPresetId?: string;
+  stationComponents?: string[];
+  customItems?: string;
 };
 
 /** Load station records by IDs (from Events.Stations). Uses field IDs from Meta API. */
@@ -554,7 +519,11 @@ export const loadStationsByRecordIds = async (
     const stationType = asString(fields[fieldIds.stationType]) || asSingleSelectName(fields[fieldIds.stationType]) || "";
     const stationItems = asLinkedRecordIds(fields[fieldIds.stationItems]);
     const stationNotes = asString(fields[fieldIds.stationNotes]) || "";
-    return { id: rec.id, stationType, stationItems, stationNotes };
+    const stationPresetIds = fieldIds.stationPreset ? asLinkedRecordIds(fields[fieldIds.stationPreset]) : [];
+    const stationPresetId = stationPresetIds[0];
+    const stationComponents = fieldIds.stationComponents ? asLinkedRecordIds(fields[fieldIds.stationComponents]) : undefined;
+    const customItems = fieldIds.customItems ? asString(fields[fieldIds.customItems]) : undefined;
+    return { id: rec.id, stationType, stationItems, stationNotes, stationPresetId, stationComponents, customItems };
   });
 };
 
@@ -585,6 +554,51 @@ export const createStation = async (params: {
   );
   if (isErrorResult(data)) return data;
   return { id: (data as { id: string }).id };
+};
+
+/** Create station from preset with components. Uses field IDs for Station Preset, Station Components, Custom Items. */
+export const createStationFromPreset = async (params: {
+  presetId: string;
+  presetName: string;
+  stationComponents: string[];
+  customItems?: string;
+  stationNotes: string;
+  eventId: string;
+}): Promise<{ id: string } | AirtableErrorResult> => {
+  const fieldIds = await getStationsFieldIds();
+  if (!fieldIds) return { error: true, message: "Could not resolve Stations table field IDs" };
+  const tableId = getStationsTable();
+  const fields: Record<string, unknown> = {
+    [fieldIds.event]: [params.eventId],
+    [fieldIds.stationType]: params.presetName,
+  };
+  if (fieldIds.stationPreset) fields[fieldIds.stationPreset] = [params.presetId];
+  if (fieldIds.stationComponents && params.stationComponents.length > 0) fields[fieldIds.stationComponents] = params.stationComponents;
+  if (fieldIds.customItems && params.customItems?.trim()) fields[fieldIds.customItems] = params.customItems.trim();
+  if (params.stationNotes?.trim()) fields[fieldIds.stationNotes] = params.stationNotes.trim();
+  const data = await airtableFetch<{ id: string }>(`/${tableId}`, { method: "POST", body: JSON.stringify({ fields }) });
+  if (isErrorResult(data)) return data;
+  return { id: (data as { id: string }).id };
+};
+
+/** Update station's Station Components, Custom Components, Custom Items. */
+export const updateStationComponents = async (
+  stationId: string,
+  patch: { stationComponents?: string[]; customItems?: string }
+): Promise<{ success: boolean } | AirtableErrorResult> => {
+  const fieldIds = await getStationsFieldIds();
+  if (!fieldIds) return { error: true, message: "Could not resolve Stations table field IDs" };
+  const tableId = getStationsTable();
+  const fields: Record<string, unknown> = {};
+  if (patch.stationComponents !== undefined && fieldIds.stationComponents) fields[fieldIds.stationComponents] = patch.stationComponents;
+  if (patch.customItems !== undefined && fieldIds.customItems) fields[fieldIds.customItems] = patch.customItems || null;
+  if (Object.keys(fields).length === 0) return { success: true };
+  const data = await airtableFetch<{ id: string }>(`/${tableId}`, {
+    method: "PATCH",
+    body: JSON.stringify({ records: [{ id: stationId, fields }] }),
+  });
+  if (isErrorResult(data)) return data;
+  return { success: true };
 };
 
 /** Station preset from Station Presets table. */

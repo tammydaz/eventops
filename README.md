@@ -27,6 +27,7 @@ If you are developing a production application, we recommend using TypeScript wi
 	- `VITE_AIRTABLE_API_KEY`
 	- `VITE_AIRTABLE_BASE_ID`
 	- `VITE_AIRTABLE_EVENTS_TABLE`
+	- `OPENAI_API_KEY` (server-side, for invoice AI parsing — optional)
 8) Deploy.
 
 ## Airtable API Key Setup

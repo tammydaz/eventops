@@ -3,13 +3,14 @@ import { useEventStore } from "../state/eventStore";
 import { useAuthStore } from "../state/authStore";
 import { useBeoPrintStore } from "../state/beoPrintStore";
 import { FIELD_IDS, getBarServiceFieldId, getLockoutFieldIds, getBOHProductionFieldIds } from "../services/airtable/events";
-import { asLinkedRecordIds, asSingleSelectName, asString, asStringArray } from "../services/airtable/selectors";
+import { airtableFetch } from "../services/airtable/client";
+import { asLinkedRecordIds, asSingleSelectName, asString, asStringArray, isErrorResult } from "../services/airtable/selectors";
 import { secondsToTimeString, secondsTo12HourString } from "../utils/timeHelpers";
-import { sanitizeForHeader } from "../utils/httpHeaders";
 import { isDeliveryOrPickup } from "../lib/deliveryHelpers";
 import { FULL_BAR_PACKAGE, FULL_BAR_PACKAGE_SPECK_ROWS, getFullBarPackagePackoutItems, getSignatureCocktailGreeting } from "../constants/fullBarPackage";
 import { ConfirmSendToBOHModal } from "../components/ConfirmSendToBOHModal";
 import { AcceptTransferModal } from "../components/AcceptTransferModal";
+import { getSauceOverrides } from "../state/sauceOverrideStore";
 
 // ── Types ──
 type MenuLineItem = {
@@ -90,7 +91,7 @@ function HeaderFieldWithDivider({ label, value, highlight }: { label: string; va
 }
 
 // ── BEO header table: Kitchen BEO style (condensed for ticket rail) ──
-const LABEL_BG = "#f5f5f0";
+const LABEL_BG = "#fff";
 const LABEL_CELL = { fontSize: 10, fontWeight: 700, color: "#000", padding: "1px 6px", border: "1px solid #000", verticalAlign: "middle" as const, background: LABEL_BG, lineHeight: 1 };
 const DATA_CELL = { fontSize: 11, fontWeight: 400, color: "#000", padding: "1px 6px", border: "1px solid #000", background: "#fff", verticalAlign: "middle" as const, lineHeight: 1 };
 // Kitchen BEO header style: 2px table border, condensed, 15/35/15/35 cols
@@ -134,7 +135,7 @@ const printStyles = `
       color-scheme: light !important;
       margin: 0 !important;
       padding: 0 !important;
-      background: #fff !important;
+      background: white !important;
       color: #000 !important;
       overflow: visible !important;
       -webkit-print-color-adjust: exact !important;
@@ -143,14 +144,14 @@ const printStyles = `
     body {
       margin: 0 !important;
       padding: 0 !important;
-      background: #fff !important;
+      background: white !important;
       color: #000 !important;
       overflow: visible !important;
       -webkit-print-color-adjust: exact !important;
       print-color-adjust: exact !important;
     }
     #root, #root > * {
-      background: #fff !important;
+      background: white !important;
       color: #000 !important;
       visibility: visible !important;
       opacity: 1 !important;
@@ -159,22 +160,48 @@ const printStyles = `
       print-color-adjust: exact !important;
     }
     .beo-print-content {
+      display: block !important;
       color: #000 !important;
-      background: #fff !important;
+      background: white !important;
       -webkit-print-color-adjust: exact !important;
       print-color-adjust: exact !important;
-      width: 100% !important;
-      max-width: none !important;
-      padding: 0 !important;
-      margin: 0 !important;
+      width: 8.5in !important;
+      max-width: 8.5in !important;
+      padding: 0.5in !important;
+      margin: 0 auto !important;
       box-sizing: border-box !important;
       font-size: 14pt !important;
       overflow: visible !important;
+      min-height: 11in !important;
+      height: auto !important;
+      max-height: none !important;
     }
     .beo-print-layout, .beo-print-main {
-      background: #fff !important;
+      background: white !important;
       max-width: none !important;
       overflow: visible !important;
+      min-height: auto !important;
+      height: auto !important;
+      max-height: none !important;
+    }
+    .beo-page, .print-page, .kitchen-beo-page, .page {
+      display: block !important;
+      background: white !important;
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+      width: 8.5in !important;
+      min-height: 11in !important;
+      height: auto !important;
+      max-height: none !important;
+      overflow: visible !important;
+    }
+    .kitchen-beo-page .beo-section-card,
+    .kitchen-beo-page .beo-line-item,
+    .kitchen-beo-page .beo-menu-item-block,
+    .kitchen-beo-page table td {
+      background: white !important;
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
     }
     .beo-print-table thead {
       display: table-header-group !important;
@@ -189,13 +216,27 @@ const printStyles = `
       font-weight: 600 !important;
     }
     .beo-section-card {
-      break-inside: avoid !important;
-      page-break-inside: avoid !important;
+      margin: 0.12in 0 !important;
+      break-inside: auto !important;
+      page-break-inside: auto !important;
       overflow: visible !important;
+      background: white !important;
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+    }
+    .beo-section-header {
+      break-after: avoid !important;
+      page-break-after: avoid !important;
+    }
+    .meeting-beo-beo-section {
+      background: white !important;
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
     }
     .beo-section-header-with-first-item {
       break-inside: avoid !important;
       page-break-inside: avoid !important;
+      background: white !important;
     }
     .beo-event-header-block {
       break-inside: avoid !important;
@@ -227,15 +268,16 @@ const printStyles = `
     .beo-section-header {
       font-size: 12pt !important;
       font-weight: 700 !important;
+      background: white !important;
     }
     .beo-line-item {
-      font-size: 14pt !important;
+      font-size: 13pt !important;
     }
     .beo-spec-col {
-      font-size: 14pt !important;
+      font-size: 13pt !important;
     }
     .beo-item-col {
-      font-size: 14pt !important;
+      font-size: 13pt !important;
       overflow: visible !important;
       overflow-wrap: break-word !important;
       word-break: break-word !important;
@@ -244,14 +286,26 @@ const printStyles = `
     .print-only { display: block !important; }
     .print-page { break-after: page; }
     .kitchen-beo-page {
-      break-after: page;
+      width: 8.5in;
+      min-height: auto !important;
+      margin: 0 auto;
+      padding: 0.35in 0.35in 0.4in 0.35in;
+      display: block !important;
+      page-break-after: auto;
+      break-after: auto;
       overflow: visible !important;
-      min-height: 0 !important;
+      height: auto !important;
+      max-height: none !important;
     }
-    .kitchen-beo-page:not(:first-child) { break-before: page !important; }
     .kitchen-beo-page:last-child { break-after: auto; }
-    .meeting-beo-notes-section { break-before: page !important; }
     .menu-section-page { break-after: page !important; width: 8in !important; min-height: 10in !important; box-sizing: border-box !important; }
+    .kitchen-beo-page,
+    .beo-print-content,
+    .print-page {
+      display: block !important;
+      justify-content: flex-start !important;
+      align-items: flex-start !important;
+    }
   }
   @page {
     size: 8.5in 11in;
@@ -346,7 +400,7 @@ const clientMenuPrintStyles = `
     body.print-menu-mode #root,
     body.print-menu-mode #root > *,
     .print-wrapper.print-menu-mode,
-    .print-wrapper.print-tent-mode { background: #f8f5f0 !important; color: #2c2c2c !important; }
+    .print-wrapper.print-tent-mode { background: #fff !important; color: #2c2c2c !important; }
     .print-wrapper .buffet-menu-signs-container {
       font-family: "Source Serif 4", "Georgia", serif !important;
       width: 100% !important;
@@ -357,7 +411,7 @@ const clientMenuPrintStyles = `
       display: block !important;
     }
     .print-menu-mode .menu-section-page {
-      background: #f8f5f0 !important;
+      background: #fff !important;
       border: 1px solid rgba(0,0,0,0.2) !important;
       width: 100% !important;
       max-width: none !important;
@@ -369,23 +423,11 @@ const clientMenuPrintStyles = `
     }
     .print-menu-mode.theme-classic-european .menu-section-page::before,
     .print-tent-mode.theme-classic-european .tent-card::before {
-      content: "❧" !important;
-      position: absolute !important;
-      top: 0.4in !important;
-      left: 0.4in !important;
-      font-size: 12pt !important;
-      color: rgba(0,0,0,0.12) !important;
-      pointer-events: none !important;
+      content: none !important;
     }
     .print-menu-mode.theme-classic-european .menu-section-page::after,
     .print-tent-mode.theme-classic-european .tent-card::after {
-      content: "❧" !important;
-      position: absolute !important;
-      bottom: 0.4in !important;
-      right: 0.4in !important;
-      font-size: 12pt !important;
-      color: rgba(0,0,0,0.12) !important;
-      pointer-events: none !important;
+      content: none !important;
     }
     .print-menu-mode .buffet-sign-title,
     .print-tent-mode .tent-panel-content { font-family: "Cormorant Garamond", "Georgia", serif !important; }
@@ -410,7 +452,7 @@ const clientMenuPrintStyles = `
     .print-menu-mode.theme-modern-minimal .menu-section-page,
     .print-tent-mode.theme-modern-minimal .tent-card { background: #fff !important; }
     .print-menu-mode.theme-rustic-elegant .menu-section-page,
-    .print-tent-mode.theme-rustic-elegant .tent-card { background: #faf6f0 !important; }
+    .print-tent-mode.theme-rustic-elegant .tent-card { background: #fff !important; }
     .print-menu-mode.theme-black-tie-formal .menu-section-page,
     .print-tent-mode.theme-black-tie-formal .tent-card { background: #fff !important; }
     .print-menu-mode.theme-black-tie-formal .buffet-sign-title { background: #000 !important; color: #fff !important; padding: 0.25em 0.5em !important; }
@@ -444,7 +486,7 @@ const styles: Record<string, React.CSSProperties> = {
     maxWidth: "8.5in",
     minHeight: "11in",
     margin: "0 auto",
-    padding: "0.5in",
+    padding: "0",
     background: "#fff",
     color: "#000",
     boxSizing: "border-box" as const,
@@ -531,7 +573,7 @@ const styles: Record<string, React.CSSProperties> = {
     whiteSpace: "pre-wrap" as const,
   },
   sectionCard: {
-    background: "transparent",
+    background: "#fff",
     border: "2px solid #000",
     borderRadius: 4,
     marginBottom: 4,
@@ -541,7 +583,7 @@ const styles: Record<string, React.CSSProperties> = {
     background: "transparent",
     color: "#000",
     padding: "2px 8px",
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: 700,
     fontFamily: "'Segoe UI', Arial, sans-serif",
     textAlign: "center" as const,
@@ -556,13 +598,13 @@ const styles: Record<string, React.CSSProperties> = {
     display: "grid",
     padding: "1px 8px",
     borderBottom: "1px solid #eee",
-    fontSize: 11,
+    fontSize: 10,
     lineHeight: 1.15,
     alignItems: "center" as const,
   },
-  specCol: { fontWeight: 700, color: "#555", fontSize: 11 },
-  itemCol: { fontWeight: 600, color: "#333", fontSize: 11, overflowWrap: "break-word" as const, wordBreak: "break-word" as const, minWidth: 0, paddingLeft: "2ch" },
-  packOutCol: { fontSize: 11, color: "#666", textAlign: "right" as const },
+  specCol: { fontWeight: 700, color: "#555", fontSize: 10 },
+  itemCol: { fontWeight: 600, color: "#333", fontSize: 10, overflowWrap: "break-word" as const, wordBreak: "break-word" as const, minWidth: 0, paddingLeft: "2ch" },
+  packOutCol: { fontSize: 10, color: "#666", textAlign: "right" as const },
   checkboxCol: { display: "flex", alignItems: "center", justifyContent: "center" },
   footer: {
     borderTop: "3px solid #000",
@@ -575,7 +617,7 @@ const styles: Record<string, React.CSSProperties> = {
     justifyContent: "center",
     alignItems: "center",
     gap: 8,
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: 500,
     color: "#333",
   },
@@ -605,7 +647,7 @@ const styles: Record<string, React.CSSProperties> = {
   layout: {
     display: "flex",
     minHeight: "100vh",
-    background: "#1a1a1a",
+    background: "#1a1a1a", // Screen only; print CSS overrides to white
   },
   leftSidebar: {
     width: 200,
@@ -1271,7 +1313,7 @@ function SBeoContent(props: {
         kitchenPages.map((page, pageIdx) => (
           <div
             key={`s-beo-${page.pageNum}`}
-            className="beo-print-content kitchen-beo-page"
+            className="beo-print-content kitchen-beo-page page"
             style={{
               ...styles.page,
               pageBreakAfter: pageIdx < kitchenPages.length - 1 ? "page" : "auto",
@@ -1299,17 +1341,21 @@ function SBeoContent(props: {
             {page.pageNum > 1 && !isDelivery && (
               <div className="kitchen-beo-page2-buffer" style={{ height: "10in", minHeight: "10in", flexShrink: 0 }} aria-hidden="true" />
             )}
-            {page.pageNum === 1 && props.beoNotes?.trim() && (
-              <div className="beo-banner-block" style={styles.beoNotesBanner}>📋 BEO NOTES: {props.beoNotes.trim()}</div>
-            )}
-            {page.pageNum === 1 && props.notBuffetBanner && (
-              <div className="beo-banner-block" style={styles.notBuffetBanner}>{props.notBuffetBanner}</div>
-            )}
-            {page.pageNum === 1 && props.allergies && (
-              <div className="beo-banner-block" style={styles.allergyBanner}>⚠️ ALLERGIES / DIETARY RESTRICTIONS: {props.allergies.toUpperCase()}</div>
-            )}
-            {page.pageNum === 1 && props.religiousRestrictions?.trim() && (
-              <div className="beo-banner-block" style={styles.religiousBanner}>🕎 RELIGIOUS / DIETARY: {props.religiousRestrictions.trim().toUpperCase()}</div>
+            {page.pageNum === 1 && (props.beoNotes?.trim() || props.notBuffetBanner || props.allergies || props.religiousRestrictions?.trim()) && (
+              <div className="beo-banner-container">
+                {props.beoNotes?.trim() && (
+                  <div className="beo-banner-block" style={styles.beoNotesBanner}>📋 BEO NOTES: {props.beoNotes.trim()}</div>
+                )}
+                {props.notBuffetBanner && (
+                  <div className="beo-banner-block" style={styles.notBuffetBanner}>{props.notBuffetBanner}</div>
+                )}
+                {props.allergies && (
+                  <div className="beo-banner-block" style={styles.allergyBanner}>⚠️ ALLERGIES / DIETARY RESTRICTIONS: {props.allergies.toUpperCase()}</div>
+                )}
+                {props.religiousRestrictions?.trim() && (
+                  <div className="beo-banner-block" style={styles.religiousBanner}>🕎 RELIGIOUS / DIETARY: {props.religiousRestrictions.trim().toUpperCase()}</div>
+                )}
+              </div>
             )}
             {page.sections.map(({ section, items: sectionItems, isContinuation }, secIdx) => (
               <div key={`${section.fieldId}-${page.pageNum}-${secIdx}`} className="beo-section-card" style={styles.sectionCard}>
@@ -2088,8 +2134,8 @@ function MeetingBeoNotesContent(props: {
         <div style={{ marginTop: 20, fontSize: 12, fontWeight: 700, marginBottom: 8 }}>***end of BEO***</div>
       </div>
 
-      {/* Notes summary page (page break before) */}
-      <div className="meeting-beo-notes-section" style={{ breakBefore: "page", marginTop: 24 }}>
+      {/* Notes summary section */}
+      <div className="meeting-beo-notes-section" style={{ marginTop: 24 }}>
         <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 16, borderBottom: "2px solid #000", paddingBottom: 8 }}>
           Notes / Issues
         </div>
@@ -2146,7 +2192,7 @@ const BeoPrintPage: React.FC = () => {
     draftNote: "",
   });
   const [loading, setLoading] = useState(true);
-  const [menuItemData, setMenuItemData] = useState<Record<string, { name: string; childIds: string[]; description?: string; dietaryTags?: string }>>({});
+  const [menuItemData, setMenuItemData] = useState<Record<string, { name: string; childIds: string[]; description?: string; dietaryTags?: string; sauce?: string }>>({});
   const [buffetMenuEdits, setBuffetMenuEdits] = useState<Record<string, string>>({}); // itemId -> edited description
   const [specOverrides, setSpecOverrides] = useState<Record<string, string>>({});
   const [packOutEdits, setPackOutEdits] = useState<Record<string, string>>({});
@@ -2329,11 +2375,12 @@ const BeoPrintPage: React.FC = () => {
     const CHILD_ITEMS = CHILD_ITEMS_FIELD_ID;
     const DESCRIPTION = FIELD_IDS.MENU_ITEM_DESCRIPTION;
     const DIETARY_TAGS = FIELD_IDS.MENU_ITEM_DIETARY_TAGS;
-    const apiKey = (import.meta.env.VITE_AIRTABLE_API_KEY as string)?.trim() || "";
+    const MENU_ITEM_SAUCE_FIELD_ID = "fldCUjK7oBckAuNNa"; // Menu Items.Sauces (Long text)
     const baseId = (import.meta.env.VITE_AIRTABLE_BASE_ID as string)?.trim() || "";
+    if (!baseId) return;
 
     const fetchMenuItems = async () => {
-      const newData: Record<string, { name: string; childIds: string[]; description?: string; dietaryTags?: string }> = {};
+      const newData: Record<string, { name: string; childIds: string[]; description?: string; dietaryTags?: string; sauce?: string }> = {};
       const toFetch = [...parentIds];
 
       const fetchChunk = async (ids: string[]) => {
@@ -2345,31 +2392,32 @@ const BeoPrintPage: React.FC = () => {
         params.append("fields[]", CHILD_ITEMS);
         params.append("fields[]", DESCRIPTION);
         params.append("fields[]", DIETARY_TAGS);
-        const res = await fetch(
-          `https://api.airtable.com/v0/${baseId}/${MENU_TABLE}?${params.toString()}`,
-          { headers: { Authorization: `Bearer ${sanitizeForHeader(apiKey)}` } }
+        params.append("fields[]", MENU_ITEM_SAUCE_FIELD_ID);
+        const data = await airtableFetch<{ records?: Array<{ id: string; fields: Record<string, unknown> }> }>(
+          `/${MENU_TABLE}?${params.toString()}`
         );
-        const data = await res.json();
-        if (data.records) {
+        if (!isErrorResult(data) && data?.records) {
           data.records.forEach((rec: { id: string; fields: Record<string, unknown> }) => {
             const name = rec.fields[ITEM_NAME];
             const rawChildItems = rec.fields[CHILD_ITEMS_FIELD_ID] ?? [];
             const childIds = Array.isArray(rawChildItems)
               ? rawChildItems.map((item: unknown) => (typeof item === "string" ? item : (item && typeof item === "object" && "id" in item ? String((item as { id?: string }).id ?? "") : ""))).filter((id) => id.startsWith("rec"))
               : [];
-            console.log("CHILD ITEMS (FINAL):", childIds);
             const descRaw = rec.fields[DESCRIPTION];
             const tagsRaw = rec.fields[DIETARY_TAGS];
+            const sauceRaw = rec.fields[MENU_ITEM_SAUCE_FIELD_ID];
             const description = typeof descRaw === "string" ? descRaw : undefined;
             const dietaryTags = Array.isArray(tagsRaw)
               ? tagsRaw.map((t) => (typeof t === "string" ? t : (t && typeof t === "object" && "name" in t ? String((t as { name: string }).name) : ""))).filter(Boolean).join(" ")
               : typeof tagsRaw === "string" ? tagsRaw
               : tagsRaw && typeof tagsRaw === "object" && "name" in tagsRaw ? String((tagsRaw as { name: string }).name) : undefined;
+            const sauce = typeof sauceRaw === "string" ? sauceRaw.trim() : undefined;
             newData[rec.id] = {
               name: typeof name === "string" ? name : rec.id,
               childIds,
               description: description || undefined,
               dietaryTags: dietaryTags || undefined,
+              sauce: sauce || undefined,
             };
           });
         }
@@ -2392,13 +2440,11 @@ const BeoPrintPage: React.FC = () => {
           childParams.set("returnFieldsByFieldId", "true");
           childParams.append("fields[]", ITEM_NAME);
           childParams.append("fields[]", DIETARY_TAGS);
-          const res = await fetch(
-            `https://api.airtable.com/v0/${baseId}/${MENU_TABLE}?${childParams.toString()}`,
-            { headers: { Authorization: `Bearer ${sanitizeForHeader(apiKey)}` } }
+          const childData = await airtableFetch<{ records?: Array<{ id: string; fields: Record<string, unknown> }> }>(
+            `/${MENU_TABLE}?${childParams.toString()}`
           );
-          const childData = await res.json();
-          if (childData.records) {
-            childData.records.forEach((rec: { id: string; fields: Record<string, unknown> }) => {
+          if (!isErrorResult(childData) && childData?.records) {
+            (childData as { records: Array<{ id: string; fields: Record<string, unknown> }> }).records.forEach((rec) => {
               const name = rec.fields[ITEM_NAME];
               const tagsRaw = rec.fields[DIETARY_TAGS];
               const dietaryTags = Array.isArray(tagsRaw)
@@ -2645,8 +2691,15 @@ const BeoPrintPage: React.FC = () => {
   })).filter((s) => s.items.length > 0);
 
   const NOTES_SEP = " – ";
-  // Expand items using linked Child Items (parent on first line, each child on own line indented 2 spaces)
-  // Custom items with "Item – Notes" format: split into parent + child
+  const sauceOverrides = getSauceOverrides(eventId);
+  const getEffectiveSauce = (itemId: string): string | null => {
+    const override = sauceOverrides[itemId];
+    const data = menuItemData[itemId];
+    if (override?.sauceOverride === "None") return null;
+    if (override?.sauceOverride === "Other") return override.customSauce?.trim() || null;
+    return data?.sauce?.trim() || null;
+  };
+  // Expand items: Item name, Sauce: Sauce Name (one leading space), blank line before next item. No dashes or "w/".
   const expandItemToRows = (item: MenuLineItem): { lineName: string; isChild: boolean; itemId: string }[] => {
     const data = menuItemData[item.id];
     const rows: { lineName: string; isChild: boolean; itemId: string }[] = [];
@@ -2656,17 +2709,26 @@ const BeoPrintPage: React.FC = () => {
       const parentName = sepIdx >= 0 ? item.name.slice(0, sepIdx).trim() : item.name;
       const notes = sepIdx >= 0 ? item.name.slice(sepIdx + NOTES_SEP.length).trim() : "";
       if (parentName) rows.push({ lineName: parentName, isChild: false, itemId: item.id });
-      if (notes) rows.push({ lineName: notes, isChild: true, itemId: `${item.id}-notes` });
+      if (notes) rows.push({ lineName: ` ${notes}`, isChild: true, itemId: `${item.id}-notes` });
     } else {
       const parentName = data?.name || item.name || "Loading...";
       rows.push({ lineName: parentName, isChild: false, itemId: item.id });
+      const effectiveSauce = getEffectiveSauce(item.id);
+      if (effectiveSauce) rows.push({ lineName: ` Sauce: ${effectiveSauce}`, isChild: true, itemId: `${item.id}-sauce` });
+      const desc = buffetMenuEdits[item.id] ?? data?.description;
+      const parentLabel = [parentName, desc, effectiveSauce].filter(Boolean).join(" ").toLowerCase();
       if (data?.childIds?.length) {
-        data.childIds.forEach((childId) => {
+        const childIdsToShow = data.childIds.filter((childId) => {
+          const childName = menuItemData[childId]?.name || "";
+          return childName && !parentLabel.includes(childName.toLowerCase());
+        });
+        childIdsToShow.forEach((childId) => {
           const childName = menuItemData[childId]?.name || "Loading...";
-          rows.push({ lineName: childName, isChild: true, itemId: childId });
+          rows.push({ lineName: ` ${childName}`, isChild: true, itemId: childId });
         });
       }
     }
+    rows.push({ lineName: "", isChild: false, itemId: `${item.id}-blank` });
     return rows;
   };
 
@@ -2674,9 +2736,9 @@ const BeoPrintPage: React.FC = () => {
   // Delivery: target 2 pages (no buffer)
   // Full service: 10in buffer on page 2+ leaves ~0.5in for content — use 4 lines so each page gets its own buffer
   const LINES_PER_PAGE_FIRST = isDelivery ? 52 : 48;
-  const LINES_PER_PAGE = isDelivery ? 55 : 4;
+  const LINES_PER_PAGE = isDelivery ? 55 : 48;
   const SECTION_HEADER_LINES = 2;
-  const MIN_LINES_ON_LAST_PAGE = 4;  // avoid orphan 1–3 lines on last page
+  const MIN_LINES_ON_LAST_PAGE = 4;
   type KitchenPage = { pageNum: number; sections: Array<{ section: SectionData; items: MenuLineItem[]; isContinuation?: boolean }> };
   const kitchenPages: KitchenPage[] = (() => {
     const pages: KitchenPage[] = [];
@@ -2686,22 +2748,19 @@ const BeoPrintPage: React.FC = () => {
     const getItemLines = (item: MenuLineItem) => expandItemToRows(item).length;
 
     for (const section of activeSections) {
-      const isDesserts = section.title === "DESSERTS";
       let remainingItems = [...section.items];
       let isFirstChunkOfSection = true;
 
       while (remainingItems.length > 0) {
-        const maxLines = getMaxLines(current.pageNum);
+        const max = getMaxLines(current.pageNum);
         const headerLines = isFirstChunkOfSection ? SECTION_HEADER_LINES : 0;
 
-        // Find how many items fit on this page (linesUsed + header + items must not exceed maxLines)
         let itemsToAdd: MenuLineItem[] = [];
         let chunkLines = headerLines;
         for (const item of remainingItems) {
           const itemLines = getItemLines(item);
-          if (linesUsed + chunkLines + itemLines > maxLines && itemsToAdd.length > 0) break;
-          if (linesUsed + chunkLines + itemLines > maxLines && current.sections.length === 0) {
-            // Must add at least one item even if it overflows
+          if (linesUsed + chunkLines + itemLines > max && itemsToAdd.length > 0) break;
+          if (linesUsed + chunkLines + itemLines > max && current.sections.length === 0) {
             itemsToAdd.push(item);
             chunkLines += itemLines;
             break;
@@ -2711,7 +2770,6 @@ const BeoPrintPage: React.FC = () => {
         }
 
         if (itemsToAdd.length === 0) {
-          // No more room on this page; start new page
           pages.push(current);
           current = { pageNum: pages.length + 1, sections: [] };
           linesUsed = 0;
@@ -2736,7 +2794,6 @@ const BeoPrintPage: React.FC = () => {
     }
     if (current.sections.length > 0) pages.push(current);
     let result = pages.length > 0 ? pages : [{ pageNum: 1, sections: [] }];
-    // Merge last page into previous if it has fewer than MIN_LINES_ON_LAST_PAGE lines
     while (result.length >= 2) {
       const last = result[result.length - 1];
       const lastLines = last.sections.reduce(
@@ -2908,7 +2965,7 @@ const BeoPrintPage: React.FC = () => {
       )}
 
       {/* ── Layout: left sidebar + main area ── */}
-      <div className={`beo-print-layout${topTab === "buffetMenuSigns" ? " print-menu-mode" : ""}`} style={styles.layout}>
+      <div className={`beo-print-layout beo-page${topTab === "buffetMenuSigns" ? " print-menu-mode" : ""}`} style={styles.layout}>
         {/* Left column: checklist boxes (hidden when printing). Kitchen dept: Print only */}
         <div className="no-print" style={styles.leftSidebar}>
           {!isKitchenDept && (
@@ -3116,19 +3173,21 @@ const BeoPrintPage: React.FC = () => {
         kitchenPages.map((page, pageIdx) => (
           <div
             key={page.pageNum}
-            className="kitchen-beo-page"
+            className="kitchen-beo-page print-page page"
             style={{
               pageBreakAfter: pageIdx < kitchenPages.length - 1 ? "page" : "auto",
             }}
           >
             {/* Page marker (PAGE 2, 3, …) is rendered via @page @top-center in print CSS — not in DOM */}
 
-            {/* Grey bar: Order # and Dispatch Time — same header on every page, sits under ticket rail via @page margin-top */}
+            {/* Grey bar + client/order details — header only on page 1 */}
+            {page.pageNum === 1 && (
+              <>
             <div className="beo-letterhead-bar kitchen-beo-page-header" style={{
               background: "#6b7280", color: "#fff", padding: "6px 12px",
               display: "flex", alignItems: "center", justifyContent: "space-between",
               fontSize: 12, fontWeight: 700, border: "2px solid #374151",
-              marginBottom: page.pageNum === 1 ? 6 : 0,
+              marginBottom: 6,
             }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 <div style={{ width: 20, height: 20, background: "#dc2626", display: "flex", alignItems: "center", justifyContent: "center", transform: "rotate(45deg)", flexShrink: 0 }}>
@@ -3139,7 +3198,6 @@ const BeoPrintPage: React.FC = () => {
               <span>ORDER #: {jobNumberDisplay} — DISPATCH TIME: {dispatchTime || "—"}</span>
             </div>
 
-            {/* First 2 lines of header block under grey box */}
             <div className="beo-event-details-table" style={{ marginTop: 4, marginBottom: 6, overflow: "hidden" }}>
               <table style={KITCHEN_HEADER_TABLE}>
                 <colgroup>
@@ -3164,18 +3222,24 @@ const BeoPrintPage: React.FC = () => {
                 </tbody>
               </table>
             </div>
+              </>
+            )}
 
-            {page.pageNum === 1 && beoNotes.trim() && (
-              <div className="beo-banner-block" style={styles.beoNotesBanner}>📋 BEO NOTES: {beoNotes.trim()}</div>
-            )}
-            {page.pageNum === 1 && notBuffetBanner && (
-              <div className="beo-banner-block" style={styles.notBuffetBanner}>{notBuffetBanner}</div>
-            )}
-            {page.pageNum === 1 && allergies && (
-              <div className="beo-banner-block" style={styles.allergyBanner}>⚠️ ALLERGIES / DIETARY RESTRICTIONS: {allergies.toUpperCase()}</div>
-            )}
-            {page.pageNum === 1 && religiousRestrictions.trim() && (
-              <div className="beo-banner-block" style={styles.religiousBanner}>🕎 RELIGIOUS / DIETARY: {religiousRestrictions.trim().toUpperCase()}</div>
+            {page.pageNum === 1 && (beoNotes.trim() || notBuffetBanner || allergies || religiousRestrictions.trim()) && (
+              <div className="beo-banner-container">
+                {beoNotes.trim() && (
+                  <div className="beo-banner-block" style={styles.beoNotesBanner}>📋 BEO NOTES: {beoNotes.trim()}</div>
+                )}
+                {notBuffetBanner && (
+                  <div className="beo-banner-block" style={styles.notBuffetBanner}>{notBuffetBanner}</div>
+                )}
+                {allergies && (
+                  <div className="beo-banner-block" style={styles.allergyBanner}>⚠️ ALLERGIES / DIETARY RESTRICTIONS: {allergies.toUpperCase()}</div>
+                )}
+                {religiousRestrictions.trim() && (
+                  <div className="beo-banner-block" style={styles.religiousBanner}>🕎 RELIGIOUS / DIETARY: {religiousRestrictions.trim().toUpperCase()}</div>
+                )}
+              </div>
             )}
 
             {/* ── Menu Sections for this page ── */}
@@ -3188,7 +3252,7 @@ const BeoPrintPage: React.FC = () => {
                 <span style={{ color: getSectionColor(section.title), fontSize: "22px", lineHeight: 0 }}>●</span>
               </div>
               {(leftCheck === "kitchen" || leftCheck === "expeditor" || leftCheck === "server") && sectionItems.length > 0 && secIdx === 0 && (
-                <div className="beo-line-item" style={{ ...styles.lineItem, borderBottom: "1px solid #ddd", gridTemplateColumns, padding: "4px 8px", lineHeight: 1.2, minHeight: "unset", alignItems: "center", fontWeight: 600, fontSize: 11, color: "#333" }}>
+                <div className="beo-line-item" style={{ ...styles.lineItem, borderBottom: "1px solid #ddd", gridTemplateColumns, padding: "4px 8px", lineHeight: 1.2, minHeight: "unset", alignItems: "center", fontWeight: 600, fontSize: 10, color: "#333" }}>
                   <div style={styles.specCol}>—</div>
                   <div style={styles.itemCol}>—</div>
                   <div style={{ ...styles.checkboxCol, justifyContent: "center" }}>✓ when complete</div>
@@ -3370,7 +3434,7 @@ const BeoPrintPage: React.FC = () => {
         )))}
         {/* When packout/expeditor/server: append Server BEO 2nd page (beverage, hydration, paper, notes, timeline) so it appears in those checks */}
         {(leftCheck === "packout" || leftCheck === "expeditor" || leftCheck === "server") && (
-          <div className="kitchen-beo-page" style={{ pageBreakBefore: "always" }}>
+          <div className="kitchen-beo-page print-page page">
             {/* Grey BEO letterhead bar + 9in buffer (same as kitchen pages 2+) */}
             <div className="beo-letterhead-bar" style={{
               background: "#6b7280", color: "#fff", padding: "12px 16px",
@@ -3474,7 +3538,6 @@ const BeoPrintPage: React.FC = () => {
                 setPackOutEdits={setPackOutEdits}
                 isDelivery={isDelivery}
               />
-              <div style={{ pageBreakBefore: "always" }} />
               <FullBeoPacketBeveragesContent
               eventDate={eventDate}
               clientName={clientName}

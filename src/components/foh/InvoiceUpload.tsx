@@ -100,7 +100,7 @@ export default function InvoiceUpload({ onClose }: Props) {
       console.error("[InvoiceUpload] Process error:", err);
       const message = err instanceof Error ? err.message : String(err);
       if (message.includes("OPENAI") || message.includes("API key") || message.includes("401") || message.includes("Bearer") || message.includes("model") || message.includes("permissions")) {
-        setError("OpenAI API key is missing or invalid. Remove or fix VITE_OPENAI_API_KEY in .env to use rule-based parsing only.");
+        setError("OpenAI API key is missing or invalid. Set OPENAI_API_KEY (server-side) in .env or Vercel to use AI parsing.");
       } else if (message.includes("worker") || message.includes("pdf") || message.includes("getDocument")) {
         setError("Could not read the PDF. Try a different file or check the console for details.");
       } else {

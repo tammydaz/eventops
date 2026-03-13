@@ -10,15 +10,98 @@ import {
   loadStationPreset,
   loadStationsByRecordIds,
   createStation,
+  createStationFromPreset,
   updateStationItems,
+  updateStationComponents,
   getStationTypeOptions,
   type LinkedRecordItem,
 } from "../../services/airtable/linkedRecords";
+import { airtableFetch } from "../../services/airtable/client";
+import { loadStationPresets, loadStationComponentNamesByIds } from "../../services/airtable/stationComponents";
+import { StationComponentsConfigModal } from "./StationComponentsConfigModal";
 import { asLinkedRecordIds, asString, isErrorResult } from "../../services/airtable/selectors";
 import { useEventStore } from "../../state/eventStore";
 import { FormSection, CollapsibleSubsection } from "./FormSection";
 import { CustomFoodItemsBlock } from "./CustomFoodItemsBlock";
-import { sanitizeForHeader } from "../../utils/httpHeaders";
+import { getSauceOverrides, setSauceOverride, type SauceOverride, type SauceOverrideValue } from "../../state/sauceOverrideStore";
+
+const MENU_ITEM_SAUCE_FIELD_ID = "fldCUjK7oBckAuNNa"; // Menu Items.Sauces (Long text)
+
+/** Menu item card with sauce override dropdown (Default / None / Other…) */
+function MenuItemCard(props: {
+  itemId: string;
+  itemName: string;
+  defaultSauce: string | null;
+  sauceOverrides: Record<string, SauceOverride>;
+  onSauceChange: (itemId: string, override: SauceOverride) => void;
+  onRemove: () => void;
+  canEdit: boolean;
+  removeColor: string;
+  itemBorder: string;
+}) {
+  const { itemId, itemName, defaultSauce, sauceOverrides, onSauceChange, onRemove, canEdit, removeColor, itemBorder } = props;
+  const override = sauceOverrides[itemId] ?? { sauceOverride: "Default" as SauceOverrideValue, customSauce: null };
+  const showCustomInput = override.sauceOverride === "Other";
+
+  const defaultLabel = defaultSauce?.trim() ? defaultSauce.trim() : "Default (none)";
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 6, backgroundColor: "#2a2a2a", border: itemBorder, borderRadius: "6px", padding: "8px 12px", marginBottom: "6px" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <span style={{ fontSize: "14px", color: "#e0e0e0" }}>{itemName}</span>
+        <button type="button" disabled={!canEdit} onClick={onRemove} style={{ background: "none", border: "none", color: removeColor, cursor: "pointer", fontSize: "16px", fontWeight: "bold" }}>✕</button>
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <label style={{ fontSize: "11px", color: "rgba(255,255,255,0.6)", flexShrink: 0 }}>Sauce:</label>
+          <select
+            value={override.sauceOverride}
+            onChange={(e) => {
+              const v = e.target.value as SauceOverrideValue;
+              onSauceChange(itemId, { sauceOverride: v, customSauce: v === "Other" ? override.customSauce : null });
+            }}
+            disabled={!canEdit}
+            style={{
+              flex: 1,
+              padding: "6px 10px",
+              fontSize: 12,
+              borderRadius: 6,
+              border: "1px solid #444",
+              background: "#1a1a1a",
+              color: "#e0e0e0",
+              cursor: canEdit ? "pointer" : "default",
+            }}
+          >
+            <option value="Default">{defaultLabel}</option>
+            <option value="None">None</option>
+            <option value="Other">Other…</option>
+          </select>
+        </div>
+        {showCustomInput && (
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <label style={{ fontSize: "11px", color: "rgba(255,255,255,0.6)", flexShrink: 0 }}>Custom Sauce:</label>
+            <input
+              type="text"
+              value={override.customSauce ?? ""}
+              onChange={(e) => onSauceChange(itemId, { ...override, customSauce: e.target.value || null })}
+              placeholder="Enter sauce name"
+              disabled={!canEdit}
+              style={{
+                flex: 1,
+                padding: "6px 10px",
+                fontSize: 12,
+                borderRadius: 6,
+                border: "1px solid #444",
+                background: "#1a1a1a",
+                color: "#e0e0e0",
+              }}
+            />
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
 
 /** Inline replace button — opens picker to swap one station item for another. */
 function StationItemReplaceButton(props: {
@@ -334,15 +417,26 @@ function CreationStationContent(props: {
 }) {
   const { selectedEventId, canEdit, getItemName, fetchItemNames, inputStyle, labelStyle, buttonStyle } = props;
   const { setFields, selectedEventData } = useEventStore();
-  const [stations, setStations] = useState<Array<{ id: string; stationType: string; stationItems: string[]; stationNotes: string }>>([]);
+  const [stations, setStations] = useState<Array<{ id: string; stationType: string; stationItems: string[]; stationNotes: string; stationPresetId?: string; stationComponents?: string[]; customItems?: string }>>([]);
   const [stationTypeOptions, setStationTypeOptions] = useState<string[]>([]);
+  const [stationPresets, setStationPresets] = useState<Array<{ id: string; name: string }>>([]);
   const [newStationType, setNewStationType] = useState("");
+  const [newStationPresetId, setNewStationPresetId] = useState("");
   const [newStationNotes, setNewStationNotes] = useState("");
   const [showConfigModal, setShowConfigModal] = useState(false);
+  const [showComponentsModal, setShowComponentsModal] = useState(false);
+  const [editingStationId, setEditingStationId] = useState<string | null>(null);
+  const [componentNames, setComponentNames] = useState<Record<string, string>>({});
   const stationIds = asLinkedRecordIds(selectedEventData?.[FIELD_IDS.STATIONS]) ?? [];
 
   useEffect(() => {
     getStationTypeOptions().then((opts) => setStationTypeOptions(opts.length > 0 ? opts : [...STATION_TYPE_OPTIONS]));
+  }, []);
+
+  useEffect(() => {
+    loadStationPresets().then((result) => {
+      if (!isErrorResult(result) && result.length > 0) setStationPresets(result);
+    });
   }, []);
 
   useEffect(() => {
@@ -358,14 +452,30 @@ function CreationStationContent(props: {
         if (allStationItemIds.length > 0 && selectedEventId) {
           fetchItemNames(selectedEventId, allStationItemIds);
         }
+        const allComponentIds = result.flatMap((s) => s.stationComponents ?? []).filter((id) => id?.startsWith("rec"));
+        if (allComponentIds.length > 0) {
+          loadStationComponentNamesByIds(allComponentIds).then((names) => {
+            if (active && !isErrorResult(names)) setComponentNames(names);
+          });
+        } else {
+          setComponentNames({});
+        }
       }
     });
     return () => { active = false; };
   }, [stationIds?.join(","), fetchItemNames]);
 
+  const usePresetFlow = stationPresets.length > 0;
+  const selectedPreset = stationPresets.find((p) => p.id === newStationPresetId);
+
   const openAddStationModal = () => {
-    if (!newStationType.trim()) return;
-    setShowConfigModal(true);
+    if (usePresetFlow) {
+      if (!newStationPresetId || !selectedPreset) return;
+      setShowComponentsModal(true);
+    } else {
+      if (!newStationType.trim()) return;
+      setShowConfigModal(true);
+    }
   };
 
   const confirmAddStation = async (itemIds: string[]) => {
@@ -388,6 +498,48 @@ function CreationStationContent(props: {
     await setFields(selectedEventId, { [FIELD_IDS.STATIONS]: updatedIds });
     if (itemIds.length > 0 && selectedEventId) fetchItemNames(selectedEventId, itemIds);
   };
+
+  const confirmAddStationFromPreset = async (params: { componentIds: string[]; customItems: string }) => {
+    if (!selectedEventId || !newStationPresetId || !selectedPreset) return;
+    const result = await createStationFromPreset({
+      presetId: newStationPresetId,
+      presetName: selectedPreset.name,
+      stationComponents: params.componentIds,
+      customItems: params.customItems || undefined,
+      stationNotes: newStationNotes.trim(),
+      eventId: selectedEventId,
+    });
+    if (isErrorResult(result)) {
+      console.error("Failed to create station:", result);
+      return;
+    }
+    setStations((prev) => [
+      ...prev,
+      { id: result.id, stationType: selectedPreset.name, stationItems: [], stationNotes: newStationNotes.trim(), stationPresetId: newStationPresetId, stationComponents: params.componentIds, customItems: params.customItems },
+    ]);
+    setNewStationPresetId("");
+    setNewStationNotes("");
+    setShowComponentsModal(false);
+    const updatedIds = [...stationIds, result.id];
+    await setFields(selectedEventId, { [FIELD_IDS.STATIONS]: updatedIds });
+  };
+
+  const confirmEditStationComponents = async (stationId: string, params: { componentIds: string[]; customItems: string }) => {
+    const result = await updateStationComponents(stationId, { stationComponents: params.componentIds, customItems: params.customItems || undefined });
+    if (isErrorResult(result)) {
+      console.error("Failed to update station components:", result);
+      return;
+    }
+    setStations((prev) =>
+      prev.map((s) => (s.id === stationId ? { ...s, stationComponents: params.componentIds, customItems: params.customItems } : s))
+    );
+    setEditingStationId(null);
+    loadStationComponentNamesByIds(params.componentIds).then((names) => {
+      if (!isErrorResult(names)) setComponentNames((prev) => ({ ...prev, ...names }));
+    });
+  };
+
+  const getComponentName = (id: string) => componentNames[id] ?? id;
 
   const addStationItem = async (stationId: string, itemId: string) => {
     const st = stations.find((s) => s.id === stationId);
@@ -414,9 +566,28 @@ function CreationStationContent(props: {
               <div style={{ color: "#e0e0e0", fontSize: 14 }}>{st.stationType || "—"}</div>
             </div>
             <div>
-              <label style={labelStyle}>Station Items</label>
+              <label style={labelStyle}>{st.stationPresetId || (st.stationComponents && st.stationComponents.length > 0) ? "Station Components" : "Station Items"}</label>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center" }}>
-                {st.stationType === "Grande Charcuterie Display" ? (
+                {st.stationPresetId || (st.stationComponents && st.stationComponents.length > 0) ? (
+                  <>
+                    {(st.stationComponents ?? []).map((id) => (
+                      <span key={id} style={{ fontSize: 12, padding: "4px 8px", backgroundColor: "#2a2a2a", borderRadius: 4, display: "inline-flex", alignItems: "center", gap: 4 }}>
+                        {getComponentName(id)}
+                      </span>
+                    ))}
+                    {st.customItems?.trim() && (
+                      <span style={{ fontSize: 12, padding: "4px 8px", backgroundColor: "#2a2a2a", borderRadius: 4, color: "#999" }} title={st.customItems}>
+                        Custom: {st.customItems.split("\n")[0]?.slice(0, 30)}{st.customItems.length > 30 ? "…" : ""}
+                      </span>
+                    )}
+                    {(st.stationComponents ?? []).length === 0 && !st.customItems?.trim() && <span style={{ color: "#666", fontSize: 12 }}>No components</span>}
+                    {canEdit && st.stationPresetId && (
+                      <button type="button" onClick={() => setEditingStationId(st.id)} style={{ ...buttonStyle, padding: "6px 10px", fontSize: 12 }}>
+                        Edit Components
+                      </button>
+                    )}
+                  </>
+                ) : st.stationType === "Grande Charcuterie Display" ? (
                   (() => {
                     const line1 = st.stationItems.slice(0, 5);
                     const line2 = st.stationItems.slice(5, 9);
@@ -462,8 +633,10 @@ function CreationStationContent(props: {
                     ))}
                   </>
                 )}
-                {st.stationItems.length === 0 && <span style={{ color: "#666", fontSize: 12 }}>No items</span>}
-                {canEdit && (
+                {!(st.stationPresetId || (st.stationComponents && st.stationComponents.length > 0)) && st.stationItems.length === 0 && (
+                  <span style={{ color: "#666", fontSize: 12 }}>No items</span>
+                )}
+                {canEdit && !(st.stationPresetId || (st.stationComponents && st.stationComponents.length > 0)) && (
                   <StationItemPicker
                     stationId={st.id}
                     stationType={st.stationType}
@@ -486,20 +659,37 @@ function CreationStationContent(props: {
         <div style={{ marginTop: 16, padding: 12, border: "2px dashed #444", borderRadius: 8 }}>
           <label style={labelStyle}>Add Creation Station</label>
           <div style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))" }}>
-            <div>
-              <label style={labelStyle}>Station Type</label>
-              <select value={newStationType} onChange={(e) => setNewStationType(e.target.value)} disabled={!canEdit} style={selectStyle}>
-                <option value="">Select type</option>
-                {(stationTypeOptions.length > 0 ? stationTypeOptions : STATION_TYPE_OPTIONS).map((opt) => (
-                  <option key={opt} value={opt}>{opt}</option>
-                ))}
-              </select>
-            </div>
+            {usePresetFlow ? (
+              <div>
+                <label style={labelStyle}>Station Preset</label>
+                <select value={newStationPresetId} onChange={(e) => setNewStationPresetId(e.target.value)} disabled={!canEdit} style={selectStyle}>
+                  <option value="">Select preset</option>
+                  {stationPresets.map((p) => (
+                    <option key={p.id} value={p.id}>{p.name}</option>
+                  ))}
+                </select>
+              </div>
+            ) : (
+              <div>
+                <label style={labelStyle}>Station Type</label>
+                <select value={newStationType} onChange={(e) => setNewStationType(e.target.value)} disabled={!canEdit} style={selectStyle}>
+                  <option value="">Select type</option>
+                  {(stationTypeOptions.length > 0 ? stationTypeOptions : STATION_TYPE_OPTIONS).map((opt) => (
+                    <option key={opt} value={opt}>{opt}</option>
+                  ))}
+                </select>
+              </div>
+            )}
             <div style={{ gridColumn: "1 / -1" }}>
               <label style={labelStyle}>Station Notes</label>
               <textarea rows={2} value={newStationNotes} onChange={(e) => setNewStationNotes(e.target.value)} disabled={!canEdit} style={inputStyle} placeholder="Special instructions or notes..." />
             </div>
-            <button type="button" disabled={!canEdit || !newStationType.trim()} onClick={openAddStationModal} style={buttonStyle}>
+            <button
+              type="button"
+              disabled={!canEdit || (usePresetFlow ? !newStationPresetId : !newStationType.trim())}
+              onClick={openAddStationModal}
+              style={buttonStyle}
+            >
               + Add Station
             </button>
           </div>
@@ -516,6 +706,43 @@ function CreationStationContent(props: {
         labelStyle={labelStyle}
         buttonStyle={buttonStyle}
       />
+      {selectedPreset && (
+        <StationComponentsConfigModal
+          isOpen={showComponentsModal}
+          presetId={newStationPresetId}
+          presetName={selectedPreset.name}
+          stationNotes={newStationNotes}
+          initialComponentIds={[]}
+          initialCustomItems=""
+          onConfirm={confirmAddStationFromPreset}
+          onCancel={() => setShowComponentsModal(false)}
+          inputStyle={inputStyle}
+          labelStyle={labelStyle}
+          buttonStyle={buttonStyle}
+          mode="create"
+        />
+      )}
+      {(() => {
+        const editingStation = editingStationId ? stations.find((s) => s.id === editingStationId) : null;
+        const editPresetId = editingStation?.stationPresetId ?? "";
+        const editPreset = stationPresets.find((p) => p.id === editPresetId) ?? (editingStation ? { id: editPresetId, name: editingStation.stationType } : null);
+        return editingStation && editPresetId ? (
+          <StationComponentsConfigModal
+            isOpen={!!editingStationId}
+            presetId={editPresetId}
+            presetName={editPreset.name}
+            stationNotes={editingStation.stationNotes}
+            initialComponentIds={editingStation.stationComponents ?? []}
+            initialCustomItems={editingStation.customItems ?? ""}
+            onConfirm={(params) => confirmEditStationComponents(editingStationId!, params)}
+            onCancel={() => setEditingStationId(null)}
+            inputStyle={inputStyle}
+            labelStyle={labelStyle}
+            buttonStyle={buttonStyle}
+            mode="edit"
+          />
+        ) : null;
+      })()}
     </div>
   );
 }
@@ -561,7 +788,8 @@ type MenuItemRecord = {
 };
 
 const MENU_TABLE_ID = "tbl0aN33DGG6R1sPZ";
-const MENU_NAME_FIELD_ID = "fldQ83gpgOmMxNMQw";
+const MENU_ITEM_NAME_FIELD_ID = "fldW5gfSlHRTl01v1"; // Item Name (not Description Name)
+const MENU_ITEMS_CHILD_ITEMS_FIELD_ID = "fldIu6qmlUwAEn2W9"; // Child Items (linked)
 
 type MenuSectionProps = { embedded?: boolean; isDelivery?: boolean };
 
@@ -569,6 +797,8 @@ export const MenuSection = ({ embedded = false, isDelivery = false }: MenuSectio
   const { selectedEventId, selectedEventData, setFields } = useEventStore();
   const [menuItems, setMenuItems] = useState<LinkedRecordItem[]>([]);
   const [menuItemNames, setMenuItemNames] = useState<Record<string, string>>({});
+  const [menuItemSauce, setMenuItemSauce] = useState<Record<string, string>>({});
+  const [sauceOverrides, setSauceOverridesState] = useState<Record<string, SauceOverride>>({});
   const [selections, setSelections] = useState<MenuSelections>({
     passedAppetizers: [],
     presentedAppetizers: [],
@@ -615,12 +845,13 @@ export const MenuSection = ({ embedded = false, isDelivery = false }: MenuSectio
   // Batches all fetches and applies a single setState to avoid re-render storm when switching events.
   // Skips update if event changed during fetch (cancellation).
   const fetchItemNames = useCallback(async (eventId: string | null, recordIds: string[]) => {
-    const apiKey = (import.meta.env.VITE_AIRTABLE_API_KEY as string)?.trim();
     const baseId = (import.meta.env.VITE_AIRTABLE_BASE_ID as string)?.trim();
-    if (!recordIds?.length || !apiKey || !baseId) return;
+    if (!recordIds?.length || !baseId) return;
 
     const uniqueIds = [...new Set(recordIds.filter((id) => typeof id === "string" && id.startsWith("rec")))];
     const allNames: Record<string, string> = {};
+    const allSauce: Record<string, string> = {};
+    const allRecords: Array<{ id: string; fields: Record<string, unknown> }> = [];
 
     for (let i = 0; i < uniqueIds.length; i += 10) {
       if (eventId && useEventStore.getState().selectedEventId !== eventId) return;
@@ -629,24 +860,77 @@ export const MenuSection = ({ embedded = false, isDelivery = false }: MenuSectio
       const params = new URLSearchParams();
       params.set("filterByFormula", formula);
       params.set("returnFieldsByFieldId", "true");
-      params.append("fields[]", MENU_NAME_FIELD_ID);
+      params.append("fields[]", MENU_ITEM_NAME_FIELD_ID);
+      params.append("fields[]", MENU_ITEM_SAUCE_FIELD_ID);
+      params.append("fields[]", MENU_ITEMS_CHILD_ITEMS_FIELD_ID);
 
       try {
-        const response = await fetch(
-          `https://api.airtable.com/v0/${baseId}/${MENU_TABLE_ID}?${params.toString()}`,
-          { headers: { Authorization: `Bearer ${sanitizeForHeader(apiKey)}` } }
+        const data = await airtableFetch<{ records?: Array<{ id: string; fields: Record<string, unknown> }> }>(
+          `/${MENU_TABLE_ID}?${params.toString()}`
         );
-        const data = (await response.json()) as { records?: Array<{ id: string; fields: Record<string, unknown> }> };
-        data.records?.forEach((rec) => {
-          const name = rec.fields[MENU_NAME_FIELD_ID];
-          allNames[rec.id] = typeof name === "string" ? name : rec.id;
-        });
+        if (!isErrorResult(data) && data?.records) allRecords.push(...data.records);
       } catch (err) {
         console.error("Failed to fetch item names:", err);
       }
     }
     if (eventId && useEventStore.getState().selectedEventId !== eventId) return;
+
+    for (const rec of allRecords) {
+      const name = rec.fields[MENU_ITEM_NAME_FIELD_ID];
+      allNames[rec.id] = typeof name === "string" ? name : rec.id;
+    }
+
+    const childIdsToFetch = new Set<string>();
+    const recordsNeedingChild: Array<{ recId: string; firstChildId: string }> = [];
+    for (const rec of allRecords) {
+      const sauceRaw = rec.fields[MENU_ITEM_SAUCE_FIELD_ID];
+      const sauce = typeof sauceRaw === "string" ? sauceRaw.trim() : "";
+      if (sauce) {
+        allSauce[rec.id] = sauce;
+      } else {
+        const childIds = asLinkedRecordIds(rec.fields[MENU_ITEMS_CHILD_ITEMS_FIELD_ID]).filter((id) => id?.startsWith("rec"));
+        const firstChildId = childIds[0];
+        if (firstChildId) {
+          recordsNeedingChild.push({ recId: rec.id, firstChildId });
+          if (!allNames[firstChildId]) childIdsToFetch.add(firstChildId);
+        }
+      }
+    }
+
+    if (childIdsToFetch.size > 0) {
+      const childIds = [...childIdsToFetch];
+      for (let i = 0; i < childIds.length; i += 10) {
+        if (eventId && useEventStore.getState().selectedEventId !== eventId) return;
+        const chunk = childIds.slice(i, i + 10);
+        const formula = `OR(${chunk.map((id) => `RECORD_ID()='${id}'`).join(",")})`;
+        const params = new URLSearchParams();
+        params.set("filterByFormula", formula);
+        params.set("returnFieldsByFieldId", "true");
+        params.append("fields[]", MENU_ITEM_NAME_FIELD_ID);
+        try {
+          const data = await airtableFetch<{ records?: Array<{ id: string; fields: Record<string, unknown> }> }>(
+            `/${MENU_TABLE_ID}?${params.toString()}`
+          );
+          if (!isErrorResult(data) && data?.records) {
+            data.records.forEach((rec) => {
+              const name = rec.fields[MENU_ITEM_NAME_FIELD_ID];
+              allNames[rec.id] = typeof name === "string" ? name : rec.id;
+            });
+          }
+        } catch (err) {
+          console.error("Failed to fetch child item names:", err);
+        }
+      }
+    }
+    if (eventId && useEventStore.getState().selectedEventId !== eventId) return;
+
+    for (const { recId, firstChildId } of recordsNeedingChild) {
+      const firstChildName = allNames[firstChildId]?.trim();
+      if (firstChildName) allSauce[recId] = firstChildName;
+    }
+
     setMenuItemNames((prev) => ({ ...prev, ...allNames }));
+    setMenuItemSauce((prev) => ({ ...prev, ...allSauce }));
   }, []);
 
   // Load selections from event data whenever selectedEventData changes
@@ -699,6 +983,8 @@ export const MenuSection = ({ embedded = false, isDelivery = false }: MenuSectio
       fetchItemNames(selectedEventId, allRecordIds);
     }
 
+    setSauceOverridesState(getSauceOverrides(selectedEventId));
+
     setCustomFields({
       customPassedApp: asString(selectedEventData[FIELD_IDS.CUSTOM_PASSED_APP]),
       customPresentedApp: asString(selectedEventData[FIELD_IDS.CUSTOM_PRESENTED_APP]),
@@ -747,6 +1033,12 @@ export const MenuSection = ({ embedded = false, isDelivery = false }: MenuSectio
     setSelections((prev) => ({ ...prev, [fieldKey]: newItems }));
 
     await setFields(selectedEventId, { [fieldIdMap[fieldKey]]: newItems });
+  };
+
+  const handleSauceChange = (itemId: string, override: SauceOverride) => {
+    if (!selectedEventId) return;
+    setSauceOverride(selectedEventId, itemId, override);
+    setSauceOverridesState((prev) => ({ ...prev, [itemId]: override }));
   };
 
   const saveCustomField = async (fieldName: string, value: string) => {
@@ -822,10 +1114,18 @@ export const MenuSection = ({ embedded = false, isDelivery = false }: MenuSectio
               <label style={labelStyle}>Passed Appetizers</label>
               <div style={{ marginBottom: "8px" }}>
                 {selections.passedAppetizers.map((itemId) => (
-                  <div key={itemId} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", backgroundColor: "#2a2a2a", border: deliveryItemBorder, borderRadius: "6px", padding: "8px 12px", marginBottom: "6px" }}>
-                    <span style={{ fontSize: "14px", color: "#e0e0e0" }}>{getItemName(itemId)}</span>
-                    <button type="button" disabled={!canEdit} onClick={() => removeMenuItem("passedAppetizers", itemId)} style={{ background: "none", border: "none", color: deliveryRemoveColor, cursor: "pointer", fontSize: "16px", fontWeight: "bold" }}>✕</button>
-                  </div>
+                  <MenuItemCard
+                    key={itemId}
+                    itemId={itemId}
+                    itemName={getItemName(itemId)}
+                    defaultSauce={menuItemSauce[itemId] ?? null}
+                    sauceOverrides={sauceOverrides}
+                    onSauceChange={handleSauceChange}
+                    onRemove={() => removeMenuItem("passedAppetizers", itemId)}
+                    canEdit={canEdit}
+                    removeColor={deliveryRemoveColor}
+                    itemBorder={deliveryItemBorder}
+                  />
                 ))}
               </div>
               <button type="button" disabled={!canEdit} onClick={() => openPicker("passed", "passedApps", "Passed Appetizers")} style={deliveryButtonStyle}>+ Add Passed Appetizer</button>
@@ -845,10 +1145,18 @@ export const MenuSection = ({ embedded = false, isDelivery = false }: MenuSectio
                 <label style={labelStyle}>Presented Appetizers</label>
                 <div style={{ marginBottom: "8px" }}>
                   {selections.presentedAppetizers.map((itemId) => (
-                    <div key={itemId} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", backgroundColor: "#2a2a2a", border: deliveryItemBorder, borderRadius: "6px", padding: "8px 12px", marginBottom: "6px" }}>
-                      <span style={{ fontSize: "14px", color: "#e0e0e0" }}>{getItemName(itemId)}</span>
-                      <button type="button" disabled={!canEdit} onClick={() => removeMenuItem("presentedAppetizers", itemId)} style={{ background: "none", border: "none", color: deliveryRemoveColor, cursor: "pointer", fontSize: "16px", fontWeight: "bold" }}>✕</button>
-                    </div>
+                    <MenuItemCard
+                      key={itemId}
+                      itemId={itemId}
+                      itemName={getItemName(itemId)}
+                      defaultSauce={menuItemSauce[itemId] ?? null}
+                      sauceOverrides={sauceOverrides}
+                      onSauceChange={handleSauceChange}
+                      onRemove={() => removeMenuItem("presentedAppetizers", itemId)}
+                      canEdit={canEdit}
+                      removeColor={deliveryRemoveColor}
+                      itemBorder={deliveryItemBorder}
+                    />
                   ))}
                 </div>
                 <button type="button" disabled={!canEdit} onClick={() => openPicker("presented", "presentedApps", "Presented Appetizers")} style={deliveryButtonStyle}>+ Add Presented Appetizer</button>
@@ -868,12 +1176,20 @@ export const MenuSection = ({ embedded = false, isDelivery = false }: MenuSectio
               <div style={{ marginTop: "12px" }}>
                 <label style={labelStyle}>Buffet – Metal (hot items)</label>
                 <div style={{ marginBottom: "8px" }}>
-                  {selections.buffetMetal.map((itemId) => (
-                    <div key={itemId} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", backgroundColor: "#2a2a2a", border: deliveryItemBorder, borderRadius: "6px", padding: "8px 12px", marginBottom: "6px" }}>
-                      <span style={{ fontSize: "14px", color: "#e0e0e0" }}>{getItemName(itemId)}</span>
-                      <button type="button" disabled={!canEdit} onClick={() => removeMenuItem("buffetMetal", itemId)} style={{ background: "none", border: "none", color: deliveryRemoveColor, cursor: "pointer", fontSize: "16px", fontWeight: "bold" }}>✕</button>
-                    </div>
-                  ))}
+                {selections.buffetMetal.map((itemId) => (
+                  <MenuItemCard
+                    key={itemId}
+                    itemId={itemId}
+                    itemName={getItemName(itemId)}
+                    defaultSauce={menuItemSauce[itemId] ?? null}
+                    sauceOverrides={sauceOverrides}
+                    onSauceChange={handleSauceChange}
+                    onRemove={() => removeMenuItem("buffetMetal", itemId)}
+                    canEdit={canEdit}
+                    removeColor={deliveryRemoveColor}
+                    itemBorder={deliveryItemBorder}
+                  />
+                ))}
                 </div>
                 <button type="button" disabled={!canEdit} onClick={() => openPicker("buffet_metal", "buffetMetal", "Select Hot Buffet Items")} style={deliveryButtonStyle}>+ Add Hot Buffet Item</button>
               </div>
@@ -885,10 +1201,18 @@ export const MenuSection = ({ embedded = false, isDelivery = false }: MenuSectio
               <label style={labelStyle}>Sandwiches & Wraps</label>
               <div style={{ marginBottom: "8px" }}>
                 {selections.deliveryDeli.map((itemId) => (
-                  <div key={itemId} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", backgroundColor: "#2a2a2a", border: deliveryItemBorder, borderRadius: "6px", padding: "8px 12px", marginBottom: "6px" }}>
-                    <span style={{ fontSize: "14px", color: "#e0e0e0" }}>{getItemName(itemId)}</span>
-                    <button type="button" disabled={!canEdit} onClick={() => removeMenuItem("deliveryDeli", itemId)} style={{ background: "none", border: "none", color: deliveryRemoveColor, cursor: "pointer", fontSize: "16px", fontWeight: "bold" }}>✕</button>
-                  </div>
+                  <MenuItemCard
+                    key={itemId}
+                    itemId={itemId}
+                    itemName={getItemName(itemId)}
+                    defaultSauce={menuItemSauce[itemId] ?? null}
+                    sauceOverrides={sauceOverrides}
+                    onSauceChange={handleSauceChange}
+                    onRemove={() => removeMenuItem("deliveryDeli", itemId)}
+                    canEdit={canEdit}
+                    removeColor={deliveryRemoveColor}
+                    itemBorder={deliveryItemBorder}
+                  />
                 ))}
               </div>
               <button type="button" disabled={!canEdit} onClick={() => openPicker("deli", "deliveryDeli", "Select Deli Items (Sandwiches & Wraps)")} style={deliveryButtonStyle}>+ Add Deli Item</button>
@@ -939,10 +1263,18 @@ export const MenuSection = ({ embedded = false, isDelivery = false }: MenuSectio
               <label style={labelStyle}>Room Temp Display / Salads</label>
               <div style={{ marginBottom: "8px" }}>
                 {selections.roomTempDisplay.map((itemId) => (
-                  <div key={itemId} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", backgroundColor: "#2a2a2a", border: deliveryItemBorder, borderRadius: "6px", padding: "8px 12px", marginBottom: "6px" }}>
-                    <span style={{ fontSize: "14px", color: "#e0e0e0" }}>{getItemName(itemId)}</span>
-                    <button type="button" disabled={!canEdit} onClick={() => removeMenuItem("roomTempDisplay", itemId)} style={{ background: "none", border: "none", color: deliveryRemoveColor, cursor: "pointer", fontSize: "16px", fontWeight: "bold" }}>✕</button>
-                  </div>
+                  <MenuItemCard
+                    key={itemId}
+                    itemId={itemId}
+                    itemName={getItemName(itemId)}
+                    defaultSauce={menuItemSauce[itemId] ?? null}
+                    sauceOverrides={sauceOverrides}
+                    onSauceChange={handleSauceChange}
+                    onRemove={() => removeMenuItem("roomTempDisplay", itemId)}
+                    canEdit={canEdit}
+                    removeColor={deliveryRemoveColor}
+                    itemBorder={deliveryItemBorder}
+                  />
                 ))}
               </div>
               <button type="button" disabled={!canEdit} onClick={() => openPicker("room_temp", "roomTempDisplay", "Select Room Temp / Salad Items")} style={deliveryButtonStyle}>+ Add Salad Item</button>
@@ -966,10 +1298,18 @@ export const MenuSection = ({ embedded = false, isDelivery = false }: MenuSectio
               <label style={labelStyle}>Desserts</label>
               <div style={{ marginBottom: "8px" }}>
                 {selections.desserts.map((itemId) => (
-                  <div key={itemId} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", backgroundColor: "#2a2a2a", border: deliveryItemBorder, borderRadius: "6px", padding: "8px 12px", marginBottom: "6px" }}>
-                    <span style={{ fontSize: "14px", color: "#e0e0e0" }}>{getItemName(itemId)}</span>
-                    <button type="button" disabled={!canEdit} onClick={() => removeMenuItem("desserts", itemId)} style={{ background: "none", border: "none", color: deliveryRemoveColor, cursor: "pointer", fontSize: "16px", fontWeight: "bold" }}>✕</button>
-                  </div>
+                  <MenuItemCard
+                    key={itemId}
+                    itemId={itemId}
+                    itemName={getItemName(itemId)}
+                    defaultSauce={menuItemSauce[itemId] ?? null}
+                    sauceOverrides={sauceOverrides}
+                    onSauceChange={handleSauceChange}
+                    onRemove={() => removeMenuItem("desserts", itemId)}
+                    canEdit={canEdit}
+                    removeColor={deliveryRemoveColor}
+                    itemBorder={deliveryItemBorder}
+                  />
                 ))}
               </div>
               <button type="button" disabled={!canEdit} onClick={() => openPicker("desserts", "desserts", "Desserts")} style={deliveryButtonStyle}>+ Add Dessert</button>
@@ -997,10 +1337,18 @@ export const MenuSection = ({ embedded = false, isDelivery = false }: MenuSectio
         <label style={labelStyle}>Passed Appetizers</label>
         <div style={{ marginBottom: "8px" }}>
           {selections.passedAppetizers.map((itemId) => (
-            <div key={itemId} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", backgroundColor: "#2a2a2a", border: "1px solid #ff6b6b", borderRadius: "6px", padding: "8px 12px", marginBottom: "6px" }}>
-              <span style={{ fontSize: "14px", color: "#e0e0e0" }}>{getItemName(itemId)}</span>
-              <button type="button" disabled={!canEdit} onClick={() => removeMenuItem("passedAppetizers", itemId)} style={{ background: "none", border: "none", color: "#ff6b6b", cursor: "pointer", fontSize: "16px", fontWeight: "bold" }}>✕</button>
-            </div>
+            <MenuItemCard
+              key={itemId}
+              itemId={itemId}
+              itemName={getItemName(itemId)}
+              defaultSauce={menuItemSauce[itemId] ?? null}
+              sauceOverrides={sauceOverrides}
+              onSauceChange={handleSauceChange}
+              onRemove={() => removeMenuItem("passedAppetizers", itemId)}
+              canEdit={canEdit}
+              removeColor="#ff6b6b"
+              itemBorder="1px solid #ff6b6b"
+            />
           ))}
         </div>
         <button type="button" disabled={!canEdit} onClick={() => openPicker("passed", "passedApps", "Passed Appetizers")} style={buttonStyle}>
@@ -1027,10 +1375,18 @@ export const MenuSection = ({ embedded = false, isDelivery = false }: MenuSectio
         <label style={labelStyle}>Presented Appetizers</label>
         <div style={{ marginBottom: "8px" }}>
           {selections.presentedAppetizers.map((itemId) => (
-            <div key={itemId} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", backgroundColor: "#2a2a2a", border: "1px solid #ff6b6b", borderRadius: "6px", padding: "8px 12px", marginBottom: "6px" }}>
-              <span style={{ fontSize: "14px", color: "#e0e0e0" }}>{getItemName(itemId)}</span>
-              <button type="button" disabled={!canEdit} onClick={() => removeMenuItem("presentedAppetizers", itemId)} style={{ background: "none", border: "none", color: "#ff6b6b", cursor: "pointer", fontSize: "16px", fontWeight: "bold" }}>✕</button>
-            </div>
+            <MenuItemCard
+              key={itemId}
+              itemId={itemId}
+              itemName={getItemName(itemId)}
+              defaultSauce={menuItemSauce[itemId] ?? null}
+              sauceOverrides={sauceOverrides}
+              onSauceChange={handleSauceChange}
+              onRemove={() => removeMenuItem("presentedAppetizers", itemId)}
+              canEdit={canEdit}
+              removeColor="#ff6b6b"
+              itemBorder="1px solid #ff6b6b"
+            />
           ))}
         </div>
         <button type="button" disabled={!canEdit} onClick={() => openPicker("presented", "presentedApps", "Presented Appetizers")} style={buttonStyle}>
@@ -1102,10 +1458,18 @@ export const MenuSection = ({ embedded = false, isDelivery = false }: MenuSectio
         <label style={labelStyle}>Buffet – China</label>
         <div style={{ marginBottom: "8px" }}>
           {selections.buffetChina.map((itemId) => (
-            <div key={itemId} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", backgroundColor: "#2a2a2a", border: "1px solid #ff6b6b", borderRadius: "6px", padding: "8px 12px", marginBottom: "6px" }}>
-              <span style={{ fontSize: "14px", color: "#e0e0e0" }}>{getItemName(itemId)}</span>
-              <button type="button" disabled={!canEdit} onClick={() => removeMenuItem("buffetChina", itemId)} style={{ background: "none", border: "none", color: "#ff6b6b", cursor: "pointer", fontSize: "16px", fontWeight: "bold" }}>✕</button>
-            </div>
+            <MenuItemCard
+              key={itemId}
+              itemId={itemId}
+              itemName={getItemName(itemId)}
+              defaultSauce={menuItemSauce[itemId] ?? null}
+              sauceOverrides={sauceOverrides}
+              onSauceChange={handleSauceChange}
+              onRemove={() => removeMenuItem("buffetChina", itemId)}
+              canEdit={canEdit}
+              removeColor="#ff6b6b"
+              itemBorder="1px solid #ff6b6b"
+            />
           ))}
         </div>
         <button type="button" disabled={!canEdit} onClick={() => openPicker("buffet_china", "buffetChina", "Select Buffet Items (China)")} style={buttonStyle}>
@@ -1132,10 +1496,18 @@ export const MenuSection = ({ embedded = false, isDelivery = false }: MenuSectio
         <label style={labelStyle}>Desserts</label>
         <div style={{ marginBottom: "8px" }}>
           {selections.desserts.map((itemId) => (
-            <div key={itemId} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", backgroundColor: "#2a2a2a", border: "1px solid #ff6b6b", borderRadius: "6px", padding: "8px 12px", marginBottom: "6px" }}>
-              <span style={{ fontSize: "14px", color: "#e0e0e0" }}>{getItemName(itemId)}</span>
-              <button type="button" disabled={!canEdit} onClick={() => removeMenuItem("desserts", itemId)} style={{ background: "none", border: "none", color: "#ff6b6b", cursor: "pointer", fontSize: "16px", fontWeight: "bold" }}>✕</button>
-            </div>
+            <MenuItemCard
+              key={itemId}
+              itemId={itemId}
+              itemName={getItemName(itemId)}
+              defaultSauce={menuItemSauce[itemId] ?? null}
+              sauceOverrides={sauceOverrides}
+              onSauceChange={handleSauceChange}
+              onRemove={() => removeMenuItem("desserts", itemId)}
+              canEdit={canEdit}
+              removeColor="#ff6b6b"
+              itemBorder="1px solid #ff6b6b"
+            />
           ))}
         </div>
         <button type="button" disabled={!canEdit} onClick={() => openPicker("desserts", "desserts", "Desserts")} style={buttonStyle}>

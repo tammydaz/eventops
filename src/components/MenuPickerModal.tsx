@@ -1,7 +1,40 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { usePickerStore } from "../state/usePickerStore";
 import { fetchMenuItemsByCategory } from "../services/airtable/menuItems";
+
+type PickerItem = { id: string; name: string; childItems?: string[] };
+
+function getDisplayLabel(item: PickerItem): string {
+  const parent = item.name;
+  const children = item.childItems || [];
+  const extraChildren = children.filter(
+    (child) => child && !parent.toLowerCase().includes(child.toLowerCase())
+  );
+  const childLines = extraChildren.map((child) => `w/ ${child}`);
+  return childLines.length > 0 ? `${parent} – ${childLines.join(" – ")}` : parent;
+}
+
+/** Group by base name (before " – ", " – ", or "— "), keep only the longest display label in each group. */
+function preferMostDescriptive(items: PickerItem[]): PickerItem[] {
+  const DASH_SPLIT = /\s*[-–—]\s+/;
+  const byBase = new Map<string, PickerItem[]>();
+  for (const item of items) {
+    const label = getDisplayLabel(item);
+    const base = label.split(DASH_SPLIT)[0].trim();
+    const list = byBase.get(base) ?? [];
+    list.push(item);
+    byBase.set(base, list);
+  }
+  const result: PickerItem[] = [];
+  for (const group of byBase.values()) {
+    const best = group.reduce((a, b) =>
+      getDisplayLabel(a).length >= getDisplayLabel(b).length ? a : b
+    );
+    result.push(best);
+  }
+  return result.sort((a, b) => getDisplayLabel(a).localeCompare(getDisplayLabel(b)));
+}
 
 interface MenuPickerModalProps {
   onAdd: (item: { id: string; name: string }) => void;
@@ -11,9 +44,10 @@ interface MenuPickerModalProps {
 export const MenuPickerModal: React.FC<MenuPickerModalProps> = ({ onAdd, alreadyAddedIds }) => {
   const { isOpen, pickerType, pickerTitle, closePicker } = usePickerStore();
 
-  const [items, setItems] = useState<{ id: string; name: string }[]>([]);
+  const [items, setItems] = useState<PickerItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState("");
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!isOpen || !pickerType) return;
@@ -22,7 +56,8 @@ export const MenuPickerModal: React.FC<MenuPickerModalProps> = ({ onAdd, already
     setLoading(true);
     fetchMenuItemsByCategory(pickerType)
       .then((results) => {
-        setItems(results || []);
+        const raw = results || [];
+        setItems(preferMostDescriptive(raw));
       })
       .catch(() => setItems([]))
       .finally(() => setLoading(false));
@@ -31,12 +66,12 @@ export const MenuPickerModal: React.FC<MenuPickerModalProps> = ({ onAdd, already
   const searchLower = search.trim().toLowerCase();
   const filteredItems = !searchLower
     ? items
-    : items.filter((item) => item.name.toLowerCase().includes(searchLower));
+    : items.filter((item) => getDisplayLabel(item).toLowerCase().includes(searchLower));
 
   if (!isOpen) return null;
 
   return createPortal(
-    <div
+      <div
       className="picker-modal-backdrop"
       style={{
         position: "fixed",
@@ -48,7 +83,10 @@ export const MenuPickerModal: React.FC<MenuPickerModalProps> = ({ onAdd, already
         justifyContent: "center",
         padding: "16px",
       }}
-      onClick={closePicker}
+      onClick={(e) => {
+        if ((e.target as HTMLElement).closest(".picker-modal") || (e.target as HTMLElement).closest(".picker-done-button")) return;
+        closePicker();
+      }}
     >
       <div
         className="picker-modal"
@@ -72,6 +110,7 @@ export const MenuPickerModal: React.FC<MenuPickerModalProps> = ({ onAdd, already
         {!loading && items.length > 0 && (
           <div style={{ padding: "0 16px 12px" }}>
             <input
+              ref={searchInputRef}
               type="text"
               placeholder="Search items..."
               value={search}
@@ -116,12 +155,14 @@ export const MenuPickerModal: React.FC<MenuPickerModalProps> = ({ onAdd, already
                     onClick={() => {
                       if (!isAdded) {
                         onAdd(item);
+                        setSearch("");
+                        searchInputRef.current?.focus();
                       }
                     }}
                   >
                     <span style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                       {isAdded && <span style={{ color: "#22c55e" }}>✓</span>}
-                      {item.name}
+                      {getDisplayLabel(item)}
                     </span>
                   </div>
                 );
@@ -137,7 +178,14 @@ export const MenuPickerModal: React.FC<MenuPickerModalProps> = ({ onAdd, already
 
         <div className="picker-actions" style={{ padding: "16px", borderTop: "1px solid #ff6b6b", display: "flex", gap: "12px", justifyContent: "flex-end" }}>
           <button
-            onClick={closePicker}
+            type="button"
+            className="picker-done-button"
+            onMouseDown={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              usePickerStore.setState({ pickerClosedAt: Date.now() });
+              usePickerStore.getState().closePicker();
+            }}
             style={{
               padding: "10px 20px",
               background: "rgba(255,107,107,0.2)",

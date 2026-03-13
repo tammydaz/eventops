@@ -14,7 +14,6 @@ import {
   type AirtableRecord,
   type AirtableErrorResult,
 } from "./client";
-import { sanitizeForHeader } from "../../utils/httpHeaders";
 import {
   asAttachments,
   asBoolean,
@@ -1229,22 +1228,13 @@ export const uploadAttachment = async (
   const table = getEventsTable();
   if (typeof table !== "string") return table;
 
-  const baseId = import.meta.env.VITE_AIRTABLE_BASE_ID as string | undefined;
-  const apiKey = import.meta.env.VITE_AIRTABLE_API_KEY as string | undefined;
-  if (!baseId || !apiKey) {
-    return { error: true, message: "Missing Airtable env vars" };
-  }
-
   const formData = new FormData();
   formData.append("file", file);
 
   const uploadResponse = await fetch(
-    `https://content.airtable.com/v0/${baseId}/${recordId}/${fieldId}`,
+    `/api/airtable/upload?recordId=${encodeURIComponent(recordId)}&fieldId=${encodeURIComponent(fieldId)}`,
     {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${sanitizeForHeader(apiKey)}`,
-      },
       body: formData,
     }
   );

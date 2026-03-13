@@ -1,35 +1,26 @@
 // SINGLE SOURCE OF TRUTH — category keys, labels, field names, and allowed Airtable CATEGORY values
 // Values below are the EXACT strings from Airtable's Category single-select field.
 
+const APPETIZER_CATEGORIES = [
+  "Passed App",
+  "Presented App",
+  "Appetizer",
+  "Passed",
+  "App",
+];
+
 export const CATEGORY_MAP: Record<string, string[]> = {
-  passed:       ['Passed App', 'Appetizer'],
-  presented:    ['Presented App', 'Presented App/metal', 'Presented App/china', 'Appetizer'],
-  buffet_metal: [
-    "Buffet Metal",
-    "Buffet",
-    "Buffet Item",
-    "Side",
-    "Vegetable (Side)",
-    "Starch (Side)",
-    "Pasta (Side)",
-    "Entrée",
-    "Protein (Entrée)",
-    "Pasta (Entrée)",
-    "Component",
-  ],
-  buffet_china: [
-    "Buffet China",
-    "Salad",
-    "Bread",
-    "Side",
-    "Vegetable (Side)",
-    "Component",
-  ],
-  desserts:     ['Dessert', 'Dessert/Metal', 'Dessert/China', 'Dessert (Individual)', 'Dessert (Display)'],
+  passed: APPETIZER_CATEGORIES,
+  presented: APPETIZER_CATEGORIES,
+
+  buffet_metal: ["Buffet Metal", "Buffet", "Buffet Item", "Side"],
+  buffet_china: ["Buffet China", "Salad", "Bread", "Side"],
+
+  desserts: ["Dessert", "Dessert/Metal", "Dessert/China"],
   stations:     ['Station', 'Stations', 'Station Item'],
   dressing:     ['Dressing'],
-  deli:         ['Deli/Sandwhiches', 'Deli/Breads', 'Deli/Sandwiches', 'Deli', 'Sandwich', 'Wrap'],
-  room_temp:    ['Room Temp Display', 'Display', 'Buffet China'],
+  deli: ["Deli/Sandwhiches", "Deli/Breads", "Deli/Sandwiches"],
+  room_temp: ["Room Temp Display", "Display", "Buffet China"],
   displays:     ['Display', 'Buffet China'],
   beverage_service: ['Beverage', 'Beverages', 'Drink'],
   bar_service:     ['Bar', 'Bar Item', 'Beverage', 'Beverages'],

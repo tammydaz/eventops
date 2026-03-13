@@ -1,0 +1,39 @@
+---
+description: PASSED APPETIZERS is STABLE and READ-ONLY — do not modify
+alwaysApply: true
+---
+
+# PASSED APPETIZERS — LOCKED MODULE
+
+The **PASSED APPETIZERS** section is **STABLE** and must be treated as **READ-ONLY**.
+
+## Do NOT modify
+
+- Logic, rendering, pagination, or data wiring for Passed Appetizers
+- Child item rendering for Passed Apps
+- Sauce rendering for Passed Apps
+- Picker logic for Passed Apps
+- Any code that references `FIELD_IDS.PASSED_APPETIZERS` or `FIELD_IDS.CUSTOM_PASSED_APP`
+
+## Affected files (do not refactor)
+
+- `src/pages/BeoPrintPage.tsx` — Passed Apps section, HOT/KITCHEN-DISPOSABLE configs
+- `src/pages/BeoIntakePage.tsx` — passedApps mapping
+- `src/pages/KitchenBEOPrintPage.tsx` — Passed Apps section config
+- `src/components/beo-intake/MenuSection.tsx` — passedAppetizers wiring
+- `src/components/beo-intake/ServicewareSection.tsx` — passedApps reference
+- `src/services/airtable/events.ts` — passedAppetizers field
+- `src/services/airtable.ts` — PASSED_APPETIZERS_FIELD_ID
+- `src/lib/specs/calculateSpecs.ts` — Passed Apps spec logic
+- `src/services/specEngine/specDataFetch.ts` — passed field fetch
+
+## Future work
+
+Changes may occur only in other sections:
+
+- Presented Appetizers
+- Buffet Metal
+- Buffet China
+- Stations
+
+If a change is required elsewhere, **do NOT** refactor or "clean up" the Passed Apps implementation. Treat it as a locked module.
