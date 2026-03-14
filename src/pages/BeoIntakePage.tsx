@@ -232,7 +232,7 @@ export const BeoIntakePage = () => {
       if (usePickerStore.getState().isOpen) return;
       if (usePickerStore.getState().isWithinCloseGrace()) return;
       const target = e.target as HTMLElement;
-      if (target.closest(".picker-modal-backdrop") || target.closest(".picker-modal") || target.closest(".picker-done-button")) return;
+      if (target.closest(".picker-modal-backdrop") || target.closest(".picker-modal") || target.closest(".picker-done-button") || target.closest(".station-config-modal") || target.closest(".station-picker-modal")) return;
       if (!target.closest(".beo-pill")) {
         window.dispatchEvent(new CustomEvent("beo-collapse-all-pills"));
       }

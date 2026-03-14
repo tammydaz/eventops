@@ -366,7 +366,7 @@ export const loadMenuItemsByStationType = async (
     let items: LinkedRecordItem[] = [];
     const recordsData = isErrorResult(data) ? null : data;
     if (recordsData && !recordsData.error && recordsData.records?.length) {
-      const allRecs = data.records;
+      const allRecs = recordsData.records;
       const idToName: Record<string, string> = {};
       for (const rec of allRecs) {
         const nameRaw = rec.fields[MENU_ITEMS_FORMATTED_NAME_FIELD_ID] ?? rec.fields[MENU_ITEMS_ITEM_NAME_FIELD_ID];
@@ -548,12 +548,13 @@ export const createStation = async (params: {
     fields["Station Notes"] = params.stationNotes.trim();
   }
 
-  const data = await airtableFetch<{ id: string; fields?: Record<string, unknown> }>(
+  const data = await airtableFetch<{ records?: Array<{ id: string }> }>(
     `/${tableId}`,
-    { method: "POST", body: JSON.stringify({ fields }) }
+    { method: "POST", body: JSON.stringify({ records: [{ fields }] }) }
   );
   if (isErrorResult(data)) return data;
-  return { id: (data as { id: string }).id };
+  const rec = (data as { records?: Array<{ id: string }> }).records?.[0];
+  return rec ? { id: rec.id } : { error: true, message: "No record returned" };
 };
 
 /** Create station from preset with components. Uses field IDs for Station Preset, Station Components, Custom Items. */
@@ -576,9 +577,13 @@ export const createStationFromPreset = async (params: {
   if (fieldIds.stationComponents && params.stationComponents.length > 0) fields[fieldIds.stationComponents] = params.stationComponents;
   if (fieldIds.customItems && params.customItems?.trim()) fields[fieldIds.customItems] = params.customItems.trim();
   if (params.stationNotes?.trim()) fields[fieldIds.stationNotes] = params.stationNotes.trim();
-  const data = await airtableFetch<{ id: string }>(`/${tableId}`, { method: "POST", body: JSON.stringify({ fields }) });
+  const data = await airtableFetch<{ records?: Array<{ id: string }> }>(`/${tableId}`, {
+    method: "POST",
+    body: JSON.stringify({ records: [{ fields }] }),
+  });
   if (isErrorResult(data)) return data;
-  return { id: (data as { id: string }).id };
+  const rec = (data as { records?: Array<{ id: string }> }).records?.[0];
+  return rec ? { id: rec.id } : { error: true, message: "No record returned" };
 };
 
 /** Update station's Station Components, Custom Components, Custom Items. */

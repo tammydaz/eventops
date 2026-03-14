@@ -18,13 +18,13 @@ import path from 'path';
 
 dotenv.config();
 
-const AIRTABLE_API_KEY = process.env.VITE_AIRTABLE_API_KEY;
-const AIRTABLE_BASE_ID = process.env.VITE_AIRTABLE_BASE_ID;
+const AIRTABLE_API_KEY = process.env.AIRTABLE_API_KEY || process.env.VITE_AIRTABLE_API_KEY;
+const AIRTABLE_BASE_ID = process.env.AIRTABLE_BASE_ID || process.env.VITE_AIRTABLE_BASE_ID;
 const AIRTABLE_EVENTS_TABLE_ID = process.env.VITE_AIRTABLE_EVENTS_TABLE;
 
 // Validate environment variables
 if (!AIRTABLE_API_KEY) {
-  console.error('❌ Error: VITE_AIRTABLE_API_KEY is not set in .env file');
+  console.error('❌ Error: AIRTABLE_API_KEY or VITE_AIRTABLE_API_KEY must be set in .env');
   process.exit(1);
 }
 
@@ -33,10 +33,7 @@ if (!AIRTABLE_BASE_ID) {
   process.exit(1);
 }
 
-if (!AIRTABLE_EVENTS_TABLE_ID) {
-  console.error('❌ Error: VITE_AIRTABLE_EVENTS_TABLE is not set in .env file');
-  process.exit(1);
-}
+// EVENTS_TABLE only required for read/add commands, not for export
 
 const BASE_URL = 'https://api.airtable.com/v0/meta';
 
@@ -328,6 +325,22 @@ async function ensureClientBusinessName() {
 }
 
 /**
+ * Export full schema to airtable_schema.json for metadata fallback.
+ */
+async function exportSchema() {
+  console.log('\n📤 Exporting Airtable schema to airtable_schema.json...\n');
+  try {
+    const data = await airtableMetaRequest(`/bases/${AIRTABLE_BASE_ID}/tables`);
+    const outPath = path.join(process.cwd(), 'airtable_schema.json');
+    fs.writeFileSync(outPath, JSON.stringify(data, null, 0), 'utf8');
+    console.log(`✅ Wrote ${data.tables?.length ?? 0} tables to ${outPath}\n`);
+  } catch (error) {
+    console.error('❌ Error exporting schema:', error.message);
+    process.exit(1);
+  }
+}
+
+/**
  * CLI Interface
  */
 async function main() {
@@ -338,6 +351,7 @@ async function main() {
     console.log('\n📚 Airtable Schema Manager\n');
     console.log('Usage:');
     console.log('  npm run schema read');
+    console.log('  npm run schema export     # Refresh airtable_schema.json');
     console.log('  npm run schema add "Field Name" "fieldType"');
     console.log('  npm run schema ensure-production-accepted');
     console.log('  npm run schema ensure-department-acceptance');
@@ -352,6 +366,10 @@ async function main() {
   switch (command.toLowerCase()) {
     case 'read':
       await readSchema();
+      break;
+
+    case 'export':
+      await exportSchema();
       break;
 
     case 'add':
@@ -374,7 +392,7 @@ async function main() {
 
     default:
       console.error(`❌ Unknown command: ${command}`);
-      console.log('\nAvailable commands: read, add, ensure-production-accepted, ensure-department-acceptance, ensure-client-business-name\n');
+      console.log('\nAvailable commands: read, export, add, ensure-production-accepted, ensure-department-acceptance, ensure-client-business-name\n');
       process.exit(1);
   }
 }

@@ -720,6 +720,7 @@ function CreationStationContent(props: {
           labelStyle={labelStyle}
           buttonStyle={buttonStyle}
           mode="create"
+          guestCount={selectedEventData?.[FIELD_IDS.GUEST_COUNT] != null ? Number(selectedEventData[FIELD_IDS.GUEST_COUNT]) : 0}
         />
       )}
       {(() => {
@@ -740,6 +741,7 @@ function CreationStationContent(props: {
             labelStyle={labelStyle}
             buttonStyle={buttonStyle}
             mode="edit"
+            guestCount={selectedEventData?.[FIELD_IDS.GUEST_COUNT] != null ? Number(selectedEventData[FIELD_IDS.GUEST_COUNT]) : 0}
           />
         ) : null;
       })()}

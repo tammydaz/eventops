@@ -1,3 +1,12 @@
+# Code for Handoff — Copy Below
+
+---
+
+## 1. Station Components Config Modal (broken / needs review)
+
+**File:** `src/components/beo-intake/StationComponentsConfigModal.tsx`
+
+```tsx
 /**
  * Station Components Config Modal — uses Station Presets, Station Components, Station Options.
  * Does NOT touch Menu Items, menu pickers, spec engine, or BEO rendering.
@@ -84,7 +93,6 @@ export function StationComponentsConfigModal(props: {
   inputStyle: React.CSSProperties;
   labelStyle: React.CSSProperties;
   buttonStyle: React.CSSProperties;
-  /** When "edit", use initialComponentIds/initialCustomItems; when "create", autopopulate defaults. */
   mode?: "create" | "edit";
   submitLabel?: string;
   guestCount?: number;
@@ -93,7 +101,6 @@ export function StationComponentsConfigModal(props: {
     isOpen,
     presetId,
     presetName,
-    stationNotes,
     initialComponentIds,
     initialCustomItems,
     onConfirm,
@@ -245,7 +252,6 @@ export function StationComponentsConfigModal(props: {
     setAddDropdownType(null);
   }, []);
 
-  // Close add dropdown when clicking outside
   useEffect(() => {
     if (!addDropdownType) return;
     const handler = (e: MouseEvent) => {
@@ -270,252 +276,66 @@ export function StationComponentsConfigModal(props: {
   const content = (
     <div className="station-config-modal" style={{ position: "fixed", inset: 0, zIndex: 99999, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
       <div className="station-config-modal-backdrop" style={{ position: "absolute", inset: 0, backgroundColor: "rgba(0,0,0,0.85)" }} onClick={onCancel} aria-hidden="true" />
-      <div
-        role="dialog"
-        style={{
-          position: "relative",
-          zIndex: 1,
-          backgroundColor: "#1a1a1a",
-          borderRadius: 12,
-          border: "2px solid #ff6b6b",
-          maxWidth: 640,
-          width: "100%",
-          maxHeight: "85vh",
-          overflow: "hidden",
-          display: "flex",
-          flexDirection: "column",
-        }}
-        onClick={(e) => e.stopPropagation()}
-      >
+      <div role="dialog" style={{ position: "relative", zIndex: 1, backgroundColor: "#1a1a1a", borderRadius: 12, border: "2px solid #ff6b6b", maxWidth: 640, width: "100%", maxHeight: "85vh", overflow: "hidden", display: "flex", flexDirection: "column" }} onClick={(e) => e.stopPropagation()}>
         <div style={{ padding: 16, borderBottom: "1px solid #444", flexShrink: 0 }}>
-          <h3 style={{ margin: "0 0 8px 0", fontSize: 18, color: "#e0e0e0" }}>
-            Configure Station {presetName || "(Select Preset)"}
-          </h3>
-          <p style={{ margin: 0, fontSize: 13, color: "#ff6b6b", fontWeight: 600 }}>
-            Follow the instructions in each section — pick the required number of items.
-          </p>
+          <h3 style={{ margin: "0 0 8px 0", fontSize: 18, color: "#e0e0e0" }}>Configure Station {presetName || "(Select Preset)"}</h3>
+          <p style={{ margin: 0, fontSize: 13, color: "#ff6b6b", fontWeight: 600 }}>Follow the instructions in each section — pick the required number of items.</p>
         </div>
         <div style={{ padding: "12px 16px", borderBottom: "1px solid #333", display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
-          <button
-            type="button"
-            onClick={handleAutoFill}
-            disabled={loading || !presetId}
-            style={{
-              padding: "8px 16px",
-              borderRadius: 6,
-              border: "1px solid #ff6b6b",
-              background: "rgba(255,107,107,0.15)",
-              color: "#ff6b6b",
-              fontSize: 12,
-              fontWeight: 600,
-              cursor: loading || !presetId ? "not-allowed" : "pointer",
-              opacity: loading || !presetId ? 0.5 : 1,
-            }}
-          >
-            Auto-Fill FoodWerx Defaults
-          </button>
-          <button
-            type="button"
-            onClick={handleClearAll}
-            disabled={loading || selectedComponentIds.length === 0}
-            style={{
-              padding: "8px 16px",
-              borderRadius: 6,
-              border: "1px solid #666",
-              background: "rgba(160,160,160,0.1)",
-              color: "#a0a0a0",
-              fontSize: 12,
-              fontWeight: 600,
-              cursor: loading || selectedComponentIds.length === 0 ? "not-allowed" : "pointer",
-              opacity: loading || selectedComponentIds.length === 0 ? 0.5 : 1,
-            }}
-          >
-            Clear All & Start Over
-          </button>
-          {guestCount > 0 && (
-            <span style={{ marginLeft: 8, fontSize: 12, color: "#888" }}>
-              ({guestCount} guests)
-            </span>
-          )}
+          <button type="button" onClick={handleAutoFill} disabled={loading || !presetId} style={{ padding: "8px 16px", borderRadius: 6, border: "1px solid #ff6b6b", background: "rgba(255,107,107,0.15)", color: "#ff6b6b", fontSize: 12, fontWeight: 600, cursor: loading || !presetId ? "not-allowed" : "pointer", opacity: loading || !presetId ? 0.5 : 1 }}>Auto-Fill FoodWerx Defaults</button>
+          <button type="button" onClick={handleClearAll} disabled={loading || selectedComponentIds.length === 0} style={{ padding: "8px 16px", borderRadius: 6, border: "1px solid #666", background: "rgba(160,160,160,0.1)", color: "#a0a0a0", fontSize: 12, fontWeight: 600, cursor: loading || selectedComponentIds.length === 0 ? "not-allowed" : "pointer", opacity: loading || selectedComponentIds.length === 0 ? 0.5 : 1 }}>Clear All & Start Over</button>
+          {guestCount > 0 && <span style={{ marginLeft: 8, fontSize: 12, color: "#888" }}>({guestCount} guests)</span>}
         </div>
         <div style={{ flex: 1, overflowY: "auto", padding: 16 }}>
-          {loading ? (
-            <div style={{ color: "#999", padding: 24, textAlign: "center" }}>Loading…</div>
-          ) : presetId ? (
+          {loading ? <div style={{ color: "#999", padding: 24, textAlign: "center" }}>Loading…</div> : presetId ? (
             <>
               {COMPONENT_TYPE_ORDER.map((type) => {
                 const comps = grouped.get(type) ?? [];
-                const selectedInType = selectedComponentIds.filter((id) => {
-                  const c = allComponents.find((x) => x.id === id);
-                  return c?.componentType === type;
-                });
+                const selectedInType = selectedComponentIds.filter((id) => allComponents.find((x) => x.id === id)?.componentType === type);
                 const limit = getLimitForType(type);
                 const availableToAdd = comps.filter((c) => !selectedSet.has(c.id));
                 const guidance = getSectionGuidance(type, limit, presetName);
                 const sectionTitle = displayType(type);
                 const isAddOpen = addDropdownType === type;
                 return (
-                  <CollapsibleSubsection
-                    key={type}
-                    title={sectionTitle}
-                    icon="▶"
-                    defaultOpen={sectionsExpanded || selectedInType.length > 0}
-                  >
+                  <CollapsibleSubsection key={type} title={sectionTitle} icon="▶" defaultOpen={sectionsExpanded || selectedInType.length > 0}>
                     <div style={{ gridColumn: "1 / -1" }}>
-                    <div
-                      style={{
-                        marginBottom: 10,
-                        padding: "8px 10px",
-                        backgroundColor: "rgba(255,107,107,0.12)",
-                        border: "1px solid rgba(255,107,107,0.4)",
-                        borderRadius: 6,
-                        fontSize: 12,
-                        fontWeight: 700,
-                        color: "#ff6b6b",
-                        textTransform: "uppercase",
-                        letterSpacing: "0.5px",
-                      }}
-                    >
-                      {guidance}
-                    </div>
-                    {selectedInType.map((id) => {
-                      const comp = allComponents.find((c) => c.id === id);
-                      const name = comp?.name ?? id;
-                      const isOther = comp?.isOther ?? name.toLowerCase() === "other";
-                      return (
-                        <div
-                          key={id}
-                          style={{
-                            display: "grid",
-                            gridTemplateColumns: "1fr 26px",
-                            gap: 6,
-                            alignItems: "center",
-                            marginBottom: 6,
-                          }}
-                        >
-                          {isOther ? (
-                            <input
-                              type="text"
-                              value={otherInput}
-                              onChange={(e) => setOtherInput(e.target.value)}
-                              placeholder="Enter custom..."
-                              style={{ ...inputStyle, padding: "5px 8px", fontSize: 12, minWidth: 0 }}
-                            />
-                          ) : (
-                            <span style={{ color: "#e0e0e0", fontSize: 13 }}>{name}</span>
-                          )}
-                          <button
-                            type="button"
-                            onClick={() => removeComponent(id)}
-                            style={{
-                              width: 26,
-                              height: 26,
-                              padding: 0,
-                              borderRadius: 5,
-                              border: "1px solid #555",
-                              background: "#333",
-                              color: "#ff6b6b",
-                              fontSize: 13,
-                              fontWeight: "bold",
-                              cursor: "pointer",
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "center",
-                            }}
-                          >
-                            ✕
-                          </button>
-                        </div>
-                      );
-                    })}
-                    <div ref={addDropdownType === type ? addDropdownRef : undefined} style={{ position: "relative" }}>
-                      <button
-                        type="button"
-                        onClick={() => setAddDropdownType(isAddOpen ? null : type)}
-                        disabled={availableToAdd.length === 0 || selectedInType.length >= limit}
-                        style={{
-                          padding: "6px 12px",
-                          fontSize: 12,
-                          background: "rgba(255,107,107,0.2)",
-                          color: "#ff6b6b",
-                          border: "1px solid #ff6b6b",
-                          borderRadius: 6,
-                          cursor: availableToAdd.length > 0 && selectedInType.length < limit ? "pointer" : "not-allowed",
-                          opacity: availableToAdd.length === 0 || selectedInType.length >= limit ? 0.5 : 1,
-                        }}
-                      >
-                        + Add {displayType(type)}
-                      </button>
-                      {isAddOpen && availableToAdd.length > 0 && (
-                        <div
-                          style={{
-                            position: "absolute",
-                            top: "100%",
-                            left: 0,
-                            marginTop: 4,
-                            minWidth: 180,
-                            maxHeight: 200,
-                            overflowY: "auto",
-                            backgroundColor: "#1a1a1a",
-                            border: "1px solid #444",
-                            borderRadius: 6,
-                            boxShadow: "0 4px 12px rgba(0,0,0,0.5)",
-                            zIndex: 10,
-                          }}
-                        >
-                          {availableToAdd.map((c) => (
-                            <button
-                              key={c.id}
-                              type="button"
-                              onClick={() => {
-                                addComponent(c.id);
-                                setAddDropdownType(null);
-                              }}
-                              disabled={!canAddComponent(c.id)}
-                              style={{
-                                display: "block",
-                                width: "100%",
-                                padding: "8px 12px",
-                                textAlign: "left",
-                                fontSize: 12,
-                                background: "none",
-                                border: "none",
-                                color: canAddComponent(c.id) ? "#e0e0e0" : "#666",
-                                cursor: canAddComponent(c.id) ? "pointer" : "not-allowed",
-                              }}
-                            >
-                              {c.name}
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                    </div>
+                      <div style={{ marginBottom: 10, padding: "8px 10px", backgroundColor: "rgba(255,107,107,0.12)", border: "1px solid rgba(255,107,107,0.4)", borderRadius: 6, fontSize: 12, fontWeight: 700, color: "#ff6b6b", textTransform: "uppercase", letterSpacing: "0.5px" }}>{guidance}</div>
+                      {selectedInType.map((id) => {
+                        const comp = allComponents.find((c) => c.id === id);
+                        const name = comp?.name ?? id;
+                        const isOther = comp?.isOther ?? name.toLowerCase() === "other";
+                        return (
+                          <div key={id} style={{ display: "grid", gridTemplateColumns: "1fr 26px", gap: 6, alignItems: "center", marginBottom: 6 }}>
+                            {isOther ? <input type="text" value={otherInput} onChange={(e) => setOtherInput(e.target.value)} placeholder="Enter custom..." style={{ ...inputStyle, padding: "5px 8px", fontSize: 12, minWidth: 0 }} /> : <span style={{ color: "#e0e0e0", fontSize: 13 }}>{name}</span>}
+                            <button type="button" onClick={() => removeComponent(id)} style={{ width: 26, height: 26, padding: 0, borderRadius: 5, border: "1px solid #555", background: "#333", color: "#ff6b6b", fontSize: 13, fontWeight: "bold", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>✕</button>
+                          </div>
+                        );
+                      })}
+                      <div ref={addDropdownType === type ? addDropdownRef : undefined} style={{ position: "relative" }}>
+                        <button type="button" onClick={() => setAddDropdownType(isAddOpen ? null : type)} disabled={availableToAdd.length === 0 || selectedInType.length >= limit} style={{ padding: "6px 12px", fontSize: 12, background: "rgba(255,107,107,0.2)", color: "#ff6b6b", border: "1px solid #ff6b6b", borderRadius: 6, cursor: availableToAdd.length > 0 && selectedInType.length < limit ? "pointer" : "not-allowed", opacity: availableToAdd.length === 0 || selectedInType.length >= limit ? 0.5 : 1 }}>+ Add {displayType(type)}</button>
+                        {isAddOpen && availableToAdd.length > 0 && (
+                          <div style={{ position: "absolute", top: "100%", left: 0, marginTop: 4, minWidth: 180, maxHeight: 200, overflowY: "auto", backgroundColor: "#1a1a1a", border: "1px solid #444", borderRadius: 6, boxShadow: "0 4px 12px rgba(0,0,0,0.5)", zIndex: 10 }}>
+                            {availableToAdd.map((c) => (
+                              <button key={c.id} type="button" onClick={() => { addComponent(c.id); setAddDropdownType(null); }} disabled={!canAddComponent(c.id)} style={{ display: "block", width: "100%", padding: "8px 12px", textAlign: "left", fontSize: 12, background: "none", border: "none", color: canAddComponent(c.id) ? "#e0e0e0" : "#666", cursor: canAddComponent(c.id) ? "pointer" : "not-allowed" }}>{c.name}</button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </CollapsibleSubsection>
                 );
               })}
               <div style={{ marginTop: 16 }}>
                 <label style={labelStyle}>Custom Items (text)</label>
-                <textarea
-                  rows={2}
-                  value={customItems}
-                  onChange={(e) => setCustomItems(e.target.value)}
-                  placeholder="Additional custom items..."
-                  style={{ ...inputStyle, width: "100%", resize: "vertical" }}
-                />
+                <textarea rows={2} value={customItems} onChange={(e) => setCustomItems(e.target.value)} placeholder="Additional custom items..." style={{ ...inputStyle, width: "100%", resize: "vertical" }} />
               </div>
             </>
-          ) : (
-            <div style={{ color: "#999", fontSize: 14 }}>Select a Station Preset to configure components.</div>
-          )}
+          ) : <div style={{ color: "#999", fontSize: 14 }}>Select a Station Preset to configure components.</div>}
         </div>
         <div style={{ padding: 16, borderTop: "1px solid #444", display: "flex", gap: 12, justifyContent: "flex-end", flexShrink: 0 }}>
-          <button type="button" onClick={onCancel} style={{ padding: "10px 20px", background: "#444", color: "#e0e0e0", border: "none", borderRadius: 8, cursor: "pointer" }}>
-            Cancel
-          </button>
-          <button type="button" onClick={handleConfirm} disabled={loading || !presetId} style={buttonStyle}>
-            {submitLabel ?? (mode === "edit" ? "Save Changes" : "Confirm & Add Station")}
-          </button>
+          <button type="button" onClick={onCancel} style={{ padding: "10px 20px", background: "#444", color: "#e0e0e0", border: "none", borderRadius: 8, cursor: "pointer" }}>Cancel</button>
+          <button type="button" onClick={handleConfirm} disabled={loading || !presetId} style={buttonStyle}>{submitLabel ?? (mode === "edit" ? "Save Changes" : "Confirm & Add Station")}</button>
         </div>
       </div>
     </div>
@@ -523,3 +343,72 @@ export function StationComponentsConfigModal(props: {
 
   return createPortal(content, document.body);
 }
+```
+
+---
+
+## 2. Paper Products / Plates • Cutlery • Glassware (working reference)
+
+**File:** `src/components/beo-intake/ServicewareSection.tsx`
+
+**Flow:** User picks **Serviceware Source** (FoodWerx / Client / Rentals / Mixed) and **Paper Type** (Standard / Premium / China), then clicks **Auto-Fill FoodWerx Defaults** or **Auto-Fill Client Defaults** to generate plates, cutlery, glassware.
+
+**Key pieces:**
+- `SERVICEWARE_SOURCE_OPTIONS` — who supplies
+- `PAPER_TYPE_OPTIONS` — Standard Paper, Premium Paper, China
+- `autoFillServiceware()` — FoodWerx defaults (lines 93–176)
+- `autoFillClientServiceware()` — Client defaults (lines 179–237)
+- `handleAutoFill` — wired to "Auto-Fill FoodWerx Defaults" (lines 489–512)
+- `handleAutoFillClient` — wired to "Auto-Fill Client Defaults" (lines 521–541)
+- `ItemRow` — qty | supplier dropdown | item name | X
+- Collapsible subsections for Plates, Cutlery, Glassware
+
+Full file is 846 lines. Key UI block (Serviceware Source + Paper Type + Auto-Fill buttons):
+
+```tsx
+// Serviceware Source dropdown
+<select value={servicewareSource} onChange={(e) => { setServicewareSource(e.target.value); saveSourceAndPaperType(e.target.value, paperType); }}>
+  <option value="">Select...</option>
+  {SERVICEWARE_SOURCE_OPTIONS.map((opt) => <option key={opt} value={opt}>{opt}</option>)}
+</select>
+
+// Paper Type dropdown
+<select value={paperType} onChange={(e) => { setPaperType(e.target.value); saveSourceAndPaperType(servicewareSource, e.target.value); }}>
+  <option value="">Select...</option>
+  {PAPER_TYPE_OPTIONS.map((opt) => <option key={opt} value={opt}>{opt}</option>)}
+</select>
+
+// Auto-Fill buttons
+<button onClick={handleAutoFill} disabled={isAutoFillDisabled}>Auto-Fill FoodWerx Defaults</button>
+<button onClick={handleAutoFillClient} disabled={isAutoFillClientDisabled}>Auto-Fill Client Defaults</button>
+<button onClick={handleClearAll}>Clear All & Start Over</button>
+```
+
+**Auto-Fill logic:**
+- `handleAutoFill` calls `autoFillServiceware(paperType, guestCount, hasAppetizersAndDesserts, carafes)` → sets plates, cutlery, glassware with FoodWerx supplier
+- `handleAutoFillClient` calls `autoFillClientServiceware(...)` → sets items with "Client" supplier
+- Both set `sectionsExpanded = true` so Plates/Cutlery/Glassware subsections open
+
+**Dependencies:** `useEventStore`, `FIELD_IDS`, `FormSection`, `CollapsibleSubsection`, `Helper`, `inputStyle`, `labelStyle`, `textareaStyle`
+
+---
+
+## Full ServicewareSection.tsx (Paper Products — 846 lines)
+
+<details>
+<summary>Click to expand full file</summary>
+
+See `src/components/beo-intake/ServicewareSection.tsx` in the project. Key structure:
+
+1. **Lines 77–78:** `SERVICEWARE_SOURCE_OPTIONS`, `PAPER_TYPE_OPTIONS`
+2. **Lines 93–176:** `autoFillServiceware()` — FoodWerx
+3. **Lines 179–237:** `autoFillClientServiceware()` — Client
+4. **Lines 239–327:** `ItemRow` component
+5. **Lines 329–341:** State (servicewareSource, paperType, plates, cutlery, glassware, etc.)
+6. **Lines 489–512:** `handleAutoFill` (FoodWerx)
+7. **Lines 521–541:** `handleAutoFillClient` (Client)
+8. **Lines 419–451:** Serviceware Source + Paper Type dropdowns
+9. **Lines 451–498:** Auto-Fill FoodWerx, Auto-Fill Client, Clear All buttons
+10. **Lines 556–621:** CollapsibleSubsection for Plates, Cutlery, Glassware with ItemRow + Add button
+
+</details>
