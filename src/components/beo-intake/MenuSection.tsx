@@ -8,7 +8,7 @@ import {
   loadMenuItems,
   loadMenuItemsByStationType,
   loadStationPreset,
-  loadStationsByRecordIds,
+  loadStationsByEventId,
   createStation,
   createStationFromPreset,
   updateStationItems,
@@ -395,7 +395,7 @@ function StationItemsConfigModal(props: {
         </div>
         <div style={{ padding: 16, borderTop: "1px solid #444", display: "flex", gap: 12, justifyContent: "flex-end", flexShrink: 0 }}>
           <button type="button" onClick={onCancel} style={{ padding: "10px 20px", background: "#444", color: "#e0e0e0", border: "none", borderRadius: 8, cursor: "pointer" }}>Cancel</button>
-          <button type="button" onClick={() => onConfirm(selectedIds)} disabled={loading} style={buttonStyle}>Confirm & Add Station</button>
+          <button type="button" onClick={() => onConfirm(selectedIds)} disabled={loading} style={buttonStyle}>Save</button>
         </div>
       </div>
     </div>,
@@ -416,8 +416,8 @@ function CreationStationContent(props: {
   buttonStyle: React.CSSProperties;
 }) {
   const { selectedEventId, canEdit, getItemName, fetchItemNames, inputStyle, labelStyle, buttonStyle } = props;
-  const { setFields, selectedEventData } = useEventStore();
-  const [stations, setStations] = useState<Array<{ id: string; stationType: string; stationItems: string[]; stationNotes: string; stationPresetId?: string; stationComponents?: string[]; customItems?: string }>>([]);
+  const { selectedEventData } = useEventStore();
+  const [stations, setStations] = useState<Array<{ id: string; stationType: string; stationItems: string[]; stationNotes: string; stationPresetId?: string; stationComponents?: string[]; customItems?: string; beoPlacement?: "Presented Appetizer Metal/China" | "Buffet Metal/China" }>>([]);
   const [stationTypeOptions, setStationTypeOptions] = useState<string[]>([]);
   const [stationPresets, setStationPresets] = useState<Array<{ id: string; name: string }>>([]);
   const [newStationType, setNewStationType] = useState("");
@@ -427,8 +427,6 @@ function CreationStationContent(props: {
   const [showComponentsModal, setShowComponentsModal] = useState(false);
   const [editingStationId, setEditingStationId] = useState<string | null>(null);
   const [componentNames, setComponentNames] = useState<Record<string, string>>({});
-  const stationIds = asLinkedRecordIds(selectedEventData?.[FIELD_IDS.STATIONS]) ?? [];
-
   useEffect(() => {
     getStationTypeOptions().then((opts) => setStationTypeOptions(opts.length > 0 ? opts : [...STATION_TYPE_OPTIONS]));
   }, []);
@@ -440,12 +438,12 @@ function CreationStationContent(props: {
   }, []);
 
   useEffect(() => {
-    if (!stationIds?.length) {
+    if (!selectedEventId) {
       setStations([]);
       return;
     }
     let active = true;
-    loadStationsByRecordIds(stationIds).then((result) => {
+    loadStationsByEventId(selectedEventId, asLinkedRecordIds(selectedEventData?.[FIELD_IDS.STATIONS])).then((result) => {
       if (active && !isErrorResult(result)) {
         setStations(result);
         const allStationItemIds = result.flatMap((s) => s.stationItems).filter((id) => id.startsWith("rec"));
@@ -463,7 +461,7 @@ function CreationStationContent(props: {
       }
     });
     return () => { active = false; };
-  }, [stationIds?.join(","), fetchItemNames]);
+  }, [selectedEventId, selectedEventData, fetchItemNames]);
 
   const usePresetFlow = stationPresets.length > 0;
   const selectedPreset = stationPresets.find((p) => p.id === newStationPresetId);
@@ -494,12 +492,10 @@ function CreationStationContent(props: {
     setNewStationType("");
     setNewStationNotes("");
     setShowConfigModal(false);
-    const updatedIds = [...stationIds, result.id];
-    await setFields(selectedEventId, { [FIELD_IDS.STATIONS]: updatedIds });
     if (itemIds.length > 0 && selectedEventId) fetchItemNames(selectedEventId, itemIds);
   };
 
-  const confirmAddStationFromPreset = async (params: { componentIds: string[]; customItems: string }) => {
+  const confirmAddStationFromPreset = async (params: { componentIds: string[]; customItems: string; beoPlacement?: "Presented Appetizer Metal/China" | "Buffet Metal/China" }) => {
     if (!selectedEventId || !newStationPresetId || !selectedPreset) return;
     const result = await createStationFromPreset({
       presetId: newStationPresetId,
@@ -508,6 +504,7 @@ function CreationStationContent(props: {
       customItems: params.customItems || undefined,
       stationNotes: newStationNotes.trim(),
       eventId: selectedEventId,
+      beoPlacement: params.beoPlacement,
     });
     if (isErrorResult(result)) {
       console.error("Failed to create station:", result);
@@ -515,23 +512,21 @@ function CreationStationContent(props: {
     }
     setStations((prev) => [
       ...prev,
-      { id: result.id, stationType: selectedPreset.name, stationItems: [], stationNotes: newStationNotes.trim(), stationPresetId: newStationPresetId, stationComponents: params.componentIds, customItems: params.customItems },
+      { id: result.id, stationType: selectedPreset.name, stationItems: [], stationNotes: newStationNotes.trim(), stationPresetId: newStationPresetId, stationComponents: params.componentIds, customItems: params.customItems, beoPlacement: params.beoPlacement },
     ]);
     setNewStationPresetId("");
     setNewStationNotes("");
     setShowComponentsModal(false);
-    const updatedIds = [...stationIds, result.id];
-    await setFields(selectedEventId, { [FIELD_IDS.STATIONS]: updatedIds });
   };
 
-  const confirmEditStationComponents = async (stationId: string, params: { componentIds: string[]; customItems: string }) => {
-    const result = await updateStationComponents(stationId, { stationComponents: params.componentIds, customItems: params.customItems || undefined });
+  const confirmEditStationComponents = async (stationId: string, params: { componentIds: string[]; customItems: string; beoPlacement?: "Presented Appetizer Metal/China" | "Buffet Metal/China" }) => {
+    const result = await updateStationComponents(stationId, { stationComponents: params.componentIds, customItems: params.customItems || undefined, beoPlacement: params.beoPlacement });
     if (isErrorResult(result)) {
       console.error("Failed to update station components:", result);
       return;
     }
     setStations((prev) =>
-      prev.map((s) => (s.id === stationId ? { ...s, stationComponents: params.componentIds, customItems: params.customItems } : s))
+      prev.map((s) => (s.id === stationId ? { ...s, stationComponents: params.componentIds, customItems: params.customItems, beoPlacement: params.beoPlacement } : s))
     );
     setEditingStationId(null);
     loadStationComponentNamesByIds(params.componentIds).then((names) => {
@@ -573,6 +568,21 @@ function CreationStationContent(props: {
                     {(st.stationComponents ?? []).map((id) => (
                       <span key={id} style={{ fontSize: 12, padding: "4px 8px", backgroundColor: "#2a2a2a", borderRadius: 4, display: "inline-flex", alignItems: "center", gap: 4 }}>
                         {getComponentName(id)}
+                        {canEdit && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const newComponents = (st.stationComponents ?? []).filter((cid) => cid !== id);
+                              updateStationComponents(st.id, { stationComponents: newComponents }).then((r) => {
+                                if (!isErrorResult(r)) setStations((prev) => prev.map((s) => (s.id === st.id ? { ...s, stationComponents: newComponents } : s)));
+                              });
+                            }}
+                            style={{ background: "none", border: "none", color: "#888", cursor: "pointer", fontSize: 10 }}
+                            title="Remove"
+                          >
+                            ✕
+                          </button>
+                        )}
                       </span>
                     ))}
                     {st.customItems?.trim() && (
@@ -714,6 +724,7 @@ function CreationStationContent(props: {
           stationNotes={newStationNotes}
           initialComponentIds={[]}
           initialCustomItems=""
+          initialBeoPlacement={undefined}
           onConfirm={confirmAddStationFromPreset}
           onCancel={() => setShowComponentsModal(false)}
           inputStyle={inputStyle}
@@ -725,9 +736,10 @@ function CreationStationContent(props: {
       )}
       {(() => {
         const editingStation = editingStationId ? stations.find((s) => s.id === editingStationId) : null;
-        const editPresetId = editingStation?.stationPresetId ?? "";
-        const editPreset = stationPresets.find((p) => p.id === editPresetId) ?? (editingStation ? { id: editPresetId, name: editingStation.stationType } : null);
-        return editingStation && editPresetId ? (
+        const resolvedPreset = stationPresets.find((p) => p.id === editingStation?.stationPresetId) ?? stationPresets.find((p) => p.name === editingStation?.stationType);
+        const editPresetId = resolvedPreset?.id ?? "";
+        const editPreset = resolvedPreset ?? (editingStation ? { id: "", name: editingStation.stationType } : null);
+        return editingStation && (editPresetId || editingStation.stationType) ? (
           <StationComponentsConfigModal
             isOpen={!!editingStationId}
             presetId={editPresetId}
@@ -735,6 +747,7 @@ function CreationStationContent(props: {
             stationNotes={editingStation.stationNotes}
             initialComponentIds={editingStation.stationComponents ?? []}
             initialCustomItems={editingStation.customItems ?? ""}
+            initialBeoPlacement={editingStation.beoPlacement}
             onConfirm={(params) => confirmEditStationComponents(editingStationId!, params)}
             onCancel={() => setEditingStationId(null)}
             inputStyle={inputStyle}

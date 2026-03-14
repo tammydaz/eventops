@@ -49,6 +49,8 @@ type CollapsibleSubsectionProps = {
   defaultOpen?: boolean;
   /** When true, use green delivery styling for header */
   isDelivery?: boolean;
+  /** Accent color for border and title (e.g. #ff6b6b, #a855f7) */
+  accentColor?: string;
 };
 
 export const CollapsibleSubsection = ({
@@ -58,6 +60,7 @@ export const CollapsibleSubsection = ({
   children,
   defaultOpen = false,
   isDelivery = false,
+  accentColor,
 }: CollapsibleSubsectionProps) => {
   const [isOpen, setIsOpen] = useState(defaultOpen);
   // Sync open state when defaultOpen changes (e.g. when a service is picked)
@@ -68,6 +71,9 @@ export const CollapsibleSubsection = ({
       setIsOpen(defaultOpen);
     }
   }, [defaultOpen]);
+
+  const borderColor = accentColor ?? (isDelivery ? "#22c55e" : "rgba(0,188,212,0.3)");
+  const titleColor = accentColor ?? "#fff";
 
   return (
     <div style={{ gridColumn: "1 / -1" }}>
@@ -82,7 +88,7 @@ export const CollapsibleSubsection = ({
           marginTop: 10,
           marginBottom: isOpen ? 8 : 0,
           paddingBottom: 4,
-          borderBottom: `1px solid ${isDelivery ? "#22c55e" : "rgba(0,188,212,0.3)"}`,
+          borderBottom: `1px solid ${borderColor}`,
           background: "none",
           border: "none",
           cursor: "pointer",
@@ -90,14 +96,14 @@ export const CollapsibleSubsection = ({
           textAlign: "left",
         }}
       >
-        <span style={{ fontSize: "12px", transform: isOpen ? "rotate(90deg)" : "rotate(0deg)", transition: "transform 0.3s ease", color: "rgba(255,255,255,0.6)" }}>
+        <span style={{ fontSize: "12px", transform: isOpen ? "rotate(90deg)" : "rotate(0deg)", transition: "transform 0.3s ease", color: accentColor ?? "rgba(255,255,255,0.6)" }}>
           {icon}
         </span>
         <span
           style={{
             fontSize: "12px",
             fontWeight: 600,
-            color: "#fff",
+            color: titleColor,
             textTransform: "none",
             letterSpacing: "0.3px",
           }}
@@ -116,6 +122,10 @@ export const CollapsibleSubsection = ({
             display: "grid",
             gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
             gap: "12px",
+            padding: accentColor ? 12 : 0,
+            borderRadius: accentColor ? 8 : 0,
+            backgroundColor: accentColor ? "rgba(0,0,0,0.15)" : undefined,
+            boxShadow: accentColor ? `0 4px 16px ${accentColor}40` : undefined,
           }}
         >
           {children}

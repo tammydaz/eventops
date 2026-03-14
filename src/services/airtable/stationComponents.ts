@@ -174,6 +174,31 @@ export async function loadAllComponentsForPreset(presetId: string): Promise<Stat
   return loadStationComponentsForPreset(presetId, false);
 }
 
+/** Load ALL components from Station Components table (no preset filter). Use as fallback when preset returns empty. */
+export async function loadAllStationComponents(): Promise<StationComponent[] | AirtableErrorResult> {
+  const { components } = await resolveTableIds();
+  if (!components) return [];
+  const metaData = await airtableMetaFetch<{ tables?: Array<{ id: string; fields?: Array<{ id: string; name: string }> }> } | Array<{ id: string; fields?: Array<{ id: string; name: string }> }>>(META_TABLES_PATH);
+  const tables = metaData && !isErrorResult(metaData) ? (Array.isArray(metaData) ? metaData : metaData.tables ?? []) : [];
+  const compTable = tables.find((t) => t.id === components);
+  const compBy = (n: string) => compTable?.fields?.find((f) => f.name === n)?.id ?? "";
+  const nameFieldId = compBy("Component Name") || compBy("Name");
+  const componentTypeFieldId = compBy("Component Type");
+  const isOtherFieldId = compBy("Is Other?") || compBy("Other");
+  const params = new URLSearchParams({ maxRecords: "500", returnFieldsByFieldId: "true" });
+  const listData = await airtableFetch<AirtableListResponse<Record<string, unknown>>>(`/${components}?${params}`);
+  if (isErrorResult(listData)) return listData;
+  const result: StationComponent[] = [];
+  for (const rec of listData.records) {
+    const fields = rec.fields as Record<string, unknown>;
+    const name = asString(fields[nameFieldId]) || asSingleSelectName(fields[nameFieldId]) || "";
+    const componentType = asString(fields[componentTypeFieldId]) || asSingleSelectName(fields[componentTypeFieldId]) || "Other";
+    const isOther = isOtherFieldId ? asBoolean(fields[isOtherFieldId]) : name.toLowerCase() === "other";
+    result.push({ id: rec.id, name, componentType, isDefault: false, isOther });
+  }
+  return result;
+}
+
 /** Load default components for a preset (for autopopulate). */
 export async function loadDefaultComponentsForPreset(presetId: string): Promise<StationComponent[] | AirtableErrorResult> {
   return loadStationComponentsForPreset(presetId, true);

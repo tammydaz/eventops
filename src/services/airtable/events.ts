@@ -101,6 +101,7 @@ export const FIELD_IDS = {
   // ── Delivery-only (linked to Menu Items; no metal/china/appetizer lanes) ──
   DELIVERY_HOT: "fldowVMZrulZLR8X5",   // Entrées (used for hot delivery items)
   DELIVERY_DELI: "fldKRlrDNIJjxg9jn",  // Deli (linked to Menu Items)
+  BOXED_LUNCH_ORDERS: "fldHCcFbEH7bEwwkb",  // Boxed Lunch Orders (linked to Boxed Lunch Orders table)
   MENU_ITEM_SPECS: "fldX9ayAyjMqYT2Oi",
   LOADED: "fldrKmicpgzVJRGjp",
 

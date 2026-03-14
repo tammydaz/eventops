@@ -4,6 +4,7 @@ import { useAuthStore } from "../state/authStore";
 import { useBeoPrintStore } from "../state/beoPrintStore";
 import { FIELD_IDS, getBarServiceFieldId, getLockoutFieldIds, getBOHProductionFieldIds } from "../services/airtable/events";
 import { airtableFetch } from "../services/airtable/client";
+import { loadStationsByEventId } from "../services/airtable/linkedRecords";
 import { asLinkedRecordIds, asSingleSelectName, asString, asStringArray, isErrorResult } from "../services/airtable/selectors";
 import { secondsToTimeString, secondsTo12HourString } from "../utils/timeHelpers";
 import { isDeliveryOrPickup } from "../lib/deliveryHelpers";
@@ -2193,6 +2194,7 @@ const BeoPrintPage: React.FC = () => {
   });
   const [loading, setLoading] = useState(true);
   const [menuItemData, setMenuItemData] = useState<Record<string, { name: string; childIds: string[]; description?: string; dietaryTags?: string; sauce?: string }>>({});
+  const [stationsData, setStationsData] = useState<Array<{ id: string; stationType: string; stationItems: string[] }>>([]);
   const [buffetMenuEdits, setBuffetMenuEdits] = useState<Record<string, string>>({}); // itemId -> edited description
   const [specOverrides, setSpecOverrides] = useState<Record<string, string>>({});
   const [packOutEdits, setPackOutEdits] = useState<Record<string, string>>({});
@@ -2355,7 +2357,6 @@ const BeoPrintPage: React.FC = () => {
           FIELD_IDS.BUFFET_METAL,
           FIELD_IDS.BUFFET_CHINA,
           FIELD_IDS.DESSERTS,
-          FIELD_IDS.STATIONS,
         ];
 
     const parentIds = new Set<string>();
@@ -2365,8 +2366,6 @@ const BeoPrintPage: React.FC = () => {
         if (id.startsWith("rec")) parentIds.add(id);
       });
     });
-
-    if (parentIds.size === 0) return;
 
     const MENU_TABLE = "tbl0aN33DGG6R1sPZ";
     const ITEM_NAME = FIELD_IDS.MENU_ITEM_NAME;
@@ -2380,6 +2379,19 @@ const BeoPrintPage: React.FC = () => {
     if (!baseId) return;
 
     const fetchMenuItems = async () => {
+      if (eventId && !isDelivery) {
+        const stationsResult = await loadStationsByEventId(eventId, asLinkedRecordIds(eventData[FIELD_IDS.STATIONS]));
+        if (!isErrorResult(stationsResult)) {
+          setStationsData(stationsResult);
+          stationsResult.flatMap((s) => s.stationItems).filter((id) => id?.startsWith("rec")).forEach((id) => parentIds.add(id));
+        } else {
+          setStationsData([]);
+        }
+      } else {
+        setStationsData([]);
+      }
+      if (parentIds.size === 0) return;
+
       const newData: Record<string, { name: string; childIds: string[]; description?: string; dietaryTags?: string; sauce?: string }> = {};
       const toFetch = [...parentIds];
 
@@ -2471,7 +2483,7 @@ const BeoPrintPage: React.FC = () => {
     };
 
     fetchMenuItems();
-  }, [eventData]);
+  }, [eventData, eventId]);
 
   // ── Extract event fields ──
   const f = (id: string): string => {
@@ -2625,7 +2637,13 @@ const BeoPrintPage: React.FC = () => {
         return { title: config.title, fieldId: config.fieldIds[0], items: allLinked };
       }).filter((s) => s.items.length > 0)
     : FULL_SERVICE_SECTION_DEFS.map((def) => {
-        const linked = parseMenuItems(def.linkedFieldId);
+        const linked =
+          def.fieldId === FIELD_IDS.STATIONS
+            ? stationsData.flatMap((s) => (s.stationItems ?? []).filter((id) => id?.startsWith("rec")).map((id) => ({
+                id,
+                name: menuItemData[id]?.name || "Loading...",
+              })))
+            : parseMenuItems(def.linkedFieldId);
         const custom = def.customFieldId ? customTextToItems(asString(eventData[def.customFieldId]), `custom-${def.fieldId}`) : [];
         const seenNames = new Set(linked.map((i) => i.name));
         const items = [...linked];
@@ -2678,11 +2696,11 @@ const BeoPrintPage: React.FC = () => {
       }
     : null;
 
-  // Kitchen BEO: hard stop after desserts — never include STATIONS or anything after DESSERTS
+  // Kitchen BEO: include Passed, Presented, Buffet, Desserts, and STATIONS (each item spec'd and pack'd individually)
   const sectionsUpToDessert = menuSections.filter((s) => {
     const idx = menuSections.indexOf(s);
-    const dessertIdx = menuSections.findIndex((m) => m.title === "DESSERTS");
-    return dessertIdx === -1 || idx <= dessertIdx;
+    const stationsIdx = menuSections.findIndex((m) => m.title === "STATIONS");
+    return stationsIdx === -1 || idx <= stationsIdx;
   });
   const activeSections = [...sectionsUpToDessert.filter((s) => s.items.length > 0)];
   const visibleSections = activeSections.map((s) => ({

@@ -14,7 +14,8 @@
     "export:menu-items": "node scripts/exportMenuItemsForAnalysis.js",
     "delete:duplicate-passed-apps": "node scripts/deleteDuplicatePassedApps.js",
     "seed-specs": "node scripts/seedMasterMenuSpecs.js",
-    "import-march6": "node scripts/importMarch6Deliveries.js"
+    "import-march6": "node scripts/importMarch6Deliveries.js",
+    "add-tortellini": "node scripts/addTortelliniToStationComponents.js"
   },
   "dependencies": {
     "@react-google-maps/api": "^2.20.8",

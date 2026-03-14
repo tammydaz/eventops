@@ -1,0 +1,28 @@
+---
+description: Station Components Config Modal (Viva La Pasta) is STABLE — do not modify validation or required fields
+alwaysApply: true
+---
+
+# STATION COMPONENTS CONFIG — LOCKED MODULE
+
+The **Station Components Config Modal** (Viva La Pasta and preset-based stations) is **STABLE**. Core validation and required-field behavior must not be changed.
+
+## Do NOT modify
+
+- **BEO Placement** — Must remain mandatory for Viva La Pasta (Presented Appetizer Metal/China or Buffet Metal/China)
+- **Save validation** — Must block save when any required field is blank
+- **Validation popup** — Must show alert: "Please fill out the entire form before saving" with missing items listed
+- Required counts: 3 sauces, 2 pastas for Viva La Pasta
+- Generic preset validation: each section with finite limit must be fully filled before save
+
+## Affected files (do not refactor validation logic)
+
+- `src/components/beo-intake/StationComponentsConfigModal.tsx` — handleConfirm validation, BEO Placement required label, validation alerts
+
+## Locked behavior
+
+1. **Viva La Pasta**: BEO Placement + 3 sauces + 2 pastas required before Save
+2. **Generic presets**: Each section with a selection limit must meet that limit before Save
+3. **Alert message**: User must see which fields are missing when validation fails
+
+If a change is required elsewhere, **do NOT** remove or relax this validation. Treat it as a locked module.

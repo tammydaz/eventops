@@ -1,5 +1,6 @@
 /**
- * Stations table structure (linked to Events via Events.Stations).
+ * Stations table structure. Stations link to Events via Stations.Event.
+ * The app loads stations by querying Stations where Event = eventId (no Events.Stations needed).
  * Set VITE_AIRTABLE_STATIONS_TABLE in .env if different from "Stations".
  *
  * Field IDs from Airtable schema:

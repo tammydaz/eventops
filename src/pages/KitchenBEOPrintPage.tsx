@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { useEventStore } from "../state/eventStore";
 import { FIELD_IDS, getFoodwerxArrivalFieldId } from "../services/airtable/events";
 import { asString, asSingleSelectName, asBoolean, asStringArray, asLinkedRecordIds, isErrorResult } from "../services/airtable/selectors";
-import { loadStationsByRecordIds } from "../services/airtable/linkedRecords";
+import { loadStationsByEventId } from "../services/airtable/linkedRecords";
 import { airtableFetch } from "../services/airtable/client";
 import { EventSelector } from "../components/EventSelector";
 import { secondsTo12HourString } from "../utils/timeHelpers";
@@ -1147,7 +1147,7 @@ const KitchenBEOPrintPage: React.FC = () => {
   const { selectedEventId, selectedEventData, loadEvents, loadEventData, selectEvent, setFields } = useEventStore();
   const [loading, setLoading] = useState(true);
   const [menuItemData, setMenuItemData] = useState<Record<string, { name: string; childIds: string[] }>>({});
-  const [stationsData, setStationsData] = useState<Array<{ id: string; stationType: string; stationItems: string[]; stationNotes: string }>>([]);
+  const [stationsData, setStationsData] = useState<Array<{ id: string; stationType: string; stationItems: string[]; stationNotes: string; beoPlacement?: "Presented Appetizer Metal/China" | "Buffet Metal/China" }>>([]);
   const [fwArrivalFieldId, setFwArrivalFieldId] = useState<string | null>(null);
   const [checkState, setCheckState] = useState<Record<string, boolean>>({});
 
@@ -1198,18 +1198,17 @@ const KitchenBEOPrintPage: React.FC = () => {
     }
   }, [selectedEventId, loadEventData]);
 
-  // Fetch stations (STATIONS field links to Stations table, not Menu Items)
+  // Fetch stations by event (Stations.Event links to Events; no Events.Stations needed)
   useEffect(() => {
-    const stationIds = asLinkedRecordIds(selectedEventData?.[FIELD_IDS.STATIONS]) ?? [];
-    if (stationIds.length === 0) {
+    if (!selectedEventId) {
       setStationsData([]);
       return;
     }
-    loadStationsByRecordIds(stationIds).then((result) => {
+    loadStationsByEventId(selectedEventId, asLinkedRecordIds(selectedEventData?.[FIELD_IDS.STATIONS])).then((result) => {
       if (!isErrorResult(result)) setStationsData(result);
       else setStationsData([]);
     });
-  }, [selectedEventData]);
+  }, [selectedEventId, selectedEventData]);
 
   // Fetch menu items with Item Name + Child Items (linked records)
   // Exclude STATIONS — those are station IDs; we fetch stations separately and add station item IDs here
@@ -1233,10 +1232,9 @@ const KitchenBEOPrintPage: React.FC = () => {
     if (!apiKey || !baseId) return;
 
     const fetchMenuItems = async () => {
-      const stationIds = asLinkedRecordIds(selectedEventData?.[FIELD_IDS.STATIONS]) ?? [];
       let stationItemIds: string[] = [];
-      if (stationIds.length > 0) {
-        const stationsResult = await loadStationsByRecordIds(stationIds);
+      if (selectedEventId) {
+        const stationsResult = await loadStationsByEventId(selectedEventId, asLinkedRecordIds(selectedEventData?.[FIELD_IDS.STATIONS]));
         if (!isErrorResult(stationsResult)) {
           stationItemIds = stationsResult.flatMap((s) => s.stationItems).filter((id) => id?.startsWith("rec"));
         }
@@ -1309,7 +1307,7 @@ const KitchenBEOPrintPage: React.FC = () => {
       }
     };
     fetchMenuItems();
-  }, [selectedEventData]);
+  }, [selectedEventData, selectedEventId]);
 
   // Build sections from event data with parent/child from linked Child Items
   const buildSectionsFromEvent = (isDelivery: boolean): MenuSection[] => {
@@ -1369,24 +1367,45 @@ const KitchenBEOPrintPage: React.FC = () => {
         }
       }
     } else {
+      // Helper: convert station to MenuItem
+      const stationToMenuItem = (st: { stationType: string; stationItems: string[]; stationNotes: string }): MenuItem => {
+        const itemLines: string[] = st.stationItems
+          .map((id) => menuItemData[id]?.name)
+          .filter((n): n is string => !!n && n !== "—");
+        const notesLines = (st.stationNotes || "")
+          .split(/\r?\n/)
+          .map((l) => l.trim())
+          .filter(Boolean);
+        const allLines = [...itemLines, ...notesLines];
+        return {
+          qty: "—",
+          name: st.stationType || "Station",
+          subItems: allLines.length > 0 ? allLines.map((text) => ({ text })) : undefined,
+        };
+      };
+
       for (const config of MENU_SECTION_CONFIG) {
         let items: MenuItem[];
         if (config.fieldId === FIELD_IDS.STATIONS) {
-          items = stationsData.map((st) => {
-            const itemLines: string[] = st.stationItems
-              .map((id) => menuItemData[id]?.name)
-              .filter((n): n is string => !!n && n !== "—");
-            const notesLines = (st.stationNotes || "")
-              .split(/\r?\n/)
-              .map((l) => l.trim())
-              .filter(Boolean);
-            const allLines = [...itemLines, ...notesLines];
-            return {
-              qty: "—",
-              name: st.stationType || "Station",
-              subItems: allLines.length > 0 ? allLines.map((text) => ({ text })) : undefined,
-            };
-          });
+          // STATIONS section: only stations with no beoPlacement (or not Presented/Buffet)
+          items = stationsData
+            .filter((st) => st.beoPlacement !== "Presented Appetizer Metal/China" && st.beoPlacement !== "Buffet Metal/China")
+            .map(stationToMenuItem);
+        } else if (config.fieldId === FIELD_IDS.PRESENTED_APPETIZERS) {
+          // PRESENTED APPETIZERS: event menu items + stations with beoPlacement="Presented Appetizer Metal/China"
+          items = processField(config.fieldId);
+          stationsData
+            .filter((st) => st.beoPlacement === "Presented Appetizer Metal/China")
+            .forEach((st) => items.push(stationToMenuItem(st)));
+        } else if (config.fieldId === FIELD_IDS.BUFFET_METAL) {
+          // BUFFET – METAL: event menu items + stations with beoPlacement="Buffet Metal/China"
+          items = processField(config.fieldId);
+          stationsData
+            .filter((st) => st.beoPlacement === "Buffet Metal/China")
+            .forEach((st) => items.push(stationToMenuItem(st)));
+        } else if (config.fieldId === FIELD_IDS.BUFFET_CHINA) {
+          // BUFFET – CHINA: event menu items only (stations with Buffet Metal/China go to METAL)
+          items = processField(config.fieldId);
         } else {
           items = processField(config.fieldId);
         }

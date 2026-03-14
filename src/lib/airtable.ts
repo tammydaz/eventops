@@ -7,6 +7,7 @@ import { airtableFetch, getEventsTable, getMasterMenuSpecsTable, getMenuItemsTab
 import type { AirtableListResponse, AirtableRecord, AirtableErrorResult } from "../services/airtable/client";
 import { isErrorResult, asString, asLinkedRecordIds, asNumber } from "../services/airtable/selectors";
 import { FIELD_IDS } from "../services/airtable/events";
+import { loadStationsByEventId } from "../services/airtable/linkedRecords";
 
 export type { AirtableErrorResult };
 
@@ -89,12 +90,12 @@ const MENU_SECTION_FIELDS = [
   FIELD_IDS.BUFFET_METAL,
   FIELD_IDS.BUFFET_CHINA,
   FIELD_IDS.DESSERTS,
-  FIELD_IDS.STATIONS,
-  // ROOM_TEMP_DISPLAY omitted — may not exist in all bases (causes 422 if missing)
+  // STATIONS excluded — links to Stations table, not Menu Items; we load station items separately
 ] as const;
 
 /** Fetch event by ID, return guestCount, menu item IDs, and section info (for passed-app division).
- * Uses full record fetch (no field filter) to avoid 422 from invalid/missing field IDs. */
+ * Uses full record fetch (no field filter) to avoid 422 from invalid/missing field IDs.
+ * Station items (menu IDs) are loaded via loadStationsByEventId; each gets itemToSection = STATIONS. */
 export async function fetchEvent(eventId: string): Promise<
   | { guestCount: number; menuItemIds: string[]; itemToSection: Record<string, string> }
   | AirtableErrorResult
@@ -118,10 +119,23 @@ export async function fetchEvent(eventId: string): Promise<
     const val = f[fieldId];
     if (val === undefined) continue;
     for (const id of asLinkedRecordIds(val)) {
-      if (id && !seen.has(id)) {
+      if (id && id.startsWith("rec") && !seen.has(id)) {
         seen.add(id);
         ids.push(id);
         itemToSection[id] = fieldId;
+      }
+    }
+  }
+  // Stations: load by event, add Station Items (menu item IDs) — each spec'd and pack'd individually
+  const stationsResult = await loadStationsByEventId(eventId, asLinkedRecordIds(f[FIELD_IDS.STATIONS]));
+  if (!isErrorResult(stationsResult)) {
+    for (const s of stationsResult) {
+      for (const id of s.stationItems ?? []) {
+        if (id && id.startsWith("rec") && !seen.has(id)) {
+          seen.add(id);
+          ids.push(id);
+          itemToSection[id] = FIELD_IDS.STATIONS;
+        }
       }
     }
   }

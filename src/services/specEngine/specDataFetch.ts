@@ -12,6 +12,7 @@ import { airtableFetch, airtableMetaFetch, getBaseId, getEventsTable, getApiKey 
 import type { AirtableListResponse, AirtableRecord, AirtableErrorResult } from "../airtable/client";
 import { isErrorResult, asString, asLinkedRecordIds, asNumber } from "../airtable/selectors";
 import { FIELD_IDS } from "../airtable/events";
+import { loadStationsByEventId } from "../airtable/linkedRecords";
 import type { SpecMenuItem } from "./specAlgorithm";
 import { getTier, normalizeSpecCategory, normalizeSpecUnitType } from "./specAlgorithm";
 import { TIER_TO_AIRTABLE_COLUMN } from "./airtableFields";
@@ -178,12 +179,23 @@ export async function fetchSpecDataForEvent(eventId: string): Promise<SpecDataFo
     const buffetMetal = asLinkedRecordIds(fields[FIELD_IDS.BUFFET_METAL]);
     const buffetChina = asLinkedRecordIds(fields[FIELD_IDS.BUFFET_CHINA]);
     const desserts = asLinkedRecordIds(fields[FIELD_IDS.DESSERTS]);
-    const stations = asLinkedRecordIds(fields[FIELD_IDS.STATIONS]);
     const seen = new Set<string>();
-    for (const id of [...passed, ...presented, ...buffetMetal, ...buffetChina, ...desserts, ...stations]) {
+    for (const id of [...passed, ...presented, ...buffetMetal, ...buffetChina, ...desserts]) {
       if (id && !seen.has(id)) {
         seen.add(id);
         menuItemIds.push(id);
+      }
+    }
+    // Stations: load by event (Stations.Event), then add Station Items (menu item IDs)
+    const stationsResult = await loadStationsByEventId(eventId);
+    if (!isErrorResult(stationsResult)) {
+      for (const s of stationsResult) {
+        for (const id of s.stationItems ?? []) {
+          if (id && id.startsWith("rec") && !seen.has(id)) {
+            seen.add(id);
+            menuItemIds.push(id);
+          }
+        }
       }
     }
   }

@@ -8,12 +8,14 @@ type StationsFieldIds = {
   stationType: string;
   stationItems: string;
   event: string;
+  eventFieldName: string;
   stationNotes: string;
   stationTypeFieldName: string;
   stationPreset?: string;
   stationComponents?: string;
   customComponents?: string;
   customItems?: string;
+  beoPlacement?: string;
 };
 
 let cachedStationsFieldIds: StationsFieldIds | null | undefined = undefined;
@@ -32,18 +34,21 @@ async function getStationsFieldIds(): Promise<StationsFieldIds | null> {
     return null;
   }
   const byName = (name: string) => table.fields.find((f) => f.name === name)?.id ?? "";
+  const eventField = table.fields.find((f) => f.id === STATION_EVENT_FIELD_ID || f.name === "Event");
   const stationTypeId = byName("Station Type") || STATION_TYPE_FIELD_ID;
   const stationTypeField = table.fields.find((f) => f.id === stationTypeId || f.name === "Station Type");
   cachedStationsFieldIds = {
     stationType: stationTypeId,
     stationItems: byName("Station Items") || STATION_ITEMS_FIELD_ID,
     event: byName("Event") || STATION_EVENT_FIELD_ID,
+    eventFieldName: eventField?.name ?? "Event",
     stationNotes: byName("Station Notes") || STATION_NOTES_FIELD_ID,
     stationTypeFieldName: stationTypeField?.name ?? "Station Type",
     stationPreset: byName("Station Preset") || byName("Station Presets") || undefined,
     stationComponents: byName("Station Components") || undefined,
     customComponents: byName("Custom Components") || undefined,
     customItems: byName("Custom Items") || byName("Additional Components") || undefined,
+    beoPlacement: byName("BEO Placement") || byName("Placement") || byName("BEO Section") || undefined,
   };
   return cachedStationsFieldIds;
 }
@@ -491,9 +496,54 @@ export type StationRecord = {
   stationPresetId?: string;
   stationComponents?: string[];
   customItems?: string;
+  beoPlacement?: "Presented Appetizer Metal/China" | "Buffet Metal/China";
 };
 
-/** Load station records by IDs (from Events.Stations). Uses field IDs from Meta API. */
+/** Load station records for an event by querying Stations where Event = eventId. Keeps stations separate from Events (no Events.Stations needed). Falls back to loadStationsByRecordIds if formula returns empty and fallbackStationIds provided (e.g. when Events.Stations exists). */
+export const loadStationsByEventId = async (
+  eventId: string,
+  fallbackStationIds?: string[]
+): Promise<StationRecord[] | AirtableErrorResult> => {
+  const baseIdResult = getBaseId();
+  const apiKeyResult = getApiKey();
+  if (isErrorResult(baseIdResult) || isErrorResult(apiKeyResult)) return baseIdResult as AirtableErrorResult;
+  const fieldIds = await getStationsFieldIds();
+  if (!fieldIds?.event || !fieldIds?.eventFieldName) {
+    return { error: true, message: "Could not resolve Stations table Event field" };
+  }
+  const tableId = getStationsTable();
+  // Linked record: FIND(eventId, ARRAYJOIN({Event})) finds if Event contains this event
+  const formula = `FIND('${eventId}', ARRAYJOIN({${fieldIds.eventFieldName}})) > 0`;
+  const params = new URLSearchParams();
+  params.set("filterByFormula", formula);
+  params.set("returnFieldsByFieldId", "true");
+  const data = await airtableFetch<AirtableListResponse<Record<string, unknown>>>(
+    `/${tableId}?${params.toString()}`
+  );
+  if (isErrorResult(data)) return data;
+  if (data.records.length === 0 && fallbackStationIds?.length) {
+    return loadStationsByRecordIds(fallbackStationIds);
+  }
+  return data.records.map((rec) => {
+    const fields = rec.fields as Record<string, unknown>;
+    const stationType = asString(fields[fieldIds.stationType]) || asSingleSelectName(fields[fieldIds.stationType]) || "";
+    const stationItems = asLinkedRecordIds(fields[fieldIds.stationItems]);
+    const stationNotes = asString(fields[fieldIds.stationNotes]) || "";
+    const stationPresetIds = fieldIds.stationPreset ? asLinkedRecordIds(fields[fieldIds.stationPreset]) : [];
+    const stationPresetId = stationPresetIds[0];
+    const stationComponents = fieldIds.stationComponents ? asLinkedRecordIds(fields[fieldIds.stationComponents]) : undefined;
+    const customItems = fieldIds.customItems ? asString(fields[fieldIds.customItems]) : undefined;
+    const beoPlacementRaw = fieldIds.beoPlacement ? (asString(fields[fieldIds.beoPlacement]) || asSingleSelectName(fields[fieldIds.beoPlacement])) : undefined;
+    let beoPlacement: "Presented Appetizer Metal/China" | "Buffet Metal/China" | undefined = beoPlacementRaw === "Presented Appetizer Metal/China" || beoPlacementRaw === "Buffet Metal/China" ? beoPlacementRaw : undefined;
+    if (!beoPlacement && customItems) {
+      const m = customItems.match(/^BEO Placement:\s*(Presented Appetizer Metal\/China|Buffet Metal\/China)/im);
+      if (m) beoPlacement = m[1] as "Presented Appetizer Metal/China" | "Buffet Metal/China";
+    }
+    return { id: rec.id, stationType, stationItems, stationNotes, stationPresetId, stationComponents, customItems, beoPlacement };
+  });
+};
+
+/** Load station records by IDs. Uses field IDs from Meta API. */
 export const loadStationsByRecordIds = async (
   recordIds: string[]
 ): Promise<StationRecord[] | AirtableErrorResult> => {
@@ -523,7 +573,13 @@ export const loadStationsByRecordIds = async (
     const stationPresetId = stationPresetIds[0];
     const stationComponents = fieldIds.stationComponents ? asLinkedRecordIds(fields[fieldIds.stationComponents]) : undefined;
     const customItems = fieldIds.customItems ? asString(fields[fieldIds.customItems]) : undefined;
-    return { id: rec.id, stationType, stationItems, stationNotes, stationPresetId, stationComponents, customItems };
+    const beoPlacementRaw = fieldIds.beoPlacement ? (asString(fields[fieldIds.beoPlacement]) || asSingleSelectName(fields[fieldIds.beoPlacement])) : undefined;
+    let beoPlacement: "Presented Appetizer Metal/China" | "Buffet Metal/China" | undefined = beoPlacementRaw === "Presented Appetizer Metal/China" || beoPlacementRaw === "Buffet Metal/China" ? beoPlacementRaw : undefined;
+    if (!beoPlacement && customItems) {
+      const m = customItems.match(/^BEO Placement:\s*(Presented Appetizer Metal\/China|Buffet Metal\/China)/im);
+      if (m) beoPlacement = m[1] as "Presented Appetizer Metal/China" | "Buffet Metal/China";
+    }
+    return { id: rec.id, stationType, stationItems, stationNotes, stationPresetId, stationComponents, customItems, beoPlacement };
   });
 };
 
@@ -565,6 +621,7 @@ export const createStationFromPreset = async (params: {
   customItems?: string;
   stationNotes: string;
   eventId: string;
+  beoPlacement?: "Presented Appetizer Metal/China" | "Buffet Metal/China";
 }): Promise<{ id: string } | AirtableErrorResult> => {
   const fieldIds = await getStationsFieldIds();
   if (!fieldIds) return { error: true, message: "Could not resolve Stations table field IDs" };
@@ -575,7 +632,15 @@ export const createStationFromPreset = async (params: {
   };
   if (fieldIds.stationPreset) fields[fieldIds.stationPreset] = [params.presetId];
   if (fieldIds.stationComponents && params.stationComponents.length > 0) fields[fieldIds.stationComponents] = params.stationComponents;
-  if (fieldIds.customItems && params.customItems?.trim()) fields[fieldIds.customItems] = params.customItems.trim();
+  let customText = params.customItems?.trim() ?? "";
+  if (params.beoPlacement) {
+    if (fieldIds.beoPlacement) {
+      fields[fieldIds.beoPlacement] = params.beoPlacement;
+    } else {
+      customText = `BEO Placement: ${params.beoPlacement}\n${customText}`.trim();
+    }
+  }
+  if (fieldIds.customItems && customText) fields[fieldIds.customItems] = customText;
   if (params.stationNotes?.trim()) fields[fieldIds.stationNotes] = params.stationNotes.trim();
   const data = await airtableFetch<{ records?: Array<{ id: string }> }>(`/${tableId}`, {
     method: "POST",
@@ -586,17 +651,26 @@ export const createStationFromPreset = async (params: {
   return rec ? { id: rec.id } : { error: true, message: "No record returned" };
 };
 
-/** Update station's Station Components, Custom Components, Custom Items. */
+/** Update station's Station Components, Custom Components, Custom Items, BEO Placement. */
 export const updateStationComponents = async (
   stationId: string,
-  patch: { stationComponents?: string[]; customItems?: string }
+  patch: { stationComponents?: string[]; customItems?: string; beoPlacement?: "Presented Appetizer Metal/China" | "Buffet Metal/China" }
 ): Promise<{ success: boolean } | AirtableErrorResult> => {
   const fieldIds = await getStationsFieldIds();
   if (!fieldIds) return { error: true, message: "Could not resolve Stations table field IDs" };
   const tableId = getStationsTable();
   const fields: Record<string, unknown> = {};
   if (patch.stationComponents !== undefined && fieldIds.stationComponents) fields[fieldIds.stationComponents] = patch.stationComponents;
-  if (patch.customItems !== undefined && fieldIds.customItems) fields[fieldIds.customItems] = patch.customItems || null;
+  let customText = patch.customItems;
+  if (patch.beoPlacement !== undefined) {
+    if (fieldIds.beoPlacement) {
+      fields[fieldIds.beoPlacement] = patch.beoPlacement || null;
+    } else if (fieldIds.customItems && patch.beoPlacement) {
+      const base = (customText ?? "").replace(/^BEO Placement:\s*(?:Presented Appetizer Metal\/China|Buffet Metal\/China)\n?/im, "").trim();
+      customText = `BEO Placement: ${patch.beoPlacement}\n${base}`.trim();
+    }
+  }
+  if (customText !== undefined && fieldIds.customItems) fields[fieldIds.customItems] = customText || null;
   if (Object.keys(fields).length === 0) return { success: true };
   const data = await airtableFetch<{ id: string }>(`/${tableId}`, {
     method: "PATCH",
