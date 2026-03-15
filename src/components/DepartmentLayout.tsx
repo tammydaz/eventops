@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link, NavLink, useLocation } from "react-router-dom";
 import { useAuthStore } from "../state/authStore";
 import { DepartmentHeader } from "./DepartmentHeader";
@@ -26,6 +26,16 @@ export function DepartmentLayout({ title, navItems, children, departmentContext,
   const { pathname } = useLocation();
   const { user, logout } = useAuthStore();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+
+  // Reset mobile nav overlay when viewport becomes desktop — prevents stuck haze
+  useEffect(() => {
+    const check = () => {
+      if (window.innerWidth > 768) setMobileNavOpen(false);
+    };
+    check();
+    window.addEventListener("resize", check);
+    return () => window.removeEventListener("resize", check);
+  }, []);
 
   return (
     <div className="dp-container">

@@ -24,7 +24,7 @@ export const ROLE_LABELS: Record<Role, string> = {
 export const ROLE_ROUTES: Record<Role, string[]> = {
   ops_admin: ["*"], // all (includes /ops-chief, /ops-chief/alerts)
   kitchen: ["/", "/home", "/beo-intake", "/quick-intake", "/invoice-intake", "/kitchen-prep", "/kitchen-beo-print", "/kitchen", "/print-test", "/feedback-issues"],
-  logistics: ["/", "/home", "/beo-intake", "/quick-intake", "/invoice-intake", "/delivery-command", "/returned-equipment", "/feedback-issues"],
+  logistics: ["/", "/home", "/beo-intake", "/quick-intake", "/invoice-intake", "/delivery-command", "/kitchen-beo-print", "/returned-equipment", "/feedback-issues"],
   intake: ["/", "/home", "/beo-intake", "/quick-intake", "/invoice-intake", "/seed-demo", "/site-visit", "/beo-print", "/kitchen-beo-print", "/intake-foh", "/event", "/feedback-issues"],
   flair: ["/", "/home", "/beo-intake", "/quick-intake", "/invoice-intake", "/returned-equipment", "/beo-print", "/flair", "/feedback-issues"],
   foh: ["/foh", "/intake-foh", "/event", "/invoice-intake", "/feedback-issues"],

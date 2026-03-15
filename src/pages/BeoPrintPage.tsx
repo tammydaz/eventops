@@ -5,6 +5,8 @@ import { useBeoPrintStore } from "../state/beoPrintStore";
 import { FIELD_IDS, getBarServiceFieldId, getLockoutFieldIds, getBOHProductionFieldIds } from "../services/airtable/events";
 import { airtableFetch } from "../services/airtable/client";
 import { loadStationsByEventId } from "../services/airtable/linkedRecords";
+import { loadBoxedLunchOrdersByEventId, type BoxedLunchOrder } from "../services/airtable/boxedLunchOrders";
+import { getPlatterOrdersByEventId } from "../state/platterOrdersStore";
 import { asLinkedRecordIds, asSingleSelectName, asString, asStringArray, isErrorResult } from "../services/airtable/selectors";
 import { secondsToTimeString, secondsTo12HourString } from "../utils/timeHelpers";
 import { isDeliveryOrPickup } from "../lib/deliveryHelpers";
@@ -1377,7 +1379,7 @@ function SBeoContent(props: {
                               {(() => {
                                 const overrideKey = `${section.fieldId}:${item.id}:${rowIdx}`;
                                 const overrideKeyLegacy = `${section.fieldId}:${item.id}`;
-                                const overrideVal = specOverrides[overrideKey] ?? (rowIdx === 0 ? specOverrides[overrideKeyLegacy] : undefined) ?? "";
+                                const overrideVal = specOverrides[overrideKey] ?? (rowIdx === 0 ? specOverrides[overrideKeyLegacy] : undefined) ?? (rowIdx === 0 ? item.specQty : undefined) ?? "";
                                 return <span>{overrideVal.trim() || "—"}</span>;
                               })()}
                             </div>
@@ -1410,7 +1412,7 @@ function SBeoContent(props: {
                             {(() => {
                               const overrideKey = `${section.fieldId}:${item.id}:${rowIdx}`;
                               const overrideKeyLegacy = `${section.fieldId}:${item.id}`;
-                              const overrideVal = specOverrides[overrideKey] ?? (rowIdx === 0 ? specOverrides[overrideKeyLegacy] : undefined) ?? "";
+                              const overrideVal = specOverrides[overrideKey] ?? (rowIdx === 0 ? specOverrides[overrideKeyLegacy] : undefined) ?? (rowIdx === 0 ? item.specQty : undefined) ?? "";
                               return <span>{overrideVal.trim() || "—"}</span>;
                             })()}
                           </div>
@@ -2195,6 +2197,7 @@ const BeoPrintPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [menuItemData, setMenuItemData] = useState<Record<string, { name: string; childIds: string[]; description?: string; dietaryTags?: string; sauce?: string }>>({});
   const [stationsData, setStationsData] = useState<Array<{ id: string; stationType: string; stationItems: string[] }>>([]);
+  const [boxedLunchOrders, setBoxedLunchOrders] = useState<BoxedLunchOrder[]>([]);
   const [buffetMenuEdits, setBuffetMenuEdits] = useState<Record<string, string>>({}); // itemId -> edited description
   const [specOverrides, setSpecOverrides] = useState<Record<string, string>>({});
   const [packOutEdits, setPackOutEdits] = useState<Record<string, string>>({});
@@ -2325,6 +2328,18 @@ const BeoPrintPage: React.FC = () => {
     const name = asSingleSelectName(raw);
     setMenuTheme(name || "Classic European");
   }, [eventData]);
+
+  // ── Fetch boxed lunch orders for event (merge into DELI section for delivery BEO) ──
+  useEffect(() => {
+    if (!eventId) {
+      setBoxedLunchOrders([]);
+      return;
+    }
+    loadBoxedLunchOrdersByEventId(eventId).then((result) => {
+      if (!isErrorResult(result)) setBoxedLunchOrders(result);
+      else setBoxedLunchOrders([]);
+    });
+  }, [eventId]);
 
   // ── Body class for menu print mode (Buffet Menu Signs tab only) ──
   useEffect(() => {
@@ -2607,7 +2622,7 @@ const BeoPrintPage: React.FC = () => {
   const DELIVERY_SECTION_CONFIG: { title: string; fieldIds: string[]; customFieldIds: string[] }[] = [
     { title: "HOT - DISPOSABLE", fieldIds: [FIELD_IDS.BUFFET_METAL, FIELD_IDS.PASSED_APPETIZERS, FIELD_IDS.PRESENTED_APPETIZERS], customFieldIds: [FIELD_IDS.CUSTOM_BUFFET_METAL, FIELD_IDS.CUSTOM_PASSED_APP, FIELD_IDS.CUSTOM_PRESENTED_APP] },
     { title: "DELI - DISPOSABLE", fieldIds: [FIELD_IDS.DELIVERY_DELI], customFieldIds: [FIELD_IDS.CUSTOM_DELIVERY_DELI] },
-    { title: "KITCHEN - DISPOSABLE", fieldIds: [FIELD_IDS.BUFFET_CHINA, FIELD_IDS.PASSED_APPETIZERS, FIELD_IDS.PRESENTED_APPETIZERS], customFieldIds: [FIELD_IDS.CUSTOM_BUFFET_CHINA, FIELD_IDS.CUSTOM_PASSED_APP, FIELD_IDS.CUSTOM_PRESENTED_APP] },
+    { title: "KITCHEN - DISPOSABLE", fieldIds: [FIELD_IDS.BUFFET_CHINA], customFieldIds: [FIELD_IDS.CUSTOM_BUFFET_CHINA] },
     { title: "SALADS - DISPOSABLE", fieldIds: [FIELD_IDS.ROOM_TEMP_DISPLAY], customFieldIds: [FIELD_IDS.CUSTOM_ROOM_TEMP_DISPLAY] },
     { title: "DESSERTS - DISPOSABLE", fieldIds: [FIELD_IDS.DESSERTS], customFieldIds: [FIELD_IDS.CUSTOM_DESSERTS] },
   ];
@@ -2633,6 +2648,38 @@ const BeoPrintPage: React.FC = () => {
               allLinked.push(c);
             }
           });
+        }
+        // Merge boxed lunch orders into DELI section (delivery only)
+        if (config.title.includes("DELI") && boxedLunchOrders.length > 0) {
+          for (const order of boxedLunchOrders) {
+            for (const item of order.items) {
+              if (!(item.quantity > 0)) continue;
+              const name = item.boxedLunchTypeName || "Boxed Lunch";
+              const spec = item.customizations?.[0]?.specialRequests?.trim();
+              const specQty = spec
+                ? `${spec} × ${item.quantity}`
+                : String(item.quantity);
+              const uniqueId = `boxed-${item.id}`;
+              if (!seenIds.has(uniqueId)) {
+                seenIds.add(uniqueId);
+                allLinked.push({ id: uniqueId, name, specQty });
+              }
+            }
+          }
+        }
+        // Merge platter orders (from localStorage) into DELI section
+        if (config.title.includes("DELI") && eventId) {
+          const platterRows = getPlatterOrdersByEventId(eventId);
+          for (const row of platterRows) {
+            if (!(row.quantity > 0) || row.picks.length === 0) continue;
+            const name = row.platterType;
+            const specQty = `${row.picks.join(", ")} × ${row.quantity}`;
+            const uniqueId = `platter-${row.id}`;
+            if (!seenIds.has(uniqueId)) {
+              seenIds.add(uniqueId);
+              allLinked.push({ id: uniqueId, name, specQty });
+            }
+          }
         }
         return { title: config.title, fieldId: config.fieldIds[0], items: allLinked };
       }).filter((s) => s.items.length > 0)
@@ -3289,7 +3336,7 @@ const BeoPrintPage: React.FC = () => {
                     {(() => {
                       const overrideKey = `${section.fieldId}:${item.id}:${rowIdx}`;
                       const overrideKeyLegacy = `${section.fieldId}:${item.id}`;
-                      const overrideVal = specOverrides[overrideKey] ?? (rowIdx === 0 ? specOverrides[overrideKeyLegacy] : undefined) ?? "";
+                      const overrideVal = specOverrides[overrideKey] ?? (rowIdx === 0 ? specOverrides[overrideKeyLegacy] : undefined) ?? (rowIdx === 0 ? item.specQty : undefined) ?? "";
                       return <span>{overrideVal.trim() || "—"}</span>;
                     })()}
                   </div>
@@ -3306,7 +3353,7 @@ const BeoPrintPage: React.FC = () => {
                     <input
                       type="text"
                       placeholder="spec..."
-                      value={specOverrides[`${section.fieldId}:${item.id}:${rowIdx}`] ?? (rowIdx === 0 ? specOverrides[`${section.fieldId}:${item.id}`] : undefined) ?? ""}
+                      value={specOverrides[`${section.fieldId}:${item.id}:${rowIdx}`] ?? (rowIdx === 0 ? specOverrides[`${section.fieldId}:${item.id}`] : undefined) ?? (rowIdx === 0 ? item.specQty : undefined) ?? ""}
                       onChange={(e) => {
                         const key = `${section.fieldId}:${item.id}:${rowIdx}`;
                         setSpecOverrides((prev) => ({ ...prev, [key]: e.target.value }));
@@ -3388,7 +3435,7 @@ const BeoPrintPage: React.FC = () => {
                     {(() => {
                       const overrideKey = `${section.fieldId}:${item.id}:${rowIdx}`;
                       const overrideKeyLegacy = `${section.fieldId}:${item.id}`;
-                      const overrideVal = specOverrides[overrideKey] ?? (rowIdx === 0 ? specOverrides[overrideKeyLegacy] : undefined) ?? "";
+                      const overrideVal = specOverrides[overrideKey] ?? (rowIdx === 0 ? specOverrides[overrideKeyLegacy] : undefined) ?? (rowIdx === 0 ? item.specQty : undefined) ?? "";
                       return <span>{overrideVal.trim() || "—"}</span>;
                     })()}
                   </div>
@@ -3396,7 +3443,7 @@ const BeoPrintPage: React.FC = () => {
                 <div className="beo-item-col" style={{ ...styles.itemCol, lineHeight: 1.25 }}>{row.lineName}</div>
                 {leftCheck === "spec" && (
                   <div className="beo-spec-col" style={{ ...styles.specCol, display: "flex", flexDirection: "column", gap: 2 }} onClick={(e) => { e.stopPropagation(); if (document.activeElement instanceof HTMLButtonElement) document.activeElement.blur(); }}>
-                    <input type="text" placeholder="spec..." value={specOverrides[`${section.fieldId}:${item.id}:${rowIdx}`] ?? (rowIdx === 0 ? specOverrides[`${section.fieldId}:${item.id}`] : undefined) ?? ""} onChange={(e) => { setSpecOverrides((prev) => ({ ...prev, [`${section.fieldId}:${item.id}:${rowIdx}`]: e.target.value })); }} style={{ width: "100%", padding: "2px 6px", fontSize: 11, lineHeight: 1, background: "#f9f9f9", border: "1px solid #ddd", borderRadius: 2 }} className="no-print" />
+                    <input type="text" placeholder="spec..." value={specOverrides[`${section.fieldId}:${item.id}:${rowIdx}`] ?? (rowIdx === 0 ? specOverrides[`${section.fieldId}:${item.id}`] : undefined) ?? (rowIdx === 0 ? item.specQty : undefined) ?? ""} onChange={(e) => { setSpecOverrides((prev) => ({ ...prev, [`${section.fieldId}:${item.id}:${rowIdx}`]: e.target.value })); }} style={{ width: "100%", padding: "2px 6px", fontSize: 11, lineHeight: 1, background: "#f9f9f9", border: "1px solid #ddd", borderRadius: 2 }} className="no-print" />
                   </div>
                 )}
                 {(leftCheck === "kitchen" || leftCheck === "expeditor" || leftCheck === "server") && (

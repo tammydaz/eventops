@@ -19,6 +19,10 @@ import {
 import { airtableFetch } from "../../services/airtable/client";
 import { loadStationPresets, loadStationComponentNamesByIds } from "../../services/airtable/stationComponents";
 import { StationComponentsConfigModal } from "./StationComponentsConfigModal";
+import { BoxedLunchConfigModal } from "./BoxedLunchConfigModal";
+import { SandwichPlatterConfigModal } from "./SandwichPlatterConfigModal";
+import { createBoxedLunchOrderFromRows } from "../../services/airtable/boxedLunchOrders";
+import { getPlatterOrdersByEventId, setPlatterOrdersForEvent } from "../../state/platterOrdersStore";
 import { asLinkedRecordIds, asString, isErrorResult } from "../../services/airtable/selectors";
 import { useEventStore } from "../../state/eventStore";
 import { FormSection, CollapsibleSubsection } from "./FormSection";
@@ -836,6 +840,8 @@ export const MenuSection = ({ embedded = false, isDelivery = false }: MenuSectio
   const [error, setError] = useState<string | null>(null);
   const [showDressingPicker, setShowDressingPicker] = useState(false);
   const [dressingPickerSearch, setDressingPickerSearch] = useState("");
+  const [boxedLunchModalOpen, setBoxedLunchModalOpen] = useState(false);
+  const [platterModalOpen, setPlatterModalOpen] = useState(false);
 
   // Load menu items on mount
   useEffect(() => {
@@ -1211,7 +1217,7 @@ export const MenuSection = ({ embedded = false, isDelivery = false }: MenuSectio
             </div>
           </CollapsibleSubsection>
 
-          <CollapsibleSubsection title="DELI - DISPOSABLE" icon="🥪" defaultOpen={false} isDelivery>
+          <CollapsibleSubsection title="DELI - DISPOSABLE" icon="🥪" defaultOpen isDelivery>
             <div style={{ gridColumn: "1 / -1" }}>
               <label style={labelStyle}>Sandwiches & Wraps</label>
               <div style={{ marginBottom: "8px" }}>
@@ -1230,7 +1236,46 @@ export const MenuSection = ({ embedded = false, isDelivery = false }: MenuSectio
                   />
                 ))}
               </div>
-              <button type="button" disabled={!canEdit} onClick={() => openPicker("deli", "deliveryDeli", "Select Deli Items (Sandwiches & Wraps)")} style={deliveryButtonStyle}>+ Add Deli Item</button>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
+                <button type="button" disabled={!canEdit} onClick={() => openPicker("deli", "deliveryDeli", "Select Deli Items (Sandwiches & Wraps)")} style={deliveryButtonStyle}>+ Add Deli Item</button>
+                <button type="button" onClick={() => setPlatterModalOpen((v) => !v)} style={{ ...deliveryButtonStyle, borderColor: "#f97316", color: "#f97316" }}>{platterModalOpen ? "− Hide Platter Config" : "+ Add Sandwich Platter"}</button>
+                <button type="button" onClick={() => setBoxedLunchModalOpen((v) => !v)} style={deliveryButtonStyle}>{boxedLunchModalOpen ? "− Hide Boxed Lunch Config" : "+ Add Boxed Lunches"}</button>
+              </div>
+              {platterModalOpen && (
+                <SandwichPlatterConfigModal
+                  open
+                  inline
+                  onClose={() => setPlatterModalOpen(false)}
+                  onConfirm={(rows) => {
+                    if (!selectedEventId) {
+                      setError("Select an event first");
+                      return;
+                    }
+                    setPlatterOrdersForEvent(selectedEventId, rows);
+                    setPlatterModalOpen(false);
+                  }}
+                  initialRows={selectedEventId ? getPlatterOrdersByEventId(selectedEventId) : []}
+                />
+              )}
+              {boxedLunchModalOpen && (
+                <BoxedLunchConfigModal
+                  open
+                  inline
+                  onClose={() => setBoxedLunchModalOpen(false)}
+                  onConfirm={async (rows) => {
+                    if (!selectedEventId) {
+                      setError("Select an event first");
+                      return;
+                    }
+                    const res = await createBoxedLunchOrderFromRows(selectedEventId, rows);
+                    if (isErrorResult(res)) {
+                      setError(res.message ?? "Failed to create boxed lunch order");
+                    } else {
+                      setBoxedLunchModalOpen(false);
+                    }
+                  }}
+                />
+              )}
               <CustomFoodItemsBlock
                 value={customFields.customDeli}
                 fieldId={FIELD_IDS.CUSTOM_DELIVERY_DELI}

@@ -20,7 +20,8 @@ export type StationPresetKey =
   | "farmers-fruit"
   | "fishermans-corner"
   | "barwerx"
-  | "philly-jawn";
+  | "philly-jawn"
+  | "salad-bar";
 
 /** Preset name patterns that map to config keys */
 export const PRESET_NAME_PATTERNS: Record<StationPresetKey, string[]> = {
@@ -41,6 +42,26 @@ export const PRESET_NAME_PATTERNS: Record<StationPresetKey, string[]> = {
   "fishermans-corner": ["fisherman", "fisherman's corner"],
   barwerx: ["barwerx", "bar werx", "appetizer sampler"],
   "philly-jawn": ["philly jawn", "philly jawn"],
+  "salad-bar": ["salad bar", "built by you salad", "foodwerx salad bar"],
+};
+
+/** "Built by You" foodwerx Salad Bar — Pick 3 Greens, Pick 3 Proteins, Pick 3 Crunch, Pick 2 Cheese, Pick 1 Sweet, Pick 1 Fruit, Pick 3 Dressings */
+export const SALAD_BAR = {
+  greensOptions: ["Romaine", "Spring mix", "Arugula", "Kale", "Spinach", "Super greens blend with red cabbage & rough chop iceberg"] as const,
+  greensCount: 3,
+  proteinOptions: ["Marinated grilled chicken", "Buffalo chicken", "Chicken salad", "Marinated steak", "Seared tofu", "Roasted turkey breast", "Quinoa", "Tuna salad", "Crispy crumbled bacon & steamed shrimp", "Poached salmon"] as const,
+  proteinCount: 3,
+  crunchOptions: ["Garlic & herb croutons", "Toasted pita squares", "Candied pecans", "Toasted walnuts", "Sunflower seeds", "Pumpkin seeds", "Wonton threads & frizzled onions", "Toasted almond slivers", "Chow mein noodles"] as const,
+  crunchCount: 3,
+  cheeseOptions: ["Crumbled bleu cheese", "Feta", "Chards of parmesan romano & cheddar blend"] as const,
+  cheeseCount: 2,
+  sweetOptions: ["Dried tart cranberries", "Sweet raisins", "Dried turkish apricots", "Locally sourced dried cherries"] as const,
+  sweetCount: 1,
+  fruitOptions: ["Sliced strawberries", "Blueberries", "Chunked pineapple", "Mango", "Grapes"] as const,
+  fruitCount: 1,
+  dressingOptions: ["Balsamic vinaigrette", "Creamy ranch", "Parmesan peppercorn", "Chef's choice trending salad dressing", "Classic caesar", "Low fat raspberry", "Red wine vinegar & olive oil", "Reduced fat caesar"] as const,
+  dressingCount: 3,
+  essentialsIncluded: ["Cucumbers", "Grape tomatoes", "Mushrooms", "Confetti peppers", "Carrots", "Red onion", "Chick peas", "Seasonal marinated grilled vegetables", "Hard-boiled eggs"] as const,
 };
 
 export function getStationPresetKey(presetName: string): StationPresetKey | null {

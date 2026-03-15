@@ -2,7 +2,7 @@
  * DepartmentHeader — Shared header for all department landing pages.
  * Left: Logo, Werx, tagline, search. Center: Large Werx + tagline. Right: Copyright.
  */
-import { useState, useRef, useEffect, useMemo } from "react";
+import { useState, useRef, useEffect, useMemo, useDeferredValue } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useEventStore } from "../state/eventStore";
 import "./DepartmentHeader.css";
@@ -37,6 +37,7 @@ export function DepartmentHeader({ departmentContext, rightActions, embedded, le
   const navigate = useNavigate();
   const { events: rawEvents, loadEvents, selectEvent } = useEventStore();
   const [searchQuery, setSearchQuery] = useState("");
+  const deferredSearchQuery = useDeferredValue(searchQuery);
   const [taglineSettled, setTaglineSettled] = useState(false);
   const searchWrapRef = useRef<HTMLDivElement>(null);
 
@@ -91,9 +92,9 @@ export function DepartmentHeader({ departmentContext, rightActions, embedded, le
   };
 
   const handleSelectEvent = (evt: { id: string }) => {
-    selectEvent(evt.id);
     setSearchQuery("");
     navigate(getTargetRoute(evt.id));
+    setTimeout(() => selectEvent(evt.id), 0);
   };
 
   if (embedded) {
@@ -114,6 +115,7 @@ export function DepartmentHeader({ departmentContext, rightActions, embedded, le
                 placeholder="Search events..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
+                autoComplete="off"
               />
               {searchQuery.trim().length > 0 && (
                 <div className="dp-search-dropdown">
@@ -168,6 +170,7 @@ export function DepartmentHeader({ departmentContext, rightActions, embedded, le
               placeholder="Search events..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
+              autoComplete="off"
             />
             {searchQuery.trim().length > 0 && (
               <div className="dept-header-search-dropdown">

@@ -3,6 +3,8 @@ import { useEventStore } from "../state/eventStore";
 import { FIELD_IDS, getFoodwerxArrivalFieldId } from "../services/airtable/events";
 import { asString, asSingleSelectName, asBoolean, asStringArray, asLinkedRecordIds, isErrorResult } from "../services/airtable/selectors";
 import { loadStationsByEventId } from "../services/airtable/linkedRecords";
+import { loadBoxedLunchOrdersByEventId, type BoxedLunchOrder } from "../services/airtable/boxedLunchOrders";
+import { getPlatterOrdersByEventId } from "../state/platterOrdersStore";
 import { airtableFetch } from "../services/airtable/client";
 import { EventSelector } from "../components/EventSelector";
 import { secondsTo12HourString } from "../utils/timeHelpers";
@@ -1148,6 +1150,7 @@ const KitchenBEOPrintPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [menuItemData, setMenuItemData] = useState<Record<string, { name: string; childIds: string[] }>>({});
   const [stationsData, setStationsData] = useState<Array<{ id: string; stationType: string; stationItems: string[]; stationNotes: string; beoPlacement?: "Presented Appetizer Metal/China" | "Buffet Metal/China" }>>([]);
+  const [boxedLunchOrders, setBoxedLunchOrders] = useState<BoxedLunchOrder[]>([]);
   const [fwArrivalFieldId, setFwArrivalFieldId] = useState<string | null>(null);
   const [checkState, setCheckState] = useState<Record<string, boolean>>({});
 
@@ -1209,6 +1212,18 @@ const KitchenBEOPrintPage: React.FC = () => {
       else setStationsData([]);
     });
   }, [selectedEventId, selectedEventData]);
+
+  // Fetch boxed lunch orders for event (used in delivery BEO DELI section)
+  useEffect(() => {
+    if (!selectedEventId) {
+      setBoxedLunchOrders([]);
+      return;
+    }
+    loadBoxedLunchOrdersByEventId(selectedEventId).then((result) => {
+      if (!isErrorResult(result)) setBoxedLunchOrders(result);
+      else setBoxedLunchOrders([]);
+    });
+  }, [selectedEventId]);
 
   // Fetch menu items with Item Name + Child Items (linked records)
   // Exclude STATIONS — those are station IDs; we fetch stations separately and add station item IDs here
@@ -1357,6 +1372,27 @@ const KitchenBEOPrintPage: React.FC = () => {
               allItems.push(it);
             }
           });
+        }
+        // Merge boxed lunch orders into DELI section (delivery only)
+        if (config.title.includes("DELI") && boxedLunchOrders.length > 0) {
+          for (const order of boxedLunchOrders) {
+            for (const item of order.items) {
+              if (!(item.quantity > 0)) continue;
+              const name = item.boxedLunchTypeName || "Boxed Lunch";
+              const spec = item.customizations?.[0]?.specialRequests?.trim();
+              const qty = spec ? `${spec} × ${item.quantity}` : String(item.quantity);
+              allItems.push({ qty, name });
+            }
+          }
+        }
+        // Merge platter orders (from localStorage) into DELI section
+        if (config.title.includes("DELI") && selectedEventId) {
+          const platterRows = getPlatterOrdersByEventId(selectedEventId);
+          for (const row of platterRows) {
+            if (!(row.quantity > 0) || row.picks.length === 0) continue;
+            const qty = `${row.picks.join(", ")} × ${row.quantity}`;
+            allItems.push({ qty, name: row.platterType });
+          }
         }
         if (allItems.length > 0) {
           sections.push({

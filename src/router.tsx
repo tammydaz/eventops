@@ -42,6 +42,7 @@ import EarlyEventSections from "./pages/EarlyEventSections";
 const DELIVERY_NAV = [
   { label: "Delivery Home", href: "/delivery-command", icon: "🚚" },
   { label: "Dispatch", href: "/delivery-command/dispatch", icon: "📋" },
+  { label: "Kitchen BEO", href: "/kitchen-beo-print", icon: "🍳" },
 ];
 
 const OPS_CHIEF_NAV = [

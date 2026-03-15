@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo, useRef, useDeferredValue } from "react";
 import { Link, NavLink, useNavigate } from "react-router-dom";
 import "./DashboardPage.css";
 import type { ViewMode, HealthStatus } from "../components/dashboard/EventCard";
@@ -206,6 +206,7 @@ export default function DashboardPage() {
   const [calendarMonth, setCalendarMonth] = useState(() => new Date().getMonth());
   const [calendarYear, setCalendarYear] = useState(() => new Date().getFullYear());
   const [searchQuery, setSearchQuery] = useState("");
+  const deferredSearchQuery = useDeferredValue(searchQuery);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [taglineSettled, setTaglineSettled] = useState(false);
   const [pendingAcceptEvent, setPendingAcceptEvent] = useState<EventData | null>(null);
@@ -225,6 +226,16 @@ export default function DashboardPage() {
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
   }, [searchQuery]);
+
+  // Reset mobile nav overlay when viewport becomes desktop — prevents stuck haze
+  useEffect(() => {
+    const check = () => {
+      if (window.innerWidth > 768) setMobileNavOpen(false);
+    };
+    check();
+    window.addEventListener("resize", check);
+    return () => window.removeEventListener("resize", check);
+  }, []);
 
   useEffect(() => {
     loadEvents();
@@ -273,7 +284,7 @@ export default function DashboardPage() {
   }, [filteredEvents, sortBy, sortDir]);
 
   const searchResults = useMemo(() => {
-    const q = searchQuery.trim().toLowerCase();
+    const q = deferredSearchQuery.trim().toLowerCase();
     if (!q) return [];
     return eventDataList.filter(
       (e) =>
@@ -282,7 +293,7 @@ export default function DashboardPage() {
         e.venue.toLowerCase().includes(q) ||
         e.category.toLowerCase().includes(q)
     );
-  }, [eventDataList, searchQuery]);
+  }, [eventDataList, deferredSearchQuery]);
 
   const dashboardDept: DepartmentKey | null = role === "kitchen" ? "kitchen" : role === "flair" ? "flair" : role === "logistics" ? "delivery" : null;
   const viewingDepartment: QuestionTargetDepartment | null = dashboardDept ?? (role === "intake" || role === "foh" ? "intake_foh" : null);
@@ -295,18 +306,17 @@ export default function DashboardPage() {
       setPendingAcceptEvent(evt);
       return;
     }
-    selectEvent(evt.id);
     setSearchQuery("");
-    // Intake/FOH/ops_admin -> BEO full intake; Kitchen -> Kitchen BEO (checkboxes); Flair -> BEO print
     if (role === "kitchen") {
       navigate(`/kitchen-beo-print/${evt.id}`);
     } else if (role === "flair") {
       navigate(`/beo-print/${evt.id}`);
-    } else if (role === "delivery") {
-      navigate(`/beo-intake/${evt.id}`);
+    } else if (role === "delivery" || role === "logistics") {
+      navigate(`/kitchen-beo-print/${evt.id}`);
     } else {
       navigate(`/beo-intake/${evt.id}`);
     }
+    setTimeout(() => selectEvent(evt.id), 0);
   };
 
   const handleAcceptTransfer = async (initials: string) => {
@@ -343,6 +353,8 @@ export default function DashboardPage() {
       navigate(`/kitchen-beo-print/${eventId}`);
     } else if (userRole === "flair") {
       navigate(`/beo-print/${eventId}`);
+    } else if (userRole === "delivery" || userRole === "logistics") {
+      navigate(`/kitchen-beo-print/${eventId}`);
     } else {
       navigate("/beo-intake");
     }
@@ -495,6 +507,7 @@ export default function DashboardPage() {
               placeholder="Search events..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
+              autoComplete="off"
             />
             {searchQuery.trim().length > 0 && (
               <div className="dp-search-dropdown">

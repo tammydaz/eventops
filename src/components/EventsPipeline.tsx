@@ -319,7 +319,8 @@ export function EventsPipeline({ title = "10-Day Pipeline", compact = false, dep
     if (departmentContext === "kitchen") return `/kitchen-beo-print/${eventId}`;
     if (departmentContext === "flair") return `/beo-print/${eventId}`;
     if (departmentContext === "intake_foh") return `/event/${eventId}`;
-    if (departmentContext === "delivery" || departmentContext === "ops_chief") return `/beo-intake/${eventId}`;
+    if (departmentContext === "delivery") return `/kitchen-beo-print/${eventId}`;
+    if (departmentContext === "ops_chief") return `/beo-intake/${eventId}`;
     const userRole = user?.role ?? "ops_admin";
     if (userRole === "kitchen") return `/kitchen-beo-print/${eventId}`;
     if (userRole === "flair") return `/beo-print/${eventId}`;

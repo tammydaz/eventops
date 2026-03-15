@@ -494,7 +494,7 @@ export function StationComponentsConfigModal(props: {
     let cancelled = false;
     setLoading(true);
     const name = (presetName || "").toLowerCase();
-    const skipAirtableLoad = name.includes("tex-mex") || name.includes("tex mex") || name.includes("ramen") || name.includes("all-american") || name.includes("all american") || name.includes("street food") || name.includes("raw bar") || name.includes("carving") || name.includes("hibachi") || (name.includes("chicken") && name.includes("waffle")) || name.includes("late night") || name.includes("vegetable") || name.includes("spreads") || name.includes("charcuterie") || name.includes("pasta flight") || name.includes("farmers") || name.includes("fisherman") || name.includes("barwerx") || name.includes("philly jawn");
+    const skipAirtableLoad = name.includes("tex-mex") || name.includes("tex mex") || name.includes("ramen") || name.includes("all-american") || name.includes("all american") || name.includes("street food") || name.includes("raw bar") || name.includes("carving") || name.includes("hibachi") || (name.includes("chicken") && name.includes("waffle")) || name.includes("late night") || name.includes("vegetable") || name.includes("spreads") || name.includes("charcuterie") || name.includes("pasta flight") || name.includes("farmers") || name.includes("fisherman") || name.includes("barwerx") || name.includes("philly jawn") || name.includes("salad bar") || name.includes("built by you");
     if (skipAirtableLoad) {
       setAllComponents([]);
       setOptions([]);

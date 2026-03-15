@@ -1,4 +1,4 @@
-import { useMemo, useState, useRef, useEffect, startTransition } from "react";
+import { useMemo, useState, useRef, useEffect, startTransition, useDeferredValue } from "react";
 import { createPortal } from "react-dom";
 import { useEventStore } from "../state/eventStore";
 
@@ -93,6 +93,7 @@ export const EventSelector = ({ variant = "default" }: EventSelectorProps) => {
   const { events, eventsLoading, eventsError, selectedEventId, selectEvent } = useEventStore();
   const [isOpen, setIsOpen] = useState(false);
   const [query, setQuery] = useState("");
+  const deferredQuery = useDeferredValue(query);
   const [listReady, setListReady] = useState(false);
   const triggerRef = useRef<HTMLDivElement>(null);
   const [dropdownRect, setDropdownRect] = useState<{ top: number; left: number; width: number } | null>(null);
@@ -116,10 +117,10 @@ export const EventSelector = ({ variant = "default" }: EventSelectorProps) => {
   }, [isOpen]);
 
   const filteredEvents = useMemo(() => {
-    const normalized = query.trim().toLowerCase();
+    const normalized = deferredQuery.trim().toLowerCase();
     if (!normalized) return events;
     return events.filter((event) => (event.eventName ?? "").toLowerCase().includes(normalized));
-  }, [events, query]);
+  }, [events, deferredQuery]);
 
   /** Limit rendered items to prevent freeze with large event lists */
   const eventsToRender = useMemo(() => {
@@ -141,10 +142,10 @@ export const EventSelector = ({ variant = "default" }: EventSelectorProps) => {
 
   const handleSelect = (eventId: string) => {
     setIsOpen(false);
+    setQuery("");
     window.history.pushState({}, "", `/beo-intake/${eventId}`);
-    requestAnimationFrame(() => {
-      selectEvent(eventId).catch(() => null);
-    });
+    // Defer heavy selectEvent to next tick so dropdown closes and UI stays responsive
+    setTimeout(() => selectEvent(eventId).catch(() => null), 0);
   };
 
   const isBeo = variant === "beo-header";
@@ -198,6 +199,7 @@ export const EventSelector = ({ variant = "default" }: EventSelectorProps) => {
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
                   onClick={(e) => e.stopPropagation()}
+                  autoComplete="off"
                   style={beoStyles.searchInput}
                   autoFocus
                 />
@@ -235,18 +237,14 @@ export const EventSelector = ({ variant = "default" }: EventSelectorProps) => {
                           setIsOpen(false);
                           setQuery("");
                           window.history.pushState({}, "", `/beo-intake/${event.id}`);
-                          requestAnimationFrame(() => {
-                            selectEvent(event.id).catch(() => null);
-                          });
+                          setTimeout(() => selectEvent(event.id).catch(() => null), 0);
                         }}
                         onKeyDown={(e) => {
                           if (e.key === "Enter") {
                             setIsOpen(false);
                             setQuery("");
                             window.history.pushState({}, "", `/beo-intake/${event.id}`);
-                            requestAnimationFrame(() => {
-                              selectEvent(event.id).catch(() => null);
-                            });
+                            setTimeout(() => selectEvent(event.id).catch(() => null), 0);
                           }
                         }}
                         onMouseEnter={(e) => {
@@ -342,6 +340,7 @@ export const EventSelector = ({ variant = "default" }: EventSelectorProps) => {
                   onChange={(e) => setQuery(e.target.value)}
                   type="text"
                   placeholder={EVENT_SEARCH_PLACEHOLDER}
+                  autoComplete="off"
                   className="w-full pl-9 pr-3 py-2 border-2 border-gray-700 rounded-md bg-gray-900 text-gray-100 focus:outline-none focus:ring-2 focus:ring-red-600 focus:border-transparent placeholder-gray-600"
                 />
               </div>

@@ -117,6 +117,23 @@ export async function loadBoxedLunchOrdersByEventId(
         ? (itemFields[BOXED_LUNCH_ORDER_ITEMS_FIELD_IDS.quantity] as number)
         : 0;
 
+      // Fetch Box Customizations (Pick 1, Pick 2) for this order item
+      const customIds = asLinkedRecordIds(itemFields[BOXED_LUNCH_ORDER_ITEMS_FIELD_IDS.customizations]);
+      let specialRequests = "";
+      if (customIds.length > 0) {
+        const customFormula = `RECORD_ID()='${customIds[0]}'`;
+        const customParams = new URLSearchParams();
+        customParams.set("filterByFormula", customFormula);
+        customParams.set("returnFieldsByFieldId", "true");
+        const customData = await airtableFetch<AirtableListResponse<Record<string, unknown>>>(
+          `/${BOX_CUSTOMIZATIONS_TABLE}?${customParams.toString()}`
+        );
+        if (!isErrorResult(customData) && customData.records[0]) {
+          const cf = customData.records[0].fields as Record<string, unknown>;
+          specialRequests = asString(cf[BOX_CUSTOMIZATIONS_FIELD_IDS.specialRequests]) || "";
+        }
+      }
+
       // Resolve menu item name
       let boxedLunchTypeName = menuItemCache[boxedLunchTypeId];
       if (!boxedLunchTypeName && boxedLunchTypeId) {
@@ -143,6 +160,7 @@ export async function loadBoxedLunchOrdersByEventId(
         boxedLunchTypeId,
         boxedLunchTypeName,
         quantity,
+        customizations: specialRequests ? [{ specialRequests }] : undefined,
       });
     }
 
@@ -155,4 +173,90 @@ export async function loadBoxedLunchOrdersByEventId(
   }
 
   return orders;
+}
+
+/** Create a Boxed Lunch Order with Order Items and Customizations. Returns order ID or error. */
+export async function createBoxedLunchOrderFromRows(
+  eventId: string,
+  rows: Array<{ boxedLunchType: string; pick1: string; pick2: string; pick2Other?: string; quantity: number }>,
+  orderName?: string
+): Promise<{ orderId: string } | AirtableErrorResult> {
+  const baseIdResult = getBaseId();
+  const apiKeyResult = getApiKey();
+  if (isErrorResult(baseIdResult) || isErrorResult(apiKeyResult)) {
+    return baseIdResult as AirtableErrorResult;
+  }
+
+  // Fetch menu items to resolve boxed lunch type name -> ID
+  const typeNames = [...new Set(rows.map((r) => r.boxedLunchType))];
+  const nameToId: Record<string, string> = {};
+  for (const name of typeNames) {
+    const formula = `{Item Name}='${name.replace(/'/g, "\\'")}'`;
+    const params = new URLSearchParams();
+    params.set("filterByFormula", formula);
+    params.set("returnFieldsByFieldId", "true");
+    params.append("fields[]", MENU_ITEM_NAME_FIELD_ID);
+    const data = await airtableFetch<AirtableListResponse<Record<string, unknown>>>(
+      `/${MENU_ITEMS_TABLE}?${params.toString()}`
+    );
+    if (!isErrorResult(data) && data.records[0]) {
+      nameToId[name] = data.records[0].id;
+    }
+  }
+
+  // Create Boxed Lunch Order
+  const orderFields: Record<string, unknown> = {
+    [BOXED_LUNCH_ORDERS_FIELD_IDS.orderName]: orderName || `Boxed Lunch ${new Date().toLocaleDateString()}`,
+    [BOXED_LUNCH_ORDERS_FIELD_IDS.clientEvent]: [eventId],
+  };
+  const orderRes = await airtableFetch<{ records?: Array<{ id: string }> }>(
+    `/${BOXED_LUNCH_ORDERS_TABLE}`,
+    { method: "POST", body: JSON.stringify({ records: [{ fields: orderFields }] }) }
+  );
+  if (isErrorResult(orderRes) || !orderRes.records?.[0]) {
+    return { error: true, message: "Failed to create Boxed Lunch Order" };
+  }
+  const orderId = orderRes.records[0].id;
+
+  const orderItemIds: string[] = [];
+
+  for (const row of rows) {
+    const typeId = nameToId[row.boxedLunchType];
+    if (!typeId) continue;
+
+    const itemFields: Record<string, unknown> = {
+      [BOXED_LUNCH_ORDER_ITEMS_FIELD_IDS.order]: [orderId],
+      [BOXED_LUNCH_ORDER_ITEMS_FIELD_IDS.boxedLunchType]: [typeId],
+      [BOXED_LUNCH_ORDER_ITEMS_FIELD_IDS.quantity]: row.quantity,
+    };
+    const itemRes = await airtableFetch<{ records?: Array<{ id: string }> }>(
+      `/${BOXED_LUNCH_ORDER_ITEMS_TABLE}`,
+      { method: "POST", body: JSON.stringify({ records: [{ fields: itemFields }] }) }
+    );
+    if (isErrorResult(itemRes) || !itemRes.records?.[0]) continue;
+    const itemId = itemRes.records[0].id;
+    orderItemIds.push(itemId);
+
+    const specText = [row.pick1, row.pick2 === "Other" ? (row.pick2Other || "Other") : row.pick2].filter(Boolean).join(" | ");
+    if (specText) {
+      const customFields: Record<string, unknown> = {
+        [BOX_CUSTOMIZATIONS_FIELD_IDS.orderItem]: [itemId],
+        [BOX_CUSTOMIZATIONS_FIELD_IDS.specialRequests]: `Pick 1: ${row.pick1} | Pick 2: ${row.pick2 === "Other" ? (row.pick2Other || "") : row.pick2}`,
+      };
+      await airtableFetch(`/${BOX_CUSTOMIZATIONS_TABLE}`, {
+        method: "POST",
+        body: JSON.stringify({ records: [{ fields: customFields }] }),
+      });
+    }
+  }
+
+  // Link order items to the order
+  if (orderItemIds.length > 0) {
+    await airtableFetch(`/${BOXED_LUNCH_ORDERS_TABLE}/${orderId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ fields: { [BOXED_LUNCH_ORDERS_FIELD_IDS.boxedLunchSelections]: orderItemIds } }),
+    });
+  }
+
+  return { orderId };
 }

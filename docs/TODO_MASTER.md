@@ -21,8 +21,9 @@ Omni is cooperating. These items keep momentum with her.
 
 | # | Task | File(s) | Status | Notes |
 |---|------|---------|--------|-------|
-| 5 | **BEO merge: Boxed lunches on Kitchen BEO** — Call `loadBoxedLunchOrdersByEventId`, add items to DELI section for delivery events | `KitchenBEOPrintPage.tsx` | Pending | Render rows like "Classic Boxed Lunch — 30" |
-| 6 | **BEO merge: Boxed lunches on BeoPrintPage** — Same for delivery BEO if it has a DELI section | `BeoPrintPage.tsx` | Pending | Check delivery section config |
+| 5 | **BEO merge: Boxed lunches on Kitchen BEO** — Call `loadBoxedLunchOrdersByEventId`, add items to DELI section for delivery events | `KitchenBEOPrintPage.tsx` | ✅ Done | Merges into DELI - DISPOSABLE |
+| 6 | **BEO merge: Boxed lunches on BeoPrintPage** — Same for delivery BEO if it has a DELI section | `BeoPrintPage.tsx` | ✅ Done | Merges into DELI - DISPOSABLE |
+| 6b | **Debug: Boxed lunches not showing** — If DELI is empty, check: (1) Event Type = Delivery/Pick Up, (2) Boxed Lunch Order linked via Client/Event in Airtable, (3) Airtable filter formula `FIND(eventId, ARRAYJOIN({Client/Event}))` | `boxedLunchOrders.ts` | Verify | See "Where are boxed lunches?" below |
 | 7 | **menuCategories: Deli** — Ensure "Deli" (from Omni) matches `deli` in `menuCategories.ts` | `menuCategories.ts` | Verify | Current: `["Deli/Sandwhiches", "Deli/Sandwiches", "Deli/Breads"]` — may need "Deli" |
 
 ---
@@ -66,6 +67,25 @@ User reported: "made shit up on some stations, missing shit on others." Need to 
 ## LOCKED — Do Not Modify
 
 - **Passed Appetizers** — `.cursor/rules/passed-appetizers-locked.mdc` — Do not touch logic, rendering, or data wiring for Passed Apps.
+- **Presented Appetizers** — Same rule; locked with Passed Apps.
+
+## TODO — Lock in Rest of Menu
+
+**We have only locked Passed and Presented Apps.** The rest of the menu (Buffet Metal, Buffet China, Desserts, Stations, Deli, etc.) is **not yet locked** and may change. When ready, create a rule for each section or a combined "menu-sections-locked" rule.
+
+---
+
+## Where Are Boxed Lunches?
+
+Boxed lunches appear in the **DELI - DISPOSABLE** section of the BEO, but **only when**:
+
+1. **Event Type** is **Delivery** or **Pick Up** (otherwise delivery sections don't render).
+2. A **Boxed Lunch Order** exists in Airtable and is **linked to the Event** via the **Client/Event** field.
+3. The Boxed Lunch Order has **Order Items** (Boxed Lunch Type + Quantity).
+
+**Flow:** `loadBoxedLunchOrdersByEventId(eventId)` → queries Boxed Lunch Orders where `Client/Event` contains the event ID → merges items into DELI section.
+
+**If DELI is empty or missing:** The section is hidden when it has no items. So if there are no DELIVERY_DELI menu items AND no boxed lunch orders, DELI won't appear. Check Airtable: Boxed Lunch Orders table → ensure the test order's Client/Event field links to the event (e.g. Jennifer Vincent).
 
 ---
 
