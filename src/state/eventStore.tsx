@@ -69,7 +69,9 @@ export const useEventStore = create<EventStore>((set, get) => ({
   selectedEventId: null,
   setSelectedEventId: (id) => set({ selectedEventId: id }),
   selectEvent: async (id) => {
-    set({ selectedEventId: id, selectedEventData: emptyFields, eventDataLoading: true });
+    if (get().selectedEventId === id) return; // already selected — no-op
+    // Keep old data visible until new data arrives (prevents 60-component blank flash)
+    set({ selectedEventId: id, eventDataLoading: true });
     get().loadEventData();
   },
 
@@ -83,13 +85,40 @@ export const useEventStore = create<EventStore>((set, get) => ({
       return;
     }
     set({ eventDataLoading: true });
-    const result = await fetchEventById(selectedEventId);
-    if (isErrorResult(result)) {
-      set({ eventData: emptyFields, selectedEventData: emptyFields, eventDataLoading: false });
-      return;
+    try {
+      const result = await fetchEventById(selectedEventId);
+
+      // Race-condition guard: if user switched events while this fetch was in-flight, discard result
+      if (get().selectedEventId !== selectedEventId) return;
+
+      if (isErrorResult(result)) {
+        console.warn("⚠️ loadEventData: Airtable error (soft fail):", result.message);
+        set({ eventDataLoading: false });
+        return;
+      }
+      const fields = result.fields ?? {};
+      // Deep-equality guard: only replace selectedEventData if field values actually changed.
+      // Prevents re-render cascades when loadEventData is called after optimistic updates.
+      const current = get().selectedEventData;
+      const hasChanged =
+        Object.keys(fields).length !== Object.keys(current).length ||
+        Object.keys(fields).some((k) => {
+          const a = fields[k];
+          const b = current[k];
+          if (Array.isArray(a) && Array.isArray(b)) {
+            return JSON.stringify(a) !== JSON.stringify(b);
+          }
+          return a !== b;
+        });
+      if (hasChanged) {
+        set({ eventData: fields, selectedEventData: fields, eventDataLoading: false });
+      } else {
+        set({ eventDataLoading: false });
+      }
+    } catch (err) {
+      console.error("❌ loadEventData: unexpected error (soft fail):", err);
+      set({ eventDataLoading: false });
     }
-    const fields = result.fields ?? {};
-    set({ eventData: fields, selectedEventData: fields, eventDataLoading: false });
   },
 
   updateEvent: async (eventId, patch) => {

@@ -15,7 +15,7 @@ import {
 } from "../../services/airtable/stationComponents";
 import { isErrorResult } from "../../services/airtable/selectors";
 import { CollapsibleSubsection } from "./FormSection";
-import { getStationPresetKey, TEX_MEX, RAMEN, ALL_AMERICAN, STREET_FOOD, RAW_BAR, CARVING, HIBACHI, CHICKEN_WAFFLE, LATE_NIGHT } from "../../config/stationPresets";
+import { getStationPresetKey, TEX_MEX, RAMEN, ALL_AMERICAN, STREET_FOOD, RAW_BAR, CARVING, HIBACHI, CHICKEN_WAFFLE, LATE_NIGHT, FISHERMANS_CORNER } from "../../config/stationPresets";
 
 /** Airtable uses "Starch"; we display "Starch (Pasta)" for pasta stations. */
 const TYPE_DISPLAY: Record<string, string> = {
@@ -250,6 +250,15 @@ function parseLateNightCustomItems(text: string): { items: string[] } | null {
   return { items };
 }
 
+/** Parse Fisherman's Corner customItems */
+function parseFishermansCornerCustomItems(text: string): { selected: string[] } | null {
+  if (!text?.trim()) return null;
+  const m = text.match(/^Items?:\s*(.+)$/im);
+  if (!m) return null;
+  const items = m[1].split(",").map((s) => s.trim()).filter(Boolean);
+  return { selected: items.slice(0, 2) };
+}
+
 /** Parse Chicken & Waffle customItems */
 function parseChickenWaffleCustomItems(text: string): {
   chicken: string;
@@ -332,8 +341,8 @@ export function StationComponentsConfigModal(props: {
   stationNotes: string;
   initialComponentIds: string[];
   initialCustomItems: string;
-  initialBeoPlacement?: "Presented Appetizer Metal/China" | "Buffet Metal/China";
-  onConfirm: (params: { componentIds: string[]; customItems: string; beoPlacement?: "Presented Appetizer Metal/China" | "Buffet Metal/China" }) => void;
+  initialBeoPlacement?: "Presented Appetizer" | "Buffet Metal" | "Buffet China";
+  onConfirm: (params: { componentIds: string[]; customItems: string; beoPlacement?: "Presented Appetizer" | "Buffet Metal" | "Buffet China" }) => void;
   onCancel: () => void;
   inputStyle: React.CSSProperties;
   labelStyle: React.CSSProperties;
@@ -374,7 +383,7 @@ export function StationComponentsConfigModal(props: {
   const [customProteinInput, setCustomProteinInput] = useState("");
   const [customSauceInput, setCustomSauceInput] = useState("");
   const [customCondimentInput, setCustomCondimentInput] = useState("");
-  const [beoPlacement, setBeoPlacement] = useState<"Presented Appetizer Metal/China" | "Buffet Metal/China" | "">(initialBeoPlacement ?? "");
+  const [beoPlacement, setBeoPlacement] = useState<"Presented Appetizer" | "Buffet Metal" | "Buffet China" | "">(initialBeoPlacement ?? "");
   const [texMexShell, setTexMexShell] = useState<"Soft" | "Hard" | "">("");
   const [texMexProteins, setTexMexProteins] = useState<string[]>(["", ""]);
   const [texMexIncluded, setTexMexIncluded] = useState<string[]>([]);
@@ -401,6 +410,8 @@ export function StationComponentsConfigModal(props: {
   const [hibachiUpgrades, setHibachiUpgrades] = useState<string[]>([]);
   const [hibachiIncluded, setHibachiIncluded] = useState<string[]>([]);
   const [hibachiIncludedInput, setHibachiIncludedInput] = useState("");
+  const [hibachiUpgradesInput, setHibachiUpgradesInput] = useState("");
+  const [rawBarCustomProteinInput, setRawBarCustomProteinInput] = useState("");
   const [chickenWaffleChicken, setChickenWaffleChicken] = useState<string>("");
   const [chickenWaffleSauces, setChickenWaffleSauces] = useState<string[]>([]);
   const [chickenWaffleButter, setChickenWaffleButter] = useState<string>("");
@@ -412,6 +423,7 @@ export function StationComponentsConfigModal(props: {
   const [lateNightSelected, setLateNightSelected] = useState<string[]>(["", "", "", "", "", ""]);
   const [lateNightCustomItems, setLateNightCustomItems] = useState<string[]>([]);
   const [lateNightCustomInput, setLateNightCustomInput] = useState("");
+  const [fishermansCornerSelected, setFishermansCornerSelected] = useState<string[]>(["", ""]);
   const addDropdownRef = useRef<HTMLDivElement>(null);
 
   const stationPresetKey = getStationPresetKey(presetName || "");
@@ -425,6 +437,7 @@ export function StationComponentsConfigModal(props: {
   const isHibachi = stationPresetKey === "hibachi";
   const isChickenWaffle = stationPresetKey === "chicken-waffle";
   const isLateNight = stationPresetKey === "late-night";
+  const isFishermansCorner = stationPresetKey === "fishermans-corner";
 
   const applyAutoFill = useCallback(
     (defaults: StationComponent[], all: StationComponent[], opts: StationOption[]) => {
@@ -502,12 +515,17 @@ export function StationComponentsConfigModal(props: {
       setCustomItems(initialCustomItems);
       setBeoPlacement(initialBeoPlacement ?? "");
       setSectionsExpanded(false);
+      const isCreate = mode === "create" && !initialCustomItems;
       if (name.includes("tex-mex") || name.includes("tex mex")) {
         const parsed = parseTexMexCustomItems(initialCustomItems);
         if (parsed) {
           setTexMexShell(parsed.shell);
           setTexMexProteins(parsed.proteins.length >= 2 ? parsed.proteins : [...parsed.proteins, ""].slice(0, 2));
           setTexMexIncluded(parsed.included.length > 0 ? parsed.included : [...TEX_MEX.includedToppings, ...TEX_MEX.includedSides]);
+        } else if (isCreate) {
+          setTexMexShell("Soft");
+          setTexMexProteins(["Chicken", "Beef"]);
+          setTexMexIncluded([...TEX_MEX.includedToppings, ...TEX_MEX.includedSides]);
         } else {
           setTexMexShell("");
           setTexMexProteins(["", ""]);
@@ -520,6 +538,10 @@ export function StationComponentsConfigModal(props: {
           setRamenStock(parsed.stock);
           setRamenProtein(parsed.protein);
           setRamenIncluded(parsed.included.length > 0 ? parsed.included : [...RAMEN.includedToppings, ...RAMEN.includedSauces]);
+        } else if (isCreate) {
+          setRamenStock("Both");
+          setRamenProtein("Chicken");
+          setRamenIncluded([...RAMEN.includedToppings, ...RAMEN.includedSauces]);
         } else {
           setRamenStock("");
           setRamenProtein("");
@@ -533,6 +555,11 @@ export function StationComponentsConfigModal(props: {
           setAllAmericanPotato(parsed.potato);
           setAllAmericanChicken(parsed.chicken);
           setAllAmericanSalad(parsed.salad);
+        } else if (isCreate) {
+          setAllAmericanMain("Mini Angus beef burgers");
+          setAllAmericanPotato("Crispy boardwalk potato wedges (sea salt & malt vinegar)");
+          setAllAmericanChicken("Honey hot chicken tenders");
+          setAllAmericanSalad("Yes");
         } else {
           setAllAmericanMain("");
           setAllAmericanPotato("");
@@ -545,6 +572,9 @@ export function StationComponentsConfigModal(props: {
         if (parsed) {
           setStreetFoodSelected(parsed.selected);
           setStreetFoodCustomItems(parsed.custom);
+        } else if (isCreate) {
+          setStreetFoodSelected(["Mini shredded BBQ chicken on brioche rolls", "Mini sliders with aged white cheddar, caramelized onions & garlic aioli on mini brioche rolls", "Crispy cod or beef street tacos", "Carolina BBQ pork on a bao bun", "Thai sesame noodles in mini Chinese takeout containers"]);
+          setStreetFoodCustomItems([]);
         } else {
           setStreetFoodSelected(["", "", "", "", ""]);
           setStreetFoodCustomItems([]);
@@ -553,11 +583,11 @@ export function StationComponentsConfigModal(props: {
       if (name.includes("raw bar")) {
         const parsed = parseRawBarCustomItems(initialCustomItems);
         if (parsed) {
-          setRawBarProteins(parsed.proteins.length > 0 ? parsed.proteins : []);
+          setRawBarProteins(parsed.proteins.length > 0 ? parsed.proteins : [...RAW_BAR.includedProteins]);
           setRawBarIncluded(parsed.included.length > 0 ? parsed.included : [...RAW_BAR.includedGarnishes]);
         } else {
-          setRawBarProteins([]);
-          setRawBarIncluded([]);
+          setRawBarProteins([...RAW_BAR.includedProteins]);
+          setRawBarIncluded([...RAW_BAR.includedGarnishes]);
         }
       }
       if (name.includes("carving")) {
@@ -566,6 +596,10 @@ export function StationComponentsConfigModal(props: {
           setCarvingMeats(parsed.meats.length >= 2 ? parsed.meats : [...parsed.meats, "", ""].slice(0, 2));
           setCarvingPotato(parsed.potato);
           setCarvingIncluded(parsed.included);
+        } else if (isCreate) {
+          setCarvingMeats(["Pork tenderloin with mushroom duxelle en croute", "Roasted turkey with orange compote & gravy"]);
+          setCarvingPotato("Roasted potatoes");
+          setCarvingIncluded([]);
         } else {
           setCarvingMeats(["", ""]);
           setCarvingPotato("");
@@ -578,6 +612,10 @@ export function StationComponentsConfigModal(props: {
           setHibachiProteins(parsed.proteins.length >= 2 ? parsed.proteins : [...parsed.proteins, "", ""].slice(0, 2));
           setHibachiUpgrades(parsed.upgrades);
           setHibachiIncluded(parsed.included.length > 0 ? parsed.included : [...HIBACHI.included]);
+        } else if (isCreate) {
+          setHibachiProteins(["Chicken", "Steak"]);
+          setHibachiUpgrades([]);
+          setHibachiIncluded([...HIBACHI.included]);
         } else {
           setHibachiProteins(["", ""]);
           setHibachiUpgrades([]);
@@ -592,6 +630,12 @@ export function StationComponentsConfigModal(props: {
           setChickenWaffleButter(parsed.butter);
           setChickenWaffleAddons(parsed.addons);
           setChickenWaffleIncluded(parsed.included.length > 0 ? parsed.included : [...CHICKEN_WAFFLE.included]);
+        } else if (isCreate) {
+          setChickenWaffleChicken("Classic fried chicken tenders");
+          setChickenWaffleSauces([]);
+          setChickenWaffleButter("Regular whipped butter");
+          setChickenWaffleAddons([]);
+          setChickenWaffleIncluded([...CHICKEN_WAFFLE.included]);
         } else {
           setChickenWaffleChicken("");
           setChickenWaffleSauces([]);
@@ -606,9 +650,22 @@ export function StationComponentsConfigModal(props: {
           const first6 = parsed.items.slice(0, 6);
           setLateNightSelected([...first6, "", "", "", "", "", ""].slice(0, 6));
           setLateNightCustomItems(parsed.items.slice(6));
+        } else if (isCreate) {
+          setLateNightSelected(["Philly soft pretzel bites with cheese & mustard", "Assorted donuts", "Chicken & waffle bites with bourbon maple butter drizzle", "Mini PB, Nutella & crumbled bacon sandwiches", "Donut wall - Assorted donuts hung from a pegged wall", ""]);
+          setLateNightCustomItems([]);
         } else {
           setLateNightSelected(["", "", "", "", "", ""]);
           setLateNightCustomItems([]);
+        }
+      }
+      if (name.includes("fisherman")) {
+        const parsed = parseFishermansCornerCustomItems(initialCustomItems);
+        if (parsed) {
+          setFishermansCornerSelected([...parsed.selected, "", ""].slice(0, 2));
+        } else if (isCreate) {
+          setFishermansCornerSelected(["Jumbo shrimp cocktail in mini martini glasses", "Jumbo lump crab salad shooters"]);
+        } else {
+          setFishermansCornerSelected(["", ""]);
         }
       }
       setLoading(false);
@@ -799,7 +856,7 @@ export function StationComponentsConfigModal(props: {
       }
       const isRawBarPreset = name.includes("raw bar");
       if (isRawBarPreset) {
-        setRawBarProteins(["Shrimp", "Crab claws"]);
+        setRawBarProteins([...RAW_BAR.includedProteins]);
         setRawBarIncluded([...RAW_BAR.includedGarnishes]);
         setSectionsExpanded(true);
         setLoading(false);
@@ -825,8 +882,15 @@ export function StationComponentsConfigModal(props: {
       }
       const isLateNightPreset = name.includes("late night");
       if (isLateNightPreset) {
-        setLateNightSelected(["Philly soft pretzel bites with cheese & mustard", "Assorted donuts", "Chicken & waffle bites with bourbon maple butter", "Mini PB, Nutella & crumbled bacon sandwiches", "Donut wall - Assorted donuts", ""]);
+        setLateNightSelected(["Philly soft pretzel bites with cheese & mustard", "Assorted donuts", "Chicken & waffle bites with bourbon maple butter drizzle", "Mini PB, Nutella & crumbled bacon sandwiches", "Donut wall - Assorted donuts hung from a pegged wall", ""]);
         setLateNightCustomItems([]);
+        setSectionsExpanded(true);
+        setLoading(false);
+        return;
+      }
+      const isFishermansCornerPreset = name.includes("fisherman");
+      if (isFishermansCornerPreset) {
+        setFishermansCornerSelected(["Jumbo shrimp cocktail in mini martini glasses", "Jumbo lump crab salad shooters"]);
         setSectionsExpanded(true);
         setLoading(false);
         return;
@@ -934,7 +998,10 @@ export function StationComponentsConfigModal(props: {
       setLateNightCustomItems([]);
       setLateNightCustomInput("");
     }
-  }, [initialBeoPlacement, isTexMex, isRamen, isAllAmerican, isStreetFood, isChickenWaffle, isRawBar, isCarving, isHibachi, isLateNight]);
+    if (isFishermansCorner) {
+      setFishermansCornerSelected(["", ""]);
+    }
+  }, [initialBeoPlacement, isTexMex, isRamen, isAllAmerican, isStreetFood, isChickenWaffle, isRawBar, isCarving, isHibachi, isLateNight, isFishermansCorner]);
 
   // Close add dropdown when clicking outside
   useEffect(() => {
@@ -953,7 +1020,7 @@ export function StationComponentsConfigModal(props: {
     const isPastaPreset = name.includes("pasta") || name.includes("viva");
 
     if (isTexMex) {
-      const hasPlacement = beoPlacement === "Presented Appetizer Metal/China" || beoPlacement === "Buffet Metal/China";
+      const hasPlacement = beoPlacement === "Presented Appetizer" || beoPlacement === "Buffet Metal" || beoPlacement === "Buffet China";
       const hasShell = texMexShell === "Soft" || texMexShell === "Hard";
       const filledProteins = texMexProteins.filter(Boolean);
       const hasProteins = filledProteins.length >= 2;
@@ -975,9 +1042,9 @@ export function StationComponentsConfigModal(props: {
     }
 
     if (isRamen) {
-      const hasPlacement = beoPlacement === "Presented Appetizer Metal/China" || beoPlacement === "Buffet Metal/China";
-      const hasStock = (RAMEN.stockOptions as readonly string[]).includes(ramenStock);
-      const hasProtein = (RAMEN.proteinOptions as readonly string[]).includes(ramenProtein);
+      const hasPlacement = beoPlacement === "Presented Appetizer" || beoPlacement === "Buffet Metal" || beoPlacement === "Buffet China";
+      const hasStock = ramenStock.trim().length > 0;
+      const hasProtein = ramenProtein.trim().length > 0;
       const missing: string[] = [];
       if (!hasPlacement) missing.push("BEO Placement");
       if (!hasStock) missing.push("Stock type");
@@ -996,11 +1063,11 @@ export function StationComponentsConfigModal(props: {
     }
 
     if (isAllAmerican) {
-      const hasPlacement = beoPlacement === "Presented Appetizer Metal/China" || beoPlacement === "Buffet Metal/China";
-      const hasMain = (ALL_AMERICAN.mainOptions as readonly string[]).includes(allAmericanMain);
-      const hasPotato = (ALL_AMERICAN.potatoOptions as readonly string[]).includes(allAmericanPotato);
-      const hasChicken = (ALL_AMERICAN.chickenOptions as readonly string[]).includes(allAmericanChicken);
-      const hasSalad = (ALL_AMERICAN.saladShooters as readonly string[]).includes(allAmericanSalad);
+      const hasPlacement = beoPlacement === "Presented Appetizer" || beoPlacement === "Buffet Metal" || beoPlacement === "Buffet China";
+      const hasMain = allAmericanMain.trim().length > 0;
+      const hasPotato = allAmericanPotato.trim().length > 0;
+      const hasChicken = allAmericanChicken.trim().length > 0;
+      const hasSalad = allAmericanSalad.trim().length > 0;
       const missing: string[] = [];
       if (!hasPlacement) missing.push("BEO Placement");
       if (!hasMain) missing.push("Main");
@@ -1017,7 +1084,7 @@ export function StationComponentsConfigModal(props: {
     }
 
     if (isStreetFood) {
-      const hasPlacement = beoPlacement === "Presented Appetizer Metal/China" || beoPlacement === "Buffet Metal/China";
+      const hasPlacement = beoPlacement === "Presented Appetizer" || beoPlacement === "Buffet Metal" || beoPlacement === "Buffet China";
       const filled = streetFoodSelected.filter(Boolean);
       const hasFive = filled.length >= 5;
       const missing: string[] = [];
@@ -1034,9 +1101,9 @@ export function StationComponentsConfigModal(props: {
     }
 
     if (isChickenWaffle) {
-      const hasPlacement = beoPlacement === "Presented Appetizer Metal/China" || beoPlacement === "Buffet Metal/China";
-      const hasChicken = (CHICKEN_WAFFLE.chickenOptions as readonly string[]).includes(chickenWaffleChicken);
-      const hasButter = (CHICKEN_WAFFLE.butterOptions as readonly string[]).includes(chickenWaffleButter);
+      const hasPlacement = beoPlacement === "Presented Appetizer" || beoPlacement === "Buffet Metal" || beoPlacement === "Buffet China";
+      const hasChicken = chickenWaffleChicken.trim().length > 0;
+      const hasButter = chickenWaffleButter.trim().length > 0;
       const missing: string[] = [];
       if (!hasPlacement) missing.push("BEO Placement");
       if (!hasChicken) missing.push("Chicken (Classic or Honey hot)");
@@ -1057,28 +1124,21 @@ export function StationComponentsConfigModal(props: {
     }
 
     if (isRawBar) {
-      const hasPlacement = beoPlacement === "Presented Appetizer Metal/China" || beoPlacement === "Buffet Metal/China";
+      const effectivePlacement = (beoPlacement || "Buffet Metal") as "Presented Appetizer" | "Buffet Metal" | "Buffet China";
       const filledProteins = rawBarProteins.filter(Boolean);
-      const missing: string[] = [];
-      if (!hasPlacement) missing.push("BEO Placement");
-      if (filledProteins.length === 0) missing.push("at least 1 protein");
-      if (missing.length > 0) {
-        window.alert(`Please fill out the entire form before saving. Missing: ${missing.join(", ")}.`);
-        return;
-      }
       const lines = [
-        `Proteins: ${filledProteins.join(", ")}`,
+        `Proteins: ${filledProteins.length > 0 ? filledProteins.join(", ") : RAW_BAR.includedProteins.join(", ")}`,
         ...(rawBarIncluded.length > 0 ? [`Included: ${rawBarIncluded.join(", ")}`] : []),
       ];
-      onConfirm({ componentIds: [], customItems: lines.join("\n"), beoPlacement: hasPlacement ? beoPlacement : undefined });
+      onConfirm({ componentIds: [], customItems: lines.join("\n"), beoPlacement: effectivePlacement });
       return;
     }
 
     if (isCarving) {
-      const hasPlacement = beoPlacement === "Presented Appetizer Metal/China" || beoPlacement === "Buffet Metal/China";
+      const hasPlacement = beoPlacement === "Presented Appetizer" || beoPlacement === "Buffet Metal" || beoPlacement === "Buffet China";
       const filledMeats = carvingMeats.filter(Boolean);
       const hasMeats = filledMeats.length >= 2;
-      const hasPotato = (CARVING.potatoOptions as readonly string[]).includes(carvingPotato);
+      const hasPotato = carvingPotato.trim().length > 0;
       const missing: string[] = [];
       if (!hasPlacement) missing.push("BEO Placement");
       if (!hasMeats) missing.push("2 meats");
@@ -1097,7 +1157,7 @@ export function StationComponentsConfigModal(props: {
     }
 
     if (isHibachi) {
-      const hasPlacement = beoPlacement === "Presented Appetizer Metal/China" || beoPlacement === "Buffet Metal/China";
+      const hasPlacement = beoPlacement === "Presented Appetizer" || beoPlacement === "Buffet Metal" || beoPlacement === "Buffet China";
       const filledProteins = hibachiProteins.filter(Boolean);
       const hasProteins = filledProteins.length >= 2;
       const missing: string[] = [];
@@ -1117,7 +1177,7 @@ export function StationComponentsConfigModal(props: {
     }
 
     if (isLateNight) {
-      const hasPlacement = beoPlacement === "Presented Appetizer Metal/China" || beoPlacement === "Buffet Metal/China";
+      const hasPlacement = beoPlacement === "Presented Appetizer" || beoPlacement === "Buffet Metal" || beoPlacement === "Buffet China";
       const filled = lateNightSelected.filter(Boolean);
       const allItems = [...filled, ...lateNightCustomItems];
       const missing: string[] = [];
@@ -1132,9 +1192,25 @@ export function StationComponentsConfigModal(props: {
       return;
     }
 
-    const isSimpleStation = stationPresetKey === "vegetable" || stationPresetKey === "spreads-breads" || stationPresetKey === "charcuterie" || stationPresetKey === "pasta-flight" || stationPresetKey === "farmers-fruit" || stationPresetKey === "fishermans-corner" || stationPresetKey === "barwerx" || stationPresetKey === "philly-jawn";
+    if (isFishermansCorner) {
+      const hasPlacement = beoPlacement === "Presented Appetizer" || beoPlacement === "Buffet Metal" || beoPlacement === "Buffet China";
+      const filled = fishermansCornerSelected.filter(Boolean);
+      const hasTwo = filled.length >= 2;
+      const missing: string[] = [];
+      if (!hasPlacement) missing.push("BEO Placement");
+      if (!hasTwo) missing.push("2 items");
+      if (missing.length > 0) {
+        window.alert(`Please fill out the entire form before saving. Missing: ${missing.join(", ")}.`);
+        return;
+      }
+      const lines = [`Items: ${filled.join(", ")}`];
+      onConfirm({ componentIds: [], customItems: lines.join("\n"), beoPlacement: hasPlacement ? beoPlacement : undefined });
+      return;
+    }
+
+    const isSimpleStation = stationPresetKey === "vegetable" || stationPresetKey === "spreads-breads" || stationPresetKey === "charcuterie" || stationPresetKey === "pasta-flight" || stationPresetKey === "farmers-fruit" || stationPresetKey === "barwerx" || stationPresetKey === "philly-jawn";
     if (isSimpleStation) {
-      const hasPlacement = beoPlacement === "Presented Appetizer Metal/China" || beoPlacement === "Buffet Metal/China";
+      const hasPlacement = beoPlacement === "Presented Appetizer" || beoPlacement === "Buffet Metal" || beoPlacement === "Buffet China";
       if (!hasPlacement) {
         window.alert("Please fill out the entire form before saving. Missing: BEO Placement.");
         return;
@@ -1152,7 +1228,7 @@ export function StationComponentsConfigModal(props: {
         const c = allComponents.find((x) => x.id === id);
         return c && normalizeComponentType(c.componentType) === "Starch";
       });
-      const hasPlacement = beoPlacement === "Presented Appetizer Metal/China" || beoPlacement === "Buffet Metal/China";
+      const hasPlacement = beoPlacement === "Presented Appetizer" || beoPlacement === "Buffet Metal" || beoPlacement === "Buffet China";
       const missing: string[] = [];
       if (!hasPlacement) missing.push("BEO Placement");
       if (selectedSauces.length < 3) missing.push("3 sauces");
@@ -1181,7 +1257,7 @@ export function StationComponentsConfigModal(props: {
       .map((s) => s?.trim())
       .filter(Boolean);
     const customText = extras.length > 0 ? `${customItems ? customItems + "\n" : ""}${extras.join("\n")}` : customItems;
-    const placement = beoPlacement === "Presented Appetizer Metal/China" || beoPlacement === "Buffet Metal/China" ? beoPlacement : undefined;
+    const placement = beoPlacement === "Presented Appetizer" || beoPlacement === "Buffet Metal" || beoPlacement === "Buffet China" ? beoPlacement : undefined;
     onConfirm({ componentIds: selectedComponentIds, customItems: customText, beoPlacement: placement });
   };
 
@@ -1240,7 +1316,7 @@ export function StationComponentsConfigModal(props: {
           <button
             type="button"
             onClick={handleClearAll}
-            disabled={loading || (selectedComponentIds.length === 0 && !(isTexMex || isRamen || isAllAmerican || isStreetFood || isChickenWaffle || isRawBar || isCarving || isHibachi || isLateNight))}
+            disabled={loading || (selectedComponentIds.length === 0 && !(isTexMex || isRamen || isAllAmerican || isStreetFood || isChickenWaffle || isRawBar || isCarving || isHibachi || isLateNight || isFishermansCorner))}
             style={{
               padding: "8px 16px",
               borderRadius: 6,
@@ -1249,8 +1325,8 @@ export function StationComponentsConfigModal(props: {
               color: "#a0a0a0",
               fontSize: 12,
               fontWeight: 600,
-              cursor: loading || (selectedComponentIds.length === 0 && !(isTexMex || isRamen || isAllAmerican || isStreetFood || isChickenWaffle || isRawBar || isCarving || isHibachi || isLateNight)) ? "not-allowed" : "pointer",
-              opacity: loading || (selectedComponentIds.length === 0 && !(isTexMex || isRamen || isAllAmerican || isStreetFood || isChickenWaffle || isRawBar || isCarving || isHibachi || isLateNight)) ? 0.5 : 1,
+              cursor: loading || (selectedComponentIds.length === 0 && !(isTexMex || isRamen || isAllAmerican || isStreetFood || isChickenWaffle || isRawBar || isCarving || isHibachi || isLateNight || isFishermansCorner)) ? "not-allowed" : "pointer",
+              opacity: loading || (selectedComponentIds.length === 0 && !(isTexMex || isRamen || isAllAmerican || isStreetFood || isChickenWaffle || isRawBar || isCarving || isHibachi || isLateNight || isFishermansCorner)) ? 0.5 : 1,
             }}
           >
             Clear All & Start Over
@@ -1277,10 +1353,11 @@ export function StationComponentsConfigModal(props: {
                   <div style={{ marginBottom: 16 }}>
                     <label style={{ ...labelStyle, display: "block", marginBottom: 6 }}>BEO Placement <span style={{ color: "#ff6b6b" }}>*</span></label>
                     <p style={{ margin: "0 0 8px 0", fontSize: 11, color: "#999" }}>Required — for placement on the BEO</p>
-                    <select value={beoPlacement} onChange={(e) => setBeoPlacement(e.target.value as "Presented Appetizer Metal/China" | "Buffet Metal/China" | "")} style={{ ...rowInputStyle, minWidth: 160, width: "auto" }}>
+                    <select value={beoPlacement} onChange={(e) => setBeoPlacement(e.target.value as "Presented Appetizer" | "Buffet Metal" | "Buffet China" | "")} style={{ ...rowInputStyle, minWidth: 160, width: "auto" }}>
                       <option value="">Select...</option>
-                      <option value="Presented Appetizer Metal/China">Presented Appetizer Metal/China</option>
-                      <option value="Buffet Metal/China">Buffet Metal/China</option>
+                      <option value="Presented Appetizer">Presented Appetizer</option>
+                      <option value="Buffet Metal">Buffet Metal</option>
+                      <option value="Buffet China">Buffet China</option>
                     </select>
                   </div>
                   <CollapsibleSubsection title="Shell - Pick 1" icon="▶" defaultOpen={sectionsExpanded} accentColor="#eab308">
@@ -1295,35 +1372,55 @@ export function StationComponentsConfigModal(props: {
                       </div>
                     </div>
                   </CollapsibleSubsection>
-                  <CollapsibleSubsection title="Proteins - Pick 2" icon="▶" defaultOpen={sectionsExpanded} accentColor="#22c55e">
+                  <CollapsibleSubsection title="Proteins - Pick 2 (or more)" icon="▶" defaultOpen={sectionsExpanded} accentColor="#22c55e">
                     <div style={{ gridColumn: "1 / -1" }}>
                       <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
-                        {[0, 1].map((idx) => (
+                        {texMexProteins.map((val, idx) => (
                           <div key={idx} style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                            <select value={texMexProteins[idx] ?? ""} onChange={(e) => updateProtein(idx, e.target.value)} style={{ ...rowInputStyle, minWidth: 120, width: "auto" }}>
-                              <option value="">Select protein...</option>
-                              {TEX_MEX.proteinOptions.map((p) => (
-                                <option key={p} value={p}>{p}</option>
-                              ))}
-                            </select>
-                            <button type="button" onClick={() => updateProtein(idx, "")} disabled={!texMexProteins[idx]} style={{ width: 26, height: 26, padding: 0, borderRadius: 5, border: "1px solid #555", background: "#333", color: "#22c55e", fontSize: 13, fontWeight: "bold", cursor: texMexProteins[idx] ? "pointer" : "default", display: "flex", alignItems: "center", justifyContent: "center", opacity: texMexProteins[idx] ? 1 : 0.4 }}>✕</button>
+                            <input type="text" value={val} onChange={(e) => updateProtein(idx, e.target.value)} list={`tex-mex-protein-${idx}`} placeholder="Select or type protein..." style={{ ...rowInputStyle, minWidth: 150, width: "auto" }} />
+                            <datalist id={`tex-mex-protein-${idx}`}>{TEX_MEX.proteinOptions.map((p) => <option key={p} value={p} />)}</datalist>
+                            <button type="button" onClick={() => { const next = texMexProteins.filter((_, i) => i !== idx); setTexMexProteins(next.length >= 2 ? next : [...next, ""].slice(0, Math.max(2, next.length))); }} disabled={texMexProteins.length <= 2 && !val} style={{ width: 26, height: 26, padding: 0, borderRadius: 5, border: "1px solid #555", background: "#333", color: "#22c55e", fontSize: 13, fontWeight: "bold", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", opacity: (texMexProteins.length <= 2 && !val) ? 0.4 : 1 }}>✕</button>
                           </div>
                         ))}
+                        <button type="button" onClick={() => setTexMexProteins((p) => [...p, ""])} style={{ padding: "5px 10px", borderRadius: 6, border: "1px solid #22c55e", background: "rgba(34,197,94,0.15)", color: "#22c55e", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>+ Add Protein</button>
                       </div>
                     </div>
                   </CollapsibleSubsection>
                   <CollapsibleSubsection title="Included (Toppings & Sides)" icon="▶" defaultOpen={sectionsExpanded} accentColor="#94a3b8">
                     <div style={{ gridColumn: "1 / -1" }}>
-                      <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
-                        {texMexIncluded.map((item, idx) => (
-                          <span key={`${idx}-${item}`} style={{ fontSize: 12, padding: "4px 8px", backgroundColor: "#2a2a2a", borderRadius: 4, display: "inline-flex", alignItems: "center", gap: 4 }}>
-                            {item}
-                            <button type="button" onClick={() => setTexMexIncluded((prev) => prev.filter((_, i) => i !== idx))} style={{ background: "none", border: "none", color: "#888", cursor: "pointer", fontSize: 10 }}>✕</button>
-                          </span>
-                        ))}
-                        <input type="text" value={texMexIncludedInput} onChange={(e) => setTexMexIncludedInput(e.target.value)} placeholder="Type custom item..." style={{ ...rowInputStyle, minWidth: 120, width: "auto" }} onKeyDown={(e) => { if (e.key === "Enter" && texMexIncludedInput.trim()) { setTexMexIncluded((prev) => [...prev, texMexIncludedInput.trim()]); setTexMexIncludedInput(""); } }} />
-                        <button type="button" onClick={() => { if (texMexIncludedInput.trim()) { setTexMexIncluded((prev) => [...prev, texMexIncludedInput.trim()]); setTexMexIncludedInput(""); } }} style={{ padding: "5px 10px", borderRadius: 6, border: "1px solid #22c55e", background: "rgba(34,197,94,0.15)", color: "#22c55e", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>+ Add Component</button>
-                      </div>
+                      {(() => {
+                        const TEX_MEX_INCLUDED_OPTIONS = [...TEX_MEX.includedToppings, ...TEX_MEX.includedSides];
+                        const available = TEX_MEX_INCLUDED_OPTIONS.filter((opt) => !texMexIncluded.includes(opt));
+                        return (
+                          <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
+                            {texMexIncluded.map((item, idx) => {
+                              const isCustom = !TEX_MEX_INCLUDED_OPTIONS.includes(item);
+                              return (
+                                <div key={`${idx}-${item}`} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                                  <select
+                                    value={isCustom ? "__custom__" : item}
+                                    onChange={(e) => { if (e.target.value === "__custom__") return; const next = [...texMexIncluded]; next[idx] = e.target.value; setTexMexIncluded(next); }}
+                                    style={{ ...rowInputStyle, minWidth: 220, width: "auto" }}
+                                  >
+                                    <option value="">Select item...</option>
+                                    {TEX_MEX_INCLUDED_OPTIONS.map((opt) => (<option key={opt} value={opt}>{opt}</option>))}
+                                    {isCustom && <option value="__custom__">{item}</option>}
+                                  </select>
+                                  <button type="button" onClick={() => setTexMexIncluded((prev) => prev.filter((_, i) => i !== idx))} style={{ width: 26, height: 26, padding: 0, borderRadius: 5, border: "1px solid #555", background: "#333", color: "#22c55e", fontSize: 13, fontWeight: "bold", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>✕</button>
+                                </div>
+                              );
+                            })}
+                            {available.length > 0 && (
+                              <select value="" onChange={(e) => { if (e.target.value) setTexMexIncluded((prev) => [...prev, e.target.value]); }} style={{ ...rowInputStyle, minWidth: 180, width: "auto" }}>
+                                <option value="">Add from list...</option>
+                                {available.map((opt) => (<option key={opt} value={opt}>{opt}</option>))}
+                              </select>
+                            )}
+                            <input type="text" value={texMexIncludedInput} onChange={(e) => setTexMexIncludedInput(e.target.value)} placeholder="Type custom item..." style={{ ...rowInputStyle, minWidth: 160, width: "auto" }} onKeyDown={(e) => { if (e.key === "Enter" && texMexIncludedInput.trim()) { setTexMexIncluded((prev) => [...prev, texMexIncludedInput.trim()]); setTexMexIncludedInput(""); } }} />
+                            <button type="button" onClick={() => { if (texMexIncludedInput.trim()) { setTexMexIncluded((prev) => [...prev, texMexIncludedInput.trim()]); setTexMexIncludedInput(""); } }} style={{ padding: "5px 10px", borderRadius: 6, border: "1px solid #22c55e", background: "rgba(34,197,94,0.15)", color: "#22c55e", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>+ Add Component</button>
+                          </div>
+                        );
+                      })()}
                     </div>
                   </CollapsibleSubsection>
                 </>
@@ -1337,50 +1434,98 @@ export function StationComponentsConfigModal(props: {
                   <div style={{ marginBottom: 16 }}>
                     <label style={{ ...labelStyle, display: "block", marginBottom: 6 }}>BEO Placement <span style={{ color: "#ff6b6b" }}>*</span></label>
                     <p style={{ margin: "0 0 8px 0", fontSize: 11, color: "#999" }}>Required — for placement on the BEO</p>
-                    <select value={beoPlacement} onChange={(e) => setBeoPlacement(e.target.value as "Presented Appetizer Metal/China" | "Buffet Metal/China" | "")} style={{ ...rowInputStyle, minWidth: 160, width: "auto" }}>
+                    <select value={beoPlacement} onChange={(e) => setBeoPlacement(e.target.value as "Presented Appetizer" | "Buffet Metal" | "Buffet China" | "")} style={{ ...rowInputStyle, minWidth: 160, width: "auto" }}>
                       <option value="">Select...</option>
-                      <option value="Presented Appetizer Metal/China">Presented Appetizer Metal/China</option>
-                      <option value="Buffet Metal/China">Buffet Metal/China</option>
+                      <option value="Presented Appetizer">Presented Appetizer</option>
+                      <option value="Buffet Metal">Buffet Metal</option>
+                      <option value="Buffet China">Buffet China</option>
                     </select>
                   </div>
                   <CollapsibleSubsection title="Stock - Pick 1" icon="▶" defaultOpen={sectionsExpanded} accentColor="#14b8a6">
                     <div style={{ gridColumn: "1 / -1" }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                        <select value={ramenStock} onChange={(e) => setRamenStock(e.target.value)} style={{ ...rowInputStyle, minWidth: 160, width: "auto" }}>
-                          <option value="">Select stock...</option>
-                          {RAMEN.stockOptions.map((s) => (
-                            <option key={s} value={s}>{s}</option>
-                          ))}
-                        </select>
-                        <button type="button" onClick={() => setRamenStock("")} disabled={!ramenStock} style={{ width: 26, height: 26, padding: 0, borderRadius: 5, border: "1px solid #555", background: "#333", color: "#14b8a6", fontSize: 13, fontWeight: "bold", cursor: ramenStock ? "pointer" : "default", display: "flex", alignItems: "center", justifyContent: "center", opacity: ramenStock ? 1 : 0.4 }}>✕</button>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                          <select
+                            value={(RAMEN.stockOptions as readonly string[]).includes(ramenStock) ? ramenStock : (ramenStock ? "__custom__" : "")}
+                            onChange={(e) => { if (e.target.value === "__custom__") return; setRamenStock(e.target.value); }}
+                            style={{ ...rowInputStyle, minWidth: 240, width: "auto" }}
+                          >
+                            <option value="">Select...</option>
+                            {RAMEN.stockOptions.map((opt) => (<option key={opt} value={opt}>{opt}</option>))}
+                            <option value="__custom__">Other (type below)...</option>
+                          </select>
+                          <button type="button" onClick={() => setRamenStock("")} disabled={!ramenStock} style={{ width: 26, height: 26, padding: 0, borderRadius: 5, border: "1px solid #555", background: "#333", color: "#14b8a6", fontSize: 13, fontWeight: "bold", cursor: ramenStock ? "pointer" : "default", display: "flex", alignItems: "center", justifyContent: "center", opacity: ramenStock ? 1 : 0.4 }}>✕</button>
+                        </div>
+                        <input
+                          type="text"
+                          value={!(RAMEN.stockOptions as readonly string[]).includes(ramenStock) ? ramenStock : ""}
+                          onChange={(e) => setRamenStock(e.target.value)}
+                          placeholder="Type custom..."
+                          style={{ ...rowInputStyle, minWidth: 200, width: "auto" }}
+                        />
                       </div>
                     </div>
                   </CollapsibleSubsection>
-                  <CollapsibleSubsection title="Protein - Pick 1" icon="▶" defaultOpen={sectionsExpanded} accentColor="#eab308">
+                  <CollapsibleSubsection title="Protein - Pick 1 (or more)" icon="▶" defaultOpen={sectionsExpanded} accentColor="#eab308">
                     <div style={{ gridColumn: "1 / -1" }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                        <select value={ramenProtein} onChange={(e) => setRamenProtein(e.target.value)} style={{ ...rowInputStyle, minWidth: 140, width: "auto" }}>
-                          <option value="">Select protein...</option>
-                          {RAMEN.proteinOptions.map((p) => (
-                            <option key={p} value={p}>{p}</option>
-                          ))}
-                        </select>
-                        <button type="button" onClick={() => setRamenProtein("")} disabled={!ramenProtein} style={{ width: 26, height: 26, padding: 0, borderRadius: 5, border: "1px solid #555", background: "#333", color: "#eab308", fontSize: 13, fontWeight: "bold", cursor: ramenProtein ? "pointer" : "default", display: "flex", alignItems: "center", justifyContent: "center", opacity: ramenProtein ? 1 : 0.4 }}>✕</button>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                          <select
+                            value={(RAMEN.proteinOptions as readonly string[]).includes(ramenProtein) ? ramenProtein : (ramenProtein ? "__custom__" : "")}
+                            onChange={(e) => { if (e.target.value === "__custom__") return; setRamenProtein(e.target.value); }}
+                            style={{ ...rowInputStyle, minWidth: 240, width: "auto" }}
+                          >
+                            <option value="">Select...</option>
+                            {RAMEN.proteinOptions.map((opt) => (<option key={opt} value={opt}>{opt}</option>))}
+                            <option value="__custom__">Other (type below)...</option>
+                          </select>
+                          <button type="button" onClick={() => setRamenProtein("")} disabled={!ramenProtein} style={{ width: 26, height: 26, padding: 0, borderRadius: 5, border: "1px solid #555", background: "#333", color: "#eab308", fontSize: 13, fontWeight: "bold", cursor: ramenProtein ? "pointer" : "default", display: "flex", alignItems: "center", justifyContent: "center", opacity: ramenProtein ? 1 : 0.4 }}>✕</button>
+                        </div>
+                        <input
+                          type="text"
+                          value={!(RAMEN.proteinOptions as readonly string[]).includes(ramenProtein) ? ramenProtein : ""}
+                          onChange={(e) => setRamenProtein(e.target.value)}
+                          placeholder="Type custom..."
+                          style={{ ...rowInputStyle, minWidth: 200, width: "auto" }}
+                        />
                       </div>
                     </div>
                   </CollapsibleSubsection>
                   <CollapsibleSubsection title="Included (Toppings & Sauces)" icon="▶" defaultOpen={sectionsExpanded} accentColor="#94a3b8">
                     <div style={{ gridColumn: "1 / -1" }}>
-                      <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
-                        {ramenIncluded.map((item, idx) => (
-                          <span key={`${idx}-${item}`} style={{ fontSize: 12, padding: "4px 8px", backgroundColor: "#2a2a2a", borderRadius: 4, display: "inline-flex", alignItems: "center", gap: 4 }}>
-                            {item}
-                            <button type="button" onClick={() => setRamenIncluded((prev) => prev.filter((_, i) => i !== idx))} style={{ background: "none", border: "none", color: "#888", cursor: "pointer", fontSize: 10 }}>✕</button>
-                          </span>
-                        ))}
-                        <input type="text" value={ramenIncludedInput} onChange={(e) => setRamenIncludedInput(e.target.value)} placeholder="Type custom item..." style={{ ...rowInputStyle, minWidth: 120, width: "auto" }} onKeyDown={(e) => { if (e.key === "Enter" && ramenIncludedInput.trim()) { setRamenIncluded((prev) => [...prev, ramenIncludedInput.trim()]); setRamenIncludedInput(""); } }} />
-                        <button type="button" onClick={() => { if (ramenIncludedInput.trim()) { setRamenIncluded((prev) => [...prev, ramenIncludedInput.trim()]); setRamenIncludedInput(""); } }} style={{ padding: "5px 10px", borderRadius: 6, border: "1px solid #22c55e", background: "rgba(34,197,94,0.15)", color: "#22c55e", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>+ Add Component</button>
-                      </div>
+                      {(() => {
+                        const RAMEN_INCLUDED_OPTIONS = [...RAMEN.includedToppings, ...RAMEN.includedSauces];
+                        const available = RAMEN_INCLUDED_OPTIONS.filter((opt) => !ramenIncluded.includes(opt));
+                        return (
+                          <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
+                            {ramenIncluded.map((item, idx) => {
+                              const isCustom = !RAMEN_INCLUDED_OPTIONS.includes(item);
+                              return (
+                                <div key={`${idx}-${item}`} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                                  <select
+                                    value={isCustom ? "__custom__" : item}
+                                    onChange={(e) => { if (e.target.value === "__custom__") return; const next = [...ramenIncluded]; next[idx] = e.target.value; setRamenIncluded(next); }}
+                                    style={{ ...rowInputStyle, minWidth: 220, width: "auto" }}
+                                  >
+                                    <option value="">Select item...</option>
+                                    {RAMEN_INCLUDED_OPTIONS.map((opt) => (<option key={opt} value={opt}>{opt}</option>))}
+                                    {isCustom && <option value="__custom__">{item}</option>}
+                                  </select>
+                                  <button type="button" onClick={() => setRamenIncluded((prev) => prev.filter((_, i) => i !== idx))} style={{ width: 26, height: 26, padding: 0, borderRadius: 5, border: "1px solid #555", background: "#333", color: "#22c55e", fontSize: 13, fontWeight: "bold", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>✕</button>
+                                </div>
+                              );
+                            })}
+                            {available.length > 0 && (
+                              <select value="" onChange={(e) => { if (e.target.value) setRamenIncluded((prev) => [...prev, e.target.value]); }} style={{ ...rowInputStyle, minWidth: 180, width: "auto" }}>
+                                <option value="">Add from list...</option>
+                                {available.map((opt) => (<option key={opt} value={opt}>{opt}</option>))}
+                              </select>
+                            )}
+                            <input type="text" value={ramenIncludedInput} onChange={(e) => setRamenIncludedInput(e.target.value)} placeholder="Type custom item..." style={{ ...rowInputStyle, minWidth: 160, width: "auto" }} onKeyDown={(e) => { if (e.key === "Enter" && ramenIncludedInput.trim()) { setRamenIncluded((prev) => [...prev, ramenIncludedInput.trim()]); setRamenIncludedInput(""); } }} />
+                            <button type="button" onClick={() => { if (ramenIncludedInput.trim()) { setRamenIncluded((prev) => [...prev, ramenIncludedInput.trim()]); setRamenIncludedInput(""); } }} style={{ padding: "5px 10px", borderRadius: 6, border: "1px solid #22c55e", background: "rgba(34,197,94,0.15)", color: "#22c55e", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>+ Add Component</button>
+                          </div>
+                        );
+                      })()}
                     </div>
                   </CollapsibleSubsection>
                 </>
@@ -1393,52 +1538,91 @@ export function StationComponentsConfigModal(props: {
                 <>
                   <div style={{ marginBottom: 16 }}>
                     <label style={{ ...labelStyle, display: "block", marginBottom: 6 }}>BEO Placement <span style={{ color: "#ff6b6b" }}>*</span></label>
-                    <select value={beoPlacement} onChange={(e) => setBeoPlacement(e.target.value as "Presented Appetizer Metal/China" | "Buffet Metal/China" | "")} style={{ ...rowInputStyle, minWidth: 160, width: "auto" }}>
+                    <select value={beoPlacement} onChange={(e) => setBeoPlacement(e.target.value as "Presented Appetizer" | "Buffet Metal" | "Buffet China" | "")} style={{ ...rowInputStyle, minWidth: 160, width: "auto" }}>
                       <option value="">Select...</option>
-                      <option value="Presented Appetizer Metal/China">Presented Appetizer Metal/China</option>
-                      <option value="Buffet Metal/China">Buffet Metal/China</option>
+                      <option value="Presented Appetizer">Presented Appetizer</option>
+                      <option value="Buffet Metal">Buffet Metal</option>
+                      <option value="Buffet China">Buffet China</option>
                     </select>
                   </div>
                   <CollapsibleSubsection title="Main - Pick 1" icon="▶" defaultOpen={sectionsExpanded} accentColor="#eab308">
                     <div style={{ gridColumn: "1 / -1" }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                        <select value={allAmericanMain} onChange={(e) => setAllAmericanMain(e.target.value)} style={{ ...rowInputStyle, minWidth: 280, width: "auto" }}>
-                          <option value="">Select main...</option>
-                          {ALL_AMERICAN.mainOptions.map((o) => (
-                            <option key={o} value={o}>{o}</option>
-                          ))}
-                        </select>
-                        <button type="button" onClick={() => setAllAmericanMain("")} disabled={!allAmericanMain} style={{ width: 26, height: 26, padding: 0, borderRadius: 5, border: "1px solid #555", background: "#333", color: "#eab308", fontSize: 13, fontWeight: "bold", cursor: allAmericanMain ? "pointer" : "default", display: "flex", alignItems: "center", justifyContent: "center", opacity: allAmericanMain ? 1 : 0.4 }}>✕</button>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                          <select
+                            value={(ALL_AMERICAN.mainOptions as readonly string[]).includes(allAmericanMain) ? allAmericanMain : (allAmericanMain ? "__custom__" : "")}
+                            onChange={(e) => { if (e.target.value === "__custom__") return; setAllAmericanMain(e.target.value); }}
+                            style={{ ...rowInputStyle, minWidth: 300, width: "auto" }}
+                          >
+                            <option value="">Select...</option>
+                            {ALL_AMERICAN.mainOptions.map((opt) => (<option key={opt} value={opt}>{opt}</option>))}
+                            <option value="__custom__">Other (type below)...</option>
+                          </select>
+                          <button type="button" onClick={() => setAllAmericanMain("")} disabled={!allAmericanMain} style={{ width: 26, height: 26, padding: 0, borderRadius: 5, border: "1px solid #555", background: "#333", color: "#eab308", fontSize: 13, fontWeight: "bold", cursor: allAmericanMain ? "pointer" : "default", display: "flex", alignItems: "center", justifyContent: "center", opacity: allAmericanMain ? 1 : 0.4 }}>✕</button>
+                        </div>
+                        <input
+                          type="text"
+                          value={!(ALL_AMERICAN.mainOptions as readonly string[]).includes(allAmericanMain) ? allAmericanMain : ""}
+                          onChange={(e) => setAllAmericanMain(e.target.value)}
+                          placeholder="Type custom..."
+                          style={{ ...rowInputStyle, minWidth: 200, width: "auto" }}
+                        />
                       </div>
                     </div>
                   </CollapsibleSubsection>
                   <CollapsibleSubsection title="Potato - Pick 1" icon="▶" defaultOpen={sectionsExpanded} accentColor="#22c55e">
                     <div style={{ gridColumn: "1 / -1" }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                        <select value={allAmericanPotato} onChange={(e) => setAllAmericanPotato(e.target.value)} style={{ ...rowInputStyle, minWidth: 280, width: "auto" }}>
-                          <option value="">Select potato...</option>
-                          {ALL_AMERICAN.potatoOptions.map((o) => (
-                            <option key={o} value={o}>{o}</option>
-                          ))}
-                        </select>
-                        <button type="button" onClick={() => setAllAmericanPotato("")} disabled={!allAmericanPotato} style={{ width: 26, height: 26, padding: 0, borderRadius: 5, border: "1px solid #555", background: "#333", color: "#22c55e", fontSize: 13, fontWeight: "bold", cursor: allAmericanPotato ? "pointer" : "default", display: "flex", alignItems: "center", justifyContent: "center", opacity: allAmericanPotato ? 1 : 0.4 }}>✕</button>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                          <select
+                            value={(ALL_AMERICAN.potatoOptions as readonly string[]).includes(allAmericanPotato) ? allAmericanPotato : (allAmericanPotato ? "__custom__" : "")}
+                            onChange={(e) => { if (e.target.value === "__custom__") return; setAllAmericanPotato(e.target.value); }}
+                            style={{ ...rowInputStyle, minWidth: 360, width: "auto" }}
+                          >
+                            <option value="">Select...</option>
+                            {ALL_AMERICAN.potatoOptions.map((opt) => (<option key={opt} value={opt}>{opt}</option>))}
+                            <option value="__custom__">Other (type below)...</option>
+                          </select>
+                          <button type="button" onClick={() => setAllAmericanPotato("")} disabled={!allAmericanPotato} style={{ width: 26, height: 26, padding: 0, borderRadius: 5, border: "1px solid #555", background: "#333", color: "#22c55e", fontSize: 13, fontWeight: "bold", cursor: allAmericanPotato ? "pointer" : "default", display: "flex", alignItems: "center", justifyContent: "center", opacity: allAmericanPotato ? 1 : 0.4 }}>✕</button>
+                        </div>
+                        <input
+                          type="text"
+                          value={!(ALL_AMERICAN.potatoOptions as readonly string[]).includes(allAmericanPotato) ? allAmericanPotato : ""}
+                          onChange={(e) => setAllAmericanPotato(e.target.value)}
+                          placeholder="Type custom..."
+                          style={{ ...rowInputStyle, minWidth: 200, width: "auto" }}
+                        />
                       </div>
                     </div>
                   </CollapsibleSubsection>
                   <CollapsibleSubsection title="Chicken & Salad" icon="▶" defaultOpen={sectionsExpanded} accentColor="#14b8a6">
                     <div style={{ gridColumn: "1 / -1" }}>
-                      <div style={{ marginBottom: 8, display: "flex", alignItems: "center", gap: 6 }}>
-                        <label style={{ ...labelStyle, minWidth: 100 }}>Chicken tenders</label>
-                        <select value={allAmericanChicken} onChange={(e) => setAllAmericanChicken(e.target.value)} style={{ ...rowInputStyle, minWidth: 200, width: "auto" }}>
-                          <option value="">Select...</option>
-                          {ALL_AMERICAN.chickenOptions.map((o) => (
-                            <option key={o} value={o}>{o}</option>
-                          ))}
-                        </select>
-                        <button type="button" onClick={() => setAllAmericanChicken("")} disabled={!allAmericanChicken} style={{ width: 26, height: 26, padding: 0, borderRadius: 5, border: "1px solid #555", background: "#333", color: "#14b8a6", fontSize: 13, fontWeight: "bold", cursor: allAmericanChicken ? "pointer" : "default", display: "flex", alignItems: "center", justifyContent: "center", opacity: allAmericanChicken ? 1 : 0.4 }}>✕</button>
+                      <div style={{ marginBottom: 8 }}>
+                        <label style={{ ...labelStyle, display: "block", marginBottom: 4 }}>Chicken tenders</label>
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                            <select
+                              value={(ALL_AMERICAN.chickenOptions as readonly string[]).includes(allAmericanChicken) ? allAmericanChicken : (allAmericanChicken ? "__custom__" : "")}
+                              onChange={(e) => { if (e.target.value === "__custom__") return; setAllAmericanChicken(e.target.value); }}
+                              style={{ ...rowInputStyle, minWidth: 240, width: "auto" }}
+                            >
+                              <option value="">Select...</option>
+                              {ALL_AMERICAN.chickenOptions.map((opt) => (<option key={opt} value={opt}>{opt}</option>))}
+                              <option value="__custom__">Other (type below)...</option>
+                            </select>
+                            <button type="button" onClick={() => setAllAmericanChicken("")} disabled={!allAmericanChicken} style={{ width: 26, height: 26, padding: 0, borderRadius: 5, border: "1px solid #555", background: "#333", color: "#14b8a6", fontSize: 13, fontWeight: "bold", cursor: allAmericanChicken ? "pointer" : "default", display: "flex", alignItems: "center", justifyContent: "center", opacity: allAmericanChicken ? 1 : 0.4 }}>✕</button>
+                          </div>
+                          <input
+                            type="text"
+                            value={!(ALL_AMERICAN.chickenOptions as readonly string[]).includes(allAmericanChicken) ? allAmericanChicken : ""}
+                            onChange={(e) => setAllAmericanChicken(e.target.value)}
+                            placeholder="Type custom..."
+                            style={{ ...rowInputStyle, minWidth: 200, width: "auto" }}
+                          />
+                        </div>
                       </div>
                       <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                        <label style={{ ...labelStyle, minWidth: 100 }}>Salad shooters</label>
+                        <label style={{ ...labelStyle, minWidth: 110 }}>Salad shooters</label>
                         <select value={allAmericanSalad} onChange={(e) => setAllAmericanSalad(e.target.value)} style={{ ...rowInputStyle, minWidth: 120, width: "auto" }}>
                           <option value="">Select...</option>
                           {ALL_AMERICAN.saladShooters.map((o) => (
@@ -1464,26 +1648,24 @@ export function StationComponentsConfigModal(props: {
                 <>
                   <div style={{ marginBottom: 16 }}>
                     <label style={{ ...labelStyle, display: "block", marginBottom: 6 }}>BEO Placement <span style={{ color: "#ff6b6b" }}>*</span></label>
-                    <select value={beoPlacement} onChange={(e) => setBeoPlacement(e.target.value as "Presented Appetizer Metal/China" | "Buffet Metal/China" | "")} style={{ ...rowInputStyle, minWidth: 160, width: "auto" }}>
+                    <select value={beoPlacement} onChange={(e) => setBeoPlacement(e.target.value as "Presented Appetizer" | "Buffet Metal" | "Buffet China" | "")} style={{ ...rowInputStyle, minWidth: 160, width: "auto" }}>
                       <option value="">Select...</option>
-                      <option value="Presented Appetizer Metal/China">Presented Appetizer Metal/China</option>
-                      <option value="Buffet Metal/China">Buffet Metal/China</option>
+                      <option value="Presented Appetizer">Presented Appetizer</option>
+                      <option value="Buffet Metal">Buffet Metal</option>
+                      <option value="Buffet China">Buffet China</option>
                     </select>
                   </div>
-                  <CollapsibleSubsection title="Choose 5 Items" icon="▶" defaultOpen={sectionsExpanded} accentColor="#a855f7">
+                  <CollapsibleSubsection title="Choose Items" icon="▶" defaultOpen={sectionsExpanded} accentColor="#a855f7">
                     <div style={{ gridColumn: "1 / -1" }}>
                       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                        {[0, 1, 2, 3, 4].map((idx) => (
+                        {streetFoodSelected.map((val, idx) => (
                           <div key={idx} style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                            <select value={streetFoodSelected[idx] ?? ""} onChange={(e) => updateStreetFood(idx, e.target.value)} style={{ ...rowInputStyle, flex: 1, minWidth: 200 }}>
-                              <option value="">Select item {idx + 1}...</option>
-                              {STREET_FOOD.options.map((o) => (
-                                <option key={o} value={o}>{o}</option>
-                              ))}
-                            </select>
-                            <button type="button" onClick={() => updateStreetFood(idx, "")} disabled={!streetFoodSelected[idx]} style={{ width: 26, height: 26, padding: 0, borderRadius: 5, border: "1px solid #555", background: "#333", color: "#a855f7", fontSize: 13, fontWeight: "bold", cursor: streetFoodSelected[idx] ? "pointer" : "default", display: "flex", alignItems: "center", justifyContent: "center", opacity: streetFoodSelected[idx] ? 1 : 0.4 }}>✕</button>
+                            <input type="text" value={val} onChange={(e) => updateStreetFood(idx, e.target.value)} list={`street-food-item-${idx}`} placeholder={`Select or type item ${idx + 1}...`} style={{ ...rowInputStyle, flex: 1, minWidth: 200 }} />
+                            <datalist id={`street-food-item-${idx}`}>{STREET_FOOD.options.map((o) => <option key={o} value={o} />)}</datalist>
+                            <button type="button" onClick={() => { const next = streetFoodSelected.filter((_, i) => i !== idx); setStreetFoodSelected(next.length > 0 ? next : [""]); }} style={{ width: 26, height: 26, padding: 0, borderRadius: 5, border: "1px solid #555", background: "#333", color: "#a855f7", fontSize: 13, fontWeight: "bold", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>✕</button>
                           </div>
                         ))}
+                        <button type="button" onClick={() => setStreetFoodSelected((s) => [...s, ""])} style={{ padding: "5px 12px", borderRadius: 6, border: "1px solid #a855f7", background: "rgba(168,85,247,0.15)", color: "#a855f7", fontSize: 11, fontWeight: 600, cursor: "pointer", alignSelf: "flex-start" }}>+ Add Another Item</button>
                       </div>
                     </div>
                   </CollapsibleSubsection>
@@ -1513,10 +1695,11 @@ export function StationComponentsConfigModal(props: {
                   <div style={{ marginBottom: 16 }}>
                     <label style={{ ...labelStyle, display: "block", marginBottom: 6 }}>BEO Placement <span style={{ color: "#ff6b6b" }}>*</span></label>
                     <p style={{ margin: "0 0 8px 0", fontSize: 11, color: "#999" }}>Required — for placement on the BEO</p>
-                    <select value={beoPlacement} onChange={(e) => setBeoPlacement(e.target.value as "Presented Appetizer Metal/China" | "Buffet Metal/China" | "")} style={{ ...rowInputStyle, minWidth: 160, width: "auto" }}>
+                    <select value={beoPlacement} onChange={(e) => setBeoPlacement(e.target.value as "Presented Appetizer" | "Buffet Metal" | "Buffet China" | "")} style={{ ...rowInputStyle, minWidth: 160, width: "auto" }}>
                       <option value="">Select...</option>
-                      <option value="Presented Appetizer Metal/China">Presented Appetizer Metal/China</option>
-                      <option value="Buffet Metal/China">Buffet Metal/China</option>
+                      <option value="Presented Appetizer">Presented Appetizer</option>
+                      <option value="Buffet Metal">Buffet Metal</option>
+                      <option value="Buffet China">Buffet China</option>
                     </select>
                   </div>
 
@@ -1524,14 +1707,29 @@ export function StationComponentsConfigModal(props: {
                     <div style={{ gridColumn: "1 / -1" }}>
                       <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                          <select value={chickenWaffleChicken} onChange={(e) => setChickenWaffleChicken(e.target.value)} style={{ ...rowInputStyle, minWidth: 200, width: "auto" }}>
-                            <option value="">Select chicken...</option>
+                          <select
+                            value={(CHICKEN_WAFFLE.chickenOptions as readonly string[]).includes(chickenWaffleChicken) ? chickenWaffleChicken : (chickenWaffleChicken ? "__custom__" : "")}
+                            onChange={(e) => {
+                              if (e.target.value === "__custom__") return;
+                              setChickenWaffleChicken(e.target.value);
+                            }}
+                            style={{ ...rowInputStyle, minWidth: 260, width: "auto" }}
+                          >
+                            <option value="">Select chicken style...</option>
                             {CHICKEN_WAFFLE.chickenOptions.map((c) => (
                               <option key={c} value={c}>{c}</option>
                             ))}
+                            <option value="__custom__">Other (type below)...</option>
                           </select>
                           <button type="button" onClick={() => setChickenWaffleChicken("")} disabled={!chickenWaffleChicken} style={{ width: 26, height: 26, padding: 0, borderRadius: 5, border: "1px solid #555", background: "#333", color: "#eab308", fontSize: 13, fontWeight: "bold", cursor: chickenWaffleChicken ? "pointer" : "default", display: "flex", alignItems: "center", justifyContent: "center", opacity: chickenWaffleChicken ? 1 : 0.4 }}>✕</button>
                         </div>
+                        <input
+                          type="text"
+                          value={!(CHICKEN_WAFFLE.chickenOptions as readonly string[]).includes(chickenWaffleChicken) ? chickenWaffleChicken : ""}
+                          onChange={(e) => setChickenWaffleChicken(e.target.value)}
+                          placeholder="Type custom chicken style..."
+                          style={{ ...rowInputStyle, minWidth: 200, width: "auto" }}
+                        />
                       </div>
                     </div>
                   </CollapsibleSubsection>
@@ -1555,14 +1753,29 @@ export function StationComponentsConfigModal(props: {
                     <div style={{ gridColumn: "1 / -1" }}>
                       <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                          <select value={chickenWaffleButter} onChange={(e) => setChickenWaffleButter(e.target.value)} style={{ ...rowInputStyle, minWidth: 200, width: "auto" }}>
-                            <option value="">Select butter...</option>
+                          <select
+                            value={(CHICKEN_WAFFLE.butterOptions as readonly string[]).includes(chickenWaffleButter) ? chickenWaffleButter : (chickenWaffleButter ? "__custom__" : "")}
+                            onChange={(e) => {
+                              if (e.target.value === "__custom__") return;
+                              setChickenWaffleButter(e.target.value);
+                            }}
+                            style={{ ...rowInputStyle, minWidth: 240, width: "auto" }}
+                          >
+                            <option value="">Select butter style...</option>
                             {CHICKEN_WAFFLE.butterOptions.map((b) => (
                               <option key={b} value={b}>{b}</option>
                             ))}
+                            <option value="__custom__">Other (type below)...</option>
                           </select>
                           <button type="button" onClick={() => setChickenWaffleButter("")} disabled={!chickenWaffleButter} style={{ width: 26, height: 26, padding: 0, borderRadius: 5, border: "1px solid #555", background: "#333", color: "#a855f7", fontSize: 13, fontWeight: "bold", cursor: chickenWaffleButter ? "pointer" : "default", display: "flex", alignItems: "center", justifyContent: "center", opacity: chickenWaffleButter ? 1 : 0.4 }}>✕</button>
                         </div>
+                        <input
+                          type="text"
+                          value={!(CHICKEN_WAFFLE.butterOptions as readonly string[]).includes(chickenWaffleButter) ? chickenWaffleButter : ""}
+                          onChange={(e) => setChickenWaffleButter(e.target.value)}
+                          placeholder="Type custom butter style..."
+                          style={{ ...rowInputStyle, minWidth: 200, width: "auto" }}
+                        />
                       </div>
                     </div>
                   </CollapsibleSubsection>
@@ -1585,13 +1798,52 @@ export function StationComponentsConfigModal(props: {
                   <CollapsibleSubsection title="Included" icon="▶" defaultOpen={sectionsExpanded} accentColor="#22c55e">
                     <div style={{ gridColumn: "1 / -1" }}>
                       <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
-                        {chickenWaffleIncluded.map((item, idx) => (
-                          <span key={`${idx}-${item}`} style={blockStyle}>
-                            {item}
-                            <button type="button" onClick={() => setChickenWaffleIncluded((prev) => prev.filter((_, i) => i !== idx))} style={{ background: "none", border: "none", color: "#888", cursor: "pointer", fontSize: 10 }}>✕</button>
-                          </span>
-                        ))}
-                        <input type="text" value={chickenWaffleIncludedInput} onChange={(e) => setChickenWaffleIncludedInput(e.target.value)} placeholder="Type custom item..." style={{ ...rowInputStyle, minWidth: 120, width: "auto" }} onKeyDown={(e) => { if (e.key === "Enter" && chickenWaffleIncludedInput.trim()) { setChickenWaffleIncluded((prev) => [...prev, chickenWaffleIncludedInput.trim()]); setChickenWaffleIncludedInput(""); } }} />
+                        {chickenWaffleIncluded.map((item, idx) => {
+                          const isCustom = !(CHICKEN_WAFFLE.included as readonly string[]).includes(item);
+                          return (
+                            <div key={`${idx}-${item}`} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                              <select
+                                value={isCustom ? "__custom__" : item}
+                                onChange={(e) => {
+                                  if (e.target.value === "__custom__") return;
+                                  const next = [...chickenWaffleIncluded];
+                                  next[idx] = e.target.value;
+                                  setChickenWaffleIncluded(next);
+                                }}
+                                style={{ ...rowInputStyle, minWidth: 220, width: "auto" }}
+                              >
+                                <option value="">Select item...</option>
+                                {CHICKEN_WAFFLE.included.map((opt) => (
+                                  <option key={opt} value={opt}>{opt}</option>
+                                ))}
+                                {isCustom && <option value="__custom__">{item}</option>}
+                              </select>
+                              <button
+                                type="button"
+                                onClick={() => setChickenWaffleIncluded((prev) => prev.filter((_, i) => i !== idx))}
+                                style={{ width: 26, height: 26, padding: 0, borderRadius: 5, border: "1px solid #555", background: "#333", color: "#22c55e", fontSize: 13, fontWeight: "bold", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
+                              >✕</button>
+                            </div>
+                          );
+                        })}
+                        {(() => {
+                          const available = (CHICKEN_WAFFLE.included as readonly string[]).filter((opt) => !chickenWaffleIncluded.includes(opt));
+                          return available.length > 0 ? (
+                            <select
+                              value=""
+                              onChange={(e) => {
+                                if (e.target.value) setChickenWaffleIncluded((prev) => [...prev, e.target.value]);
+                              }}
+                              style={{ ...rowInputStyle, minWidth: 180, width: "auto" }}
+                            >
+                              <option value="">Add from list...</option>
+                              {available.map((opt) => (
+                                <option key={opt} value={opt}>{opt}</option>
+                              ))}
+                            </select>
+                          ) : null;
+                        })()}
+                        <input type="text" value={chickenWaffleIncludedInput} onChange={(e) => setChickenWaffleIncludedInput(e.target.value)} placeholder="Type custom item..." style={{ ...rowInputStyle, minWidth: 160, width: "auto" }} onKeyDown={(e) => { if (e.key === "Enter" && chickenWaffleIncludedInput.trim()) { setChickenWaffleIncluded((prev) => [...prev, chickenWaffleIncludedInput.trim()]); setChickenWaffleIncludedInput(""); } }} />
                         <button type="button" onClick={() => { if (chickenWaffleIncludedInput.trim()) { setChickenWaffleIncluded((prev) => [...prev, chickenWaffleIncludedInput.trim()]); setChickenWaffleIncludedInput(""); } }} style={{ padding: "5px 10px", borderRadius: 6, border: "1px solid #22c55e", background: "rgba(34,197,94,0.15)", color: "#22c55e", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>+ Add Component</button>
                       </div>
                     </div>
@@ -1602,48 +1854,67 @@ export function StationComponentsConfigModal(props: {
           ) : presetId && isRawBar ? (
             (() => {
               const rowInputStyle = { padding: "5px 8px", borderRadius: 5, border: "1px solid #444", backgroundColor: "#1a1a1a", color: "#e0e0e0", fontSize: 12, minWidth: 0, width: "100%" };
-              const blockStyle = { fontSize: 12, padding: "4px 8px", backgroundColor: "#2a2a2a", borderRadius: 4, display: "inline-flex", alignItems: "center", gap: 4 };
-              const addProtein = (p: string) => { if (p && !rawBarProteins.includes(p)) setRawBarProteins((prev) => [...prev, p]); };
+              const updateRawBarProtein = (idx: number, val: string) => { const n = [...rawBarProteins]; n[idx] = val; setRawBarProteins(n); };
               return (
                 <>
                   <div style={{ marginBottom: 16 }}>
                     <label style={{ ...labelStyle, display: "block", marginBottom: 6 }}>BEO Placement <span style={{ color: "#ff6b6b" }}>*</span></label>
-                    <select value={beoPlacement} onChange={(e) => setBeoPlacement(e.target.value as "Presented Appetizer Metal/China" | "Buffet Metal/China" | "")} style={{ ...rowInputStyle, minWidth: 160, width: "auto" }}>
-                      <option value="">Select...</option>
-                      <option value="Presented Appetizer Metal/China">Presented Appetizer Metal/China</option>
-                      <option value="Buffet Metal/China">Buffet Metal/China</option>
+                    <select value={beoPlacement || "Buffet Metal"} onChange={(e) => setBeoPlacement(e.target.value as "Presented Appetizer" | "Buffet Metal" | "Buffet China" | "")} style={{ ...rowInputStyle, minWidth: 160, width: "auto" }}>
+                      <option value="Presented Appetizer">Presented Appetizer</option>
+                      <option value="Buffet Metal">Buffet Metal</option>
+                      <option value="Buffet China">Buffet China</option>
                     </select>
                   </div>
-                  <CollapsibleSubsection title="Proteins - Pick 1+" icon="▶" defaultOpen={sectionsExpanded} accentColor="#eab308">
+                  <CollapsibleSubsection title="Proteins (All Included)" icon="▶" defaultOpen={sectionsExpanded} accentColor="#eab308">
                     <div style={{ gridColumn: "1 / -1" }}>
+                      <p style={{ margin: "0 0 8px 0", fontSize: 11, color: "#999" }}>All 3 proteins are always included. Edit or remove for custom orders only.</p>
                       <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
-                        {rawBarProteins.map((p, idx) => (
-                          <span key={`${idx}-${p}`} style={blockStyle}>
-                            {p}
-                            <button type="button" onClick={() => setRawBarProteins((prev) => prev.filter((_, i) => i !== idx))} style={{ background: "none", border: "none", color: "#888", cursor: "pointer", fontSize: 10 }}>✕</button>
-                          </span>
+                        {rawBarProteins.map((val, idx) => (
+                          <div key={idx} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                            <input type="text" value={val} onChange={(e) => updateRawBarProtein(idx, e.target.value)} list={`raw-bar-protein-${idx}`} placeholder="Protein..." style={{ ...rowInputStyle, minWidth: 150, width: "auto" }} />
+                            <datalist id={`raw-bar-protein-${idx}`}>{RAW_BAR.includedProteins.map((p) => <option key={p} value={p} />)}</datalist>
+                            <button type="button" onClick={() => setRawBarProteins((prev) => prev.filter((_, i) => i !== idx))} style={{ width: 26, height: 26, padding: 0, borderRadius: 5, border: "1px solid #555", background: "#333", color: "#eab308", fontSize: 13, fontWeight: "bold", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>✕</button>
+                          </div>
                         ))}
-                        <select value="" onChange={(e) => { const v = e.target.value; if (v) addProtein(v); e.target.value = ""; }} style={{ ...rowInputStyle, minWidth: 120, width: "auto" }}>
-                          <option value="">Add protein...</option>
-                          {RAW_BAR.proteinOptions.map((o) => (
-                            <option key={o} value={o}>{o}</option>
-                          ))}
-                        </select>
+                        <button type="button" onClick={() => setRawBarProteins((p) => [...p, ""])} style={{ padding: "5px 10px", borderRadius: 6, border: "1px solid #eab308", background: "rgba(234,179,8,0.15)", color: "#eab308", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>+ Add Protein</button>
                       </div>
                     </div>
                   </CollapsibleSubsection>
                   <CollapsibleSubsection title="Included (Garnishes)" icon="▶" defaultOpen={sectionsExpanded} accentColor="#22c55e">
                     <div style={{ gridColumn: "1 / -1" }}>
-                      <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
-                        {rawBarIncluded.map((item, idx) => (
-                          <span key={`${idx}-${item}`} style={blockStyle}>
-                            {item}
-                            <button type="button" onClick={() => setRawBarIncluded((prev) => prev.filter((_, i) => i !== idx))} style={{ background: "none", border: "none", color: "#888", cursor: "pointer", fontSize: 10 }}>✕</button>
-                          </span>
-                        ))}
-                        <input type="text" value={rawBarIncludedInput} onChange={(e) => setRawBarIncludedInput(e.target.value)} placeholder="Type custom garnish..." style={{ ...rowInputStyle, minWidth: 120, width: "auto" }} onKeyDown={(e) => { if (e.key === "Enter" && rawBarIncludedInput.trim()) { setRawBarIncluded((prev) => [...prev, rawBarIncludedInput.trim()]); setRawBarIncludedInput(""); } }} />
-                        <button type="button" onClick={() => { if (rawBarIncludedInput.trim()) { setRawBarIncluded((prev) => [...prev, rawBarIncludedInput.trim()]); setRawBarIncludedInput(""); } }} style={{ padding: "5px 10px", borderRadius: 6, border: "1px solid #22c55e", background: "rgba(34,197,94,0.15)", color: "#22c55e", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>+ Add Component</button>
-                      </div>
+                      {(() => {
+                        const RAW_BAR_GARNISH_OPTIONS = [...RAW_BAR.includedGarnishes];
+                        const available = RAW_BAR_GARNISH_OPTIONS.filter((opt) => !rawBarIncluded.includes(opt));
+                        return (
+                          <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
+                            {rawBarIncluded.map((item, idx) => {
+                              const isCustom = !RAW_BAR_GARNISH_OPTIONS.includes(item);
+                              return (
+                                <div key={`${idx}-${item}`} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                                  <select
+                                    value={isCustom ? "__custom__" : item}
+                                    onChange={(e) => { if (e.target.value === "__custom__") return; const next = [...rawBarIncluded]; next[idx] = e.target.value; setRawBarIncluded(next); }}
+                                    style={{ ...rowInputStyle, minWidth: 220, width: "auto" }}
+                                  >
+                                    <option value="">Select item...</option>
+                                    {RAW_BAR_GARNISH_OPTIONS.map((opt) => (<option key={opt} value={opt}>{opt}</option>))}
+                                    {isCustom && <option value="__custom__">{item}</option>}
+                                  </select>
+                                  <button type="button" onClick={() => setRawBarIncluded((prev) => prev.filter((_, i) => i !== idx))} style={{ width: 26, height: 26, padding: 0, borderRadius: 5, border: "1px solid #555", background: "#333", color: "#22c55e", fontSize: 13, fontWeight: "bold", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>✕</button>
+                                </div>
+                              );
+                            })}
+                            {available.length > 0 && (
+                              <select value="" onChange={(e) => { if (e.target.value) setRawBarIncluded((prev) => [...prev, e.target.value]); }} style={{ ...rowInputStyle, minWidth: 180, width: "auto" }}>
+                                <option value="">Add from list...</option>
+                                {available.map((opt) => (<option key={opt} value={opt}>{opt}</option>))}
+                              </select>
+                            )}
+                            <input type="text" value={rawBarIncludedInput} onChange={(e) => setRawBarIncludedInput(e.target.value)} placeholder="Type custom garnish..." style={{ ...rowInputStyle, minWidth: 160, width: "auto" }} onKeyDown={(e) => { if (e.key === "Enter" && rawBarIncludedInput.trim()) { setRawBarIncluded((prev) => [...prev, rawBarIncludedInput.trim()]); setRawBarIncludedInput(""); } }} />
+                            <button type="button" onClick={() => { if (rawBarIncludedInput.trim()) { setRawBarIncluded((prev) => [...prev, rawBarIncludedInput.trim()]); setRawBarIncludedInput(""); } }} style={{ padding: "5px 10px", borderRadius: 6, border: "1px solid #22c55e", background: "rgba(34,197,94,0.15)", color: "#22c55e", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>+ Add Component</button>
+                          </div>
+                        );
+                      })()}
                     </div>
                   </CollapsibleSubsection>
                 </>
@@ -1658,39 +1929,49 @@ export function StationComponentsConfigModal(props: {
                 <>
                   <div style={{ marginBottom: 16 }}>
                     <label style={{ ...labelStyle, display: "block", marginBottom: 6 }}>BEO Placement <span style={{ color: "#ff6b6b" }}>*</span></label>
-                    <select value={beoPlacement} onChange={(e) => setBeoPlacement(e.target.value as "Presented Appetizer Metal/China" | "Buffet Metal/China" | "")} style={{ ...rowInputStyle, minWidth: 160, width: "auto" }}>
+                    <select value={beoPlacement} onChange={(e) => setBeoPlacement(e.target.value as "Presented Appetizer" | "Buffet Metal" | "Buffet China" | "")} style={{ ...rowInputStyle, minWidth: 160, width: "auto" }}>
                       <option value="">Select...</option>
-                      <option value="Presented Appetizer Metal/China">Presented Appetizer Metal/China</option>
-                      <option value="Buffet Metal/China">Buffet Metal/China</option>
+                      <option value="Presented Appetizer">Presented Appetizer</option>
+                      <option value="Buffet Metal">Buffet Metal</option>
+                      <option value="Buffet China">Buffet China</option>
                     </select>
                   </div>
-                  <CollapsibleSubsection title="Meats - Pick 2" icon="▶" defaultOpen={sectionsExpanded} accentColor="#eab308">
+                  <CollapsibleSubsection title="Meats - Pick 2 (or more)" icon="▶" defaultOpen={sectionsExpanded} accentColor="#eab308">
                     <div style={{ gridColumn: "1 / -1" }}>
                       <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
-                        {[0, 1].map((idx) => (
+                        {carvingMeats.map((val, idx) => (
                           <div key={idx} style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                            <select value={carvingMeats[idx] ?? ""} onChange={(e) => updateMeat(idx, e.target.value)} style={{ ...rowInputStyle, minWidth: 200, width: "auto" }}>
-                              <option value="">Select meat...</option>
-                              {CARVING.meatOptions.map((o) => (
-                                <option key={o} value={o}>{o}</option>
-                              ))}
-                            </select>
-                            <button type="button" onClick={() => updateMeat(idx, "")} disabled={!carvingMeats[idx]} style={{ width: 26, height: 26, padding: 0, borderRadius: 5, border: "1px solid #555", background: "#333", color: "#eab308", fontSize: 13, fontWeight: "bold", cursor: carvingMeats[idx] ? "pointer" : "default", display: "flex", alignItems: "center", justifyContent: "center", opacity: carvingMeats[idx] ? 1 : 0.4 }}>✕</button>
+                            <input type="text" value={val} onChange={(e) => updateMeat(idx, e.target.value)} list={`carving-meat-${idx}`} placeholder="Select or type meat..." style={{ ...rowInputStyle, minWidth: 200, width: "auto" }} />
+                            <datalist id={`carving-meat-${idx}`}>{CARVING.meatOptions.map((o) => <option key={o} value={o} />)}</datalist>
+                            <button type="button" onClick={() => { const next = carvingMeats.filter((_, i) => i !== idx); setCarvingMeats(next.length >= 2 ? next : [...next, ""].slice(0, Math.max(2, next.length))); }} disabled={carvingMeats.length <= 2 && !val} style={{ width: 26, height: 26, padding: 0, borderRadius: 5, border: "1px solid #555", background: "#333", color: "#eab308", fontSize: 13, fontWeight: "bold", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", opacity: (carvingMeats.length <= 2 && !val) ? 0.4 : 1 }}>✕</button>
                           </div>
                         ))}
+                        <button type="button" onClick={() => setCarvingMeats((m) => [...m, ""])} style={{ padding: "5px 10px", borderRadius: 6, border: "1px solid #eab308", background: "rgba(234,179,8,0.15)", color: "#eab308", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>+ Add Meat</button>
                       </div>
                     </div>
                   </CollapsibleSubsection>
                   <CollapsibleSubsection title="Potato - Pick 1" icon="▶" defaultOpen={sectionsExpanded} accentColor="#22c55e">
                     <div style={{ gridColumn: "1 / -1" }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                        <select value={carvingPotato} onChange={(e) => setCarvingPotato(e.target.value)} style={{ ...rowInputStyle, minWidth: 180, width: "auto" }}>
-                          <option value="">Select potato...</option>
-                          {CARVING.potatoOptions.map((o) => (
-                            <option key={o} value={o}>{o}</option>
-                          ))}
-                        </select>
-                        <button type="button" onClick={() => setCarvingPotato("")} disabled={!carvingPotato} style={{ width: 26, height: 26, padding: 0, borderRadius: 5, border: "1px solid #555", background: "#333", color: "#22c55e", fontSize: 13, fontWeight: "bold", cursor: carvingPotato ? "pointer" : "default", display: "flex", alignItems: "center", justifyContent: "center", opacity: carvingPotato ? 1 : 0.4 }}>✕</button>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                          <select
+                            value={(CARVING.potatoOptions as readonly string[]).includes(carvingPotato) ? carvingPotato : (carvingPotato ? "__custom__" : "")}
+                            onChange={(e) => { if (e.target.value === "__custom__") return; setCarvingPotato(e.target.value); }}
+                            style={{ ...rowInputStyle, minWidth: 240, width: "auto" }}
+                          >
+                            <option value="">Select...</option>
+                            {CARVING.potatoOptions.map((opt) => (<option key={opt} value={opt}>{opt}</option>))}
+                            <option value="__custom__">Other (type below)...</option>
+                          </select>
+                          <button type="button" onClick={() => setCarvingPotato("")} disabled={!carvingPotato} style={{ width: 26, height: 26, padding: 0, borderRadius: 5, border: "1px solid #555", background: "#333", color: "#22c55e", fontSize: 13, fontWeight: "bold", cursor: carvingPotato ? "pointer" : "default", display: "flex", alignItems: "center", justifyContent: "center", opacity: carvingPotato ? 1 : 0.4 }}>✕</button>
+                        </div>
+                        <input
+                          type="text"
+                          value={!(CARVING.potatoOptions as readonly string[]).includes(carvingPotato) ? carvingPotato : ""}
+                          onChange={(e) => setCarvingPotato(e.target.value)}
+                          placeholder="Type custom..."
+                          style={{ ...rowInputStyle, minWidth: 200, width: "auto" }}
+                        />
                       </div>
                     </div>
                   </CollapsibleSubsection>
@@ -1698,12 +1979,17 @@ export function StationComponentsConfigModal(props: {
                     <div style={{ gridColumn: "1 / -1" }}>
                       <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
                         {carvingIncluded.map((item, idx) => (
-                          <span key={`${idx}-${item}`} style={blockStyle}>
-                            {item}
-                            <button type="button" onClick={() => setCarvingIncluded((prev) => prev.filter((_, i) => i !== idx))} style={{ background: "none", border: "none", color: "#888", cursor: "pointer", fontSize: 10 }}>✕</button>
-                          </span>
+                          <div key={`${idx}-${item}`} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                            <input
+                              type="text"
+                              value={item}
+                              onChange={(e) => { const next = [...carvingIncluded]; next[idx] = e.target.value; setCarvingIncluded(next); }}
+                              style={{ ...rowInputStyle, minWidth: 220, width: "auto" }}
+                            />
+                            <button type="button" onClick={() => setCarvingIncluded((prev) => prev.filter((_, i) => i !== idx))} style={{ width: 26, height: 26, padding: 0, borderRadius: 5, border: "1px solid #555", background: "#333", color: "#22c55e", fontSize: 13, fontWeight: "bold", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>✕</button>
+                          </div>
                         ))}
-                        <input type="text" value={carvingIncludedInput} onChange={(e) => setCarvingIncludedInput(e.target.value)} placeholder="Type custom item..." style={{ ...rowInputStyle, minWidth: 120, width: "auto" }} onKeyDown={(e) => { if (e.key === "Enter" && carvingIncludedInput.trim()) { setCarvingIncluded((prev) => [...prev, carvingIncludedInput.trim()]); setCarvingIncludedInput(""); } }} />
+                        <input type="text" value={carvingIncludedInput} onChange={(e) => setCarvingIncludedInput(e.target.value)} placeholder="Type custom item..." style={{ ...rowInputStyle, minWidth: 160, width: "auto" }} onKeyDown={(e) => { if (e.key === "Enter" && carvingIncludedInput.trim()) { setCarvingIncluded((prev) => [...prev, carvingIncludedInput.trim()]); setCarvingIncludedInput(""); } }} />
                         <button type="button" onClick={() => { if (carvingIncludedInput.trim()) { setCarvingIncluded((prev) => [...prev, carvingIncludedInput.trim()]); setCarvingIncludedInput(""); } }} style={{ padding: "5px 10px", borderRadius: 6, border: "1px solid #22c55e", background: "rgba(34,197,94,0.15)", color: "#22c55e", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>+ Add Component</button>
                       </div>
                     </div>
@@ -1720,26 +2006,24 @@ export function StationComponentsConfigModal(props: {
                 <>
                   <div style={{ marginBottom: 16 }}>
                     <label style={{ ...labelStyle, display: "block", marginBottom: 6 }}>BEO Placement <span style={{ color: "#ff6b6b" }}>*</span></label>
-                    <select value={beoPlacement} onChange={(e) => setBeoPlacement(e.target.value as "Presented Appetizer Metal/China" | "Buffet Metal/China" | "")} style={{ ...rowInputStyle, minWidth: 160, width: "auto" }}>
+                    <select value={beoPlacement} onChange={(e) => setBeoPlacement(e.target.value as "Presented Appetizer" | "Buffet Metal" | "Buffet China" | "")} style={{ ...rowInputStyle, minWidth: 160, width: "auto" }}>
                       <option value="">Select...</option>
-                      <option value="Presented Appetizer Metal/China">Presented Appetizer Metal/China</option>
-                      <option value="Buffet Metal/China">Buffet Metal/China</option>
+                      <option value="Presented Appetizer">Presented Appetizer</option>
+                      <option value="Buffet Metal">Buffet Metal</option>
+                      <option value="Buffet China">Buffet China</option>
                     </select>
                   </div>
-                  <CollapsibleSubsection title="Proteins - Pick 2" icon="▶" defaultOpen={sectionsExpanded} accentColor="#eab308">
+                  <CollapsibleSubsection title="Proteins - Pick 2 (or more)" icon="▶" defaultOpen={sectionsExpanded} accentColor="#eab308">
                     <div style={{ gridColumn: "1 / -1" }}>
                       <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
-                        {[0, 1].map((idx) => (
+                        {hibachiProteins.map((val, idx) => (
                           <div key={idx} style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                            <select value={hibachiProteins[idx] ?? ""} onChange={(e) => updateProtein(idx, e.target.value)} style={{ ...rowInputStyle, minWidth: 120, width: "auto" }}>
-                              <option value="">Select protein...</option>
-                              {HIBACHI.proteinOptions.map((o) => (
-                                <option key={o} value={o}>{o}</option>
-                              ))}
-                            </select>
-                            <button type="button" onClick={() => updateProtein(idx, "")} disabled={!hibachiProteins[idx]} style={{ width: 26, height: 26, padding: 0, borderRadius: 5, border: "1px solid #555", background: "#333", color: "#eab308", fontSize: 13, fontWeight: "bold", cursor: hibachiProteins[idx] ? "pointer" : "default", display: "flex", alignItems: "center", justifyContent: "center", opacity: hibachiProteins[idx] ? 1 : 0.4 }}>✕</button>
+                            <input type="text" value={val} onChange={(e) => updateProtein(idx, e.target.value)} list={`hibachi-protein-${idx}`} placeholder="Select or type protein..." style={{ ...rowInputStyle, minWidth: 150, width: "auto" }} />
+                            <datalist id={`hibachi-protein-${idx}`}>{HIBACHI.proteinOptions.map((o) => <option key={o} value={o} />)}</datalist>
+                            <button type="button" onClick={() => { const next = hibachiProteins.filter((_, i) => i !== idx); setHibachiProteins(next.length >= 2 ? next : [...next, ""].slice(0, Math.max(2, next.length))); }} disabled={hibachiProteins.length <= 2 && !val} style={{ width: 26, height: 26, padding: 0, borderRadius: 5, border: "1px solid #555", background: "#333", color: "#eab308", fontSize: 13, fontWeight: "bold", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", opacity: (hibachiProteins.length <= 2 && !val) ? 0.4 : 1 }}>✕</button>
                           </div>
                         ))}
+                        <button type="button" onClick={() => setHibachiProteins((p) => [...p, ""])} style={{ padding: "5px 10px", borderRadius: 6, border: "1px solid #eab308", background: "rgba(234,179,8,0.15)", color: "#eab308", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>+ Add Protein</button>
                       </div>
                     </div>
                   </CollapsibleSubsection>
@@ -1755,21 +2039,46 @@ export function StationComponentsConfigModal(props: {
                         {HIBACHI.upgrades.filter((u) => !hibachiUpgrades.includes(u)).map((u) => (
                           <button key={u} type="button" onClick={() => setHibachiUpgrades((prev) => [...prev, u])} style={{ padding: "5px 10px", borderRadius: 6, border: "1px solid #a855f7", background: "rgba(168,85,247,0.15)", color: "#a855f7", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>+ {u}</button>
                         ))}
+                        <input type="text" value={hibachiUpgradesInput} onChange={(e) => setHibachiUpgradesInput(e.target.value)} placeholder="Type custom upgrade..." style={{ ...rowInputStyle, minWidth: 140, width: "auto" }} onKeyDown={(e) => { if (e.key === "Enter" && hibachiUpgradesInput.trim()) { setHibachiUpgrades((prev) => [...prev, hibachiUpgradesInput.trim()]); setHibachiUpgradesInput(""); } }} />
+                        <button type="button" onClick={() => { if (hibachiUpgradesInput.trim()) { setHibachiUpgrades((prev) => [...prev, hibachiUpgradesInput.trim()]); setHibachiUpgradesInput(""); } }} style={{ padding: "5px 10px", borderRadius: 6, border: "1px solid #a855f7", background: "rgba(168,85,247,0.15)", color: "#a855f7", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>+ Add Custom</button>
                       </div>
                     </div>
                   </CollapsibleSubsection>
                   <CollapsibleSubsection title="Included" icon="▶" defaultOpen={sectionsExpanded} accentColor="#22c55e">
                     <div style={{ gridColumn: "1 / -1" }}>
-                      <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
-                        {hibachiIncluded.map((item, idx) => (
-                          <span key={`${idx}-${item}`} style={blockStyle}>
-                            {item}
-                            <button type="button" onClick={() => setHibachiIncluded((prev) => prev.filter((_, i) => i !== idx))} style={{ background: "none", border: "none", color: "#888", cursor: "pointer", fontSize: 10 }}>✕</button>
-                          </span>
-                        ))}
-                        <input type="text" value={hibachiIncludedInput} onChange={(e) => setHibachiIncludedInput(e.target.value)} placeholder="Type custom item..." style={{ ...rowInputStyle, minWidth: 120, width: "auto" }} onKeyDown={(e) => { if (e.key === "Enter" && hibachiIncludedInput.trim()) { setHibachiIncluded((prev) => [...prev, hibachiIncludedInput.trim()]); setHibachiIncludedInput(""); } }} />
-                        <button type="button" onClick={() => { if (hibachiIncludedInput.trim()) { setHibachiIncluded((prev) => [...prev, hibachiIncludedInput.trim()]); setHibachiIncludedInput(""); } }} style={{ padding: "5px 10px", borderRadius: 6, border: "1px solid #22c55e", background: "rgba(34,197,94,0.15)", color: "#22c55e", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>+ Add Component</button>
-                      </div>
+                      {(() => {
+                        const HIBACHI_INCLUDED_OPTIONS = [...HIBACHI.included];
+                        const available = HIBACHI_INCLUDED_OPTIONS.filter((opt) => !hibachiIncluded.includes(opt));
+                        return (
+                          <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
+                            {hibachiIncluded.map((item, idx) => {
+                              const isCustom = !HIBACHI_INCLUDED_OPTIONS.includes(item);
+                              return (
+                                <div key={`${idx}-${item}`} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                                  <select
+                                    value={isCustom ? "__custom__" : item}
+                                    onChange={(e) => { if (e.target.value === "__custom__") return; const next = [...hibachiIncluded]; next[idx] = e.target.value; setHibachiIncluded(next); }}
+                                    style={{ ...rowInputStyle, minWidth: 220, width: "auto" }}
+                                  >
+                                    <option value="">Select item...</option>
+                                    {HIBACHI_INCLUDED_OPTIONS.map((opt) => (<option key={opt} value={opt}>{opt}</option>))}
+                                    {isCustom && <option value="__custom__">{item}</option>}
+                                  </select>
+                                  <button type="button" onClick={() => setHibachiIncluded((prev) => prev.filter((_, i) => i !== idx))} style={{ width: 26, height: 26, padding: 0, borderRadius: 5, border: "1px solid #555", background: "#333", color: "#22c55e", fontSize: 13, fontWeight: "bold", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>✕</button>
+                                </div>
+                              );
+                            })}
+                            {available.length > 0 && (
+                              <select value="" onChange={(e) => { if (e.target.value) setHibachiIncluded((prev) => [...prev, e.target.value]); }} style={{ ...rowInputStyle, minWidth: 180, width: "auto" }}>
+                                <option value="">Add from list...</option>
+                                {available.map((opt) => (<option key={opt} value={opt}>{opt}</option>))}
+                              </select>
+                            )}
+                            <input type="text" value={hibachiIncludedInput} onChange={(e) => setHibachiIncludedInput(e.target.value)} placeholder="Type custom item..." style={{ ...rowInputStyle, minWidth: 160, width: "auto" }} onKeyDown={(e) => { if (e.key === "Enter" && hibachiIncludedInput.trim()) { setHibachiIncluded((prev) => [...prev, hibachiIncludedInput.trim()]); setHibachiIncludedInput(""); } }} />
+                            <button type="button" onClick={() => { if (hibachiIncludedInput.trim()) { setHibachiIncluded((prev) => [...prev, hibachiIncludedInput.trim()]); setHibachiIncludedInput(""); } }} style={{ padding: "5px 10px", borderRadius: 6, border: "1px solid #22c55e", background: "rgba(34,197,94,0.15)", color: "#22c55e", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>+ Add Component</button>
+                          </div>
+                        );
+                      })()}
                     </div>
                   </CollapsibleSubsection>
                 </>
@@ -1784,26 +2093,24 @@ export function StationComponentsConfigModal(props: {
                 <>
                   <div style={{ marginBottom: 16 }}>
                     <label style={{ ...labelStyle, display: "block", marginBottom: 6 }}>BEO Placement <span style={{ color: "#ff6b6b" }}>*</span></label>
-                    <select value={beoPlacement} onChange={(e) => setBeoPlacement(e.target.value as "Presented Appetizer Metal/China" | "Buffet Metal/China" | "")} style={{ ...rowInputStyle, minWidth: 160, width: "auto" }}>
+                    <select value={beoPlacement} onChange={(e) => setBeoPlacement(e.target.value as "Presented Appetizer" | "Buffet Metal" | "Buffet China" | "")} style={{ ...rowInputStyle, minWidth: 160, width: "auto" }}>
                       <option value="">Select...</option>
-                      <option value="Presented Appetizer Metal/China">Presented Appetizer Metal/China</option>
-                      <option value="Buffet Metal/China">Buffet Metal/China</option>
+                      <option value="Presented Appetizer">Presented Appetizer</option>
+                      <option value="Buffet Metal">Buffet Metal</option>
+                      <option value="Buffet China">Buffet China</option>
                     </select>
                   </div>
                   <CollapsibleSubsection title="Choose Items" icon="▶" defaultOpen={sectionsExpanded} accentColor="#a855f7">
                     <div style={{ gridColumn: "1 / -1" }}>
                       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                        {[0, 1, 2, 3, 4, 5].map((idx) => (
+                        {lateNightSelected.map((val, idx) => (
                           <div key={idx} style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                            <select value={lateNightSelected[idx] ?? ""} onChange={(e) => updateItem(idx, e.target.value)} style={{ ...rowInputStyle, flex: 1, minWidth: 200 }}>
-                              <option value="">Select item {idx + 1}...</option>
-                              {LATE_NIGHT.options.map((o) => (
-                                <option key={o} value={o}>{o}</option>
-                              ))}
-                            </select>
-                            <button type="button" onClick={() => updateItem(idx, "")} disabled={!lateNightSelected[idx]} style={{ width: 26, height: 26, padding: 0, borderRadius: 5, border: "1px solid #555", background: "#333", color: "#a855f7", fontSize: 13, fontWeight: "bold", cursor: lateNightSelected[idx] ? "pointer" : "default", display: "flex", alignItems: "center", justifyContent: "center", opacity: lateNightSelected[idx] ? 1 : 0.4 }}>✕</button>
+                            <input type="text" value={val} onChange={(e) => updateItem(idx, e.target.value)} list={`late-night-item-${idx}`} placeholder={`Select or type item ${idx + 1}...`} style={{ ...rowInputStyle, flex: 1, minWidth: 200 }} />
+                            <datalist id={`late-night-item-${idx}`}>{LATE_NIGHT.options.map((o) => <option key={o} value={o} />)}</datalist>
+                            <button type="button" onClick={() => { const next = lateNightSelected.filter((_, i) => i !== idx); setLateNightSelected(next.length > 0 ? next : [""]); }} style={{ width: 26, height: 26, padding: 0, borderRadius: 5, border: "1px solid #555", background: "#333", color: "#a855f7", fontSize: 13, fontWeight: "bold", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>✕</button>
                           </div>
                         ))}
+                        <button type="button" onClick={() => setLateNightSelected((s) => [...s, ""])} style={{ padding: "5px 12px", borderRadius: 6, border: "1px solid #a855f7", background: "rgba(168,85,247,0.15)", color: "#a855f7", fontSize: 11, fontWeight: 600, cursor: "pointer", alignSelf: "flex-start" }}>+ Add Another Item</button>
                       </div>
                     </div>
                   </CollapsibleSubsection>
@@ -1831,10 +2138,11 @@ export function StationComponentsConfigModal(props: {
                 <>
                   <div style={{ marginBottom: 16 }}>
                     <label style={{ ...labelStyle, display: "block", marginBottom: 6 }}>BEO Placement <span style={{ color: "#ff6b6b" }}>*</span></label>
-                    <select value={beoPlacement} onChange={(e) => setBeoPlacement(e.target.value as "Presented Appetizer Metal/China" | "Buffet Metal/China" | "")} style={{ ...rowInputStyle, minWidth: 160, width: "auto" }}>
+                    <select value={beoPlacement} onChange={(e) => setBeoPlacement(e.target.value as "Presented Appetizer" | "Buffet Metal" | "Buffet China" | "")} style={{ ...rowInputStyle, minWidth: 160, width: "auto" }}>
                       <option value="">Select...</option>
-                      <option value="Presented Appetizer Metal/China">Presented Appetizer Metal/China</option>
-                      <option value="Buffet Metal/China">Buffet Metal/China</option>
+                      <option value="Presented Appetizer">Presented Appetizer</option>
+                      <option value="Buffet Metal">Buffet Metal</option>
+                      <option value="Buffet China">Buffet China</option>
                     </select>
                   </div>
                   <div style={{ marginTop: 16 }}>
@@ -1905,12 +2213,13 @@ export function StationComponentsConfigModal(props: {
                     <p style={{ margin: "0 0 8px 0", fontSize: 11, color: "#999" }}>Required — for placement on the BEO</p>
                     <select
                       value={beoPlacement}
-                      onChange={(e) => setBeoPlacement(e.target.value as "Presented Appetizer Metal/China" | "Buffet Metal/China" | "")}
+                      onChange={(e) => setBeoPlacement(e.target.value as "Presented Appetizer" | "Buffet Metal" | "Buffet China" | "")}
                       style={{ ...rowInputStyle, minWidth: 160, width: "auto" }}
                     >
                       <option value="">Select...</option>
-                      <option value="Presented Appetizer Metal/China">Presented Appetizer Metal/China</option>
-                      <option value="Buffet Metal/China">Buffet Metal/China</option>
+                      <option value="Presented Appetizer">Presented Appetizer</option>
+                      <option value="Buffet Metal">Buffet Metal</option>
+                      <option value="Buffet China">Buffet China</option>
                     </select>
                   </div>
 
@@ -2129,6 +2438,43 @@ export function StationComponentsConfigModal(props: {
                       style={{ ...inputStyle, width: "100%", resize: "vertical" }}
                     />
                   </div>
+                </>
+              );
+            })()
+          ) : presetId && isFishermansCorner ? (
+            (() => {
+              const rowInputStyle = { padding: "5px 8px", borderRadius: 5, border: "1px solid #444", backgroundColor: "#1a1a1a", color: "#e0e0e0", fontSize: 12, minWidth: 0, width: "100%" };
+              const updateSelection = (idx: number, val: string) => {
+                const next = [...fishermansCornerSelected];
+                next[idx] = val;
+                setFishermansCornerSelected(next);
+              };
+              return (
+                <>
+                  <div style={{ marginBottom: 16 }}>
+                    <label style={{ ...labelStyle, display: "block", marginBottom: 6 }}>BEO Placement <span style={{ color: "#ff6b6b" }}>*</span></label>
+                    <p style={{ margin: "0 0 8px 0", fontSize: 11, color: "#999" }}>Required — for placement on the BEO</p>
+                    <select value={beoPlacement} onChange={(e) => setBeoPlacement(e.target.value as "Presented Appetizer" | "Buffet Metal" | "Buffet China" | "")} style={{ ...rowInputStyle, minWidth: 160, width: "auto" }}>
+                      <option value="">Select...</option>
+                      <option value="Presented Appetizer">Presented Appetizer</option>
+                      <option value="Buffet Metal">Buffet Metal</option>
+                      <option value="Buffet China">Buffet China</option>
+                    </select>
+                  </div>
+                  <CollapsibleSubsection title="Choose 2 Items (or more)" icon="▶" defaultOpen={true} accentColor="#14b8a6">
+                    <div style={{ gridColumn: "1 / -1" }}>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
+                        {fishermansCornerSelected.map((val, idx) => (
+                          <div key={idx} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                            <input type="text" value={val} onChange={(e) => updateSelection(idx, e.target.value)} list={`fc-item-${idx}`} placeholder="Select or type item..." style={{ ...rowInputStyle, minWidth: 240, width: "auto" }} />
+                            <datalist id={`fc-item-${idx}`}>{FISHERMANS_CORNER.options.map((opt) => <option key={opt} value={opt} />)}</datalist>
+                            <button type="button" onClick={() => { const next = fishermansCornerSelected.filter((_, i) => i !== idx); setFishermansCornerSelected(next.length >= 2 ? next : [...next, ""].slice(0, Math.max(2, next.length))); }} disabled={fishermansCornerSelected.length <= 2 && !val} style={{ width: 26, height: 26, padding: 0, borderRadius: 5, border: "1px solid #555", background: "#333", color: "#14b8a6", fontSize: 13, fontWeight: "bold", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", opacity: (fishermansCornerSelected.length <= 2 && !val) ? 0.4 : 1 }}>✕</button>
+                          </div>
+                        ))}
+                        <button type="button" onClick={() => setFishermansCornerSelected((s) => [...s, ""])} style={{ padding: "5px 10px", borderRadius: 6, border: "1px solid #14b8a6", background: "rgba(20,184,166,0.15)", color: "#14b8a6", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>+ Add Item</button>
+                      </div>
+                    </div>
+                  </CollapsibleSubsection>
                 </>
               );
             })()

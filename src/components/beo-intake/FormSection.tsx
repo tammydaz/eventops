@@ -146,6 +146,8 @@ type FormSectionProps = {
   dotColor?: string;
   /** When true, use green delivery theme (border, glow) */
   isDelivery?: boolean;
+  /** Unique ID for jump-to navigation */
+  sectionId?: string;
 };
 
 export const FormSection = ({
@@ -156,6 +158,7 @@ export const FormSection = ({
   subtitle,
   dotColor,
   isDelivery = false,
+  sectionId,
 }: FormSectionProps) => {
   const [isOpen, setIsOpen] = useState(defaultOpen);
   const [isSaving, setIsSaving] = useState(false);
@@ -197,8 +200,18 @@ export const FormSection = ({
     return () => window.removeEventListener("beo-collapse-all-pills", collapse);
   }, []);
 
+  useEffect(() => {
+    if (!sectionId) return;
+    const expand = (e: Event) => {
+      if ((e as CustomEvent).detail === sectionId) setIsOpen(true);
+    };
+    window.addEventListener("beo-jump-to-section", expand);
+    return () => window.removeEventListener("beo-jump-to-section", expand);
+  }, [sectionId]);
+
   return (
     <div
+      id={sectionId}
       className="beo-pill"
       data-beo-pill
       onDoubleClick={handleDoubleClick}

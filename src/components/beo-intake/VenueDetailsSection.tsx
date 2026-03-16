@@ -74,6 +74,7 @@ export const VenueDetailsSection = () => {
     <FormSection 
       title={isDelivery ? "Delivery Location" : "Venue"} 
       subtitle="If different from client address"
+      sectionId="beo-section-venue"
       isDelivery={isDelivery}
     >
       <div style={{ gridColumn: "1 / -1", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>

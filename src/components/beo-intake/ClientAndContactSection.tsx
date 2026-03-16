@@ -104,7 +104,7 @@ export const ClientAndContactSection = () => {
   const isDelivery = isDeliveryOrPickup(eventType);
 
   return (
-    <FormSection title="Client & Day-of Contact" isDelivery={isDelivery}>
+    <FormSection title="Client & Day-of Contact" isDelivery={isDelivery} sectionId="beo-section-client">
       {/* Client info */}
       <div>
         <label style={labelStyle}>Client First Name *</label>

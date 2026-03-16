@@ -5,6 +5,7 @@ import { useBeoPrintStore } from "../state/beoPrintStore";
 import { FIELD_IDS, getBarServiceFieldId, getLockoutFieldIds, getBOHProductionFieldIds } from "../services/airtable/events";
 import { airtableFetch } from "../services/airtable/client";
 import { loadStationsByEventId } from "../services/airtable/linkedRecords";
+import { loadStationComponentNamesByIds } from "../services/airtable/stationComponents";
 import { loadBoxedLunchOrdersByEventId, type BoxedLunchOrder } from "../services/airtable/boxedLunchOrders";
 import { getPlatterOrdersByEventId } from "../state/platterOrdersStore";
 import { asLinkedRecordIds, asSingleSelectName, asString, asStringArray, isErrorResult } from "../services/airtable/selectors";
@@ -113,6 +114,17 @@ const getEventIdFromUrl = (): string | null => {
 
 // ── Cursive font for section headers ──
 const SECTION_HEADER_FONT = "'Dancing Script', 'Brush Script MT', 'Lucida Handwriting', cursive";
+
+/** Parent/child item row styling for BEO print.
+ * - Parent with children → bold (#111), fontWeight 700
+ * - Child row → lighter (#777), fontWeight 400, italic
+ * - Standalone parent (no children) → normal (#333), fontWeight 600
+ */
+function getItemRowNameStyle(isChild: boolean, hasChildren: boolean): React.CSSProperties {
+  if (isChild) return { fontWeight: 400, color: "#777", fontStyle: "italic" };
+  if (hasChildren) return { fontWeight: 700, color: "#111" };
+  return { fontWeight: 600, color: "#333" };
+}
 
 // ── Menu print theme options (Airtable Single Select) ──
 const MENU_THEME_OPTIONS = [
@@ -1383,7 +1395,7 @@ function SBeoContent(props: {
                                 return <span>{overrideVal.trim() || "—"}</span>;
                               })()}
                             </div>
-                            <div className="beo-item-col" style={{ ...styles.itemCol, lineHeight: 1.25 }}>{row.lineName}</div>
+                            <div className="beo-item-col" style={{ ...styles.itemCol, lineHeight: 1.25, ...getItemRowNameStyle(row.isChild, rows.some(r => r.isChild)) }}>{row.lineName}</div>
                             <div style={styles.checkboxCol} onClick={(e) => { e.stopPropagation(); if (document.activeElement instanceof HTMLButtonElement) document.activeElement.blur(); }}>
                               <input
                                 type="checkbox"
@@ -1416,7 +1428,7 @@ function SBeoContent(props: {
                               return <span>{overrideVal.trim() || "—"}</span>;
                             })()}
                           </div>
-                          <div className="beo-item-col" style={{ ...styles.itemCol, lineHeight: 1.25 }}>{row.lineName}</div>
+                          <div className="beo-item-col" style={{ ...styles.itemCol, lineHeight: 1.25, ...getItemRowNameStyle(row.isChild, rows.some(r => r.isChild)) }}>{row.lineName}</div>
                           <div style={styles.checkboxCol} onClick={(e) => { e.stopPropagation(); if (document.activeElement instanceof HTMLButtonElement) document.activeElement.blur(); }}>
                             <input type="checkbox" checked={checkState[`${leftCheck}:${section.fieldId}:${item.id}:${rowIdx}`] ?? item.loaded ?? false} onChange={(e) => { setCheckState((prev) => ({ ...prev, [`${leftCheck}:${section.fieldId}:${item.id}:${rowIdx}`]: e.target.checked })); }} className="no-print" style={{ width: "20px", height: "20px", accentColor: "#333", cursor: "pointer" }} />
                           </div>
@@ -1474,6 +1486,8 @@ function FullBeoPacketBeveragesContent(props: {
   const hasCoffeeTea = coffeeServiceNeeded === "Yes";
   const iceProvidedBy = asSingleSelectName(eventData[FIELD_IDS.ICE_PROVIDED_BY]);
   const hasIce = iceProvidedBy.trim() !== "";
+
+  const barServiceKitchenBeo = asString(eventData[FIELD_IDS.BAR_SERVICE_KITCHEN_BEO]);
 
   return (
     <div className="beo-print-content" style={styles.page}>
@@ -1548,6 +1562,11 @@ function FullBeoPacketBeveragesContent(props: {
           </table>
         </div>
       </div>
+      {barServiceKitchenBeo.trim() && (
+        <div className="beo-banner-block" style={{ ...styles.beoNotesBanner, background: "#1e3a5f", color: "#fff", borderColor: "#1e3a5f" }}>
+          🍸 BAR / SERVICE NOTES: {barServiceKitchenBeo.trim()}
+        </div>
+      )}
       {props.beoNotes?.trim() && (
         <div className="beo-banner-block" style={styles.beoNotesBanner}>📋 BEO NOTES: {props.beoNotes.trim()}</div>
       )}
@@ -2196,7 +2215,8 @@ const BeoPrintPage: React.FC = () => {
   });
   const [loading, setLoading] = useState(true);
   const [menuItemData, setMenuItemData] = useState<Record<string, { name: string; childIds: string[]; description?: string; dietaryTags?: string; sauce?: string }>>({});
-  const [stationsData, setStationsData] = useState<Array<{ id: string; stationType: string; stationItems: string[] }>>([]);
+  const [stationsData, setStationsData] = useState<Array<{ id: string; stationType: string; stationItems: string[]; stationNotes?: string; stationComponents?: string[]; beoPlacement?: "Presented Appetizer" | "Buffet Metal" | "Buffet China" }>>([]);
+  const [stationComponentNames, setStationComponentNames] = useState<Record<string, string>>({});
   const [boxedLunchOrders, setBoxedLunchOrders] = useState<BoxedLunchOrder[]>([]);
   const [buffetMenuEdits, setBuffetMenuEdits] = useState<Record<string, string>>({}); // itemId -> edited description
   const [specOverrides, setSpecOverrides] = useState<Record<string, string>>({});
@@ -2399,6 +2419,12 @@ const BeoPrintPage: React.FC = () => {
         if (!isErrorResult(stationsResult)) {
           setStationsData(stationsResult);
           stationsResult.flatMap((s) => s.stationItems).filter((id) => id?.startsWith("rec")).forEach((id) => parentIds.add(id));
+          // Fetch station component names (sauces, pastas, included items etc.)
+          const allComponentIds = stationsResult.flatMap((s) => s.stationComponents ?? []).filter((id) => id?.startsWith("rec"));
+          if (allComponentIds.length > 0) {
+            const nameMap = await loadStationComponentNamesByIds(allComponentIds);
+            if (!isErrorResult(nameMap)) setStationComponentNames(nameMap);
+          }
         } else {
           setStationsData([]);
         }
@@ -2610,13 +2636,15 @@ const BeoPrintPage: React.FC = () => {
   const eventType = asSingleSelectName(eventData[FIELD_IDS.EVENT_TYPE]);
   const isDelivery = isDeliveryOrPickup(eventType);
 
+  // Hard print order: Passed Apps → Presented Apps → Buffet Metal → Buffet China → Dessert
+  // Stations route into their placement section (Presented Appetizer / Buffet Metal / Buffet China).
+  // No standalone STATIONS section — a station must have a BEO Placement to appear on the print.
   const FULL_SERVICE_SECTION_DEFS: { title: string; fieldId: string; linkedFieldId: string; customFieldId: string }[] = [
     { title: "PASSED APPETIZERS", fieldId: FIELD_IDS.PASSED_APPETIZERS, linkedFieldId: FIELD_IDS.PASSED_APPETIZERS, customFieldId: FIELD_IDS.CUSTOM_PASSED_APP },
     { title: "PRESENTED APPETIZERS", fieldId: FIELD_IDS.PRESENTED_APPETIZERS, linkedFieldId: FIELD_IDS.PRESENTED_APPETIZERS, customFieldId: FIELD_IDS.CUSTOM_PRESENTED_APP },
     { title: "BUFFET – METAL", fieldId: FIELD_IDS.BUFFET_METAL, linkedFieldId: FIELD_IDS.BUFFET_METAL, customFieldId: FIELD_IDS.CUSTOM_BUFFET_METAL },
     { title: "BUFFET – CHINA", fieldId: FIELD_IDS.BUFFET_CHINA, linkedFieldId: FIELD_IDS.BUFFET_CHINA, customFieldId: FIELD_IDS.CUSTOM_BUFFET_CHINA },
     { title: "DESSERTS", fieldId: FIELD_IDS.DESSERTS, linkedFieldId: FIELD_IDS.DESSERTS, customFieldId: FIELD_IDS.CUSTOM_DESSERTS },
-    { title: "STATIONS", fieldId: FIELD_IDS.STATIONS, linkedFieldId: FIELD_IDS.STATIONS, customFieldId: "" },
   ];
 
   const DELIVERY_SECTION_CONFIG: { title: string; fieldIds: string[]; customFieldIds: string[] }[] = [
@@ -2684,13 +2712,49 @@ const BeoPrintPage: React.FC = () => {
         return { title: config.title, fieldId: config.fieldIds[0], items: allLinked };
       }).filter((s) => s.items.length > 0)
     : FULL_SERVICE_SECTION_DEFS.map((def) => {
-        const linked =
-          def.fieldId === FIELD_IDS.STATIONS
-            ? stationsData.flatMap((s) => (s.stationItems ?? []).filter((id) => id?.startsWith("rec")).map((id) => ({
-                id,
-                name: menuItemData[id]?.name || "Loading...",
-              })))
-            : parseMenuItems(def.linkedFieldId);
+        // Build ONE synthetic item per station — expandItemToRows handles splitting into header + child rows
+        const stationToItems = (s: typeof stationsData[number]): { id: string; name: string }[] => {
+          const linkedComponentNames = (s.stationComponents ?? [])
+            .filter((id) => id?.startsWith("rec"))
+            .map((id) => stationComponentNames[id])
+            .filter((n): n is string => !!n);
+          const menuItemNames = (s.stationItems ?? [])
+            .filter((id) => id?.startsWith("rec"))
+            .map((id) => menuItemData[id]?.name)
+            .filter((n): n is string => !!n && n !== "—");
+          const notesLines = (s.stationNotes || "")
+            .split(/\r?\n/)
+            .map((l) => l.replace(/^BEO Placement:\s*.+$/i, "").trim())
+            .filter(Boolean);
+          const allComponents = linkedComponentNames.length > 0
+            ? [...linkedComponentNames, ...notesLines]
+            : [...menuItemNames, ...notesLines];
+          // Encode as a single item: header \n component1 \n component2 ...
+          // expandItemToRows detects "station-hdr-" prefix and splits into tight rows
+          const encodedName = [`▶ ${s.stationType} [Metal/China]`, ...allComponents].join("\n");
+          return [{ id: `station-hdr-${s.id}`, name: encodedName }];
+        };
+
+        let linked: { id: string; name: string }[];
+        if (def.fieldId === FIELD_IDS.PRESENTED_APPETIZERS) {
+          linked = [
+            ...parseMenuItems(def.linkedFieldId),
+            ...stationsData.filter((s) => s.beoPlacement === "Presented Appetizer").flatMap(stationToItems),
+          ];
+        } else if (def.fieldId === FIELD_IDS.BUFFET_METAL) {
+          linked = [
+            ...parseMenuItems(def.linkedFieldId),
+            ...stationsData.filter((s) => s.beoPlacement === "Buffet Metal").flatMap(stationToItems),
+          ];
+        } else if (def.fieldId === FIELD_IDS.BUFFET_CHINA) {
+          linked = [
+            ...parseMenuItems(def.linkedFieldId),
+            ...stationsData.filter((s) => s.beoPlacement === "Buffet China").flatMap(stationToItems),
+          ];
+        } else {
+          linked = parseMenuItems(def.linkedFieldId);
+        }
+
         const custom = def.customFieldId ? customTextToItems(asString(eventData[def.customFieldId]), `custom-${def.fieldId}`) : [];
         const seenNames = new Set(linked.map((i) => i.name));
         const items = [...linked];
@@ -2743,13 +2807,8 @@ const BeoPrintPage: React.FC = () => {
       }
     : null;
 
-  // Kitchen BEO: include Passed, Presented, Buffet, Desserts, and STATIONS (each item spec'd and pack'd individually)
-  const sectionsUpToDessert = menuSections.filter((s) => {
-    const idx = menuSections.indexOf(s);
-    const stationsIdx = menuSections.findIndex((m) => m.title === "STATIONS");
-    return stationsIdx === -1 || idx <= stationsIdx;
-  });
-  const activeSections = [...sectionsUpToDessert.filter((s) => s.items.length > 0)];
+  // Hard print order ends at DESSERTS — no section after it.
+  const activeSections = [...menuSections.filter((s) => s.items.length > 0)];
   const visibleSections = activeSections.map((s) => ({
     ...s,
     items: s.items.filter((item) => !hiddenMenuItems.has(item.id)),
@@ -2768,6 +2827,18 @@ const BeoPrintPage: React.FC = () => {
   const expandItemToRows = (item: MenuLineItem): { lineName: string; isChild: boolean; itemId: string }[] => {
     const data = menuItemData[item.id];
     const rows: { lineName: string; isChild: boolean; itemId: string }[] = [];
+    // Station items (id starts with "station-hdr-"): name encodes header + components separated by \n
+    if (item.id.startsWith("station-hdr-")) {
+      const lines = item.name.split("\n");
+      const header = lines[0] ?? "";
+      const components = lines.slice(1);
+      if (header) rows.push({ lineName: header, isChild: false, itemId: item.id });
+      components.forEach((comp, i) => {
+        if (comp.trim()) rows.push({ lineName: ` ${comp.trim()}`, isChild: true, itemId: `${item.id}-c${i}` });
+      });
+      rows.push({ lineName: "", isChild: false, itemId: `${item.id}-blank` });
+      return rows;
+    }
     // Custom items (id starts with "custom-"): parse "Item – Notes" into parent + child
     if (item.id.startsWith("custom-")) {
       const sepIdx = item.name.indexOf(NOTES_SEP);
@@ -3343,7 +3414,7 @@ const BeoPrintPage: React.FC = () => {
                 )}
 
                 {/* Item Name (middle column) */}
-                <div className="beo-item-col" style={{ ...styles.itemCol, lineHeight: 1.25 }}>
+                <div className="beo-item-col" style={{ ...styles.itemCol, lineHeight: 1.25, ...getItemRowNameStyle(row.isChild, rows.some(r => r.isChild)) }}>
                   {row.lineName}
                 </div>
 
@@ -3440,7 +3511,7 @@ const BeoPrintPage: React.FC = () => {
                     })()}
                   </div>
                 )}
-                <div className="beo-item-col" style={{ ...styles.itemCol, lineHeight: 1.25 }}>{row.lineName}</div>
+                <div className="beo-item-col" style={{ ...styles.itemCol, lineHeight: 1.25, ...getItemRowNameStyle(row.isChild, rows.some(r => r.isChild)) }}>{row.lineName}</div>
                 {leftCheck === "spec" && (
                   <div className="beo-spec-col" style={{ ...styles.specCol, display: "flex", flexDirection: "column", gap: 2 }} onClick={(e) => { e.stopPropagation(); if (document.activeElement instanceof HTMLButtonElement) document.activeElement.blur(); }}>
                     <input type="text" placeholder="spec..." value={specOverrides[`${section.fieldId}:${item.id}:${rowIdx}`] ?? (rowIdx === 0 ? specOverrides[`${section.fieldId}:${item.id}`] : undefined) ?? (rowIdx === 0 ? item.specQty : undefined) ?? ""} onChange={(e) => { setSpecOverrides((prev) => ({ ...prev, [`${section.fieldId}:${item.id}:${rowIdx}`]: e.target.value })); }} style={{ width: "100%", padding: "2px 6px", fontSize: 11, lineHeight: 1, background: "#f9f9f9", border: "1px solid #ddd", borderRadius: 2 }} className="no-print" />

@@ -496,7 +496,7 @@ export type StationRecord = {
   stationPresetId?: string;
   stationComponents?: string[];
   customItems?: string;
-  beoPlacement?: "Presented Appetizer Metal/China" | "Buffet Metal/China";
+  beoPlacement?: "Presented Appetizer" | "Buffet Metal" | "Buffet China";
 };
 
 /** Load station records for an event by querying Stations where Event = eventId. Keeps stations separate from Events (no Events.Stations needed). Falls back to loadStationsByRecordIds if formula returns empty and fallbackStationIds provided (e.g. when Events.Stations exists). */
@@ -534,10 +534,17 @@ export const loadStationsByEventId = async (
     const stationComponents = fieldIds.stationComponents ? asLinkedRecordIds(fields[fieldIds.stationComponents]) : undefined;
     const customItems = fieldIds.customItems ? asString(fields[fieldIds.customItems]) : undefined;
     const beoPlacementRaw = fieldIds.beoPlacement ? (asString(fields[fieldIds.beoPlacement]) || asSingleSelectName(fields[fieldIds.beoPlacement])) : undefined;
-    let beoPlacement: "Presented Appetizer Metal/China" | "Buffet Metal/China" | undefined = beoPlacementRaw === "Presented Appetizer Metal/China" || beoPlacementRaw === "Buffet Metal/China" ? beoPlacementRaw : undefined;
+    const normalizePlacement = (raw: string | undefined): "Presented Appetizer" | "Buffet Metal" | "Buffet China" | undefined => {
+      if (!raw) return undefined;
+      if (raw === "Presented Appetizer" || raw === "Presented Appetizer Metal/China") return "Presented Appetizer";
+      if (raw === "Buffet Metal" || raw === "Buffet Metal/China") return "Buffet Metal";
+      if (raw === "Buffet China") return "Buffet China";
+      return undefined;
+    };
+    let beoPlacement = normalizePlacement(beoPlacementRaw);
     if (!beoPlacement && customItems) {
-      const m = customItems.match(/^BEO Placement:\s*(Presented Appetizer Metal\/China|Buffet Metal\/China)/im);
-      if (m) beoPlacement = m[1] as "Presented Appetizer Metal/China" | "Buffet Metal/China";
+      const m = customItems.match(/^BEO Placement:\s*(Presented Appetizer(?:\s*Metal\/China)?|Buffet Metal(?:\/China)?|Buffet China)/im);
+      if (m) beoPlacement = normalizePlacement(m[1].trim());
     }
     return { id: rec.id, stationType, stationItems, stationNotes, stationPresetId, stationComponents, customItems, beoPlacement };
   });
@@ -574,10 +581,17 @@ export const loadStationsByRecordIds = async (
     const stationComponents = fieldIds.stationComponents ? asLinkedRecordIds(fields[fieldIds.stationComponents]) : undefined;
     const customItems = fieldIds.customItems ? asString(fields[fieldIds.customItems]) : undefined;
     const beoPlacementRaw = fieldIds.beoPlacement ? (asString(fields[fieldIds.beoPlacement]) || asSingleSelectName(fields[fieldIds.beoPlacement])) : undefined;
-    let beoPlacement: "Presented Appetizer Metal/China" | "Buffet Metal/China" | undefined = beoPlacementRaw === "Presented Appetizer Metal/China" || beoPlacementRaw === "Buffet Metal/China" ? beoPlacementRaw : undefined;
+    const normalizePlacement2 = (raw: string | undefined): "Presented Appetizer" | "Buffet Metal" | "Buffet China" | undefined => {
+      if (!raw) return undefined;
+      if (raw === "Presented Appetizer" || raw === "Presented Appetizer Metal/China") return "Presented Appetizer";
+      if (raw === "Buffet Metal" || raw === "Buffet Metal/China") return "Buffet Metal";
+      if (raw === "Buffet China") return "Buffet China";
+      return undefined;
+    };
+    let beoPlacement = normalizePlacement2(beoPlacementRaw);
     if (!beoPlacement && customItems) {
-      const m = customItems.match(/^BEO Placement:\s*(Presented Appetizer Metal\/China|Buffet Metal\/China)/im);
-      if (m) beoPlacement = m[1] as "Presented Appetizer Metal/China" | "Buffet Metal/China";
+      const m = customItems.match(/^BEO Placement:\s*(Presented Appetizer(?:\s*Metal\/China)?|Buffet Metal(?:\/China)?|Buffet China)/im);
+      if (m) beoPlacement = normalizePlacement2(m[1].trim());
     }
     return { id: rec.id, stationType, stationItems, stationNotes, stationPresetId, stationComponents, customItems, beoPlacement };
   });
@@ -621,7 +635,7 @@ export const createStationFromPreset = async (params: {
   customItems?: string;
   stationNotes: string;
   eventId: string;
-  beoPlacement?: "Presented Appetizer Metal/China" | "Buffet Metal/China";
+  beoPlacement?: "Presented Appetizer" | "Buffet Metal" | "Buffet China";
 }): Promise<{ id: string } | AirtableErrorResult> => {
   const fieldIds = await getStationsFieldIds();
   if (!fieldIds) return { error: true, message: "Could not resolve Stations table field IDs" };
@@ -666,7 +680,7 @@ export const updateStationComponents = async (
     if (fieldIds.beoPlacement) {
       fields[fieldIds.beoPlacement] = patch.beoPlacement || null;
     } else if (fieldIds.customItems && patch.beoPlacement) {
-      const base = (customText ?? "").replace(/^BEO Placement:\s*(?:Presented Appetizer Metal\/China|Buffet Metal\/China)\n?/im, "").trim();
+      const base = (customText ?? "").replace(/^BEO Placement:\s*(?:Presented Appetizer|Buffet Metal|Buffet China)\n?/im, "").trim();
       customText = `BEO Placement: ${patch.beoPlacement}\n${base}`.trim();
     }
   }
@@ -675,6 +689,22 @@ export const updateStationComponents = async (
   const data = await airtableFetch<{ id: string }>(`/${tableId}`, {
     method: "PATCH",
     body: JSON.stringify({ records: [{ id: stationId, fields }] }),
+  });
+  if (isErrorResult(data)) return data;
+  return { success: true };
+};
+
+/** Delete a station record entirely from Airtable. */
+export const deleteStation = async (
+  stationId: string
+): Promise<{ success: boolean } | AirtableErrorResult> => {
+  const apiKeyResult = getApiKey();
+  if (isErrorResult(apiKeyResult)) return apiKeyResult as AirtableErrorResult;
+  const baseIdResult = getBaseId();
+  if (isErrorResult(baseIdResult)) return baseIdResult as AirtableErrorResult;
+  const tableId = getStationsTable();
+  const data = await airtableFetch<{ deleted: boolean; id: string }>(`/${tableId}/${stationId}`, {
+    method: "DELETE",
   });
   if (isErrorResult(data)) return data;
   return { success: true };

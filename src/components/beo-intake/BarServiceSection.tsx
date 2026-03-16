@@ -16,7 +16,7 @@ export const BarServiceSection = () => {
     
     const newDetails = {
       barService: asSingleSelectName(selectedEventData[FIELD_IDS.BAR_SERVICE]),
-      sigDrink: asSingleSelectName(selectedEventData[FIELD_IDS.BAR_SIG_DRINK]),
+      sigDrink: asSingleSelectName(selectedEventData[FIELD_IDS.BAR_SIGNATURE_DRINK_YES_NO]),
       drinkName: asString(selectedEventData[FIELD_IDS.BAR_DRINK_NAME]),
       recipe: asString(selectedEventData[FIELD_IDS.BAR_RECIPE]),
       whoSupplies: asSingleSelectName(selectedEventData[FIELD_IDS.BAR_WHO_SUPPLIES]),
@@ -47,7 +47,7 @@ export const BarServiceSection = () => {
   const canEdit = Boolean(selectedEventId);
 
   return (
-    <FormSection title="Bar Service">
+    <FormSection title="Bar Service" sectionId="beo-section-bar">
       <div>
         <label style={labelStyle}>Bar Service Needed</label>
         <select value={details.barService} disabled={!canEdit} onChange={(e) => { setDetails(p => ({ ...p, barService: e.target.value })); save(FIELD_IDS.BAR_SERVICE, e.target.value || null); }} style={inputStyle}>
@@ -61,7 +61,7 @@ export const BarServiceSection = () => {
       </div>
       <div>
         <label style={labelStyle}>Signature Drink</label>
-        <select value={details.sigDrink} disabled={!canEdit} onChange={(e) => { setDetails(p => ({ ...p, sigDrink: e.target.value })); save(FIELD_IDS.BAR_SIG_DRINK, e.target.value || null); }} style={inputStyle}>
+        <select value={details.sigDrink} disabled={!canEdit} onChange={(e) => { setDetails(p => ({ ...p, sigDrink: e.target.value })); save(FIELD_IDS.BAR_SIGNATURE_DRINK_YES_NO, e.target.value || null); }} style={inputStyle}>
           <option value="">Select</option>
           <option value="Yes">Yes</option>
           <option value="No">No</option>

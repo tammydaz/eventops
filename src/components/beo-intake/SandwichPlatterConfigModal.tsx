@@ -1,8 +1,9 @@
 /**
- * Sandwich Platter Config Modal — Pick X from list (e.g. "Pick up to 5 selections").
- * Same pattern as Boxed Lunch / Viva la Pasta.
+ * Sandwich Platter Config Modal — dropdown-slot pattern (same as station modals).
+ * Each platter type shows only its own options; options are scoped to that tier.
+ * Available for both delivery and full-service events.
  */
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useEffect } from "react";
 import { createPortal } from "react-dom";
 import {
   PLATTER_CHOICES,
@@ -25,6 +26,16 @@ type SandwichPlatterConfigModalProps = {
   inline?: boolean;
 };
 
+const rowInputStyle: React.CSSProperties = {
+  padding: "6px 8px",
+  borderRadius: 5,
+  border: "1px solid #444",
+  backgroundColor: "#1a1a1a",
+  color: "#e0e0e0",
+  fontSize: 12,
+  minWidth: 0,
+};
+
 export function SandwichPlatterConfigModal({
   open,
   onClose,
@@ -32,18 +43,28 @@ export function SandwichPlatterConfigModal({
   initialRows = [],
   inline = false,
 }: SandwichPlatterConfigModalProps) {
-  const [rows, setRows] = useState<PlatterRow[]>(() =>
+  // Each row: platterType, picks (ordered slots), customPicks (typed extras), quantity
+  const [rows, setRows] = useState<(PlatterRow & { customPicks: string[] })[]>(() =>
     initialRows.length > 0
-      ? initialRows.map((r) => ({ ...r, id: r.id || generateId() }))
-      : [{ id: generateId(), platterType: "Classic Sandwiches", picks: [], quantity: 1 }]
+      ? initialRows.map((r) => ({ ...r, id: r.id || generateId(), customPicks: [] }))
+      : [{ id: generateId(), platterType: "Classic Sandwiches", picks: [], quantity: 1, customPicks: [] }]
   );
+
+  // Per-row custom input text
+  const [customInputs, setCustomInputs] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    if (open && initialRows.length > 0) {
+      setRows(initialRows.map((r) => ({ ...r, id: r.id || generateId(), customPicks: [] })));
+    }
+  }, [open]);
 
   const total = rows.reduce((sum, r) => sum + (r.quantity || 0), 0);
 
   const addRow = useCallback(() => {
     setRows((prev) => [
       ...prev,
-      { id: generateId(), platterType: "Classic Sandwiches", picks: [], quantity: 1 },
+      { id: generateId(), platterType: "Classic Sandwiches", picks: [], quantity: 1, customPicks: [] },
     ]);
   }, []);
 
@@ -51,34 +72,74 @@ export function SandwichPlatterConfigModal({
     setRows((prev) => prev.filter((r) => r.id !== id));
   }, []);
 
-  const updateRow = useCallback((id: string, patch: Partial<PlatterRow>) => {
-    setRows((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)));
+  const updatePlatterType = useCallback((id: string, platterType: string) => {
+    setRows((prev) => prev.map((r) => r.id === id ? { ...r, platterType, picks: [], customPicks: [] } : r));
   }, []);
 
-  const togglePick = useCallback(
-    (rowId: string, option: string) => {
-      const row = rows.find((r) => r.id === rowId);
-      if (!row) return;
-      const config = PLATTER_CHOICES[row.platterType];
-      if (!config) return;
-      const has = row.picks.includes(option);
-      if (has) {
-        updateRow(rowId, { picks: row.picks.filter((p) => p !== option) });
-      } else if (row.picks.length < config.maxPick) {
-        updateRow(rowId, { picks: [...row.picks, option] });
-      }
-    },
-    [rows, updateRow]
-  );
+  const updateQuantity = useCallback((id: string, quantity: number) => {
+    setRows((prev) => prev.map((r) => r.id === id ? { ...r, quantity } : r));
+  }, []);
+
+  // Update a specific pick slot index
+  const updatePickSlot = useCallback((rowId: string, slotIdx: number, value: string) => {
+    setRows((prev) => prev.map((r) => {
+      if (r.id !== rowId) return r;
+      const config = PLATTER_CHOICES[r.platterType];
+      if (!config) return r;
+      const next = [...r.picks];
+      while (next.length <= slotIdx) next.push("");
+      next[slotIdx] = value;
+      return { ...r, picks: next };
+    }));
+  }, []);
+
+  // Add an extra slot (up to maxPick)
+  const addPickSlot = useCallback((rowId: string) => {
+    setRows((prev) => prev.map((r) => {
+      if (r.id !== rowId) return r;
+      const config = PLATTER_CHOICES[r.platterType];
+      if (!config || r.picks.length >= config.maxPick) return r;
+      return { ...r, picks: [...r.picks, ""] };
+    }));
+  }, []);
+
+  const clearPickSlot = useCallback((rowId: string, slotIdx: number) => {
+    setRows((prev) => prev.map((r) => {
+      if (r.id !== rowId) return r;
+      const next = [...r.picks];
+      next[slotIdx] = "";
+      return { ...r, picks: next };
+    }));
+  }, []);
+
+  const addCustomPick = useCallback((rowId: string) => {
+    const text = (customInputs[rowId] || "").trim();
+    if (!text) return;
+    setRows((prev) => prev.map((r) => r.id === rowId ? { ...r, customPicks: [...r.customPicks, text] } : r));
+    setCustomInputs((prev) => ({ ...prev, [rowId]: "" }));
+  }, [customInputs]);
+
+  const removeCustomPick = useCallback((rowId: string, idx: number) => {
+    setRows((prev) => prev.map((r) => r.id === rowId ? { ...r, customPicks: r.customPicks.filter((_, i) => i !== idx) } : r));
+  }, []);
 
   const handleConfirm = useCallback(() => {
-    const valid = rows.filter((r) => r.picks.length > 0 && r.quantity > 0);
+    const valid = rows
+      .filter((r) => r.quantity > 0)
+      .map((r) => ({
+        id: r.id,
+        platterType: r.platterType,
+        picks: [...r.picks.filter(Boolean), ...r.customPicks],
+        quantity: r.quantity,
+      }))
+      .filter((r) => r.picks.length > 0);
     onConfirm(valid);
     onClose();
   }, [rows, onConfirm, onClose]);
 
   const handleClearAll = useCallback(() => {
-    setRows([{ id: generateId(), platterType: "Classic Sandwiches", picks: [], quantity: 1 }]);
+    setRows([{ id: generateId(), platterType: "Classic Sandwiches", picks: [], quantity: 1, customPicks: [] }]);
+    setCustomInputs({});
   }, []);
 
   if (!open) return null;
@@ -93,8 +154,8 @@ export function SandwichPlatterConfigModal({
               top: "50%",
               left: "50%",
               transform: "translate(-50%, -50%)",
-              width: "min(600px, 95vw)",
-              maxHeight: "85vh",
+              width: "min(660px, 95vw)",
+              maxHeight: "88vh",
               zIndex: 99999,
             }),
         background: "#1a1a1a",
@@ -107,91 +168,150 @@ export function SandwichPlatterConfigModal({
       }}
       {...(inline ? {} : { onClick: (e: React.MouseEvent) => e.stopPropagation() })}
     >
+      {/* Header */}
       <div style={{ padding: "16px 20px", borderBottom: "1px solid #333", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: "#e0e0e0" }}>
-          Sandwich Platter — Pick your selections
+          Sandwich Platter — Configure selections
         </h3>
-        <button type="button" onClick={onClose} style={{ background: "none", border: "none", color: "#888", fontSize: 24, cursor: "pointer", padding: "0 8px", lineHeight: 1 }}>×</button>
+        {!inline && (
+          <button type="button" onClick={onClose} style={{ background: "none", border: "none", color: "#888", fontSize: 24, cursor: "pointer", padding: "0 8px", lineHeight: 1 }}>×</button>
+        )}
       </div>
 
+      {/* Body */}
       <div style={{ padding: "16px 20px", overflowY: "auto", flex: 1 }}>
         <p style={{ fontSize: 12, color: "#888", marginBottom: 16 }}>
-          Select your choices for each platter. Most platters allow up to 5 selections; Panini allows 2 per 10 guests.
+          Each platter shows only its own options. Use the dropdown slots to pick your selections, or type a custom item at the bottom of each platter.
         </p>
 
         {rows.map((row) => {
           const config = PLATTER_CHOICES[row.platterType];
           if (!config) return null;
+          const filledSlots = row.picks.filter(Boolean).length;
+          const totalSelected = filledSlots + row.customPicks.length;
+          const slotsToShow = Math.max(row.picks.length, Math.min(config.maxPick, 1));
+
           return (
-            <div
-              key={row.id}
-              style={{ marginBottom: 16, padding: 12, background: "#252525", borderRadius: 8, border: "1px solid #333" }}
-            >
-              <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 10, flexWrap: "wrap" }}>
-                <div style={{ flex: "1 1 200px" }}>
+            <div key={row.id} style={{ marginBottom: 20, padding: 14, background: "#252525", borderRadius: 8, border: "1px solid #333" }}>
+              {/* Row header: platter type + qty + remove */}
+              <div style={{ display: "flex", gap: 10, alignItems: "flex-end", marginBottom: 12, flexWrap: "wrap" }}>
+                <div style={{ flex: "1 1 220px" }}>
                   <label style={{ fontSize: 10, color: "#888", display: "block", marginBottom: 4 }}>Platter type</label>
                   <select
                     value={row.platterType}
-                    onChange={(e) => updateRow(row.id, { platterType: e.target.value, picks: [] })}
-                    style={{ width: "100%", padding: "8px 10px", fontSize: 13, borderRadius: 6, border: "1px solid #444", background: "#1a1a1a", color: "#e0e0e0" }}
+                    onChange={(e) => updatePlatterType(row.id, e.target.value)}
+                    style={{ ...rowInputStyle, width: "100%", fontSize: 13 }}
                   >
                     {PLATTER_TYPES.map((t) => (
                       <option key={t} value={t}>{t}</option>
                     ))}
                   </select>
                 </div>
-                <div style={{ width: 80 }}>
+                <div style={{ width: 72 }}>
                   <label style={{ fontSize: 10, color: "#888", display: "block", marginBottom: 4 }}>Qty</label>
                   <input
                     type="number"
                     min={1}
                     value={row.quantity || ""}
-                    onChange={(e) => updateRow(row.id, { quantity: parseInt(e.target.value, 10) || 0 })}
-                    style={{ width: "100%", padding: "8px 6px", fontSize: 13, borderRadius: 6, border: "1px solid #444", background: "#1a1a1a", color: "#e0e0e0" }}
+                    onChange={(e) => updateQuantity(row.id, parseInt(e.target.value, 10) || 0)}
+                    style={{ ...rowInputStyle, width: "100%", fontSize: 13 }}
                   />
                 </div>
-                <button type="button" onClick={() => removeRow(row.id)} style={{ background: "none", border: "none", color: "#ef4444", cursor: "pointer", fontSize: 18, padding: "4px 8px" }} title="Remove row">✕</button>
+                <button
+                  type="button"
+                  onClick={() => removeRow(row.id)}
+                  style={{ padding: "6px 10px", fontSize: 11, fontWeight: 600, background: "rgba(239,68,68,0.15)", border: "1px solid #ef4444", color: "#ef4444", borderRadius: 5, cursor: "pointer", marginBottom: 1 }}
+                >
+                  ✕ Remove
+                </button>
               </div>
-              <div style={{ fontSize: 11, color: "#888", marginBottom: 8 }}>
-                {config.instruction} — {row.picks.length} of {config.maxPick} selected
+
+              {/* Pick instruction */}
+              <div style={{ fontSize: 11, color: "#888", marginBottom: 10 }}>
+                {config.instruction} — <span style={{ color: totalSelected > 0 ? accentColor : "#666" }}>{totalSelected} of {config.maxPick} selected</span>
               </div>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                {config.options.map((opt) => {
-                  const checked = row.picks.includes(opt);
-                  const disabled = !checked && row.picks.length >= config.maxPick;
+
+              {/* Dropdown slots */}
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                {Array.from({ length: slotsToShow }).map((_, slotIdx) => {
+                  const slotValue = row.picks[slotIdx] ?? "";
+                  const takenByOtherSlots = new Set(row.picks.filter((v, i) => i !== slotIdx && v));
+                  const availableOptions = config.options.filter((opt) => !takenByOtherSlots.has(opt));
                   return (
-                    <label
-                      key={opt}
-                      style={{
-                        display: "inline-flex",
-                        alignItems: "center",
-                        gap: 6,
-                        padding: "6px 10px",
-                        borderRadius: 6,
-                        background: checked ? accentBg : "#1a1a1a",
-                        border: `1px solid ${checked ? accentColor : "#444"}`,
-                        cursor: disabled ? "not-allowed" : "pointer",
-                        opacity: disabled ? 0.5 : 1,
-                        fontSize: 12,
-                        color: "#e0e0e0",
-                      }}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={checked}
-                        onChange={() => togglePick(row.id, opt)}
-                        disabled={disabled}
-                        style={{ accentColor }}
-                      />
-                      {opt}
-                    </label>
+                    <div key={slotIdx} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <select
+                        value={slotValue}
+                        onChange={(e) => updatePickSlot(row.id, slotIdx, e.target.value)}
+                        style={{ ...rowInputStyle, flex: 1, fontSize: 12 }}
+                      >
+                        <option value="">Select {config.label} option {slotIdx + 1}...</option>
+                        {availableOptions.map((opt) => (
+                          <option key={opt} value={opt}>{opt}</option>
+                        ))}
+                        {slotValue && !availableOptions.includes(slotValue) && (
+                          <option value={slotValue}>{slotValue}</option>
+                        )}
+                      </select>
+                      <button
+                        type="button"
+                        onClick={() => clearPickSlot(row.id, slotIdx)}
+                        disabled={!slotValue}
+                        style={{ width: 26, height: 26, padding: 0, borderRadius: 5, border: "1px solid #555", background: "#333", color: accentColor, fontSize: 13, cursor: slotValue ? "pointer" : "default", display: "flex", alignItems: "center", justifyContent: "center", opacity: slotValue ? 1 : 0.4, flexShrink: 0 }}
+                      >✕</button>
+                    </div>
                   );
                 })}
+
+                {/* Custom picks (typed extras) */}
+                {row.customPicks.map((cp, idx) => (
+                  <div key={`custom-${idx}`} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <div style={{ ...rowInputStyle, flex: 1, fontSize: 12, color: "#aaa", background: "#1a1a1a", border: "1px solid #555", display: "flex", alignItems: "center" }}>
+                      {cp} <span style={{ marginLeft: 6, fontSize: 10, color: "#666" }}>(custom)</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => removeCustomPick(row.id, idx)}
+                      style={{ width: 26, height: 26, padding: 0, borderRadius: 5, border: "1px solid #555", background: "#333", color: "#ef4444", fontSize: 13, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}
+                    >✕</button>
+                  </div>
+                ))}
+
+                {/* Add more slot button */}
+                {row.picks.length < config.maxPick && totalSelected < config.maxPick && (
+                  <button
+                    type="button"
+                    onClick={() => addPickSlot(row.id)}
+                    style={{ alignSelf: "flex-start", padding: "4px 10px", fontSize: 11, fontWeight: 600, borderRadius: 5, border: `1px solid ${accentColor}`, background: accentBg, color: accentColor, cursor: "pointer" }}
+                  >
+                    + Add slot
+                  </button>
+                )}
+
+                {/* Custom text input */}
+                <div style={{ display: "flex", gap: 6, marginTop: 4 }}>
+                  <input
+                    type="text"
+                    value={customInputs[row.id] || ""}
+                    onChange={(e) => setCustomInputs((prev) => ({ ...prev, [row.id]: e.target.value }))}
+                    placeholder="Type custom item not on list..."
+                    style={{ ...rowInputStyle, flex: 1, fontSize: 12 }}
+                    onKeyDown={(e) => { if (e.key === "Enter") addCustomPick(row.id); }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => addCustomPick(row.id)}
+                    disabled={!(customInputs[row.id] || "").trim()}
+                    style={{ padding: "5px 10px", fontSize: 11, fontWeight: 600, borderRadius: 5, border: `1px solid ${accentColor}`, background: accentBg, color: accentColor, cursor: (customInputs[row.id] || "").trim() ? "pointer" : "not-allowed", opacity: (customInputs[row.id] || "").trim() ? 1 : 0.5 }}
+                  >
+                    + Add
+                  </button>
+                </div>
               </div>
             </div>
           );
         })}
 
+        {/* Add platter button */}
         <button
           type="button"
           onClick={addRow}
@@ -200,25 +320,36 @@ export function SandwichPlatterConfigModal({
           + Add platter
         </button>
 
-        {rows.filter((r) => r.picks.length > 0 && r.quantity > 0).length > 0 && (
+        {/* Summary */}
+        {rows.some((r) => (r.picks.filter(Boolean).length + r.customPicks.length) > 0 && r.quantity > 0) && (
           <div style={{ marginBottom: 12, padding: 12, background: "#1a1a1a", borderRadius: 8, border: "1px solid #333" }}>
             <div style={{ fontSize: 11, color: "#888", marginBottom: 8 }}>Summary</div>
             {rows
-              .filter((r) => r.picks.length > 0 && r.quantity > 0)
-              .map((row) => (
-                <div key={row.id} style={{ fontSize: 12, color: "#c0c0c0", marginBottom: 4 }}>
-                  <strong>{row.platterType}</strong> × {row.quantity}: {row.picks.join(", ")}
-                </div>
-              ))}
+              .filter((r) => (r.picks.filter(Boolean).length + r.customPicks.length) > 0 && r.quantity > 0)
+              .map((row) => {
+                const allPicks = [...row.picks.filter(Boolean), ...row.customPicks];
+                return (
+                  <div key={row.id} style={{ fontSize: 12, color: "#c0c0c0", marginBottom: 4 }}>
+                    <strong style={{ color: accentColor }}>{row.platterType}</strong> × {row.quantity}:
+                    <div style={{ paddingLeft: 12, marginTop: 2 }}>
+                      {allPicks.map((p, i) => (
+                        <div key={i} style={{ fontSize: 11, color: "#aaa" }}>• {p}</div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
           </div>
         )}
 
+        {/* Total */}
         <div style={{ padding: "12px 16px", background: "#0a0a0a", borderRadius: 8, border: `2px solid ${accentColor}`, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <span style={{ fontSize: 14, fontWeight: 600, color: "#e0e0e0" }}>Total platters</span>
           <span style={{ fontSize: 24, fontWeight: 700, color: accentColor }}>{total}</span>
         </div>
       </div>
 
+      {/* Footer */}
       <div style={{ padding: "16px 20px", borderTop: "1px solid #333", display: "flex", gap: 12, justifyContent: "flex-end" }}>
         <button type="button" onClick={handleClearAll} style={{ padding: "10px 16px", fontSize: 13, borderRadius: 8, border: "1px solid #555", background: "transparent", color: "#888", cursor: "pointer" }}>Clear all</button>
         <button type="button" onClick={onClose} style={{ padding: "10px 16px", fontSize: 13, borderRadius: 8, border: "1px solid #555", background: "transparent", color: "#e0e0e0", cursor: "pointer" }}>Cancel</button>

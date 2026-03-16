@@ -112,7 +112,7 @@ export const SiteVisitLogisticsSection = () => {
   const textareaStyle = { ...inputStyle, resize: "vertical" as const, fontFamily: "inherit" };
 
   return (
-    <FormSection title="Notes / Onsite event logistics" dotColor="#00bcd4">
+    <FormSection title="Notes / Onsite event logistics" dotColor="#00bcd4" sectionId="beo-section-notes">
       <CollapsibleSubsection title="Parking & Load-In" defaultOpen={false}>
         <div style={{ gridColumn: "1 / -1" }}>
           <label style={labelStyle}>Parking Notes</label>

@@ -13,6 +13,7 @@ import {
 } from "../components/beo-intake";
 import { ApprovalsLockoutSection } from "../components/beo-intake/ApprovalsLockoutSection";
 import { BeoIntakeActionBar } from "../components/beo-intake/BeoIntakeActionBar";
+import { BeoJumpToNav } from "../components/beo-intake/BeoJumpToNav";
 import { ConfirmSendToBOHModal } from "../components/ConfirmSendToBOHModal";
 import { SubmitChangeRequestModal } from "../components/SubmitChangeRequestModal";
 import { MissingFieldsModal } from "../components/MissingFieldsModal";
@@ -24,6 +25,7 @@ import { FIELD_IDS, getLockoutFieldIds, getBOHProductionFieldIds } from "../serv
 import { createTask } from "../services/airtable/tasks";
 import { MenuPickerModal } from "../components/MenuPickerModal";
 import { usePickerStore } from "../state/usePickerStore";
+import { updateMenuItemVesselType, VESSEL_TYPE_VALUES } from "../services/airtable/menuItems";
 import "./IntakePage.css";
 
 /** Required BEO fields for Send to BOH. Empty or falsy = missing. */
@@ -216,6 +218,19 @@ export const BeoIntakePage = () => {
       const merged = [...new Set([...existing, item.id])];
 
       await setFields(selectedEventId, { [fieldId]: merged });
+
+      // Vessel Type save: patch the Menu Items record when placed in a Metal or China section
+      const vesselTypeMap: Record<string, string> = {
+        buffetMetal: VESSEL_TYPE_VALUES.METAL_HOT,
+        buffetChina: VESSEL_TYPE_VALUES.CHINA_COLD,
+      };
+      const vesselType = vesselTypeMap[targetField];
+      if (vesselType && item.id.startsWith("rec")) {
+        updateMenuItemVesselType(item.id, vesselType).catch((err) =>
+          console.warn("⚠️ Vessel type save failed (non-blocking):", err)
+        );
+      }
+
       loadEventData();
     },
     [selectedEventId, selectedEventData, setFields, loadEventData]
@@ -355,35 +370,38 @@ export const BeoIntakePage = () => {
           </div>
         )}
         <div className="beo-content" style={{ position: "relative", zIndex: 1, padding: "20px 24px", minHeight: "calc(100vh - 100px)", paddingBottom: "140px", maxWidth: "1400px", margin: "0 auto", color: "#e0e0e0" }}>
-          {selectedEventId && eventDataLoading ? (
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "400px", textAlign: "center" }}>
-              <div>
-                <div style={{ fontSize: "32px", marginBottom: "16px" }}>⏳</div>
-                <h2 style={{ fontSize: "20px", fontWeight: 600, color: "#ff6b6b", marginBottom: "8px" }}>Loading event...</h2>
+          {selectedEventId ? (
+            <div style={{ position: "relative" }}>
+              {eventDataLoading && (
+                <div style={{ position: "absolute", inset: 0, zIndex: 10, background: "rgba(0,0,0,0.45)", borderRadius: "8px", display: "flex", alignItems: "center", justifyContent: "center", pointerEvents: "all" }}>
+                  <div style={{ textAlign: "center" }}>
+                    <div style={{ fontSize: "28px", marginBottom: "10px" }}>⏳</div>
+                    <div style={{ fontSize: "16px", fontWeight: 600, color: "#ff6b6b" }}>Loading event...</div>
+                  </div>
+                </div>
+              )}
+              <div className="beo-sections-grid" style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "12px", alignItems: "start", maxWidth: "700px", margin: "0 auto" }}>
+                <div style={{ position: "relative", gridColumn: "1 / -1", display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "12px", alignItems: "start" }}>
+                  {isLocked && (
+                    <div
+                      className={`beo-locked-overlay ${canSubmitChangeRequest ? "beo-locked-foh" : "beo-locked-boh"}`}
+                      onClick={handleFormInteraction}
+                      role="button"
+                      tabIndex={0}
+                      onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && handleFormInteraction()}
+                      aria-label={canSubmitChangeRequest ? "Event is locked. Click to submit a change request." : "Event is locked. Only FOH can submit a change request to unlock."}
+                    />
+                  )}
+                  <ClientAndContactSection />
+                  <EventCoreSection isDelivery={isDelivery} />
+                  <VenueDetailsSection />
+                  <MenuAndBeveragesSection isDelivery={isDelivery} />
+                  {!isDelivery && <KitchenAndServicewareSection />}
+                  {!isDelivery && <TimelineSection />}
+                  {!isDelivery && <SiteVisitLogisticsSection />}
+                </div>
+                <ApprovalsLockoutSection eventId={selectedEventId} eventName={eventName} />
               </div>
-            </div>
-          ) : selectedEventId ? (
-            <div key={selectedEventId} className="beo-sections-grid" style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "12px", alignItems: "start", maxWidth: "700px", margin: "0 auto" }}>
-              <div style={{ position: "relative", gridColumn: "1 / -1", display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "12px", alignItems: "start" }}>
-                {isLocked && (
-                  <div
-                    className={`beo-locked-overlay ${canSubmitChangeRequest ? "beo-locked-foh" : "beo-locked-boh"}`}
-                    onClick={handleFormInteraction}
-                    role="button"
-                    tabIndex={0}
-                    onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && handleFormInteraction()}
-                    aria-label={canSubmitChangeRequest ? "Event is locked. Click to submit a change request." : "Event is locked. Only FOH can submit a change request to unlock."}
-                  />
-                )}
-                <ClientAndContactSection />
-                <EventCoreSection isDelivery={isDelivery} />
-                <VenueDetailsSection />
-                <MenuAndBeveragesSection isDelivery={isDelivery} />
-                {!isDelivery && <KitchenAndServicewareSection />}
-                {!isDelivery && <TimelineSection />}
-                {!isDelivery && <SiteVisitLogisticsSection />}
-              </div>
-              <ApprovalsLockoutSection eventId={selectedEventId} eventName={eventName} />
             </div>
           ) : (
             <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "400px", textAlign: "center" }}>
@@ -394,6 +412,7 @@ export const BeoIntakePage = () => {
               </div>
             </div>
           )}
+          {selectedEventId && <BeoJumpToNav />}
           <SubmitChangeRequestModal
             open={showChangeRequestModal}
             onClose={() => setShowChangeRequestModal(false)}

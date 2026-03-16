@@ -13,6 +13,7 @@ import {
   createStationFromPreset,
   updateStationItems,
   updateStationComponents,
+  deleteStation,
   getStationTypeOptions,
   type LinkedRecordItem,
 } from "../../services/airtable/linkedRecords";
@@ -421,7 +422,7 @@ function CreationStationContent(props: {
 }) {
   const { selectedEventId, canEdit, getItemName, fetchItemNames, inputStyle, labelStyle, buttonStyle } = props;
   const { selectedEventData } = useEventStore();
-  const [stations, setStations] = useState<Array<{ id: string; stationType: string; stationItems: string[]; stationNotes: string; stationPresetId?: string; stationComponents?: string[]; customItems?: string; beoPlacement?: "Presented Appetizer Metal/China" | "Buffet Metal/China" }>>([]);
+  const [stations, setStations] = useState<Array<{ id: string; stationType: string; stationItems: string[]; stationNotes: string; stationPresetId?: string; stationComponents?: string[]; customItems?: string; beoPlacement?: "Presented Appetizer" | "Buffet Metal" | "Buffet China" }>>([]);
   const [stationTypeOptions, setStationTypeOptions] = useState<string[]>([]);
   const [stationPresets, setStationPresets] = useState<Array<{ id: string; name: string }>>([]);
   const [newStationType, setNewStationType] = useState("");
@@ -499,7 +500,7 @@ function CreationStationContent(props: {
     if (itemIds.length > 0 && selectedEventId) fetchItemNames(selectedEventId, itemIds);
   };
 
-  const confirmAddStationFromPreset = async (params: { componentIds: string[]; customItems: string; beoPlacement?: "Presented Appetizer Metal/China" | "Buffet Metal/China" }) => {
+  const confirmAddStationFromPreset = async (params: { componentIds: string[]; customItems: string; beoPlacement?: "Presented Appetizer" | "Buffet Metal" | "Buffet China" }) => {
     if (!selectedEventId || !newStationPresetId || !selectedPreset) return;
     const result = await createStationFromPreset({
       presetId: newStationPresetId,
@@ -523,7 +524,17 @@ function CreationStationContent(props: {
     setShowComponentsModal(false);
   };
 
-  const confirmEditStationComponents = async (stationId: string, params: { componentIds: string[]; customItems: string; beoPlacement?: "Presented Appetizer Metal/China" | "Buffet Metal/China" }) => {
+  const handleDeleteStation = async (stationId: string) => {
+    if (!window.confirm("Remove this station from the event? This cannot be undone.")) return;
+    const result = await deleteStation(stationId);
+    if (isErrorResult(result)) {
+      console.error("Failed to delete station:", result);
+      return;
+    }
+    setStations((prev) => prev.filter((s) => s.id !== stationId));
+  };
+
+  const confirmEditStationComponents = async (stationId: string, params: { componentIds: string[]; customItems: string; beoPlacement?: "Presented Appetizer" | "Buffet Metal" | "Buffet China" }) => {
     const result = await updateStationComponents(stationId, { stationComponents: params.componentIds, customItems: params.customItems || undefined, beoPlacement: params.beoPlacement });
     if (isErrorResult(result)) {
       console.error("Failed to update station components:", result);
@@ -559,6 +570,18 @@ function CreationStationContent(props: {
     <div style={{ gridColumn: "1 / -1" }}>
       {stations.map((st) => (
         <div key={st.id} style={{ marginBottom: 16, padding: 12, backgroundColor: "#1a1a1a", borderRadius: 8, border: "1px solid #444" }}>
+          {canEdit && (
+            <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}>
+              <button
+                type="button"
+                onClick={() => handleDeleteStation(st.id)}
+                style={{ padding: "4px 10px", fontSize: 11, fontWeight: 600, background: "rgba(239,68,68,0.15)", border: "1px solid #ef4444", color: "#ef4444", borderRadius: 5, cursor: "pointer" }}
+                title="Remove this station from the event"
+              >
+                ✕ Remove Station
+              </button>
+            </div>
+          )}
           <div style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))" }}>
             <div>
               <label style={labelStyle}>Station Type</label>
@@ -1465,6 +1488,34 @@ export const MenuSection = ({ embedded = false, isDelivery = false }: MenuSectio
           buttonStyle={buttonStyle}
         />
       </div>
+      </CollapsibleSubsection>
+
+      {/* Sandwich Platters (full service) */}
+      <CollapsibleSubsection title="Sandwich Platters" icon="🥪" defaultOpen={false}>
+        <div style={{ gridColumn: "1 / -1" }}>
+          <label style={labelStyle}>Sandwich & Wrap Platters</label>
+          <p style={{ fontSize: 12, color: "#888", marginBottom: 10 }}>Available for full service and delivery events. Selections are scoped to each platter tier.</p>
+          <button
+            type="button"
+            onClick={() => setPlatterModalOpen((v) => !v)}
+            style={{ ...buttonStyle, borderColor: "#f97316", color: "#f97316", background: "rgba(249,115,22,0.1)" }}
+          >
+            {platterModalOpen ? "− Hide Platter Config" : "+ Configure Sandwich Platters"}
+          </button>
+          {platterModalOpen && (
+            <SandwichPlatterConfigModal
+              open
+              inline
+              onClose={() => setPlatterModalOpen(false)}
+              onConfirm={(rows) => {
+                if (!selectedEventId) { setError("Select an event first"); return; }
+                setPlatterOrdersForEvent(selectedEventId, rows);
+                setPlatterModalOpen(false);
+              }}
+              initialRows={selectedEventId ? getPlatterOrdersByEventId(selectedEventId) : []}
+            />
+          )}
+        </div>
       </CollapsibleSubsection>
 
       {/* Creation Station */}

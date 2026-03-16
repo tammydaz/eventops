@@ -65,6 +65,7 @@ type BEOData = {
   eventEnd?: string;
   fwStaff?: string;
   staffArrival?: string;
+  foodMustBeReady?: string;
   invoice?: string;
   rentals?: string;
   updatedBy?: string;
@@ -76,6 +77,7 @@ type BEOData = {
   allergyBanner?: string;
   kitchenBanner?: string;
   noKitchenOnSite?: boolean;
+  noKitchenResolution?: string;
   isBuffet?: boolean;
   sections: MenuSection[];
   eventOccasion?: string;
@@ -136,8 +138,9 @@ const FULL_SERVICE_SAMPLE: BEOData = {
   updatedDate: "10/22/2025",
   allergyBanner: undefined,
   noKitchenOnSite: true,
+  noKitchenResolution: "Send small oven on truck",
   isBuffet: false,
-  kitchenBanner: "NO KITCHEN ON SITE — ALL FOOD MUST GO HOT",
+  kitchenBanner: "NO KITCHEN ON SITE",
   sections: [
     {
       title: "PRESENTED APPS",
@@ -622,46 +625,27 @@ const renderHeader = (beo: BEOData) => {
               <td style={{ ...print.headerCell, width: "35%", color: "#ff0000", fontWeight: 700 }}>{beo.orderNumber}</td>
             </tr>
             <tr>
-              <td style={print.headerCell}><span style={print.headerLabel}>CONTACT</span></td>
-              <td style={print.headerCell}>{beo.contact}</td>
               <td style={print.headerCell}><span style={print.headerLabel}>EVENT DATE</span></td>
               <td style={print.headerCell}>{beo.eventDate}</td>
-            </tr>
-            <tr>
-              <td style={print.headerCell}><span style={print.headerLabel}>PHONE</span></td>
-              <td style={print.headerCell}>{beo.phone}</td>
               <td style={print.headerCell}><span style={print.headerLabel}>GUESTS</span></td>
               <td style={{ ...print.headerCell, color: "#ff0000", fontWeight: 700 }}>{beo.guestCount}</td>
             </tr>
             <tr>
-              <td style={print.headerCell}><span style={print.headerLabel}>ADDRESS</span></td>
-              <td style={print.headerCell}>{beo.address}</td>
-              <td style={print.headerCell}><span style={print.headerLabel}>EVENT START</span></td>
-              <td style={{ ...print.headerCell, color: "#ff0000", fontWeight: 700 }}>{beo.eventStart}</td>
-            </tr>
-            <tr>
               <td style={print.headerCell}><span style={print.headerLabel}>CITY, ST</span></td>
               <td style={print.headerCell}>{beo.cityState}</td>
-              <td style={print.headerCell}><span style={print.headerLabel}>EVENT END</span></td>
-              <td style={{ ...print.headerCell, color: "#ff0000", fontWeight: 700 }}>{beo.eventEnd}</td>
-            </tr>
-            <tr>
-              <td style={print.headerCell}></td>
-              <td style={print.headerCell}></td>
-              <td style={print.headerCell}><span style={print.headerLabel}>FW STAFF</span></td>
-              <td style={{ ...print.headerCell, color: "#ff0000", fontWeight: 700 }}>{beo.fwStaff}</td>
+              <td style={print.headerCell}><span style={print.headerLabel}>EVENT TYPE</span></td>
+              <td style={print.headerCell}>{beo.eventOccasion || "—"}</td>
             </tr>
             <tr>
               <td style={{ ...print.headerCell, background: "#ff0000" }}></td>
               <td style={{ ...print.headerCell, background: "#ff0000" }}></td>
-              <td style={{ ...print.headerCell, background: "#ff0000", color: "#fff", fontWeight: 700 }}>STAFF ARRIVAL</td>
-              <td style={{ ...print.headerCell, color: "#ff0000", fontWeight: 700 }}>{beo.staffArrival}</td>
+              <td style={{ ...print.headerCell, background: "#ff0000", color: "#fff", fontWeight: 700, fontSize: 13, letterSpacing: 1 }}>FOOD MUST BE READY</td>
+              <td style={{ ...print.headerCell, color: "#ff0000", fontWeight: 700, fontSize: 16 }}>{beo.foodMustBeReady || "—"}</td>
             </tr>
           </tbody>
         </table>
-        {(beo.invoice || beo.rentals || beo.eventOccasion) && (
+        {(beo.invoice || beo.rentals) && (
           <div style={{ display: "flex", gap: 32, padding: "4px 8px", fontSize: 12, borderBottom: "1px solid #000" }}>
-            {beo.eventOccasion && <span><strong>Occasion:</strong> {beo.eventOccasion}</span>}
             {beo.invoice && <span><strong>Invoice:</strong> {beo.invoice}</span>}
             {beo.rentals && <span><strong>Rentals:</strong> <span style={{ color: "#0000ff" }}>{beo.rentals}</span></span>}
             {beo.updatedBy && <span style={{ marginLeft: "auto" }}><strong>Updated:</strong> {beo.updatedBy}</span>}
@@ -838,7 +822,7 @@ const renderSection = (
 };
 
 const renderPage2FullService = (beo: BEOData) => (
-  <>
+  <div className="kitchen-beo-page2">
     <div style={print.redSectionBanner}>BEVERAGES</div>
     <table style={print.twoColTable}>
       <thead>
@@ -912,7 +896,7 @@ const renderPage2FullService = (beo: BEOData) => (
       </div>
     ))}
     </div>
-  </>
+  </div>
 );
 
 const renderPaperProductsDelivery = (beo: BEOData) => (
@@ -961,14 +945,15 @@ const renderPaperProductsDelivery = (beo: BEOData) => (
 );
 
 // ── Section config for building from event data (with custom text fields) ──
+// Hard print order: Passed → Presented → Buffet Metal → Buffet China → Dessert.
+// Kitchen BEO ALWAYS ends after Dessert. Stations route into their placement section.
+// STATIONS and ROOM TEMP/DISPLAYS are intentionally excluded — no section header for them.
 const MENU_SECTION_CONFIG: { title: string; fieldId: string; customFieldId: string }[] = [
   { title: "PASSED APPETIZERS", fieldId: FIELD_IDS.PASSED_APPETIZERS, customFieldId: FIELD_IDS.CUSTOM_PASSED_APP },
   { title: "PRESENTED APPETIZERS", fieldId: FIELD_IDS.PRESENTED_APPETIZERS, customFieldId: FIELD_IDS.CUSTOM_PRESENTED_APP },
   { title: "BUFFET – METAL", fieldId: FIELD_IDS.BUFFET_METAL, customFieldId: FIELD_IDS.CUSTOM_BUFFET_METAL },
   { title: "BUFFET – CHINA", fieldId: FIELD_IDS.BUFFET_CHINA, customFieldId: FIELD_IDS.CUSTOM_BUFFET_CHINA },
   { title: "DESSERTS", fieldId: FIELD_IDS.DESSERTS, customFieldId: FIELD_IDS.CUSTOM_DESSERTS },
-  { title: "STATIONS", fieldId: FIELD_IDS.STATIONS, customFieldId: "" },
-  { title: "ROOM TEMP/DISPLAYS", fieldId: FIELD_IDS.ROOM_TEMP_DISPLAY, customFieldId: FIELD_IDS.CUSTOM_ROOM_TEMP_DISPLAY },
 ];
 
 /** Delivery BEO section config — delivery-only fields (no metal/china/appetizer lanes; all disposable)
@@ -1149,7 +1134,7 @@ const KitchenBEOPrintPage: React.FC = () => {
   const { selectedEventId, selectedEventData, loadEvents, loadEventData, selectEvent, setFields } = useEventStore();
   const [loading, setLoading] = useState(true);
   const [menuItemData, setMenuItemData] = useState<Record<string, { name: string; childIds: string[] }>>({});
-  const [stationsData, setStationsData] = useState<Array<{ id: string; stationType: string; stationItems: string[]; stationNotes: string; beoPlacement?: "Presented Appetizer Metal/China" | "Buffet Metal/China" }>>([]);
+  const [stationsData, setStationsData] = useState<Array<{ id: string; stationType: string; stationItems: string[]; stationNotes: string; beoPlacement?: "Presented Appetizer" | "Buffet Metal" | "Buffet China" }>>([]);
   const [boxedLunchOrders, setBoxedLunchOrders] = useState<BoxedLunchOrder[]>([]);
   const [fwArrivalFieldId, setFwArrivalFieldId] = useState<string | null>(null);
   const [checkState, setCheckState] = useState<Record<string, boolean>>({});
@@ -1415,33 +1400,28 @@ const KitchenBEOPrintPage: React.FC = () => {
         const allLines = [...itemLines, ...notesLines];
         return {
           qty: "—",
-          name: st.stationType || "Station",
+          name: st.stationType || "—",
           subItems: allLines.length > 0 ? allLines.map((text) => ({ text })) : undefined,
         };
       };
 
       for (const config of MENU_SECTION_CONFIG) {
         let items: MenuItem[];
-        if (config.fieldId === FIELD_IDS.STATIONS) {
-          // STATIONS section: only stations with no beoPlacement (or not Presented/Buffet)
-          items = stationsData
-            .filter((st) => st.beoPlacement !== "Presented Appetizer Metal/China" && st.beoPlacement !== "Buffet Metal/China")
-            .map(stationToMenuItem);
-        } else if (config.fieldId === FIELD_IDS.PRESENTED_APPETIZERS) {
-          // PRESENTED APPETIZERS: event menu items + stations with beoPlacement="Presented Appetizer Metal/China"
+        if (config.fieldId === FIELD_IDS.PRESENTED_APPETIZERS) {
           items = processField(config.fieldId);
           stationsData
-            .filter((st) => st.beoPlacement === "Presented Appetizer Metal/China")
+            .filter((st) => st.beoPlacement === "Presented Appetizer")
             .forEach((st) => items.push(stationToMenuItem(st)));
         } else if (config.fieldId === FIELD_IDS.BUFFET_METAL) {
-          // BUFFET – METAL: event menu items + stations with beoPlacement="Buffet Metal/China"
           items = processField(config.fieldId);
           stationsData
-            .filter((st) => st.beoPlacement === "Buffet Metal/China")
+            .filter((st) => st.beoPlacement === "Buffet Metal")
             .forEach((st) => items.push(stationToMenuItem(st)));
         } else if (config.fieldId === FIELD_IDS.BUFFET_CHINA) {
-          // BUFFET – CHINA: event menu items only (stations with Buffet Metal/China go to METAL)
           items = processField(config.fieldId);
+          stationsData
+            .filter((st) => st.beoPlacement === "Buffet China")
+            .forEach((st) => items.push(stationToMenuItem(st)));
         } else {
           items = processField(config.fieldId);
         }
@@ -1496,6 +1476,7 @@ const KitchenBEOPrintPage: React.FC = () => {
     eventStart: secondsTo12HourString(selectedEventData[FIELD_IDS.EVENT_START_TIME]) || "",
     eventEnd: secondsTo12HourString(selectedEventData[FIELD_IDS.EVENT_END_TIME]) || "",
     fwStaff: asString(selectedEventData[FIELD_IDS.CAPTAIN]) || asString(selectedEventData[FIELD_IDS.SERVERS]) || asString(selectedEventData[FIELD_IDS.STAFF]) || "",
+    foodMustBeReady: secondsTo12HourString(selectedEventData[FIELD_IDS.DISPATCH_TIME]) || asString(selectedEventData[FIELD_IDS.DISPATCH_TIME]) || "",
     staffArrival: (() => {
       const arrivalFieldId = fwArrivalFieldId ?? FIELD_IDS.VENUE_ARRIVAL_TIME;
       const raw = selectedEventData[arrivalFieldId] ?? selectedEventData[FIELD_IDS.VENUE_ARRIVAL_TIME];
@@ -1511,9 +1492,10 @@ const KitchenBEOPrintPage: React.FC = () => {
     employee: asString(selectedEventData[FIELD_IDS.CAPTAIN]) || "",
     allergyBanner: asString(selectedEventData[FIELD_IDS.DIETARY_NOTES]) ? `ALLERGIES: ${asString(selectedEventData[FIELD_IDS.DIETARY_NOTES])}` : undefined,
     noKitchenOnSite: asSingleSelectName(selectedEventData[FIELD_IDS.KITCHEN_ON_SITE]) === "No",
+    noKitchenResolution: asSingleSelectName(selectedEventData[FIELD_IDS.NO_KITCHEN_RESOLUTION]) || undefined,
     isBuffet: asSingleSelectName(selectedEventData[FIELD_IDS.SERVICE_STYLE])?.toLowerCase().includes("buffet") || false,
-    kitchenBanner: asSingleSelectName(selectedEventData[FIELD_IDS.KITCHEN_ON_SITE]) === "No" && asBoolean(selectedEventData[FIELD_IDS.FOOD_MUST_GO_HOT])
-      ? "NO KITCHEN ON SITE — ALL FOOD MUST GO HOT"
+    kitchenBanner: asSingleSelectName(selectedEventData[FIELD_IDS.KITCHEN_ON_SITE]) === "No"
+      ? "NO KITCHEN ON SITE"
       : undefined,
     eventOccasion: asSingleSelectName(selectedEventData[FIELD_IDS.EVENT_OCCASION]) || undefined,
     sections: buildSectionsFromEvent(isDelivery),
@@ -1611,6 +1593,14 @@ const KitchenBEOPrintPage: React.FC = () => {
             break-inside: avoid !important;
             page-break-inside: avoid !important;
           }
+          /* No orphan footer: keep page-2 content (beverages, serviceware, notes, timeline)
+             together with the last food section — never alone on its own page. */
+          .kitchen-beo-print-page .kitchen-beo-page2 {
+            break-before: avoid !important;
+            page-break-before: avoid !important;
+            orphans: 4 !important;
+            widows: 4 !important;
+          }
           /* White checkboxes on the right — print with white background and border */
           .kitchen-beo-print-page input[type="checkbox"] {
             background: #fff !important;
@@ -1682,8 +1672,22 @@ const KitchenBEOPrintPage: React.FC = () => {
           <div style={print.allergyBanner}>{beo.allergyBanner}</div>
         )}
 
-        {beo.noKitchenOnSite && !beo.isBuffet && beo.kitchenBanner && (
-          <div style={print.kitchenBanner}>{beo.kitchenBanner}</div>
+        {beo.noKitchenOnSite && beo.kitchenBanner && (
+          <div style={{ border: "3px solid #ff0000", borderRadius: 4, margin: "6px 0", overflow: "hidden" }}>
+            <div style={{ background: "#ff0000", color: "#fff", fontWeight: 700, fontSize: 14, textAlign: "center", padding: "5px 8px", letterSpacing: 1 }}>
+              ⚠️ NO KITCHEN ON SITE — ALL FOOD MUST GO HOT
+            </div>
+            {beo.noKitchenResolution ? (
+              <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "7px 14px", background: "#fff8f8" }}>
+                <span style={{ fontWeight: 700, fontSize: 12, color: "#ff0000" }}>RESOLUTION:</span>
+                <span style={{ fontWeight: 700, fontSize: 13, color: "#000" }}>{beo.noKitchenResolution}</span>
+              </div>
+            ) : (
+              <div style={{ padding: "5px 14px", background: "#fff8f8", color: "#c00", fontWeight: 700, fontSize: 12 }}>
+                ⚠️ RESOLUTION NOT SET — Confirm with office before packout
+              </div>
+            )}
+          </div>
         )}
 
         {selectedEventData && beo.sections.length === 0 && (

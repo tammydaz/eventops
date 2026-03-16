@@ -79,7 +79,7 @@ export const TimelineSection = () => {
     .join(" / ");
 
   return (
-    <FormSection title="Timeline" dotColor="#00bcd4">
+    <FormSection title="Timeline" dotColor="#00bcd4" sectionId="beo-section-timeline">
       {showKeyMoments && (
         <div style={{ gridColumn: "1 / -1", marginBottom: 10, padding: 8, backgroundColor: "rgba(59,130,246,0.08)", borderRadius: 6, border: "1px solid rgba(59,130,246,0.3)" }}>
           <div style={{ fontSize: 11, color: "#93c5fd", marginBottom: 4, fontWeight: 600 }}>

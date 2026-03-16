@@ -9,7 +9,8 @@ export const DietaryNotesSection = () => {
   const [details, setDetails] = useState({ 
     dietaryNotes: "", 
     specialNotes: "", 
-    beoNotes: "", 
+    beoNotes: "",
+    opsExceptions: "",
   });
   const lastEventIdRef = useRef<string | null>(null);
 
@@ -19,7 +20,7 @@ export const DietaryNotesSection = () => {
       lastEventIdRef.current = selectedEventId;
       
       if (!selectedEventId || !selectedEventData) {
-        setDetails({ dietaryNotes: "", specialNotes: "", beoNotes: "" });
+        setDetails({ dietaryNotes: "", specialNotes: "", beoNotes: "", opsExceptions: "" });
         return;
       }
       
@@ -27,6 +28,7 @@ export const DietaryNotesSection = () => {
         dietaryNotes: asString(selectedEventData[FIELD_IDS.DIETARY_NOTES]),
         specialNotes: asString(selectedEventData[FIELD_IDS.SPECIAL_NOTES]),
         beoNotes: asString(selectedEventData[FIELD_IDS.BEO_NOTES]),
+        opsExceptions: asString(selectedEventData[FIELD_IDS.OPS_EXCEPTIONS_SPECIAL_HANDLING]),
       });
     }
   }, [selectedEventId, selectedEventData]);
@@ -74,6 +76,23 @@ export const DietaryNotesSection = () => {
           onBlur={(e) => handleBlur(FIELD_IDS.BEO_NOTES, e.target.value)}
           style={textareaStyle} 
           placeholder="Kitchen notes, special handling, venue setup instructions..." 
+        />
+      </div>
+      <div style={{ gridColumn: "1 / -1" }}>
+        <label style={labelStyle}>
+          Outside Sourcing / Ops Exceptions
+          <span style={{ fontWeight: 400, color: "#888", marginLeft: 8 }}>
+            — items sourced externally or requiring Ops Chief notification
+          </span>
+        </label>
+        <textarea 
+          rows={3} 
+          value={details.opsExceptions} 
+          disabled={!canEdit} 
+          onChange={(e) => setDetails(p => ({ ...p, opsExceptions: e.target.value }))} 
+          onBlur={(e) => handleBlur(FIELD_IDS.OPS_EXCEPTIONS_SPECIAL_HANDLING, e.target.value)}
+          style={textareaStyle} 
+          placeholder="e.g. Wedding cake pickup — arrive by 3pm · Sushi from Nobu — driver must confirm · Sig drink ingredients needed — notify Ops Chief · Client-supplied ingredients for pasta station..." 
         />
       </div>
     </FormSection>

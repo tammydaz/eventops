@@ -101,9 +101,8 @@ export const ALL_AMERICAN = {
 export const STREET_FOOD = {
   options: [
     "Mini shredded BBQ chicken on brioche rolls",
-    "Mini sliders with aged white cheddar, caramelized onions & garlic aioli",
-    "Crispy cod street tacos",
-    "Beef street tacos",
+    "Mini sliders with aged white cheddar, caramelized onions & garlic aioli on mini brioche rolls",
+    "Crispy cod or beef street tacos",
     "Carolina BBQ pork on a bao bun",
     "Thai sesame noodles in mini Chinese takeout containers",
     "Grilled chimichurri beef kebob",
@@ -116,9 +115,9 @@ export const STREET_FOOD = {
   count: 5,
 };
 
-/** Iced Raw Bar: Choose proteins, garnishes included */
+/** Iced Raw Bar: ALL proteins always included, no picks */
 export const RAW_BAR = {
-  proteinOptions: ["Shrimp", "Crab claws", "Oysters"] as const,
+  includedProteins: ["Shrimp", "Crab claws", "Oysters"] as const,
   includedGarnishes: ["Classic cocktail sauce", "Louisiana hot sauce", "Jalapeno remoulade", "Sweet Vidalia vinegar", "Horseradish"],
 };
 
@@ -156,9 +155,40 @@ export const LATE_NIGHT = {
   options: [
     "Philly soft pretzel bites with cheese & mustard",
     "Assorted donuts",
-    "Chicken & waffle bites with bourbon maple butter",
+    "Chicken & waffle bites with bourbon maple butter drizzle",
     "Mini PB, Nutella & crumbled bacon sandwiches",
-    "Donut wall - Assorted donuts",
-    "Pop-Tart a la carte (Strawberry, Cinnamon, S'mores, Blueberry)",
+    "Donut wall - Assorted donuts hung from a pegged wall",
+    "Pop-Tart a la carte (Strawberry Frosted, Cinnamon Brown Sugar Frosted, S'mores, Blueberry)",
+  ] as const,
+};
+
+/** Fisherman's Corner: Choose 2 of the following 4 */
+export const FISHERMANS_CORNER = {
+  options: [
+    "Jumbo shrimp cocktail in mini martini glasses",
+    "Jumbo lump crab salad shooters",
+    "Bacon wrapped scallops",
+    "Sesame seared ahi tuna",
+  ] as const,
+  count: 2,
+};
+
+/** BarWerx Appetizer Sampler — fixed 4-item display, no choices */
+export const BARWERX = {
+  included: [
+    "Cheesy potato skins with bacon & a dollop of sour cream",
+    "Cheese quesadillas with house made salsa",
+    "Classic boneless buffalo wings",
+    "Mozzarella sticks",
+  ] as const,
+};
+
+/** The Philly Jawn — fixed 4-item display, no choices */
+export const PHILLY_JAWN = {
+  included: [
+    "Mini roast pork sandwiches with house made roasted peppers",
+    "Nonna's meatballs with Sunday gravy sliders",
+    "Philly cheesesteak dumplings with spicy ketchup",
+    "Philly soft pretzels with mustard & warm cheese",
   ] as const,
 };

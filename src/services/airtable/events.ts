@@ -112,12 +112,12 @@ export const FIELD_IDS = {
   MENU_ITEM_DIETARY_TAGS: "fldUSr1QgzP4nv9vs", // Dietary tags / allergen icons
 
   // ── Bar & Beverage ──
-  BAR_SERVICE: "fldOisfjYPDeBwM1B",              // Bar Service Needed (Single select)
+  BAR_SERVICE: "fldXm91QjyvVKbiyO",              // Bar Service Needed (Single select) — confirmed field ID
   BAR_SIGNATURE_DRINK_YES_NO: "fldcry8vpUBY3fkHk", // Signature Drink? (Yes/No) — shown when Full Bar
   BAR_SIGNATURE_DRINK_NAME: "fldZSIBTkzcEmG7bt",  // Signature Drink Name
   BAR_SIGNATURE_DRINK_INGREDIENTS: "fld1sg6vQi7lziPDz", // Signature Drink Recipe & Ingredients
   BAR_SIGNATURE_DRINK_MIXERS_SUPPLIER: "fldoek1mpdi2ESyzu", // Who is supplying signature drink mixers and garnishes (Foodwerx, Client)
-  BAR_SERVICE_NEEDED: "fldOisfjYPDeBwM1B",       // Alias for BAR_SERVICE
+  BAR_SERVICE_NEEDED: "fldXm91QjyvVKbiyO",       // Alias for BAR_SERVICE — confirmed field ID
   BAR_DRINK_NAME: "fldZSIBTkzcEmG7bt",           // Alias for BAR_SIGNATURE_DRINK_NAME
   BAR_RECIPE: "fld1sg6vQi7lziPDz",               // Alias for BAR_SIGNATURE_DRINK_INGREDIENTS
   BAR_WHO_SUPPLIES: "fldoek1mpdi2ESyzu",         // Alias for BAR_SIGNATURE_DRINK_MIXERS_SUPPLIER
@@ -198,6 +198,7 @@ export const FIELD_IDS = {
   // ── Kitchen / Hot Food Logic ──
   KITCHEN_ON_SITE: "fldSpUlS9qEQ5ly6T",        // Single select: Yes/No/None
   FOOD_MUST_GO_HOT: "fldJFB69mmB5T4Ysp",       // Checkbox
+  NO_KITCHEN_RESOLUTION: "fldm6U2EI3fZ4x6fB",  // Single select: resolution when no kitchen on site
 
   // ── Status & Booking ──
   BOOKING_STATUS: "fldUfOemMR4gpALQR",
@@ -217,6 +218,10 @@ export const FIELD_IDS = {
   HYDRATION_BOTTLED_TEA: "fld91JcDezV20RarF",
   HYDRATION_DIET_TEA: "fldGUB8Thl42pJcx6",
   HYDRATION_MIXTURE: "fldV6XXkMe5S0zyEV",
+
+  // ── Spec Engine ──
+  SPEC_DEFAULT: "fldt09eXgXYoMkrbT",    // Spec – Default (formula/rollup) — READ ONLY, never write
+  SPEC_OVERRIDE: "fldoMjEaGZek6pgXG",   // Spec – Override (editable) — write here only
 
   // ── Print & Docs ──
   THEME_COLOR_SCHEME: "fld5raG6Afilj1wDo",
@@ -393,13 +398,15 @@ export async function getBarServiceFieldId(): Promise<string | null> {
     (f) => f.type === "singleSelect" && /bar\s*service/i.test(f.name)
   ) ?? [];
   const field = barServiceFields.find((f) => /needed/i.test(f.name)) ?? barServiceFields[0];
-  cachedBarServiceFieldId = field?.id ?? null;
-  if (cachedBarServiceFieldId) {
-    additionalAllowedFieldIds.add(cachedBarServiceFieldId);
-    SINGLE_SELECT_FIELD_IDS.add(cachedBarServiceFieldId);
-    console.log("✅ Bar Service field resolved:", cachedBarServiceFieldId, field?.name);
+  // Fall back to the confirmed field ID if Meta API doesn't return a match
+  cachedBarServiceFieldId = field?.id ?? "fldXm91QjyvVKbiyO";
+  additionalAllowedFieldIds.add(cachedBarServiceFieldId);
+  // ⚠️ Do NOT add to SINGLE_SELECT_FIELD_IDS — this base rejects { name } format for this field.
+  // Plain string or null is the correct payload format for Bar Service Needed.
+  if (field?.id) {
+    console.log("✅ Bar Service field resolved via Meta API:", cachedBarServiceFieldId, field?.name);
   } else {
-    console.warn("⚠️ Bar Service Needed field not found in Events table. Fields:", table?.fields.map((f) => f.name) ?? []);
+    console.log("✅ Bar Service field using confirmed fallback ID:", cachedBarServiceFieldId);
   }
   return cachedBarServiceFieldId;
 }
@@ -937,6 +944,7 @@ const SAVE_WHITELIST = new Set([
   "fldJUrDnCSnw31wan",   // DISPLAY_DESIGN
   "fldaT7wcJglqPr8dA",   // DINING_CREW
   "fldSpUlS9qEQ5ly6T",   // KITCHEN_ON_SITE
+  "fldm6U2EI3fZ4x6fB",   // NO_KITCHEN_RESOLUTION
   "fldMenuPrintTheme",   // MENU_PRINT_THEME (Single Select) — update if different from Airtable
   "fldJFB69mmB5T4Ysp",   // FOOD_MUST_GO_HOT
   "fldnGtJVWf4u39SHI",   // BEO_NOTES
@@ -952,6 +960,7 @@ const SAVE_WHITELIST = new Set([
   "fldRb454yd3EQhcbo",   // BEVERAGES
   "fld7n9gmBURwXzrnB",   // MENU_ITEMS
   "fldX9ayAyjMqYT2Oi",   // MENU_ITEM_SPECS
+  "fldoMjEaGZek6pgXG",   // SPEC_OVERRIDE — editable override; SPEC_DEFAULT (fldt09eXgXYoMkrbT) is formula, never write
   "fldwdqfHaKXmqObE2",   // STATUS
   "fldUfOemMR4gpALQR",   // BOOKING_STATUS
   "fld84akZRtjijhCHQ",   // PAYMENT_STATUS
@@ -967,6 +976,7 @@ const SAVE_WHITELIST = new Set([
   "fldm1qYJE55QVjYsd",   // CUSTOM_BUFFET_METAL
   "fldtquSPyLWUEYX6P",   // CUSTOM_BUFFET_CHINA
   "fld95NEZsIfHpVvAk",   // CUSTOM_DESSERTS
+  "fldXm91QjyvVKbiyO",   // BAR_SERVICE / BAR_SERVICE_NEEDED — confirmed Airtable field ID (Single Select)
   "fldcry8vpUBY3fkHk",   // BAR_SIGNATURE_DRINK_YES_NO
   "fldZSIBTkzcEmG7bt",   // BAR_SIGNATURE_DRINK_NAME
   "fld1sg6vQi7lziPDz",   // BAR_SIGNATURE_DRINK_INGREDIENTS (Recipe & Ingredients)
@@ -1033,7 +1043,9 @@ const DATE_TIME_FIELD_IDS = new Set([
 // Field IDs Airtable rejects — strip before PATCH (Bar Service now resolved dynamically by name)
 const STRIP_FIELD_IDS = new Set<string>([]);
 
-// Single-select: send plain string (many bases reject { name } format with "Cannot parse value")
+// Single-select fields that REQUIRE { name } format: normalize value to { name } or null before PATCH.
+// ⚠️ DO NOT add BAR_SERVICE (fldXm91QjyvVKbiyO) here — this base rejects { name } format
+// for that field and returns "Cannot parse value". Plain string or null is the correct format.
 const SINGLE_SELECT_FIELD_IDS = new Set<string>([]);
 
 /** Convert seconds (from midnight) + date string → ISO datetime for Airtable */

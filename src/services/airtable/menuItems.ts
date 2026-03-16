@@ -121,3 +121,47 @@ export async function fetchMenuItemsByCategory(categoryKey: string): Promise<Men
     };
   });
 }
+
+const MENU_ITEMS_VESSEL_TYPE_FIELD_ID = "fldZCnfKzWijIDaeV";
+
+/** Vessel type values matching Airtable single-select options in Menu Items table */
+export const VESSEL_TYPE_VALUES = {
+  METAL_HOT: "Metal – Hot",
+  CHINA_COLD: "China – Cold / Display",
+  CHINA_ROOM_TEMP: "China – Room Temp",
+} as const;
+
+/**
+ * Patch the Vessel Type field on a Menu Items record.
+ * Called when a user places an item into a Metal or China section in the intake UI.
+ * This does NOT go through the Events table — it patches the Menu Items table directly.
+ */
+export async function updateMenuItemVesselType(
+  menuItemId: string,
+  vesselType: string
+): Promise<{ success: true } | { error: true; message: string }> {
+  const tableId = getMenuItemsTable() || MENU_ITEMS_TABLE_ID_DEFAULT;
+
+  const data = await airtableFetch<{ records?: unknown[]; error?: { message?: string } }>(
+    `/${tableId}`,
+    {
+      method: "PATCH",
+      body: JSON.stringify({
+        records: [
+          {
+            id: menuItemId,
+            fields: {
+              [MENU_ITEMS_VESSEL_TYPE_FIELD_ID]: vesselType,
+            },
+          },
+        ],
+      }),
+    }
+  );
+
+  if (isErrorResult(data)) {
+    console.warn(`⚠️ updateMenuItemVesselType failed for ${menuItemId}:`, data);
+    return data;
+  }
+  return { success: true };
+}

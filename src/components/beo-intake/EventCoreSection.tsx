@@ -114,7 +114,7 @@ export const EventCoreSection = ({ isDelivery = false }: { isDelivery?: boolean 
   };
 
   return (
-    <FormSection title={isDelivery ? "Delivery Event Details" : "Event Details"} dotColor={isDelivery ? "#22c55e" : undefined} isDelivery={isDelivery}>
+    <FormSection title={isDelivery ? "Delivery Event Details" : "Event Details"} dotColor={isDelivery ? "#22c55e" : undefined} isDelivery={isDelivery} sectionId="beo-section-event">
       <div>
         <label style={labelStyle}>Event Date</label>
         <input
