@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { useLocation } from "react-router-dom";
 import { useEventStore } from "../state/eventStore";
 import { useAuthStore } from "../state/authStore";
 import { useBeoPrintStore } from "../state/beoPrintStore";
@@ -8,13 +9,14 @@ import { loadStationsByEventId } from "../services/airtable/linkedRecords";
 import { loadStationComponentNamesByIds } from "../services/airtable/stationComponents";
 import { loadBoxedLunchOrdersByEventId, type BoxedLunchOrder } from "../services/airtable/boxedLunchOrders";
 import { getPlatterOrdersByEventId } from "../state/platterOrdersStore";
-import { asLinkedRecordIds, asSingleSelectName, asString, asStringArray, isErrorResult } from "../services/airtable/selectors";
+import { asBarServicePrimary, asLinkedRecordIds, asMultiSelectNames, asSingleSelectName, asString, asStringArray, isErrorResult } from "../services/airtable/selectors";
 import { secondsToTimeString, secondsTo12HourString } from "../utils/timeHelpers";
 import { isDeliveryOrPickup } from "../lib/deliveryHelpers";
-import { FULL_BAR_PACKAGE, FULL_BAR_PACKAGE_SPECK_ROWS, getFullBarPackagePackoutItems, getSignatureCocktailGreeting } from "../constants/fullBarPackage";
+import { FULL_BAR_PACKAGE, FULL_BAR_PACKAGE_SPECK_ROWS, getFullBarPackagePackoutItems, getSignatureCocktailGreeting, getNonStandardBarItems, parseBarItemTokens, isStandardBarItem } from "../constants/fullBarPackage";
 import { ConfirmSendToBOHModal } from "../components/ConfirmSendToBOHModal";
 import { AcceptTransferModal } from "../components/AcceptTransferModal";
 import { getSauceOverrides } from "../state/sauceOverrideStore";
+import { getBeoSpecStorageKey, getSpecOverrideKey } from "../utils/beoSpecStorage";
 
 // ── Types ──
 type MenuLineItem = {
@@ -1016,28 +1018,31 @@ function parseServicewareLines(text: string): { item: string; qty: string; suppl
   return items;
 }
 
-// ── Section pill for BEO print (with dot color, always expanded) ──
+// ── Section pill for BEO print (with dot color, always expanded). Omit title to hide the header (e.g. Bar table only). ──
 function BeoSectionPill({
   title,
   dotColor,
   children,
 }: { title: string; dotColor: string; children: React.ReactNode }) {
+  const showHeader = title.length > 0;
   return (
     <div className="beo-section-card" style={styles.sectionCard}>
-      <div
-        style={{
-          width: "100%",
-          ...styles.sectionHeader,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          gap: 10,
-        }}
-      >
-        <span style={{ color: dotColor, fontSize: "22px", lineHeight: 0 }}>●</span>
-        <span>{title}</span>
-        <span style={{ color: dotColor, fontSize: "22px", lineHeight: 0 }}>●</span>
-      </div>
+      {showHeader && (
+        <div
+          style={{
+            width: "100%",
+            ...styles.sectionHeader,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 10,
+          }}
+        >
+          <span style={{ color: dotColor, fontSize: "22px", lineHeight: 0 }}>●</span>
+          <span>{title}</span>
+          <span style={{ color: dotColor, fontSize: "22px", lineHeight: 0 }}>●</span>
+        </div>
+      )}
       <div style={{ padding: "0 16px 16px" }}>{children}</div>
     </div>
   );
@@ -1473,9 +1478,11 @@ function FullBeoPacketBeveragesContent(props: {
   const phoneStr = asString(eventData[FIELD_IDS.CONTACT_PHONE]) || asString(eventData[FIELD_IDS.CLIENT_PHONE]) || "";
   const f = (id: string) => asString(eventData[id]);
   const barFid = barServiceFieldId ?? FIELD_IDS.BAR_SERVICE;
-  const barService = asSingleSelectName(eventData[barFid]);
+  const barServiceSelectedHeader = asMultiSelectNames(eventData[barFid]);
+  const barServiceLabel = barServiceSelectedHeader.length ? barServiceSelectedHeader.filter((x) => x !== "None").join(", ") || "N/A" : "—";
   const signatureDrinkName = f(FIELD_IDS.BAR_SIGNATURE_DRINK_NAME);
-  const isFullBarPackage = barService === "Full Bar Package";
+  const signatureDrinkRecipe = f(FIELD_IDS.BAR_SIGNATURE_DRINK_INGREDIENTS);
+  const isFullBarPackage = barServiceSelectedHeader.includes("Full Bar Package");
   const hasSignatureDrink = signatureDrinkName.trim() !== "";
 
   const hydrationProvided = asSingleSelectName(eventData[FIELD_IDS.HYDRATION_STATION_PROVIDED]);
@@ -1588,10 +1595,15 @@ function FullBeoPacketBeveragesContent(props: {
             {FULL_BAR_PACKAGE.glasswareAndService.map((g) => <div key={g}>{g}</div>)}
             {FULL_BAR_PACKAGE.garnishes.map((g) => <div key={g}>{g}</div>)}
             {FULL_BAR_PACKAGE.mixers.map((m) => <div key={m}>{m}</div>)}
-            {hasSignatureDrink && <div style={{ marginTop: 8 }}>{getSignatureCocktailGreeting(signatureDrinkName)}</div>}
+            {hasSignatureDrink && (
+              <div style={{ marginTop: 8 }}>
+                <div>{getSignatureCocktailGreeting(signatureDrinkName)}</div>
+                {signatureDrinkRecipe.trim() && <div style={{ marginTop: 4, whiteSpace: "pre-wrap", fontSize: 13 }}>{signatureDrinkRecipe.trim()}</div>}
+              </div>
+            )}
           </div>
         ) : (
-          <div style={{ fontSize: 14 }}>Bar Service: {barService || "—"}</div>
+          <div style={{ fontSize: 14 }}>Bar Service: {barServiceLabel}</div>
         )}
       </BeveragePill>
 
@@ -1661,13 +1673,15 @@ function ServerBeo2ndPageContent(props: {
   const { eventData, barServiceFieldId, leftCheck, gridTemplateColumns, checkState, setCheckState, specOverrides, setSpecOverrides, packOutEdits, setPackOutEdits } = props;
   const f = (id: string) => asString(eventData[id]);
   const barFid = barServiceFieldId ?? FIELD_IDS.BAR_SERVICE;
-  const barService = asSingleSelectName(eventData[barFid]);
+  const barServiceSelected = asMultiSelectNames(eventData[barFid]);
+  const barService = asBarServicePrimary(eventData[barFid]); // primary for single-place label
   const signatureDrinkName = f(FIELD_IDS.BAR_SIGNATURE_DRINK_NAME);
+  const signatureDrinkRecipe = f(FIELD_IDS.BAR_SIGNATURE_DRINK_INGREDIENTS);
   const signatureDrinkMixersSupplier = asSingleSelectName(eventData[FIELD_IDS.BAR_SIGNATURE_DRINK_MIXERS_SUPPLIER]);
   const signatureDrinkMixers = f(FIELD_IDS.BAR_MIXERS);
   const signatureDrinkGarnishes = f(FIELD_IDS.BAR_GARNISHES);
   const isClientSupplyingBar = /client/i.test(signatureDrinkMixersSupplier || "");
-  const isFullBarPackage = barService === "Full Bar Package";
+  const isFullBarPackage = barServiceSelected.includes("Full Bar Package");
   const hasSignatureDrink = signatureDrinkName.trim() !== "";
 
   const hydrationProvided = asSingleSelectName(eventData[FIELD_IDS.HYDRATION_STATION_PROVIDED]);
@@ -1714,8 +1728,10 @@ function ServerBeo2ndPageContent(props: {
   const foodServiceFlow = asSingleSelectName(eventData[FIELD_IDS.FOOD_SERVICE_FLOW]);
   const clientSuppliedFood = f(FIELD_IDS.CLIENT_SUPPLIED_FOOD);
   const religiousRestrictions = f(FIELD_IDS.RELIGIOUS_RESTRICTIONS);
+  const dietarySummaryNotes = f(FIELD_IDS.DIETARY_SUMMARY);
   const hasNotes =
     dietaryNotes.trim() !== "" ||
+    dietarySummaryNotes.trim() !== "" ||
     specialNotes.trim() !== "" ||
     beoNotes.trim() !== "" ||
     parkingNotes.trim() !== "" ||
@@ -1739,47 +1755,63 @@ function ServerBeo2ndPageContent(props: {
   const eventOccasion = asSingleSelectName(eventData[FIELD_IDS.EVENT_OCCASION]) ?? "";
   const isWeddingOrMitzvah = eventOccasion === "Wedding" || eventOccasion === "Bar/Bat Mitzvah";
 
-  // Beverages: 2-column rows (CLIENT | FOODWERX) — Rentals column removed
-  type TwoColRow = { client: string; foodwerx: string };
+  // Beverages: bar rows (collapsible to CLIENT or FOODWERX) + other rows (hydration, coffee, ice)
+  type BeverageRow = { client: string; speck?: string; foodwerx: string };
   type ThreeColRow = { client: string; rentals: string; foodwerx: string };
-  const beverageRows: TwoColRow[] = [];
+  const barRows: BeverageRow[] = [];
+  const otherBeverageRows: BeverageRow[] = [];
   const paperRows: ThreeColRow[] = [];
   const rentalsDisplay = f(FIELD_IDS.RENTALS) || "";
   const source = asSingleSelectName(eventData[FIELD_IDS.SERVICEWARE_SOURCE])?.toLowerCase() || "";
 
-  // ── Beverage rows (no Rentals column) ──
-  if (isClientSupplyingBar) beverageRows.push({ client: "Mixers", foodwerx: "" });
+  // ── Bar rows (under "Bar"; intake picks CLIENT or FOODWERX — only that column shows) ──
+  if (isClientSupplyingBar) barRows.push({ client: "Mixers", foodwerx: "" });
   if (!isFullBarPackage) {
-    const barLabel = barService === "None" || !barService ? "None" : /foodwerx bartender only/i.test(barService || "") ? "Foodwerx bartender, client supplying mixers" : barService;
-    beverageRows.push({ client: "", foodwerx: barLabel });
+    const barLabel = barServiceSelected.length === 0 ? "N/A" : barServiceSelected.some((x) => /foodwerx bartender only/i.test(x)) ? "Foodwerx bartender, client supplying mixers" : barServiceSelected.join(", ");
+    barRows.push({ client: "", foodwerx: barLabel });
   } else {
-    beverageRows.push({ client: "", foodwerx: "Bars: 1" });
-    FULL_BAR_PACKAGE_SPECK_ROWS.forEach((r) => beverageRows.push({ client: "", foodwerx: r.item }));
+    barRows.push({ client: "", foodwerx: "Bars: 1" });
+    FULL_BAR_PACKAGE_SPECK_ROWS.forEach((r) => barRows.push({ client: "", speck: r.speck, foodwerx: r.item }));
     if (hasSignatureDrink) {
-      beverageRows.push({ client: "", foodwerx: getSignatureCocktailGreeting(signatureDrinkName).toUpperCase() });
-      if (isClientSupplyingBar) beverageRows.push({ client: "Mixers/Garnishes", foodwerx: "" });
+      barRows.push({ client: "", foodwerx: getSignatureCocktailGreeting(signatureDrinkName).toUpperCase() });
+      if (signatureDrinkRecipe.trim()) {
+        barRows.push({ client: signatureDrinkRecipe.trim(), foodwerx: signatureDrinkRecipe.trim() });
+      }
+      if (isClientSupplyingBar) barRows.push({ client: "Mixers/Garnishes (client supplying)", foodwerx: "" });
       else if (signatureDrinkMixers.trim() || signatureDrinkGarnishes.trim()) {
-        if (signatureDrinkMixers.trim()) beverageRows.push({ client: "", foodwerx: `SIGNATURE MIXERS: ${signatureDrinkMixers.toUpperCase()}` });
-        if (signatureDrinkGarnishes.trim()) beverageRows.push({ client: "", foodwerx: `SIGNATURE GARNISHES: ${signatureDrinkGarnishes.toUpperCase()}` });
+        if (signatureDrinkMixers.trim()) barRows.push({ client: "", foodwerx: `SIGNATURE MIXERS: ${signatureDrinkMixers.toUpperCase()}` });
+        if (signatureDrinkGarnishes.trim()) barRows.push({ client: "", foodwerx: `SIGNATURE GARNISHES: ${signatureDrinkGarnishes.toUpperCase()}` });
       }
     }
   }
+  // ── Other beverage rows (hydration, coffee, ice). Mimosa Bar juices/garnish only on Kitchen BEO (after DESSERTS). ──
   if (hasHydration) {
+    const otherHydrationOptions = hydrationDrinkOptions.filter((o) => !/mimosa\s*bar/i.test(o));
     const parts: string[] = [];
-    if (hydrationDrinkOptions.length > 0) parts.push(hydrationDrinkOptions.join(", ").toUpperCase());
+    if (otherHydrationOptions.length > 0) parts.push(otherHydrationOptions.join(", ").toUpperCase());
     if (hydrationNotes.trim()) parts.push(hydrationNotes.trim().toUpperCase());
-    beverageRows.push({ client: "", foodwerx: `HYDRATION STATION: ${parts.join(" — ")}` });
+    if (parts.length > 0) otherBeverageRows.push({ client: "", foodwerx: `HYDRATION STATION: ${parts.join(" — ")}` });
+    else otherBeverageRows.push({ client: "", foodwerx: "HYDRATION STATION: —" });
   }
   if (hasCoffeeTea) {
-    beverageRows.push({ client: "", foodwerx: "COFFEE/TEA SERVICE REQUESTED" });
+    otherBeverageRows.push({ client: "", foodwerx: "COFFEE/TEA SERVICE REQUESTED" });
     const coffeeMugType = f(FIELD_IDS.COFFEE_MUG_TYPE);
-    if (coffeeMugType.trim()) beverageRows.push({ client: "", foodwerx: `${coffeeMugType.toUpperCase()} MUGS` });
-    beverageRows.push({ client: "", foodwerx: "• Full Coffee Station Setup" });
-    beverageRows.push({ client: "", foodwerx: "• Regular + Decaf Urns" });
-    beverageRows.push({ client: "", foodwerx: "• Cups, Lids, Stirrers" });
-    beverageRows.push({ client: "", foodwerx: "• Creamers + Sugar" });
+    if (coffeeMugType.trim()) otherBeverageRows.push({ client: "", foodwerx: `${coffeeMugType.toUpperCase()} MUGS` });
+    otherBeverageRows.push({ client: "", foodwerx: "• Full Coffee Station Setup" });
+    otherBeverageRows.push({ client: "", foodwerx: "• Regular + Decaf Urns" });
+    otherBeverageRows.push({ client: "", foodwerx: "• Cups, Lids, Stirrers" });
+    otherBeverageRows.push({ client: "", foodwerx: "• Creamers + Sugar" });
   }
-  if (hasIce) beverageRows.push({ client: "", foodwerx: `ICE: ${iceProvidedBy.toUpperCase()} — Ice Quantity: 1` });
+  if (hasIce) otherBeverageRows.push({ client: "", foodwerx: `ICE: ${iceProvidedBy.toUpperCase()} — Ice Quantity: 1` });
+
+  const barColumnLabel = isClientSupplyingBar ? "CLIENT" : "FOODWERX";
+
+  // Non-standard signature drink items (we don't regularly supply) — show banner so they're not missed.
+  // TODO(Ops Chief): Surface nonStandardSigDrinkItems in Ops Chief view so expediter sees events that need sig drink items sourced.
+  const nonStandardSigDrinkItems =
+    hasSignatureDrink && !isClientSupplyingBar
+      ? getNonStandardBarItems([signatureDrinkMixers, signatureDrinkGarnishes].filter(Boolean).join(", "))
+      : [];
 
   // ── Paper product rows (CLIENT | RENTALS | FOODWERX) ──
   const hasNewLists = platesList.trim() || cutleryList.trim() || glasswareList.trim();
@@ -1883,24 +1915,47 @@ function ServerBeo2ndPageContent(props: {
         </div>
       </div>
 
-      {/* BEVERAGES — pill section (2 columns: CLIENT | FOODWERX, no Rentals) */}
-      <BeoSectionPill title="BEVERAGES" dotColor={SERVER_BEO_SECTION_COLORS.beverage}>
+      {nonStandardSigDrinkItems.length > 0 && (
+        <div className="beo-banner-block" style={{ ...styles.allergyBanner, background: "#fef3c7", color: "#92400e", borderColor: "#d97706", marginTop: 8 }}>
+          🍸 SIGNATURE DRINK — NON-STANDARD ITEMS (not in bar speck): {nonStandardSigDrinkItems.join(", ").toUpperCase()}. Ensure ordered/sourced.
+        </div>
+      )}
+
+      {/* BEVERAGES — Bar shows only CLIENT or FOODWERX (from intake); speck in left margin, items centered like Excel BEO */}
+      <BeoSectionPill title="" dotColor={SERVER_BEO_SECTION_COLORS.beverage}>
         <table style={{ ...serverBeoTable, marginBottom: 0 }}>
           <thead>
             <tr>
-              <td style={{ ...serverBeoHeader, width: "50%", color: "#c00" }}>CLIENT</td>
-              <td style={{ ...serverBeoHeader, width: "50%", color: "#00a" }}>FOODWERX</td>
+              <td style={{ ...serverBeoHeader, width: "18%", color: barColumnLabel === "CLIENT" ? "#c00" : "#00a" }}>Bar</td>
+              <td style={{ ...serverBeoHeader, width: "82%", color: barColumnLabel === "CLIENT" ? "#c00" : "#00a" }}>{barColumnLabel}</td>
             </tr>
           </thead>
           <tbody>
-            {(beverageRows.length > 0 ? beverageRows : [{ client: "", foodwerx: "No beverage service specified" }]).map((r, i) => (
-              <tr key={i}>
-                <td style={serverBeoCell}>{r.client || "—"}</td>
-                <td style={serverBeoCell}>{r.foodwerx || "—"}</td>
+            {(barRows.length > 0 ? barRows : [{ client: "", foodwerx: "No bar service specified" }]).map((r, i) => {
+              const content = barColumnLabel === "CLIENT" ? (r.client || "—") : (r.foodwerx || "—");
+              const speck = r.speck ?? "—";
+              return (
+                <tr key={i}>
+                  <td style={{ ...serverBeoCell, width: "18%", verticalAlign: "top" }}>{speck}</td>
+                  <td style={{ ...serverBeoCell, width: "82%", textAlign: "center", verticalAlign: "middle" }}>{content}</td>
+                </tr>
+              );
+            })}
+            {otherBeverageRows.map((r, i) => (
+              <tr key={`other-${i}`}>
+                <td style={{ ...serverBeoCell, width: "18%", verticalAlign: "top" }}>{r.speck ?? "—"}</td>
+                <td style={{ ...serverBeoCell, width: "82%", textAlign: "center", verticalAlign: "middle" }}>{r.foodwerx || "—"}</td>
               </tr>
             ))}
           </tbody>
         </table>
+        {hasSignatureDrink && !isClientSupplyingBar && (() => {
+          const tokens = parseBarItemTokens([signatureDrinkMixers, signatureDrinkGarnishes].filter(Boolean).join(", "));
+          const anyInSpeck = tokens.some((t) => isStandardBarItem(t));
+          return anyInSpeck ? (
+            <div style={{ fontSize: 10, color: "#16a34a", marginTop: 4, fontStyle: "italic" }}>* Sig drink items included in speck</div>
+          ) : null;
+        })()}
       </BeoSectionPill>
 
       {/* PAPER PRODUCTS — pill section (3 columns: CLIENT | RENTALS | FOODWERX) */}
@@ -1945,6 +2000,7 @@ function ServerBeo2ndPageContent(props: {
           { label: "EQUIPMENT", val: equipmentNotes },
           { label: "ALLERGIES/DIETARY", val: dietaryNotes },
           { label: "RELIGIOUS", val: religiousRestrictions },
+          { label: "DIETARY MEAL COUNTS", val: dietarySummaryNotes },
           { label: "SPECIAL", val: specialNotes },
           { label: "BEO", val: beoNotes },
         ]
@@ -1954,7 +2010,7 @@ function ServerBeo2ndPageContent(props: {
               <strong>{x.label}:</strong> {x.val}
             </div>
           ))}
-        {!parkingNotes && !loadInNotes && !stairsSteps && !elevatorsAvailable && !venueNotes && !kitchenAccessNotes && !foodSetupLocation && !powerNotes && !animalsPets && !eventPurpose && !foodServiceFlow && !timelineNotes && !clientSuppliedFood && !equipmentNotes && !dietaryNotes && !religiousRestrictions && !specialNotes && !beoNotes && (
+        {!parkingNotes && !loadInNotes && !stairsSteps && !elevatorsAvailable && !venueNotes && !kitchenAccessNotes && !foodSetupLocation && !powerNotes && !animalsPets && !eventPurpose && !foodServiceFlow && !timelineNotes && !clientSuppliedFood && !equipmentNotes && !dietaryNotes && !religiousRestrictions && !dietarySummaryNotes && !specialNotes && !beoNotes && (
           <div style={{ color: "#999", fontSize: 12 }}>—</div>
         )}
         </div>
@@ -2179,6 +2235,7 @@ function MeetingBeoNotesContent(props: {
 }
 
 const BeoPrintPage: React.FC = () => {
+  const location = useLocation();
   const { user } = useAuthStore();
   const {
     selectedEventId,
@@ -2223,7 +2280,7 @@ const BeoPrintPage: React.FC = () => {
   const [packOutEdits, setPackOutEdits] = useState<Record<string, string>>({});
   const [checkState, setCheckState] = useState<Record<string, boolean>>({});
 
-  const SPEC_STORAGE_KEY = (eid: string) => `beo-spec-overrides-${eid}`;
+  const SPEC_STORAGE_KEY = getBeoSpecStorageKey;
   const PACKOUT_STORAGE_KEY = (eid: string) => `beo-packout-edits-${eid}`;
   const CHECK_STORAGE_KEY = (eid: string) => `beo-check-state-${eid}`;
   const [hiddenMenuItems, setHiddenMenuItems] = useState<Set<string>>(new Set());
@@ -2306,15 +2363,30 @@ const BeoPrintPage: React.FC = () => {
     }
   }, []);
 
-  // ── Load spec overrides, packout edits, check state from localStorage (per event) ──
+  // ── Load spec overrides from Airtable (SPEC_OVERRIDE) then merge localStorage (per event) ──
   useEffect(() => {
     if (!eventId) return;
     try {
-      const specRaw = localStorage.getItem(SPEC_STORAGE_KEY(eventId));
-      if (specRaw) {
-        const parsed = JSON.parse(specRaw) as Record<string, string>;
-        if (parsed && typeof parsed === "object") setSpecOverrides(parsed);
+      const fromAirtable = typeof eventData[FIELD_IDS.SPEC_OVERRIDE] === "string" ? (eventData[FIELD_IDS.SPEC_OVERRIDE] as string).trim() : "";
+      const fromStorage = localStorage.getItem(SPEC_STORAGE_KEY(eventId));
+      let merged: Record<string, string> = {};
+      if (fromAirtable) {
+        try {
+          const p = JSON.parse(fromAirtable) as Record<string, string>;
+          if (p && typeof p === "object") merged = { ...merged, ...p };
+        } catch {
+          // ignore
+        }
       }
+      if (fromStorage) {
+        try {
+          const p = JSON.parse(fromStorage) as Record<string, string>;
+          if (p && typeof p === "object") merged = { ...merged, ...p };
+        } catch {
+          // ignore
+        }
+      }
+      if (Object.keys(merged).length > 0) setSpecOverrides(merged);
       const packRaw = localStorage.getItem(PACKOUT_STORAGE_KEY(eventId));
       if (packRaw) {
         const parsed = JSON.parse(packRaw) as Record<string, string>;
@@ -2328,12 +2400,35 @@ const BeoPrintPage: React.FC = () => {
     } catch {
       // ignore parse errors
     }
+  }, [eventId, eventData]);
+
+  // ── When tab becomes visible, re-merge spec overrides from localStorage (e.g. after editing in intake) ──
+  useEffect(() => {
+    if (!eventId) return;
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        try {
+          const specRaw = localStorage.getItem(SPEC_STORAGE_KEY(eventId));
+          if (specRaw) {
+            const parsed = JSON.parse(specRaw) as Record<string, string>;
+            if (parsed && typeof parsed === "object") setSpecOverrides((prev) => ({ ...prev, ...parsed }));
+          }
+        } catch {
+          // ignore
+        }
+      }
+    };
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => document.removeEventListener("visibilitychange", onVisibilityChange);
   }, [eventId]);
 
   // ── Persist spec overrides, packout edits, check state to localStorage ──
   useEffect(() => {
     if (!eventId) return;
     try {
+      // Don't overwrite with {} before load effect has applied (would wipe intake overrides)
+      const specRaw = localStorage.getItem(SPEC_STORAGE_KEY(eventId));
+      if (Object.keys(specOverrides).length === 0 && specRaw && specRaw !== "{}") return;
       localStorage.setItem(SPEC_STORAGE_KEY(eventId), JSON.stringify(specOverrides));
       localStorage.setItem(PACKOUT_STORAGE_KEY(eventId), JSON.stringify(packOutEdits));
       localStorage.setItem(CHECK_STORAGE_KEY(eventId), JSON.stringify(checkState));
@@ -2524,7 +2619,8 @@ const BeoPrintPage: React.FC = () => {
     };
 
     fetchMenuItems();
-  }, [eventData, eventId]);
+    // Refetch when navigating to BEO page so station config (e.g. All-American customItems) is fresh after saving from intake
+  }, [eventData, eventId, location.pathname]);
 
   // ── Extract event fields ──
   const f = (id: string): string => {
@@ -2572,6 +2668,7 @@ const BeoPrintPage: React.FC = () => {
     f(FIELD_IDS.VENUE_ARRIVAL_TIME);
   const allergies = f(FIELD_IDS.DIETARY_NOTES);
   const religiousRestrictions = f(FIELD_IDS.RELIGIOUS_RESTRICTIONS);
+  const dietarySummary = f(FIELD_IDS.DIETARY_SUMMARY);
   const beoNotes = f(FIELD_IDS.BEO_NOTES);
   const serviceStyle = asSingleSelectName(eventData[FIELD_IDS.SERVICE_STYLE]).trim();
   const notBuffetBanner = serviceStyle && !serviceStyle.toLowerCase().includes("buffet")
@@ -2642,6 +2739,7 @@ const BeoPrintPage: React.FC = () => {
   const FULL_SERVICE_SECTION_DEFS: { title: string; fieldId: string; linkedFieldId: string; customFieldId: string }[] = [
     { title: "PASSED APPETIZERS", fieldId: FIELD_IDS.PASSED_APPETIZERS, linkedFieldId: FIELD_IDS.PASSED_APPETIZERS, customFieldId: FIELD_IDS.CUSTOM_PASSED_APP },
     { title: "PRESENTED APPETIZERS", fieldId: FIELD_IDS.PRESENTED_APPETIZERS, linkedFieldId: FIELD_IDS.PRESENTED_APPETIZERS, customFieldId: FIELD_IDS.CUSTOM_PRESENTED_APP },
+    { title: "DELI", fieldId: FIELD_IDS.FULL_SERVICE_DELI, linkedFieldId: FIELD_IDS.FULL_SERVICE_DELI, customFieldId: FIELD_IDS.CUSTOM_FULL_SERVICE_DELI },
     { title: "BUFFET – METAL", fieldId: FIELD_IDS.BUFFET_METAL, linkedFieldId: FIELD_IDS.BUFFET_METAL, customFieldId: FIELD_IDS.CUSTOM_BUFFET_METAL },
     { title: "BUFFET – CHINA", fieldId: FIELD_IDS.BUFFET_CHINA, linkedFieldId: FIELD_IDS.BUFFET_CHINA, customFieldId: FIELD_IDS.CUSTOM_BUFFET_CHINA },
     { title: "DESSERTS", fieldId: FIELD_IDS.DESSERTS, linkedFieldId: FIELD_IDS.DESSERTS, customFieldId: FIELD_IDS.CUSTOM_DESSERTS },
@@ -2726,30 +2824,59 @@ const BeoPrintPage: React.FC = () => {
             .split(/\r?\n/)
             .map((l) => l.replace(/^BEO Placement:\s*.+$/i, "").trim())
             .filter(Boolean);
-          const allComponents = linkedComponentNames.length > 0
-            ? [...linkedComponentNames, ...notesLines]
-            : [...menuItemNames, ...notesLines];
-          // Encode as a single item: header \n component1 \n component2 ...
-          // expandItemToRows detects "station-hdr-" prefix and splits into tight rows
-          const encodedName = [`▶ ${s.stationType} [Metal/China]`, ...allComponents].join("\n");
+          // Preset stations (e.g. All-American) store Main, Potato, Chicken, Salad, Slider rolls, Toppings, Condiments, Dressings — show values as child lines (like old BEOs)
+          const customItems = (s as { customItems?: string }).customItems;
+          const rawCustomLines = customItems
+            ? customItems.split(/\r?\n/).map((l) => l.trim()).filter((l) => l && !/^BEO Placement:/i.test(l))
+            : [];
+          const customLines: string[] = [];
+          const multiValueKeys = /^(Toppings?|Condiments?|Dressings?|Salads?):\s*(.+)$/i;
+          for (const line of rawCustomLines) {
+            const multi = line.match(multiValueKeys);
+            if (multi) {
+              const values = multi[2].split(",").map((v) => v.trim()).filter(Boolean);
+              customLines.push(...values);
+            } else {
+              const keyVal = line.match(/^([A-Za-z\s]+):\s*(.+)$/);
+              if (keyVal) {
+                const key = keyVal[1].trim();
+                const val = keyVal[2].trim();
+                if (/^Salad\s*shooters?$/i.test(key) && /^yes$/i.test(val)) customLines.push("Salad shooters (included)");
+                else if (!/^yes$/i.test(val) || !/^Salad/i.test(key)) customLines.push(val);
+              } else customLines.push(line);
+            }
+          }
+          const stripPlatter = (s: string) => s.replace(/^PLATTER\s+/i, "");
+          const cleanedCustomLines = customLines.map(stripPlatter);
+          const allComponents = linkedComponentNames.length > 0 || menuItemNames.length > 0
+            ? [...linkedComponentNames, ...menuItemNames, ...cleanedCustomLines, ...notesLines]
+            : [...cleanedCustomLines, ...notesLines];
+          const stationDisplayName = /all-american|all american/i.test(s.stationType || "") ? "The All-American Station" : `${s.stationType} [Metal/China]`;
+          const encodedName = [`▶ ${stationDisplayName}`, ...allComponents].join("\n");
           return [{ id: `station-hdr-${s.id}`, name: encodedName }];
         };
 
+        const placementFor = (s: typeof stationsData[number]) => {
+          if (s.beoPlacement) return s.beoPlacement;
+          const name = (s.stationType || "").toLowerCase();
+          if (name.includes("all-american") || name.includes("all american") || name.includes("slider")) return "Presented Appetizer" as const;
+          return undefined;
+        };
         let linked: { id: string; name: string }[];
         if (def.fieldId === FIELD_IDS.PRESENTED_APPETIZERS) {
           linked = [
             ...parseMenuItems(def.linkedFieldId),
-            ...stationsData.filter((s) => s.beoPlacement === "Presented Appetizer").flatMap(stationToItems),
+            ...stationsData.filter((s) => placementFor(s) === "Presented Appetizer").flatMap(stationToItems),
           ];
         } else if (def.fieldId === FIELD_IDS.BUFFET_METAL) {
           linked = [
             ...parseMenuItems(def.linkedFieldId),
-            ...stationsData.filter((s) => s.beoPlacement === "Buffet Metal").flatMap(stationToItems),
+            ...stationsData.filter((s) => placementFor(s) === "Buffet Metal").flatMap(stationToItems),
           ];
         } else if (def.fieldId === FIELD_IDS.BUFFET_CHINA) {
           linked = [
             ...parseMenuItems(def.linkedFieldId),
-            ...stationsData.filter((s) => s.beoPlacement === "Buffet China").flatMap(stationToItems),
+            ...stationsData.filter((s) => placementFor(s) === "Buffet China").flatMap(stationToItems),
           ];
         } else {
           linked = parseMenuItems(def.linkedFieldId);
@@ -2764,12 +2891,24 @@ const BeoPrintPage: React.FC = () => {
             items.push(c);
           }
         });
+        // Merge platter orders into full-service DELI section (same as delivery)
+        if (def.fieldId === FIELD_IDS.FULL_SERVICE_DELI && eventId) {
+          const platterRows = getPlatterOrdersByEventId(eventId);
+          for (const row of platterRows) {
+            if (!(row.quantity > 0) || row.picks.length === 0) continue;
+            items.push({
+              id: `platter-fs-${row.id}`,
+              name: row.platterType,
+              specQty: `${row.picks.join(", ")} × ${row.quantity}`,
+            });
+          }
+        }
         return { title: def.title, fieldId: def.fieldId, items };
       });
 
   const barFid = barServiceFieldId ?? FIELD_IDS.BAR_SERVICE;
-  const barService = asSingleSelectName(eventData[barFid]);
-  const isFullBarPackage = barService === "Full Bar Package";
+  const barServiceSelectedKitchen = asMultiSelectNames(eventData[barFid]);
+  const isFullBarPackage = barServiceSelectedKitchen.includes("Full Bar Package");
   const sigDrinkMixersSupplier = asSingleSelectName(eventData[FIELD_IDS.BAR_SIGNATURE_DRINK_MIXERS_SUPPLIER]);
   const sigDrinkMixers = asString(eventData[FIELD_IDS.BAR_MIXERS]);
   const sigDrinkGarnishes = asString(eventData[FIELD_IDS.BAR_GARNISHES]);
@@ -2807,12 +2946,12 @@ const BeoPrintPage: React.FC = () => {
       }
     : null;
 
-  // Hard print order ends at DESSERTS — no section after it.
-  const activeSections = [...menuSections.filter((s) => s.items.length > 0)];
+  // Hard print order ends at DESSERTS — no section after it. Always show DELI for full service (like old BEOs).
+  const activeSections = [...menuSections.filter((s) => s.items.length > 0 || (s.title === "DELI" && !isDelivery))];
   const visibleSections = activeSections.map((s) => ({
     ...s,
     items: s.items.filter((item) => !hiddenMenuItems.has(item.id)),
-  })).filter((s) => s.items.length > 0);
+  })).filter((s) => s.items.length > 0 || (s.title === "DELI" && !isDelivery));
 
   const NOTES_SEP = " – ";
   const sauceOverrides = getSauceOverrides(eventId);
@@ -2846,13 +2985,21 @@ const BeoPrintPage: React.FC = () => {
       const notes = sepIdx >= 0 ? item.name.slice(sepIdx + NOTES_SEP.length).trim() : "";
       if (parentName) rows.push({ lineName: parentName, isChild: false, itemId: item.id });
       if (notes) rows.push({ lineName: ` ${notes}`, isChild: true, itemId: `${item.id}-notes` });
+    } else if (item.id.startsWith("platter-") && item.specQty) {
+      // Platter orders: main line + indented sub-items (picks × qty)
+      rows.push({ lineName: item.name, isChild: false, itemId: item.id });
+      rows.push({ lineName: ` ${item.specQty}`, isChild: true, itemId: `${item.id}-spec` });
     } else {
-      const parentName = data?.name || item.name || "Loading...";
+      const rawName = data?.name || item.name || "Loading...";
+      const dashIdx = rawName.indexOf(" – ");
+      const parentName = dashIdx >= 0 ? rawName.slice(0, dashIdx).trim() : rawName;
+      const nameSuffixChild = dashIdx >= 0 ? rawName.slice(dashIdx + 3).trim() : "";
       rows.push({ lineName: parentName, isChild: false, itemId: item.id });
+      if (nameSuffixChild) rows.push({ lineName: ` • ✓ ${nameSuffixChild}`, isChild: true, itemId: `${item.id}-namesuffix` });
       const effectiveSauce = getEffectiveSauce(item.id);
-      if (effectiveSauce) rows.push({ lineName: ` Sauce: ${effectiveSauce}`, isChild: true, itemId: `${item.id}-sauce` });
+      if (effectiveSauce && effectiveSauce !== nameSuffixChild) rows.push({ lineName: ` • ✓ ${effectiveSauce}`, isChild: true, itemId: `${item.id}-sauce` });
       const desc = buffetMenuEdits[item.id] ?? data?.description;
-      const parentLabel = [parentName, desc, effectiveSauce].filter(Boolean).join(" ").toLowerCase();
+      const parentLabel = [parentName, desc, effectiveSauce, nameSuffixChild].filter(Boolean).join(" ").toLowerCase();
       if (data?.childIds?.length) {
         const childIdsToShow = data.childIds.filter((childId) => {
           const childName = menuItemData[childId]?.name || "";
@@ -2860,7 +3007,7 @@ const BeoPrintPage: React.FC = () => {
         });
         childIdsToShow.forEach((childId) => {
           const childName = menuItemData[childId]?.name || "Loading...";
-          rows.push({ lineName: ` ${childName}`, isChild: true, itemId: childId });
+          rows.push({ lineName: ` • ✓ ${childName}`, isChild: true, itemId: childId });
         });
       }
     }
@@ -3361,7 +3508,7 @@ const BeoPrintPage: React.FC = () => {
               </>
             )}
 
-            {page.pageNum === 1 && (beoNotes.trim() || notBuffetBanner || allergies || religiousRestrictions.trim()) && (
+            {page.pageNum === 1 && (beoNotes.trim() || notBuffetBanner || allergies || religiousRestrictions.trim() || dietarySummary.trim()) && (
               <div className="beo-banner-container">
                 {beoNotes.trim() && (
                   <div className="beo-banner-block" style={styles.beoNotesBanner}>📋 BEO NOTES: {beoNotes.trim()}</div>
@@ -3374,6 +3521,9 @@ const BeoPrintPage: React.FC = () => {
                 )}
                 {religiousRestrictions.trim() && (
                   <div className="beo-banner-block" style={styles.religiousBanner}>🕎 RELIGIOUS / DIETARY: {religiousRestrictions.trim().toUpperCase()}</div>
+                )}
+                {dietarySummary.trim() && (
+                  <div className="beo-banner-block" style={styles.beoNotesBanner}>🍽️ DIETARY MEAL COUNTS: {dietarySummary.trim().toUpperCase()}</div>
                 )}
               </div>
             )}
@@ -3399,17 +3549,15 @@ const BeoPrintPage: React.FC = () => {
                 const rows = expandItemToRows(item);
                 return (
               <div key={`${item.id}-0`} className="beo-menu-item-block" style={{ borderBottom: "1px solid #ddd", paddingBottom: 2, marginTop: 0 }}>
-              {rows.map((row, rowIdx) => (
+              {rows.map((row, rowIdx) => {
+                const overrideKey = getSpecOverrideKey(section.fieldId, item.id, rowIdx);
+                const overrideKeyLegacy = `${section.fieldId}:${item.id}`;
+                return (
               <div key={rowIdx} className="beo-line-item" style={{ ...styles.lineItem, borderBottom: "none", gridTemplateColumns, padding: row.isChild ? "0 8px 0 8px" : "0 8px", paddingLeft: row.isChild ? "calc(8px + 2ch)" : 8, lineHeight: 1.15, minHeight: "unset", alignItems: "flex-start", marginTop: row.isChild ? 0 : 0 }}>
                 {/* SPEC / PACK-OUT / EXPEDITOR / KITCHEN / SERVER: Spec Column (left) */}
                 {(leftCheck === "spec" || leftCheck === "packout" || leftCheck === "expeditor" || leftCheck === "kitchen" || leftCheck === "server") && (
                   <div className="beo-spec-col" style={{ ...styles.specCol, lineHeight: 1.2 }}>
-                    {(() => {
-                      const overrideKey = `${section.fieldId}:${item.id}:${rowIdx}`;
-                      const overrideKeyLegacy = `${section.fieldId}:${item.id}`;
-                      const overrideVal = specOverrides[overrideKey] ?? (rowIdx === 0 ? specOverrides[overrideKeyLegacy] : undefined) ?? (rowIdx === 0 ? item.specQty : undefined) ?? "";
-                      return <span>{overrideVal.trim() || "—"}</span>;
-                    })()}
+                    <span>{(specOverrides[overrideKey] ?? (rowIdx === 0 ? specOverrides[overrideKeyLegacy] : undefined) ?? (rowIdx === 0 ? item.specQty : undefined) ?? "").trim() || "—"}</span>
                   </div>
                 )}
 
@@ -3424,10 +3572,9 @@ const BeoPrintPage: React.FC = () => {
                     <input
                       type="text"
                       placeholder="spec..."
-                      value={specOverrides[`${section.fieldId}:${item.id}:${rowIdx}`] ?? (rowIdx === 0 ? specOverrides[`${section.fieldId}:${item.id}`] : undefined) ?? (rowIdx === 0 ? item.specQty : undefined) ?? ""}
+                      value={specOverrides[overrideKey] ?? (rowIdx === 0 ? specOverrides[overrideKeyLegacy] : undefined) ?? (rowIdx === 0 ? item.specQty : undefined) ?? ""}
                       onChange={(e) => {
-                        const key = `${section.fieldId}:${item.id}:${rowIdx}`;
-                        setSpecOverrides((prev) => ({ ...prev, [key]: e.target.value }));
+                        setSpecOverrides((prev) => ({ ...prev, [overrideKey]: e.target.value }));
                       }}
                       style={{
                         width: "100%",
@@ -3490,7 +3637,8 @@ const BeoPrintPage: React.FC = () => {
                 )}
 
               </div>
-            ))}
+            );
+            })}
               </div>
                 );
               })()}
@@ -3499,22 +3647,20 @@ const BeoPrintPage: React.FC = () => {
               const rows = expandItemToRows(item);
               return (
               <div key={`${item.id}-${itemIdx + 1}`} className="beo-menu-item-block" style={{ borderBottom: "1px solid #ddd", paddingBottom: 2, marginTop: 2 }}>
-              {rows.map((row, rowIdx) => (
+              {rows.map((row, rowIdx) => {
+                const overrideKey = getSpecOverrideKey(section.fieldId, item.id, rowIdx);
+                const overrideKeyLegacy = `${section.fieldId}:${item.id}`;
+                return (
               <div key={rowIdx} className="beo-line-item" style={{ ...styles.lineItem, borderBottom: "none", gridTemplateColumns, padding: row.isChild ? "0 8px 0 8px" : "0 8px", paddingLeft: row.isChild ? "calc(8px + 2ch)" : 8, lineHeight: 1.15, minHeight: "unset", alignItems: "flex-start", marginTop: row.isChild ? 0 : 0 }}>
                 {(leftCheck === "spec" || leftCheck === "packout" || leftCheck === "expeditor" || leftCheck === "kitchen" || leftCheck === "server") && (
                   <div className="beo-spec-col" style={{ ...styles.specCol, lineHeight: 1.2 }}>
-                    {(() => {
-                      const overrideKey = `${section.fieldId}:${item.id}:${rowIdx}`;
-                      const overrideKeyLegacy = `${section.fieldId}:${item.id}`;
-                      const overrideVal = specOverrides[overrideKey] ?? (rowIdx === 0 ? specOverrides[overrideKeyLegacy] : undefined) ?? (rowIdx === 0 ? item.specQty : undefined) ?? "";
-                      return <span>{overrideVal.trim() || "—"}</span>;
-                    })()}
+                    <span>{(specOverrides[overrideKey] ?? (rowIdx === 0 ? specOverrides[overrideKeyLegacy] : undefined) ?? (rowIdx === 0 ? item.specQty : undefined) ?? "").trim() || "—"}</span>
                   </div>
                 )}
                 <div className="beo-item-col" style={{ ...styles.itemCol, lineHeight: 1.25, ...getItemRowNameStyle(row.isChild, rows.some(r => r.isChild)) }}>{row.lineName}</div>
                 {leftCheck === "spec" && (
                   <div className="beo-spec-col" style={{ ...styles.specCol, display: "flex", flexDirection: "column", gap: 2 }} onClick={(e) => { e.stopPropagation(); if (document.activeElement instanceof HTMLButtonElement) document.activeElement.blur(); }}>
-                    <input type="text" placeholder="spec..." value={specOverrides[`${section.fieldId}:${item.id}:${rowIdx}`] ?? (rowIdx === 0 ? specOverrides[`${section.fieldId}:${item.id}`] : undefined) ?? (rowIdx === 0 ? item.specQty : undefined) ?? ""} onChange={(e) => { setSpecOverrides((prev) => ({ ...prev, [`${section.fieldId}:${item.id}:${rowIdx}`]: e.target.value })); }} style={{ width: "100%", padding: "2px 6px", fontSize: 11, lineHeight: 1, background: "#f9f9f9", border: "1px solid #ddd", borderRadius: 2 }} className="no-print" />
+                    <input type="text" placeholder="spec..." value={specOverrides[overrideKey] ?? (rowIdx === 0 ? specOverrides[overrideKeyLegacy] : undefined) ?? (rowIdx === 0 ? item.specQty : undefined) ?? ""} onChange={(e) => { setSpecOverrides((prev) => ({ ...prev, [overrideKey]: e.target.value })); }} style={{ width: "100%", padding: "2px 6px", fontSize: 11, lineHeight: 1, background: "#f9f9f9", border: "1px solid #ddd", borderRadius: 2 }} className="no-print" />
                   </div>
                 )}
                 {(leftCheck === "kitchen" || leftCheck === "expeditor" || leftCheck === "server") && (
@@ -3528,7 +3674,8 @@ const BeoPrintPage: React.FC = () => {
                   </div>
                 )}
               </div>
-            ))}
+                );
+              })}
               </div>
             );
             })}

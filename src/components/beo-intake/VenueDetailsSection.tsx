@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useEventStore } from "../../state/eventStore";
 import { FIELD_IDS } from "../../services/airtable/events";
 import { asSingleSelectName, asString } from "../../services/airtable/selectors";
@@ -7,6 +7,20 @@ import { FormSection, inputStyle, labelStyle, textareaStyle } from "./FormSectio
 import type { VenueDetails } from "./types";
 
 const VENUE_STATE_OPTIONS = ["NJ", "PA", "DE", "NY"];
+
+const pillBase: React.CSSProperties = {
+  padding: "4px 14px",
+  borderRadius: 20,
+  border: "1px solid #444",
+  fontSize: 12,
+  fontWeight: 600,
+  cursor: "pointer",
+  transition: "background 0.15s, color 0.15s",
+};
+const pillActive: React.CSSProperties = { ...pillBase, background: "#2563eb", borderColor: "#2563eb", color: "#fff" };
+const pillInactive: React.CSSProperties = { ...pillBase, background: "transparent", color: "#777" };
+
+type VenueMode = "same_as_client" | "add_venue";
 
 export const VenueDetailsSection = () => {
   const { selectedEventId, selectedEventData, setFields } = useEventStore();
@@ -18,6 +32,7 @@ export const VenueDetailsSection = () => {
     venueFullAddress: "",
   });
   const [deliveryNotes, setDeliveryNotes] = useState("");
+  const [venueMode, setVenueMode] = useState<VenueMode>("same_as_client");
 
   const eventType = selectedEventData ? asSingleSelectName(selectedEventData[FIELD_IDS.EVENT_TYPE]) : "";
   const isDelivery = isDeliveryOrPickup(eventType);
@@ -55,8 +70,9 @@ export const VenueDetailsSection = () => {
       }
       return newDetails;
     });
-    
     setDeliveryNotes(prev => prev === newDeliveryNotes ? prev : newDeliveryNotes);
+    const hasVenueData = !!(newDetails.venue?.trim() || newDetails.venueAddress?.trim() || newDetails.venueCity?.trim());
+    setVenueMode(hasVenueData ? "add_venue" : "same_as_client");
   }, [selectedEventId, selectedEventData]);
 
   const handleChange = <K extends keyof VenueDetails>(key: K, value: VenueDetails[K]) => {
@@ -70,17 +86,99 @@ export const VenueDetailsSection = () => {
 
   const canEdit = Boolean(selectedEventId);
 
+  const venueSummary = useMemo(() => {
+    const parts = [details.venue, details.venueCity].filter(Boolean);
+    return parts.length ? parts.join("  ·  ") : undefined;
+  }, [details.venue, details.venueCity]);
+
+  // Copy client address into venue (event location). BEO shows venue when set; otherwise client.
+  const clientStreet = selectedEventData ? asString(selectedEventData[FIELD_IDS.CLIENT_STREET]) : "";
+  const clientCity = selectedEventData ? asString(selectedEventData[FIELD_IDS.CLIENT_CITY]) : "";
+  const clientState = selectedEventData ? asString(selectedEventData[FIELD_IDS.CLIENT_STATE]) : "";
+  const clientZip = selectedEventData ? asString(selectedEventData[FIELD_IDS.CLIENT_ZIP]) : "";
+  const hasClientAddress = !!(clientStreet?.trim() || clientCity?.trim() || clientState?.trim() || clientZip?.trim());
+
+  const copyFromClientAddress = async () => {
+    if (!selectedEventId) return;
+    setVenueMode("same_as_client");
+    const updates: Record<string, string> = {
+      [FIELD_IDS.VENUE_ADDRESS]: clientStreet?.trim() ?? "",
+      [FIELD_IDS.VENUE_CITY]: clientCity?.trim() ?? "",
+      [FIELD_IDS.VENUE_STATE]: clientState?.trim() ?? "",
+      [FIELD_IDS.VENUE_ZIP]: clientZip?.trim() ?? "",
+    };
+    if (!details.venue?.trim()) {
+      updates[FIELD_IDS.VENUE] = "Residence";
+    }
+    await setFields(selectedEventId, updates);
+    setDetails((prev) => ({
+      ...prev,
+      venueAddress: updates[FIELD_IDS.VENUE_ADDRESS],
+      venueCity: updates[FIELD_IDS.VENUE_CITY],
+      venueState: updates[FIELD_IDS.VENUE_STATE],
+      venue: updates[FIELD_IDS.VENUE] ?? prev.venue,
+    }));
+  };
+
   return (
     <FormSection 
-      title={isDelivery ? "Delivery Location" : "Venue"} 
-      subtitle="If different from client address"
+      title={isDelivery ? "Delivery Location" : "Event location"} 
+      subtitle={venueSummary ?? (venueMode === "same_as_client" ? "Same as client address" : "Where the event is taking place — shows on BEO")}
       sectionId="beo-section-venue"
       isDelivery={isDelivery}
     >
-      <div style={{ gridColumn: "1 / -1", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+      {/* Pills: Same as client | Add venue — venue fields drop down only when Add venue */}
+      <div style={{ gridColumn: "1 / -1", display: "flex", flexWrap: "wrap", alignItems: "center", gap: 10, paddingBottom: 10, borderBottom: "1px solid #222" }}>
+        <button
+          type="button"
+          style={venueMode === "same_as_client" ? pillActive : pillInactive}
+          onClick={async () => {
+            setVenueMode("same_as_client");
+            if (hasClientAddress) await copyFromClientAddress();
+          }}
+        >
+          Same as client
+        </button>
+        <button
+          type="button"
+          style={venueMode === "add_venue" ? pillActive : pillInactive}
+          onClick={() => setVenueMode("add_venue")}
+        >
+          Add venue
+        </button>
+      </div>
+
+      {venueMode === "same_as_client" && (
+        <div style={{ gridColumn: "1 / -1", fontSize: 12, color: "rgba(255,255,255,0.6)", marginTop: 8 }}>
+          Event location on the BEO will use the client address.
+          {hasClientAddress && (
+            <button
+              type="button"
+              onClick={copyFromClientAddress}
+              style={{
+                marginLeft: 10,
+                padding: "4px 10px",
+                fontSize: 11,
+                fontWeight: 600,
+                borderRadius: 6,
+                border: "1px solid rgba(0,188,212,0.5)",
+                background: "rgba(0,188,212,0.12)",
+                color: "#00bcd4",
+                cursor: "pointer",
+              }}
+            >
+              Copy from client now
+            </button>
+          )}
+        </div>
+      )}
+
+      {venueMode === "add_venue" && (
+      <>
+      <div style={{ gridColumn: "1 / -1", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginTop: 8 }}>
         <div>
           <label style={labelStyle}>
-            {isDelivery ? "Business / Location Name" : "Venue"}
+            {isDelivery ? "Business / Location Name" : "Venue name"}
           </label>
           <input
             type="text"
@@ -156,6 +254,8 @@ export const VenueDetailsSection = () => {
             placeholder="Loading dock, call on arrival, etc."
           />
         </div>
+      )}
+      </>
       )}
     </FormSection>
   );

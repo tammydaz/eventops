@@ -1,5 +1,8 @@
 import React, { useState } from "react";
 import { Link } from "react-router-dom";
+import { OpsChiefDailyDispatch } from "../components/OpsChiefDailyDispatch";
+import { EventsPipeline } from "../components/EventsPipeline";
+import { OpsChiefFiredView } from "../components/OpsChiefFiredView";
 
 type Event = {
   id: string;
@@ -134,8 +137,11 @@ const OpsChiefDashboard = () => {
   const [selectedStaff, setSelectedStaff] = useState<string>("");
   const [opsNotes, setOpsNotes] = useState<string>("");
   const [resolutionStatus, setResolutionStatus] = useState<string>("");
+  const [showIntakeVsFired, setShowIntakeVsFired] = useState<boolean>(false);
 
   // Calculate critical alerts for each event
+  // TODO(Ops Chief): When wiring to real event data, add alert for signature drink non-standard items
+  // (events with hasSignatureDrink && !isClientSupplyingBar && getNonStandardBarItems(mixers+garnishes).length > 0).
   const getCriticalAlerts = (event: Event) => {
     const alerts = [];
     
@@ -339,9 +345,49 @@ const OpsChiefDashboard = () => {
         </div>
       </header>
 
-      {/* Main Content - 3 Zones */}
+      {/* Main Content - Dispatch, Deliveries, then Alerts */}
       <main style={styles.main}>
-        
+        {/* Toggle: Side-by-side Intake (FOH) vs Fired / Not yet fired */}
+        <div style={{ marginBottom: 16, display: "flex", alignItems: "center", gap: 12 }}>
+          <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", color: "#e5e7eb", fontSize: 14 }}>
+            <input
+              type="checkbox"
+              checked={showIntakeVsFired}
+              onChange={(e) => setShowIntakeVsFired(e.target.checked)}
+              style={{ width: 18, height: 18 }}
+            />
+            Side-by-side: Intake/FOH 10-day pipeline and Fired vs Not yet fired
+          </label>
+        </div>
+
+        {showIntakeVsFired ? (
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 320px", gap: 24, marginBottom: 24, minHeight: 480 }}>
+            <div style={{ minWidth: 0, border: "1px solid #374151", borderRadius: 8, overflow: "hidden", background: "#111827" }}>
+              <div style={{ padding: "12px 16px", borderBottom: "1px solid #374151", fontWeight: 600, color: "#f3f4f6" }}>
+                Intake / FOH — 10-Day Pipeline
+              </div>
+              <div style={{ height: "calc(100% - 52px)", overflow: "auto" }}>
+                <EventsPipeline title="" compact departmentContext="intake_foh" />
+              </div>
+            </div>
+            <div style={{ border: "1px solid #374151", borderRadius: 8, overflow: "hidden", background: "#111827", display: "flex", flexDirection: "column" }}>
+              <div style={{ padding: "12px 16px", borderBottom: "1px solid #374151", fontWeight: 600, color: "#f3f4f6" }}>
+                Fired vs Not yet fired (next 10 days)
+              </div>
+              <div style={{ flex: 1, overflow: "auto", padding: 16 }}>
+                <OpsChiefFiredView />
+              </div>
+            </div>
+          </div>
+        ) : (
+          <>
+            <OpsChiefDailyDispatch />
+            <section style={{ marginBottom: 24 }}>
+              <EventsPipeline title="Deliveries — 10-Day Pipeline" departmentContext="delivery" />
+            </section>
+          </>
+        )}
+
         {/* Zone 1: Critical Alerts (RED) */}
         <section style={styles.criticalAlertsZone}>
           <div style={styles.zoneHeader}>

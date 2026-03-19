@@ -15,7 +15,7 @@ import {
 } from "../../services/airtable/stationComponents";
 import { isErrorResult } from "../../services/airtable/selectors";
 import { CollapsibleSubsection } from "./FormSection";
-import { getStationPresetKey, TEX_MEX, RAMEN, ALL_AMERICAN, STREET_FOOD, RAW_BAR, CARVING, HIBACHI, CHICKEN_WAFFLE, LATE_NIGHT, FISHERMANS_CORNER } from "../../config/stationPresets";
+import { getStationPresetKey, TEX_MEX, RAMEN, ALL_AMERICAN, STREET_FOOD, RAW_BAR, CHARCUTERIE, CARVING, HIBACHI, CHICKEN_WAFFLE, LATE_NIGHT, FISHERMANS_CORNER } from "../../config/stationPresets";
 
 /** Airtable uses "Starch"; we display "Starch (Pasta)" for pasta stations. */
 const TYPE_DISPLAY: Record<string, string> = {
@@ -159,19 +159,32 @@ function parseRamenCustomItems(text: string): { stock: string; protein: string; 
   return { stock, protein, included };
 }
 
-/** Parse All-American customItems */
-function parseAllAmericanCustomItems(text: string): { main: string; potato: string; chicken: string; salad: string } | null {
+/** Parse All-American customItems — Main, Potato, Chicken, Salad shooters, Slider rolls, Toppings, Condiments, Dressings, Salads */
+function parseAllAmericanCustomItems(text: string): {
+  main: string; potato: string; chicken: string; salad: string;
+  sliderRolls: string; toppings: string[]; condiments: string[]; dressings: string[]; salads: string[];
+} | null {
   if (!text?.trim()) return null;
   const lines = text.split("\n").map((s) => s.trim());
   let main = "", potato = "", chicken = "", salad = "";
+  let sliderRolls = "";
+  const toppings: string[] = [];
+  const condiments: string[] = [];
+  const dressings: string[] = [];
+  const salads: string[] = [];
   for (const line of lines) {
     const m = line.match(/^Main:\s*(.+)$/i); if (m) main = m[1].trim();
     const p = line.match(/^Potato:\s*(.+)$/i); if (p) potato = p[1].trim();
     const c = line.match(/^Chicken:\s*(.+)$/i); if (c) chicken = c[1].trim();
-    const s = line.match(/^Salad:\s*(.+)$/i); if (s) salad = s[1].trim();
+    const s = line.match(/^Salad(?:\s*shooters?)?:\s*(.+)$/i); if (s) salad = s[1].trim();
+    const sr = line.match(/^Slider\s*rolls?:\s*(.+)$/i); if (sr) sliderRolls = sr[1].trim();
+    const t = line.match(/^Toppings?:\s*(.+)$/i); if (t) toppings.push(...t[1].split(",").map((x) => x.trim()).filter(Boolean));
+    const co = line.match(/^Condiments?:\s*(.+)$/i); if (co) condiments.push(...co[1].split(",").map((x) => x.trim()).filter(Boolean));
+    const d = line.match(/^Dressings?:\s*(.+)$/i); if (d) dressings.push(...d[1].split(",").map((x) => x.trim()).filter(Boolean));
+    const sal = line.match(/^Salads?:\s*(.+)$/i); if (sal) salads.push(...sal[1].split(",").map((x) => x.trim()).filter(Boolean));
   }
-  if (!main && !potato && !chicken && !salad) return null;
-  return { main, potato, chicken, salad };
+  if (!main && !potato && !chicken && !salad && !sliderRolls && toppings.length === 0 && condiments.length === 0 && dressings.length === 0 && salads.length === 0) return null;
+  return { main, potato, chicken, salad, sliderRolls, toppings, condiments, dressings, salads };
 }
 
 /** Parse Street Food customItems — first 5 go to dropdowns, rest to custom */
@@ -396,6 +409,11 @@ export function StationComponentsConfigModal(props: {
   const [allAmericanPotato, setAllAmericanPotato] = useState<string>("");
   const [allAmericanChicken, setAllAmericanChicken] = useState<string>("");
   const [allAmericanSalad, setAllAmericanSalad] = useState<string>("");
+  const [allAmericanSliderRolls, setAllAmericanSliderRolls] = useState<string>("");
+  const [allAmericanToppings, setAllAmericanToppings] = useState<string[]>([]);
+  const [allAmericanCondiments, setAllAmericanCondiments] = useState<string[]>([]);
+  const [allAmericanDressings, setAllAmericanDressings] = useState<string[]>([]);
+  const [allAmericanSalads, setAllAmericanSalads] = useState<string[]>([]);
   const [streetFoodSelected, setStreetFoodSelected] = useState<string[]>(["", "", "", "", ""]);
   const [streetFoodCustomItems, setStreetFoodCustomItems] = useState<string[]>([]);
   const [streetFoodCustomInput, setStreetFoodCustomInput] = useState("");
@@ -438,6 +456,7 @@ export function StationComponentsConfigModal(props: {
   const isChickenWaffle = stationPresetKey === "chicken-waffle";
   const isLateNight = stationPresetKey === "late-night";
   const isFishermansCorner = stationPresetKey === "fishermans-corner";
+  const isCharcuterie = stationPresetKey === "charcuterie";
 
   const applyAutoFill = useCallback(
     (defaults: StationComponent[], all: StationComponent[], opts: StationOption[]) => {
@@ -512,7 +531,12 @@ export function StationComponentsConfigModal(props: {
       setAllComponents([]);
       setOptions([]);
       setSelectedComponentIds([]);
-      setCustomItems(initialCustomItems);
+      // For simple presets that don't use structured parsing, seed defaults.
+      if (!initialCustomItems && stationPresetKey === "charcuterie" && mode === "create") {
+        setCustomItems(`Items: ${CHARCUTERIE.included.join(", ")}`);
+      } else {
+        setCustomItems(initialCustomItems);
+      }
       setBeoPlacement(initialBeoPlacement ?? "");
       setSectionsExpanded(false);
       const isCreate = mode === "create" && !initialCustomItems;
@@ -555,16 +579,31 @@ export function StationComponentsConfigModal(props: {
           setAllAmericanPotato(parsed.potato);
           setAllAmericanChicken(parsed.chicken);
           setAllAmericanSalad(parsed.salad);
+          setAllAmericanSliderRolls(parsed.sliderRolls);
+          setAllAmericanToppings(parsed.toppings.length > 0 ? parsed.toppings : []);
+          setAllAmericanCondiments(parsed.condiments.length > 0 ? parsed.condiments : []);
+          setAllAmericanDressings(parsed.dressings.length > 0 ? parsed.dressings : []);
+          setAllAmericanSalads(parsed.salads?.length ? parsed.salads : []);
         } else if (isCreate) {
           setAllAmericanMain("Mini Angus beef burgers");
           setAllAmericanPotato("Crispy boardwalk potato wedges (sea salt & malt vinegar)");
           setAllAmericanChicken("Honey hot chicken tenders");
           setAllAmericanSalad("Yes");
+          setAllAmericanSliderRolls("Assorted slider rolls");
+          setAllAmericanToppings(["PLATTER Lettuce & Tomato", "Sliced American Cheese"]);
+          setAllAmericanCondiments(["Pickles", "Ketchup"]);
+          setAllAmericanDressings([]);
+          setAllAmericanSalads([]);
         } else {
           setAllAmericanMain("");
           setAllAmericanPotato("");
           setAllAmericanChicken("");
           setAllAmericanSalad("");
+          setAllAmericanSliderRolls("");
+          setAllAmericanToppings([]);
+          setAllAmericanCondiments([]);
+          setAllAmericanDressings([]);
+          setAllAmericanSalads([]);
         }
       }
       if (name.includes("street food")) {
@@ -705,7 +744,11 @@ export function StationComponentsConfigModal(props: {
       } else {
         setSelectedComponentIds(initialComponentIds);
       }
-      setCustomItems(initialCustomItems);
+      if (!initialCustomItems && stationPresetKey === "charcuterie" && mode === "create") {
+        setCustomItems(`Items: ${CHARCUTERIE.included.join(", ")}`);
+      } else {
+        setCustomItems(initialCustomItems);
+      }
       setOtherInput("");
       setCustomPastaInput("");
       setCustomProteinInput("");
@@ -832,6 +875,11 @@ export function StationComponentsConfigModal(props: {
         setAllAmericanPotato("Crispy boardwalk potato wedges (sea salt & malt vinegar)");
         setAllAmericanChicken("Honey hot chicken tenders");
         setAllAmericanSalad("Yes");
+        setAllAmericanSliderRolls("Assorted slider rolls");
+        setAllAmericanToppings(["PLATTER Lettuce & Tomato", "Sliced American Cheese"]);
+        setAllAmericanCondiments(["Pickles", "Ketchup"]);
+        setAllAmericanDressings([]);
+        setAllAmericanSalads([]);
         setSectionsExpanded(true);
         setLoading(false);
         return;
@@ -1078,7 +1126,17 @@ export function StationComponentsConfigModal(props: {
         window.alert(`Please fill out the entire form before saving. Missing: ${missing.join(", ")}.`);
         return;
       }
-      const lines = [`Main: ${allAmericanMain}`, `Potato: ${allAmericanPotato}`, `Chicken: ${allAmericanChicken}`, `Salad shooters: ${allAmericanSalad}`];
+      const lines: string[] = [
+        `Main: ${allAmericanMain}`,
+        `Potato: ${allAmericanPotato}`,
+        `Chicken: ${allAmericanChicken}`,
+        `Salad shooters: ${allAmericanSalad}`,
+      ];
+      if (allAmericanSliderRolls.trim()) lines.push(`Slider rolls: ${allAmericanSliderRolls.trim()}`);
+      if (allAmericanToppings.length > 0) lines.push(`Toppings: ${allAmericanToppings.join(", ")}`);
+      if (allAmericanCondiments.length > 0) lines.push(`Condiments: ${allAmericanCondiments.join(", ")}`);
+      if (allAmericanDressings.length > 0) lines.push(`Dressings: ${allAmericanDressings.join(", ")}`);
+      if (allAmericanSalads.length > 0) lines.push(`Salads: ${allAmericanSalads.join(", ")}`);
       onConfirm({ componentIds: [], customItems: lines.join("\n"), beoPlacement: hasPlacement ? beoPlacement : undefined });
       return;
     }
@@ -1630,6 +1688,74 @@ export function StationComponentsConfigModal(props: {
                           ))}
                         </select>
                         <button type="button" onClick={() => setAllAmericanSalad("")} disabled={!allAmericanSalad} style={{ width: 26, height: 26, padding: 0, borderRadius: 5, border: "1px solid #555", background: "#333", color: "#14b8a6", fontSize: 13, fontWeight: "bold", cursor: allAmericanSalad ? "pointer" : "default", display: "flex", alignItems: "center", justifyContent: "center", opacity: allAmericanSalad ? 1 : 0.4 }}>✕</button>
+                      </div>
+                    </div>
+                  </CollapsibleSubsection>
+                  <CollapsibleSubsection title="Sliders, rolls & toppings" icon="▶" defaultOpen={sectionsExpanded} accentColor="#eab308">
+                    <div style={{ gridColumn: "1 / -1" }}>
+                      <p style={{ margin: "0 0 10px 0", fontSize: 11, color: "#999" }}>These appear as child lines under the station on the BEO (like old BEOs: slider rolls, lettuce & tomato, pickles, ketchup).</p>
+                      <div style={{ marginBottom: 10 }}>
+                        <label style={{ ...labelStyle, display: "block", marginBottom: 4 }}>Slider rolls</label>
+                        <select value={allAmericanSliderRolls} onChange={(e) => setAllAmericanSliderRolls(e.target.value)} style={{ ...rowInputStyle, minWidth: 220, width: "auto" }}>
+                          <option value="">Select...</option>
+                          {(ALL_AMERICAN.sliderRollOptions as readonly string[]).map((opt) => (<option key={opt} value={opt}>{opt}</option>))}
+                        </select>
+                      </div>
+                      <div style={{ marginBottom: 10 }}>
+                        <label style={{ ...labelStyle, display: "block", marginBottom: 4 }}>Toppings (lettuce, tomato, cheese)</label>
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                          {(ALL_AMERICAN.toppingsOptions as readonly string[]).map((opt) => {
+                            const on = allAmericanToppings.includes(opt);
+                            return (
+                              <label key={opt} style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 12, cursor: "pointer" }}>
+                                <input type="checkbox" checked={on} onChange={() => setAllAmericanToppings((prev) => on ? prev.filter((x) => x !== opt) : [...prev, opt])} />
+                                {opt}
+                              </label>
+                            );
+                          })}
+                        </div>
+                      </div>
+                      <div style={{ marginBottom: 10 }}>
+                        <label style={{ ...labelStyle, display: "block", marginBottom: 4 }}>Condiments</label>
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                          {(ALL_AMERICAN.condimentOptions as readonly string[]).map((opt) => {
+                            const on = allAmericanCondiments.includes(opt);
+                            return (
+                              <label key={opt} style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 12, cursor: "pointer" }}>
+                                <input type="checkbox" checked={on} onChange={() => setAllAmericanCondiments((prev) => on ? prev.filter((x) => x !== opt) : [...prev, opt])} />
+                                {opt}
+                              </label>
+                            );
+                          })}
+                        </div>
+                      </div>
+                      <div style={{ marginBottom: 10 }}>
+                        <label style={{ ...labelStyle, display: "block", marginBottom: 4 }}>Dressings (for salad shooters)</label>
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                          {(ALL_AMERICAN.dressingOptions as readonly string[]).map((opt) => {
+                            const on = allAmericanDressings.includes(opt);
+                            return (
+                              <label key={opt} style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 12, cursor: "pointer" }}>
+                                <input type="checkbox" checked={on} onChange={() => setAllAmericanDressings((prev) => on ? prev.filter((x) => x !== opt) : [...prev, opt])} />
+                                {opt}
+                              </label>
+                            );
+                          })}
+                        </div>
+                      </div>
+                      <div>
+                        <label style={{ ...labelStyle, display: "block", marginBottom: 4 }}>Salad choices (greens / salad types)</label>
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                          {(ALL_AMERICAN.saladOptions as readonly string[]).map((opt) => {
+                            const on = allAmericanSalads.includes(opt);
+                            return (
+                              <label key={opt} style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 12, cursor: "pointer" }}>
+                                <input type="checkbox" checked={on} onChange={() => setAllAmericanSalads((prev) => on ? prev.filter((x) => x !== opt) : [...prev, opt])} />
+                                {opt}
+                              </label>
+                            );
+                          })}
+                        </div>
                       </div>
                     </div>
                   </CollapsibleSubsection>

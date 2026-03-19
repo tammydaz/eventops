@@ -3,7 +3,7 @@ import { DepartmentLayout } from "../components/DepartmentLayout";
 import { EventsPipeline } from "../components/EventsPipeline";
 
 const FOH_NAV = [
-  { label: "Add Event", href: "/quick-intake" },
+  { label: "Add Event", href: "/event/new" },
   { label: "Open Event", href: "/beo-intake" },
   { label: "Leads", href: "/foh/leads" },
   { label: "Events", href: "/intake-foh" },

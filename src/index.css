@@ -51,6 +51,14 @@ code {
   button {
     min-height: 44px;
   }
+  /* Feedback circle: move up on mobile to avoid overlap with action bar */
+  .feedback-circle-btn {
+    bottom: 80px;
+    right: 16px;
+  }
+  .feedback-modal {
+    min-width: 95vw;
+  }
 }
 
 /* ═══ Werx branding (App header, etc.) ═══ */

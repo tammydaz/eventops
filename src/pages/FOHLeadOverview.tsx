@@ -184,7 +184,7 @@ const FOHLeadOverview: React.FC = () => {
   }, [id]);
 
   const handleConvertToEvent = () => {
-    navigate("/quick-intake");
+    navigate("/event/new");
   };
 
   if (!id) {

@@ -333,6 +333,12 @@
   flex: 1;
 }
 
+.dp-header-overflow-visible.dp-header,
+.dp-header-overflow-visible .dp-header-main,
+.dp-header-overflow-visible .dp-header-left {
+  overflow: visible;
+}
+
 .dp-search-wrap {
   position: relative;
 }
@@ -362,6 +368,11 @@
   border-radius: 8px;
   box-shadow: 0 8px 24px rgba(0,0,0,0.5);
   z-index: 100;
+}
+
+.dp-search-dropdown-portal {
+  margin-top: 0;
+  box-shadow: 0 12px 32px rgba(0,0,0,0.6);
 }
 
 .dp-search-item {

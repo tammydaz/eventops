@@ -1,7 +1,17 @@
 import { useState, useRef, useEffect, type ReactNode } from "react";
 import { useEventStore } from "../../state/eventStore";
+import { useBeoIntakeView } from "./BeoIntakeViewContext";
 
-/** Shared compact input styling for BEO intake forms */
+/** BEO intake type scale: section title > field label > input > helper. One muted color for secondary. */
+export const INPUT_FONT_SIZE = 14;
+export const LABEL_FONT_SIZE = 13;
+export const HELPER_FONT_SIZE = 11;
+export const SECTION_TITLE_SIZE = 16;
+export const MUTED_COLOR = "rgba(255,255,255,0.5)";
+export const LABEL_COLOR = "rgba(255,255,255,0.9)";
+export const ACCENT_LINK = "#00bcd4";
+
+/** Shared input styling for BEO intake forms */
 export const inputStyle = {
   width: "100%",
   padding: "8px 10px",
@@ -9,7 +19,7 @@ export const inputStyle = {
   border: "1px solid rgba(255,255,255,0.12)",
   backgroundColor: "rgba(0,0,0,0.25)",
   color: "#e0e0e0",
-  fontSize: "13px",
+  fontSize: `${INPUT_FONT_SIZE}px`,
 } as const;
 
 /** For textareas - extends inputStyle with resize */
@@ -19,22 +29,22 @@ export const textareaStyle = {
   fontFamily: "inherit",
 };
 
-/** Shared compact label styling */
+/** Field label — prominent so users scan easily */
 export const labelStyle = {
   display: "block" as const,
-  fontSize: "10px",
-  color: "rgba(255,255,255,0.55)",
+  fontSize: `${LABEL_FONT_SIZE}px`,
+  color: LABEL_COLOR,
   marginBottom: "4px",
   fontWeight: "600" as const,
 };
 
-/** Helper text below form fields */
+/** Helper / secondary text — smaller, muted, never competes with labels */
 export const helperStyle = {
-  fontSize: "11px",
-  color: "#a5b4fc",
+  fontSize: `${HELPER_FONT_SIZE}px`,
+  color: MUTED_COLOR,
   marginTop: "4px",
   lineHeight: 1.4,
-  fontWeight: 500,
+  fontWeight: 400,
 } as const;
 
 export function Helper({ children }: { children: React.ReactNode }) {
@@ -51,6 +61,8 @@ type CollapsibleSubsectionProps = {
   isDelivery?: boolean;
   /** Accent color for border and title (e.g. #ff6b6b, #a855f7) */
   accentColor?: string;
+  /** When "center", heading and summary are centered */
+  titleAlign?: "left" | "center";
 };
 
 export const CollapsibleSubsection = ({
@@ -61,6 +73,7 @@ export const CollapsibleSubsection = ({
   defaultOpen = false,
   isDelivery = false,
   accentColor,
+  titleAlign = "left",
 }: CollapsibleSubsectionProps) => {
   const [isOpen, setIsOpen] = useState(defaultOpen);
   // Sync open state when defaultOpen changes (e.g. when a service is picked)
@@ -84,6 +97,7 @@ export const CollapsibleSubsection = ({
           width: "100%",
           display: "flex",
           alignItems: "center",
+          justifyContent: titleAlign === "center" ? "center" : "flex-start",
           gap: "6px",
           marginTop: 10,
           marginBottom: isOpen ? 8 : 0,
@@ -93,7 +107,7 @@ export const CollapsibleSubsection = ({
           border: "none",
           cursor: "pointer",
           padding: 0,
-          textAlign: "left",
+          textAlign: titleAlign === "center" ? "center" : "left",
         }}
       >
         <span style={{ fontSize: "12px", transform: isOpen ? "rotate(90deg)" : "rotate(0deg)", transition: "transform 0.3s ease", color: accentColor ?? "rgba(255,255,255,0.6)" }}>
@@ -111,7 +125,7 @@ export const CollapsibleSubsection = ({
           {title}
         </span>
         {summary && (
-          <span style={{ fontSize: 12, color: "#888", fontWeight: 400, marginLeft: 8 }}>
+          <span style={{ fontSize: 12, color: "#888", fontWeight: 400, marginLeft: titleAlign === "center" ? 0 : 8 }}>
             — {summary}
           </span>
         )}
@@ -148,6 +162,8 @@ type FormSectionProps = {
   isDelivery?: boolean;
   /** Unique ID for jump-to navigation */
   sectionId?: string;
+  /** When "center", section title and subtitle are centered */
+  titleAlign?: "left" | "center";
 };
 
 export const FormSection = ({
@@ -159,6 +175,7 @@ export const FormSection = ({
   dotColor,
   isDelivery = false,
   sectionId,
+  titleAlign = "left",
 }: FormSectionProps) => {
   const [isOpen, setIsOpen] = useState(defaultOpen);
   const [isSaving, setIsSaving] = useState(false);
@@ -173,8 +190,8 @@ export const FormSection = ({
       setIsOpen(defaultOpen);
     }
   }, [defaultOpen]);
-  const borderColor = isDelivery ? "#22c55e" : "#00bcd4";
-  const glowColor = isDelivery ? "rgba(34,197,94,0.15)" : "rgba(0,188,212,0.2)";
+  const borderColor = isDelivery ? "#eab308" : "#00bcd4";
+  const glowColor = isDelivery ? "rgba(234,179,8,0.15)" : "rgba(0,188,212,0.2)";
 
   const handleSave = async () => {
     if (!selectedEventId) return;
@@ -209,6 +226,44 @@ export const FormSection = ({
     return () => window.removeEventListener("beo-jump-to-section", expand);
   }, [sectionId]);
 
+  const beoView = useBeoIntakeView();
+  const effectiveOpen = beoView.inBeoView && beoView.controlledOpen !== undefined
+    ? beoView.controlledOpen
+    : isOpen;
+
+  if (beoView.inBeoView && beoView.controlledOpen !== undefined) {
+    if (!effectiveOpen) return null;
+    return (
+      <div style={{ padding: "0 16px 16px" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "12px" }}>
+          {children}
+        </div>
+        {selectedEventId && (
+          <div style={{ marginTop: 12, paddingTop: 10, borderTop: "1px solid rgba(255,255,255,0.08)" }}>
+            <button
+              type="button"
+              onClick={handleSave}
+              disabled={isSaving}
+              style={{
+                padding: "6px 14px",
+                fontSize: "11px",
+                fontWeight: 600,
+                borderRadius: "6px",
+                border: "1px solid rgba(255,107,107,0.5)",
+                background: isSaving ? "rgba(255,255,255,0.04)" : "rgba(255,107,107,0.15)",
+                color: "#ff6b6b",
+                cursor: isSaving ? "not-allowed" : "pointer",
+                opacity: isSaving ? 0.7 : 1,
+              }}
+            >
+              {showSaved ? "Saved ✓" : isSaving ? "Saving…" : "Save"}
+            </button>
+          </div>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div
       id={sectionId}
@@ -234,7 +289,7 @@ export const FormSection = ({
           width: "100%",
           display: "flex",
           flexDirection: "column",
-          alignItems: "flex-start",
+          alignItems: titleAlign === "center" ? "center" : "flex-start",
           gap: "2px",
           marginBottom: isOpen ? "16px" : "0",
           background: "none",
@@ -243,34 +298,34 @@ export const FormSection = ({
           padding: 0,
         }}
       >
-        <div style={{ display: "flex", alignItems: "center", gap: "8px", width: "100%" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: titleAlign === "center" ? "center" : "flex-start", gap: "8px", width: "100%" }}>
           <h2
             style={{
-              fontSize: "15px",
+              fontSize: `${SECTION_TITLE_SIZE}px`,
               fontWeight: "600",
               color: "#fff",
               textTransform: "none",
               letterSpacing: "0.2px",
-              flex: 1,
-              textAlign: "left",
+              flex: titleAlign === "center" ? undefined : 1,
+              textAlign: titleAlign === "center" ? "center" : "left",
               margin: 0,
             }}
           >
             {title}
           </h2>
           <span
-          style={{
-            color: "rgba(255,255,255,0.5)",
-            fontSize: "11px",
-            transform: isOpen ? "rotate(90deg)" : "rotate(0deg)",
-            transition: "transform 0.3s ease",
-          }}
-        >
-          ▶
-        </span>
+            style={{
+              color: MUTED_COLOR,
+              fontSize: `${HELPER_FONT_SIZE}px`,
+              transform: isOpen ? "rotate(90deg)" : "rotate(0deg)",
+              transition: "transform 0.3s ease",
+            }}
+          >
+            ▶
+          </span>
         </div>
-        {subtitle && (
-          <span style={{ fontSize: "10px", color: "rgba(255,255,255,0.5)", fontWeight: 400 }}>
+        {!isOpen && subtitle && (
+          <span style={{ fontSize: `${LABEL_FONT_SIZE}px`, color: MUTED_COLOR, fontWeight: 400, marginTop: 2, textAlign: titleAlign === "center" ? "center" : "left", display: "block", width: "100%" }}>
             {subtitle}
           </span>
         )}
@@ -296,14 +351,14 @@ export const FormSection = ({
                 disabled={isSaving}
                 style={{
                   padding: "6px 14px",
-                  fontSize: "11px",
+                  fontSize: `${LABEL_FONT_SIZE}px`,
                   fontWeight: 600,
                   textTransform: "none",
                   letterSpacing: "0.2px",
                   borderRadius: "6px",
-                  border: `1px solid ${isDelivery ? "rgba(34,197,94,0.5)" : "rgba(255,107,107,0.5)"}`,
-                  background: isSaving ? "rgba(255,255,255,0.04)" : (isDelivery ? "rgba(34,197,94,0.15)" : "rgba(255,107,107,0.15)"),
-                  color: isDelivery ? "#4ade80" : "#ff6b6b",
+                  border: `1px solid ${isDelivery ? "rgba(234,179,8,0.5)" : "rgba(255,107,107,0.5)"}`,
+                  background: isSaving ? "rgba(255,255,255,0.04)" : (isDelivery ? "rgba(234,179,8,0.15)" : "rgba(255,107,107,0.15)"),
+                  color: isDelivery ? "#eab308" : "#ff6b6b",
                   cursor: isSaving ? "not-allowed" : "pointer",
                   opacity: isSaving ? 0.7 : 1,
                 }}

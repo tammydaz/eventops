@@ -27,7 +27,8 @@ export type EventStore = {
   eventData: Fields;
   selectedEventData: Fields;
   eventDataLoading: boolean;
-  loadEventData: () => Promise<void>;
+  /** Load event by id. Pass id explicitly when switching so we never rely on store timing. */
+  loadEventData: (eventId?: string) => Promise<void>;
 
   updateEvent: (eventId: string, patch: Fields) => Promise<boolean>;
   setField: (eventId: string, fieldId: string, value: unknown) => Promise<boolean>;
@@ -39,6 +40,10 @@ export type EventStore = {
 
   /** Save current event data to Airtable (blur + filter + setFields). Returns true on success. */
   saveCurrentEvent: (eventId: string) => Promise<boolean>;
+
+  /** BEO intake: unsaved changes (prompt before leaving page or switching event) */
+  intakeDirty: boolean;
+  setIntakeDirty: (dirty: boolean) => void;
 
   fields: Fields;
   setFieldLegacy: (name: string, value: unknown) => void;
@@ -69,52 +74,31 @@ export const useEventStore = create<EventStore>((set, get) => ({
   selectedEventId: null,
   setSelectedEventId: (id) => set({ selectedEventId: id }),
   selectEvent: async (id) => {
-    if (get().selectedEventId === id) return; // already selected — no-op
-    // Keep old data visible until new data arrives (prevents 60-component blank flash)
-    set({ selectedEventId: id, eventDataLoading: true });
-    get().loadEventData();
+    // Always update: set id, show loading, clear old data so UI reflects the switch immediately
+    set({ selectedEventId: id, eventDataLoading: true, selectedEventData: emptyFields, eventData: emptyFields, intakeDirty: false });
+    get().loadEventData(id);
   },
 
   eventData: { ...emptyFields },
   selectedEventData: { ...emptyFields },
   eventDataLoading: false,
-  loadEventData: async () => {
-    const { selectedEventId } = get();
-    if (!selectedEventId) {
+  loadEventData: async (explicitEventId) => {
+    const eventId = explicitEventId ?? get().selectedEventId;
+    if (!eventId) {
       set({ eventData: emptyFields, selectedEventData: emptyFields, eventDataLoading: false });
       return;
     }
     set({ eventDataLoading: true });
     try {
-      const result = await fetchEventById(selectedEventId);
-
-      // Race-condition guard: if user switched events while this fetch was in-flight, discard result
-      if (get().selectedEventId !== selectedEventId) return;
-
+      const result = await fetchEventById(eventId);
+      if (get().selectedEventId !== eventId) return;
       if (isErrorResult(result)) {
         console.warn("⚠️ loadEventData: Airtable error (soft fail):", result.message);
         set({ eventDataLoading: false });
         return;
       }
       const fields = result.fields ?? {};
-      // Deep-equality guard: only replace selectedEventData if field values actually changed.
-      // Prevents re-render cascades when loadEventData is called after optimistic updates.
-      const current = get().selectedEventData;
-      const hasChanged =
-        Object.keys(fields).length !== Object.keys(current).length ||
-        Object.keys(fields).some((k) => {
-          const a = fields[k];
-          const b = current[k];
-          if (Array.isArray(a) && Array.isArray(b)) {
-            return JSON.stringify(a) !== JSON.stringify(b);
-          }
-          return a !== b;
-        });
-      if (hasChanged) {
-        set({ eventData: fields, selectedEventData: fields, eventDataLoading: false });
-      } else {
-        set({ eventDataLoading: false });
-      }
+      set({ eventData: fields, selectedEventData: fields, eventDataLoading: false });
     } catch (err) {
       console.error("❌ loadEventData: unexpected error (soft fail):", err);
       set({ eventDataLoading: false });
@@ -193,8 +177,12 @@ export const useEventStore = create<EventStore>((set, get) => ({
     const dataToSave = filterToEditableOnly(raw);
     if (Object.keys(dataToSave).length === 0) return true;
     const ok = await get().setFields(eventId, { ...dataToSave });
+    if (ok) set({ intakeDirty: false });
     return ok ?? false;
   },
+
+  intakeDirty: false,
+  setIntakeDirty: (dirty) => set({ intakeDirty: dirty }),
 
   fields: { ...emptyFields },
   setFieldLegacy: (name, value) =>

@@ -1,10 +1,9 @@
 import { lazy, Suspense } from "react";
-import { useLocation, Routes, Route } from "react-router-dom";
+import { useLocation, Routes, Route, Navigate } from "react-router-dom";
 import { BeoIntakePage } from "./pages/BeoIntakePage";
 import { SeedDemoEventPage } from "./pages/SeedDemoEventPage";
 import PrintTestPage from "./pages/PrintTestPage";
 import { HomeDashboard } from "./pages/HomeDashboard";
-import { QuickIntake } from "./pages/QuickIntake";
 import DashboardPage from "./pages/DashboardPage";
 import Watchtower from "./pages/Watchtower";
 
@@ -48,6 +47,10 @@ const DELIVERY_NAV = [
 const OPS_CHIEF_NAV = [
   { label: "Ops Chief Home", href: "/ops-chief", icon: "🎯" },
   { label: "Alerts Dashboard", href: "/ops-chief/alerts", icon: "⚠️" },
+  { label: "Flair", href: "/flair", icon: "🎪" },
+  { label: "Intake", href: "/beo-intake", icon: "📋" },
+  { label: "Kitchen", href: "/kitchen", icon: "🍳" },
+  { label: "Deliveries", href: "/delivery-command", icon: "🚚" },
 ];
 
 export const Router = ({ selectedEventId }: { selectedEventId: string | null }) => {
@@ -84,7 +87,7 @@ function RouterContent({ pathname, selectedEventId }: { pathname: string; select
   }
 
 	if (pathname.startsWith("/quick-intake")) {
-		return <QuickIntake />;
+		return <Navigate to="/event/new" replace />;
 	}
 
 	if (pathname.startsWith("/early-event-sections")) {

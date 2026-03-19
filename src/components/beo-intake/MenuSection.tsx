@@ -22,13 +22,16 @@ import { loadStationPresets, loadStationComponentNamesByIds } from "../../servic
 import { StationComponentsConfigModal } from "./StationComponentsConfigModal";
 import { BoxedLunchConfigModal } from "./BoxedLunchConfigModal";
 import { SandwichPlatterConfigModal } from "./SandwichPlatterConfigModal";
+import { SALAD_BAR } from "../../config/stationPresets";
 import { createBoxedLunchOrderFromRows } from "../../services/airtable/boxedLunchOrders";
 import { getPlatterOrdersByEventId, setPlatterOrdersForEvent } from "../../state/platterOrdersStore";
-import { asLinkedRecordIds, asString, isErrorResult } from "../../services/airtable/selectors";
+import { asLinkedRecordIds, asSingleSelectName, asString, isErrorResult } from "../../services/airtable/selectors";
 import { useEventStore } from "../../state/eventStore";
 import { FormSection, CollapsibleSubsection } from "./FormSection";
 import { CustomFoodItemsBlock } from "./CustomFoodItemsBlock";
 import { getSauceOverrides, setSauceOverride, type SauceOverride, type SauceOverrideValue } from "../../state/sauceOverrideStore";
+import { calculateAutoSpec, type FoodCategory } from "../../utils/beoAutoSpec";
+import { getBeoSpecStorageKey, getSpecOverrideKey } from "../../utils/beoSpecStorage";
 
 const MENU_ITEM_SAUCE_FIELD_ID = "fldCUjK7oBckAuNNa"; // Menu Items.Sauces (Long text)
 
@@ -104,6 +107,205 @@ function MenuItemCard(props: {
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+/** Collapsible block with same visual shell as CourseBlock: heading with colored dots and chevron. Use for any section that should match course-block look. */
+function CourseStyleBlock(props: {
+  title: string;
+  dotColor: string;
+  defaultCollapsed?: boolean;
+  children: React.ReactNode;
+}) {
+  const { title, dotColor, defaultCollapsed = true, children } = props;
+  const [isOpen, setIsOpen] = useState(!defaultCollapsed);
+  const dotStyle: React.CSSProperties = {
+    width: 8,
+    height: 8,
+    borderRadius: "50%",
+    backgroundColor: dotColor,
+    flexShrink: 0,
+  };
+  const tableBorder = "1px solid rgba(255,255,255,0.15)";
+  return (
+    <div
+      style={{
+        border: tableBorder,
+        borderRadius: 8,
+        backgroundColor: "rgba(0,0,0,0.2)",
+        overflow: "hidden",
+        marginBottom: 10,
+      }}
+    >
+      <button
+        type="button"
+        onClick={() => setIsOpen((prev) => !prev)}
+        style={{
+          width: "100%",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: 8,
+          padding: "8px 12px",
+          border: "none",
+          borderBottom: isOpen ? tableBorder : "none",
+          background: "rgba(0,0,0,0.15)",
+          cursor: "pointer",
+          color: "inherit",
+        }}
+      >
+        <span style={{ fontSize: "10px", transform: isOpen ? "rotate(90deg)" : "rotate(0deg)", transition: "transform 0.2s ease", color: "rgba(255,255,255,0.7)" }}>▶</span>
+        <span style={dotStyle} />
+        <span style={{ fontSize: 13, fontWeight: 700, letterSpacing: "0.05em", color: "#e0e0e0" }}>{title}</span>
+        <span style={dotStyle} />
+      </button>
+      {isOpen && <div style={{ padding: 8 }}>{children}</div>}
+    </div>
+  );
+}
+
+/** Course block: collapsible heading with colored dots, two-column item list (qty | name/description), + Add button. */
+function CourseBlock(props: {
+  title: string;
+  dotColor: string;
+  itemIds: string[];
+  getItemName: (id: string) => string;
+  getItemDescription?: (id: string) => string | null;
+  onRemove: (id: string) => void;
+  onAdd: () => void;
+  addButtonLabel: string;
+  canEdit: boolean;
+  buttonStyle: React.CSSProperties;
+  defaultCollapsed?: boolean;
+  children?: React.ReactNode;
+}) {
+  const {
+    title,
+    dotColor,
+    itemIds,
+    getItemName,
+    getItemDescription,
+    onRemove,
+    onAdd,
+    addButtonLabel,
+    canEdit,
+    buttonStyle,
+    defaultCollapsed = true,
+    children,
+  } = props;
+  const [isOpen, setIsOpen] = useState(!defaultCollapsed);
+  const dotStyle: React.CSSProperties = {
+    width: 8,
+    height: 8,
+    borderRadius: "50%",
+    backgroundColor: dotColor,
+    flexShrink: 0,
+  };
+  const tableBorder = "1px solid rgba(255,255,255,0.15)";
+  return (
+    <div
+      style={{
+        border: tableBorder,
+        borderRadius: 8,
+        backgroundColor: "rgba(0,0,0,0.2)",
+        overflow: "hidden",
+        marginBottom: 16,
+      }}
+    >
+      <button
+        type="button"
+        onClick={() => setIsOpen((prev) => !prev)}
+        style={{
+          width: "100%",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: 10,
+          padding: "12px 16px",
+          border: "none",
+          borderBottom: isOpen ? tableBorder : "none",
+          background: "rgba(0,0,0,0.15)",
+          cursor: "pointer",
+          color: "inherit",
+        }}
+      >
+        <span style={{ fontSize: "10px", transform: isOpen ? "rotate(90deg)" : "rotate(0deg)", transition: "transform 0.2s ease", color: "rgba(255,255,255,0.7)" }}>▶</span>
+        <span style={dotStyle} />
+        <span style={{ fontSize: 14, fontWeight: 700, letterSpacing: "0.05em", color: "#e0e0e0" }}>{title}</span>
+        <span style={dotStyle} />
+      </button>
+      {isOpen && (
+      <div style={{ padding: 12 }}>
+        <div style={{ border: tableBorder, borderRadius: 6, overflow: "hidden" }}>
+          {itemIds.length === 0 ? (
+            <div style={{ padding: "12px 16px", color: "rgba(255,255,255,0.5)", fontSize: 13 }}>No items yet. Use + Add to select.</div>
+          ) : (
+            itemIds.map((itemId) => {
+              const name = getItemName(itemId);
+              const desc = getItemDescription?.(itemId)?.trim();
+              return (
+                <div
+                  key={itemId}
+                  style={{
+                    display: "flex",
+                    borderBottom: itemIds.indexOf(itemId) < itemIds.length - 1 ? tableBorder : "none",
+                    minHeight: 44,
+                    alignItems: "center",
+                  }}
+                >
+                  <div
+                    style={{
+                      width: 72,
+                      flexShrink: 0,
+                      padding: "8px 12px",
+                      borderRight: tableBorder,
+                      fontSize: 13,
+                      color: "rgba(255,255,255,0.6)",
+                    }}
+                  >
+                    —
+                  </div>
+                  <div
+                    style={{
+                      flex: 1,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      padding: "8px 12px",
+                      gap: 8,
+                    }}
+                  >
+                    <div>
+                      <div style={{ fontSize: 14, color: "#e0e0e0", fontWeight: 500 }}>{name}</div>
+                      {desc && (
+                        <div style={{ fontSize: 12, color: "rgba(255,255,255,0.6)", marginTop: 2 }}>{desc.startsWith("w/") || desc.startsWith("Sauce:") ? desc : `w/ ${desc}`}</div>
+                      )}
+                    </div>
+                    {canEdit && (
+                      <button
+                        type="button"
+                        onClick={() => onRemove(itemId)}
+                        style={{ background: "none", border: "none", color: "#ff6b6b", cursor: "pointer", fontSize: 16, fontWeight: "bold", flexShrink: 0 }}
+                        aria-label="Remove"
+                      >
+                        ✕
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+        <div style={{ marginTop: 12 }}>
+          <button type="button" disabled={!canEdit} onClick={onAdd} style={buttonStyle}>
+            {addButtonLabel}
+          </button>
+        </div>
+        {children}
+      </div>
+      )}
     </div>
   );
 }
@@ -419,8 +621,11 @@ function CreationStationContent(props: {
   inputStyle: React.CSSProperties;
   labelStyle: React.CSSProperties;
   buttonStyle: React.CSSProperties;
+  /** Compact style for Edit Components and + Add Station */
+  addButtonStyle?: React.CSSProperties;
 }) {
-  const { selectedEventId, canEdit, getItemName, fetchItemNames, inputStyle, labelStyle, buttonStyle } = props;
+  const { selectedEventId, canEdit, getItemName, fetchItemNames, inputStyle, labelStyle, buttonStyle, addButtonStyle } = props;
+  const compactStyle = addButtonStyle ?? buttonStyle;
   const { selectedEventData } = useEventStore();
   const [stations, setStations] = useState<Array<{ id: string; stationType: string; stationItems: string[]; stationNotes: string; stationPresetId?: string; stationComponents?: string[]; customItems?: string; beoPlacement?: "Presented Appetizer" | "Buffet Metal" | "Buffet China" }>>([]);
   const [stationTypeOptions, setStationTypeOptions] = useState<string[]>([]);
@@ -571,7 +776,17 @@ function CreationStationContent(props: {
       {stations.map((st) => (
         <div key={st.id} style={{ marginBottom: 16, padding: 12, backgroundColor: "#1a1a1a", borderRadius: 8, border: "1px solid #444" }}>
           {canEdit && (
-            <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}>
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginBottom: 8, flexWrap: "wrap" }}>
+              {(st.stationPresetId || stationPresets.some((p) => p.name === st.stationType) || (st.customItems != null && /^Main:\s/m.test(st.customItems))) && (
+                <button
+                  type="button"
+                  onClick={() => setEditingStationId(st.id)}
+                  style={{ padding: "4px 10px", fontSize: 11, fontWeight: 600, background: "rgba(139,92,246,0.2)", border: "1px solid #8b5cf6", color: "#a78bfa", borderRadius: 5, cursor: "pointer" }}
+                  title="Reopen station config to edit components, toppings, BEO placement"
+                >
+                  Edit
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => handleDeleteStation(st.id)}
@@ -618,8 +833,8 @@ function CreationStationContent(props: {
                       </span>
                     )}
                     {(st.stationComponents ?? []).length === 0 && !st.customItems?.trim() && <span style={{ color: "#666", fontSize: 12 }}>No components</span>}
-                    {canEdit && st.stationPresetId && (
-                      <button type="button" onClick={() => setEditingStationId(st.id)} style={{ ...buttonStyle, padding: "6px 10px", fontSize: 12 }}>
+                    {canEdit && (st.stationPresetId || stationPresets.some((p) => p.name === st.stationType) || (st.customItems != null && /^Main:\s/m.test(st.customItems))) && (
+                      <button type="button" onClick={() => setEditingStationId(st.id)} style={compactStyle}>
                         Edit Components
                       </button>
                     )}
@@ -711,7 +926,7 @@ function CreationStationContent(props: {
                 <label style={labelStyle}>Station Type</label>
                 <select value={newStationType} onChange={(e) => setNewStationType(e.target.value)} disabled={!canEdit} style={selectStyle}>
                   <option value="">Select type</option>
-                  {(stationTypeOptions.length > 0 ? stationTypeOptions : STATION_TYPE_OPTIONS).map((opt) => (
+                  {([...new Set([...(stationTypeOptions.length > 0 ? stationTypeOptions : []), ...STATION_TYPE_OPTIONS])]).map((opt) => (
                     <option key={opt} value={opt}>{opt}</option>
                   ))}
                 </select>
@@ -725,7 +940,7 @@ function CreationStationContent(props: {
               type="button"
               disabled={!canEdit || (usePresetFlow ? !newStationPresetId : !newStationType.trim())}
               onClick={openAddStationModal}
-              style={buttonStyle}
+              style={compactStyle}
             >
               + Add Station
             </button>
@@ -807,6 +1022,7 @@ type MenuSelections = {
   buffetChina: string[];
   desserts: string[];
   deliveryDeli: string[];
+  fullServiceDeli: string[];
   roomTempDisplay: string[];
   displays: string[];
 };
@@ -818,6 +1034,7 @@ type CustomFields = {
   customBuffetChina: string;
   customDessert: string;
   customDeli: string;
+  customFullServiceDeli: string;
   customRoomTemp: string;
 };
 
@@ -839,7 +1056,9 @@ export const MenuSection = ({ embedded = false, isDelivery = false }: MenuSectio
   const { selectedEventId, selectedEventData, setFields } = useEventStore();
   const [menuItems, setMenuItems] = useState<LinkedRecordItem[]>([]);
   const [menuItemNames, setMenuItemNames] = useState<Record<string, string>>({});
+  const [menuItemChildIds, setMenuItemChildIds] = useState<Record<string, string[]>>({});
   const [menuItemSauce, setMenuItemSauce] = useState<Record<string, string>>({});
+  const [menuSpecOverrides, setMenuSpecOverrides] = useState<Record<string, string>>({});
   const [sauceOverrides, setSauceOverridesState] = useState<Record<string, SauceOverride>>({});
   const [selections, setSelections] = useState<MenuSelections>({
     passedAppetizers: [],
@@ -848,6 +1067,7 @@ export const MenuSection = ({ embedded = false, isDelivery = false }: MenuSectio
     buffetChina: [],
     desserts: [],
     deliveryDeli: [],
+    fullServiceDeli: [],
     roomTempDisplay: [],
     displays: [],
   });
@@ -858,6 +1078,7 @@ export const MenuSection = ({ embedded = false, isDelivery = false }: MenuSectio
     customBuffetChina: "",
     customDessert: "",
     customDeli: "",
+    customFullServiceDeli: "",
     customRoomTemp: "",
   });
   const [error, setError] = useState<string | null>(null);
@@ -865,6 +1086,9 @@ export const MenuSection = ({ embedded = false, isDelivery = false }: MenuSectio
   const [dressingPickerSearch, setDressingPickerSearch] = useState("");
   const [boxedLunchModalOpen, setBoxedLunchModalOpen] = useState(false);
   const [platterModalOpen, setPlatterModalOpen] = useState(false);
+  const [kitchenFields, setKitchenFields] = useState({ allergies: "", religious: "", dietaryMeals: "" });
+  const [dietaryLine, setDietaryLine] = useState({ count: 1, type: "Gluten free", item: "" });
+  const [openKitchenPill, setOpenKitchenPill] = useState<"allergies" | "religious" | "dietaryMeals" | "serviceStyle" | null>(null);
 
   // Load menu items on mount
   useEffect(() => {
@@ -926,13 +1150,15 @@ export const MenuSection = ({ embedded = false, isDelivery = false }: MenuSectio
 
     const childIdsToFetch = new Set<string>();
     const recordsNeedingChild: Array<{ recId: string; firstChildId: string }> = [];
+    const childIdsByParent: Record<string, string[]> = {};
     for (const rec of allRecords) {
       const sauceRaw = rec.fields[MENU_ITEM_SAUCE_FIELD_ID];
       const sauce = typeof sauceRaw === "string" ? sauceRaw.trim() : "";
+      const childIds = asLinkedRecordIds(rec.fields[MENU_ITEMS_CHILD_ITEMS_FIELD_ID]).filter((id) => id?.startsWith("rec"));
+      if (childIds.length) childIdsByParent[rec.id] = childIds;
       if (sauce) {
         allSauce[rec.id] = sauce;
       } else {
-        const childIds = asLinkedRecordIds(rec.fields[MENU_ITEMS_CHILD_ITEMS_FIELD_ID]).filter((id) => id?.startsWith("rec"));
         const firstChildId = childIds[0];
         if (firstChildId) {
           recordsNeedingChild.push({ recId: rec.id, firstChildId });
@@ -974,6 +1200,7 @@ export const MenuSection = ({ embedded = false, isDelivery = false }: MenuSectio
     }
 
     setMenuItemNames((prev) => ({ ...prev, ...allNames }));
+    setMenuItemChildIds((prev) => ({ ...prev, ...childIdsByParent }));
     setMenuItemSauce((prev) => ({ ...prev, ...allSauce }));
   }, []);
 
@@ -988,6 +1215,7 @@ export const MenuSection = ({ embedded = false, isDelivery = false }: MenuSectio
         buffetChina: [],
         desserts: [],
         deliveryDeli: [],
+        fullServiceDeli: [],
         roomTempDisplay: [],
         displays: [],
       });
@@ -997,7 +1225,11 @@ export const MenuSection = ({ embedded = false, isDelivery = false }: MenuSectio
         customBuffetMetal: "",
         customBuffetChina: "",
         customDessert: "",
+        customDeli: "",
+        customFullServiceDeli: "",
+        customRoomTemp: "",
       });
+      setKitchenFields({ allergies: "", religious: "", dietaryMeals: "" });
       return;
     }
 
@@ -1008,6 +1240,7 @@ export const MenuSection = ({ embedded = false, isDelivery = false }: MenuSectio
       buffetChina: asLinkedRecordIds(selectedEventData[FIELD_IDS.BUFFET_CHINA]),
       desserts: asLinkedRecordIds(selectedEventData[FIELD_IDS.DESSERTS]),
       deliveryDeli: asLinkedRecordIds(selectedEventData[FIELD_IDS.DELIVERY_DELI]),
+      fullServiceDeli: asLinkedRecordIds(selectedEventData[FIELD_IDS.FULL_SERVICE_DELI]),
       roomTempDisplay: asLinkedRecordIds(selectedEventData[FIELD_IDS.ROOM_TEMP_DISPLAY]),
       displays: asLinkedRecordIds(selectedEventData[FIELD_IDS.DISPLAYS]),
     };
@@ -1020,6 +1253,7 @@ export const MenuSection = ({ embedded = false, isDelivery = false }: MenuSectio
       ...newSelections.buffetChina,
       ...newSelections.desserts,
       ...newSelections.deliveryDeli,
+      ...newSelections.fullServiceDeli,
       ...newSelections.roomTempDisplay,
       ...newSelections.displays,
     ];
@@ -1036,12 +1270,74 @@ export const MenuSection = ({ embedded = false, isDelivery = false }: MenuSectio
       customBuffetChina: asString(selectedEventData[FIELD_IDS.CUSTOM_BUFFET_CHINA]),
       customDessert: asString(selectedEventData[FIELD_IDS.CUSTOM_DESSERTS]),
       customDeli: asString(selectedEventData[FIELD_IDS.CUSTOM_DELIVERY_DELI]),
+      customFullServiceDeli: asString(selectedEventData[FIELD_IDS.CUSTOM_FULL_SERVICE_DELI]),
       customRoomTemp: asString(selectedEventData[FIELD_IDS.CUSTOM_ROOM_TEMP_DISPLAY]),
+    });
+    setKitchenFields({
+      allergies: asString(selectedEventData[FIELD_IDS.DIETARY_NOTES]),
+      religious: asString(selectedEventData[FIELD_IDS.RELIGIOUS_RESTRICTIONS]),
+      dietaryMeals: asString(selectedEventData[FIELD_IDS.DIETARY_SUMMARY]),
     });
   }, [selectedEventId, selectedEventData, fetchItemNames]);
 
+  // Load spec overrides once per event (not on every save). Isolated from selectedEventData so
+  // optimistic saves don't wipe overrides the user is actively editing.
+  useEffect(() => {
+    if (!selectedEventId) {
+      setMenuSpecOverrides({});
+      return;
+    }
+    let parsed: Record<string, string> = {};
+    try {
+      const fromStorage = localStorage.getItem(getBeoSpecStorageKey(selectedEventId));
+      if (fromStorage) {
+        const p = JSON.parse(fromStorage);
+        if (p && typeof p === "object") parsed = { ...parsed, ...p };
+      }
+    } catch {
+      // ignore
+    }
+    // Also merge Airtable SPEC_OVERRIDE if present at load time
+    try {
+      const fromAirtable = asString(selectedEventData?.[FIELD_IDS.SPEC_OVERRIDE])?.trim();
+      if (fromAirtable) {
+        const p = JSON.parse(fromAirtable);
+        if (p && typeof p === "object") parsed = { ...p, ...parsed }; // localStorage wins over Airtable
+      }
+    } catch {
+      // ignore
+    }
+    setMenuSpecOverrides(parsed);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedEventId]); // intentionally omit selectedEventData — only re-load on event switch
+
+  // Persist spec overrides to localStorage so BEO print page sees them (effect for bulk/load; handler for immediate write on edit)
+  useEffect(() => {
+    if (!selectedEventId || Object.keys(menuSpecOverrides).length === 0) return;
+    try {
+      localStorage.setItem(getBeoSpecStorageKey(selectedEventId), JSON.stringify(menuSpecOverrides));
+    } catch {
+      // ignore
+    }
+  }, [selectedEventId, menuSpecOverrides]);
+
+  const handleSpecOverrideChange = (specKey: string, value: string) => {
+    setMenuSpecOverrides((prev) => ({ ...prev, [specKey]: value }));
+  };
+
   const canEdit = Boolean(selectedEventId);
   const { openPicker } = usePickerStore();
+
+  const getItemDescriptionForList = useCallback(
+    (itemId: string): string | null => {
+      const override = sauceOverrides[itemId];
+      if (override?.sauceOverride === "Other" && override.customSauce?.trim()) return override.customSauce.trim();
+      if (override?.sauceOverride === "None") return null;
+      const def = menuItemSauce[itemId]?.trim();
+      return def || null;
+    },
+    [sauceOverrides, menuItemSauce]
+  );
 
   const fieldIdMap: Record<keyof MenuSelections, string> = {
     passedAppetizers: FIELD_IDS.PASSED_APPETIZERS,
@@ -1050,6 +1346,7 @@ export const MenuSection = ({ embedded = false, isDelivery = false }: MenuSectio
     buffetChina: FIELD_IDS.BUFFET_CHINA,
     desserts: FIELD_IDS.DESSERTS,
     deliveryDeli: FIELD_IDS.DELIVERY_DELI,
+    fullServiceDeli: FIELD_IDS.FULL_SERVICE_DELI,
     roomTempDisplay: FIELD_IDS.ROOM_TEMP_DISPLAY,
     displays: FIELD_IDS.DISPLAYS,
   };
@@ -1063,6 +1360,15 @@ export const MenuSection = ({ embedded = false, isDelivery = false }: MenuSectio
     const newItems = [...currentItems, itemId];
     setSelections((prev) => ({ ...prev, buffetChina: newItems }));
     await setFields(selectedEventId, { [FIELD_IDS.BUFFET_CHINA]: newItems });
+  };
+
+  /** Add a dressing or salad by name to Custom Buffet China (when not in menu). */
+  const addDressingOrSaladCustom = async (name: string) => {
+    if (!selectedEventId || !name.trim()) return;
+    const current = (customFields.customBuffetChina || "").trim();
+    const next = current ? `${current}\n${name.trim()}` : name.trim();
+    setCustomFields((prev) => ({ ...prev, customBuffetChina: next }));
+    await setFields(selectedEventId, { [FIELD_IDS.CUSTOM_BUFFET_CHINA]: next });
   };
 
   const closeDressingPicker = () => {
@@ -1088,6 +1394,20 @@ export const MenuSection = ({ embedded = false, isDelivery = false }: MenuSectio
   const saveCustomField = async (fieldName: string, value: string) => {
     if (!selectedEventId) return;
     await setFields(selectedEventId, { [fieldName]: value });
+  };
+
+  const saveKitchenField = async (fieldId: string, value: string) => {
+    if (!selectedEventId) return;
+    await setFields(selectedEventId, { [fieldId]: value });
+  };
+
+  const addDietaryMealLine = () => {
+    const { count, type, item } = dietaryLine;
+    const line = item.trim() ? `${count} ${type} (${item.trim()})` : `${count} ${type}`;
+    const next = kitchenFields.dietaryMeals.trim() ? `${kitchenFields.dietaryMeals}\n${line}` : line;
+    setKitchenFields((prev) => ({ ...prev, dietaryMeals: next }));
+    saveKitchenField(FIELD_IDS.DIETARY_SUMMARY, next);
+    setDietaryLine((prev) => ({ ...prev, count: 1, item: "" }));
   };
 
   const getItemName = (itemId: string) => {
@@ -1138,9 +1458,52 @@ export const MenuSection = ({ embedded = false, isDelivery = false }: MenuSectio
     transition: "all 0.2s",
   };
 
-  const deliveryButtonStyle = { ...buttonStyle, borderColor: "#22c55e", color: "#22c55e" };
-  const deliveryItemBorder = "1px solid #22c55e";
-  const deliveryRemoveColor = "#22c55e";
+  /** Compact save-style buttons for + Add / + Add Custom Item (match contact info Save pill) */
+  const smallAddButtonStyle: React.CSSProperties = {
+    padding: "6px 14px",
+    fontSize: "11px",
+    fontWeight: 600,
+    borderRadius: 6,
+    border: "1px solid rgba(255,107,107,0.5)",
+    background: "rgba(255,107,107,0.15)",
+    color: "#ff6b6b",
+    cursor: "pointer",
+    opacity: 1,
+    transition: "background 0.2s ease, opacity 0.2s ease",
+  };
+
+  const deliveryButtonStyle = { ...buttonStyle, borderColor: "#eab308", color: "#eab308" };
+  const deliverySmallAddStyle: React.CSSProperties = { ...smallAddButtonStyle, borderColor: "rgba(234,179,8,0.6)", color: "#eab308" };
+  const deliveryItemBorder = "1px solid #eab308";
+  const deliveryRemoveColor = "#eab308";
+
+  const kitchenLabelStyle: React.CSSProperties = { fontSize: 10, fontWeight: 600, color: "rgba(255,255,255,0.7)", marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.05em" };
+  const kitchenInputStyle: React.CSSProperties = { width: "100%", padding: "6px 8px", borderRadius: 4, border: "1px solid #444", backgroundColor: "#1a1a1a", color: "#e0e0e0", fontSize: 12, fontFamily: "inherit" };
+  const SERVICE_STYLE_OPTIONS = ["Buffet", "Cocktail / Passed Apps Only", "Hybrid (Cocktail + Buffet)", "Family Style", "Plated"];
+  const serviceStyleValue = selectedEventData ? asSingleSelectName(selectedEventData[FIELD_IDS.SERVICE_STYLE]) : "";
+
+  const pillBaseStyle: React.CSSProperties = {
+    flex: "1 1 0",
+    minWidth: 0,
+    maxWidth: "25%",
+    border: "1px solid rgba(255,255,255,0.2)",
+    borderRadius: 10,
+    backgroundColor: "rgba(30,15,15,0.6)",
+    overflow: "hidden",
+  };
+  const pillHeaderStyle = (isOpen: boolean): React.CSSProperties => ({
+    width: "100%",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 6,
+    padding: "10px 12px",
+    border: "none",
+    background: "none",
+    cursor: "pointer",
+    color: "inherit",
+    textAlign: "left",
+  });
 
   const content = (
     <>
@@ -1149,6 +1512,168 @@ export const MenuSection = ({ embedded = false, isDelivery = false }: MenuSectio
           {error}
         </div>
       )}
+
+      {/* Kitchen / service pills — span full grid width so they spread across the top */}
+      <div style={{ gridColumn: "1 / -1", display: "flex", flexDirection: "row", gap: 8, marginBottom: 16, flexWrap: "nowrap", width: "100%" }}>
+        {/* Allergies pill */}
+        <div style={pillBaseStyle}>
+          <button
+            type="button"
+            onClick={() => setOpenKitchenPill((p) => (p === "allergies" ? null : "allergies"))}
+            style={pillHeaderStyle(openKitchenPill === "allergies")}
+          >
+            <span style={{ fontSize: 12, fontWeight: 600, color: "#fff", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>Allergies</span>
+            <span style={{ fontSize: 10, color: "rgba(255,255,255,0.6)", transform: openKitchenPill === "allergies" ? "rotate(90deg)" : "none" }}>▶</span>
+          </button>
+          {openKitchenPill === "allergies" && (
+            <div style={{ padding: "0 12px 12px" }}>
+              <input
+                type="text"
+                value={kitchenFields.allergies}
+                disabled={!canEdit}
+                onChange={(e) => setKitchenFields((p) => ({ ...p, allergies: e.target.value }))}
+                onBlur={(e) => saveKitchenField(FIELD_IDS.DIETARY_NOTES, e.target.value)}
+                placeholder="e.g. Shellfish, tree nuts"
+                style={kitchenInputStyle}
+              />
+            </div>
+          )}
+        </div>
+        {/* Religious / dietary pill */}
+        <div style={pillBaseStyle}>
+          <button
+            type="button"
+            onClick={() => setOpenKitchenPill((p) => (p === "religious" ? null : "religious"))}
+            style={pillHeaderStyle(openKitchenPill === "religious")}
+          >
+            <span style={{ fontSize: 12, fontWeight: 600, color: "#fff", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>Religious / dietary</span>
+            <span style={{ fontSize: 10, color: "rgba(255,255,255,0.6)", transform: openKitchenPill === "religious" ? "rotate(90deg)" : "none" }}>▶</span>
+          </button>
+          {openKitchenPill === "religious" && (
+            <div style={{ padding: "0 12px 12px" }}>
+              <select
+                value=""
+                disabled={!canEdit}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  if (!v) return;
+                  const next = kitchenFields.religious.trim() ? `${kitchenFields.religious}; ${v}` : v;
+                  setKitchenFields((p) => ({ ...p, religious: next }));
+                  saveKitchenField(FIELD_IDS.RELIGIOUS_RESTRICTIONS, next);
+                  e.target.value = "";
+                }}
+                style={{ ...kitchenInputStyle, marginBottom: 6 }}
+              >
+                <option value="">+ Add…</option>
+                <option value="Kosher">Kosher</option>
+                <option value="Halal">Halal</option>
+                <option value="No pork">No pork</option>
+                <option value="Vegetarian options">Vegetarian options</option>
+                <option value="Vegan options">Vegan options</option>
+                <option value="Dairy free">Dairy free</option>
+              </select>
+              <input
+                type="text"
+                value={kitchenFields.religious}
+                disabled={!canEdit}
+                onChange={(e) => setKitchenFields((p) => ({ ...p, religious: e.target.value }))}
+                onBlur={(e) => saveKitchenField(FIELD_IDS.RELIGIOUS_RESTRICTIONS, e.target.value)}
+                placeholder="Or type here"
+                style={kitchenInputStyle}
+              />
+            </div>
+          )}
+        </div>
+        {/* Dietary meal counts pill */}
+        <div style={pillBaseStyle}>
+          <button
+            type="button"
+            onClick={() => setOpenKitchenPill((p) => (p === "dietaryMeals" ? null : "dietaryMeals"))}
+            style={pillHeaderStyle(openKitchenPill === "dietaryMeals")}
+          >
+            <span style={{ fontSize: 12, fontWeight: 600, color: "#fff", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>Dietary meals</span>
+            <span style={{ fontSize: 10, color: "rgba(255,255,255,0.6)", transform: openKitchenPill === "dietaryMeals" ? "rotate(90deg)" : "none" }}>▶</span>
+          </button>
+          {openKitchenPill === "dietaryMeals" && (
+            <div style={{ padding: "0 12px 12px" }}>
+              <textarea
+                rows={2}
+                value={kitchenFields.dietaryMeals}
+                disabled={!canEdit}
+                onChange={(e) => setKitchenFields((p) => ({ ...p, dietaryMeals: e.target.value }))}
+                onBlur={(e) => saveKitchenField(FIELD_IDS.DIETARY_SUMMARY, e.target.value)}
+                placeholder="e.g. 2 gluten-free crab cakes, 3 vegetarian"
+                style={{ ...kitchenInputStyle, resize: "vertical", minHeight: 44 }}
+              />
+              {canEdit && (
+                <div style={{ display: "flex", gap: 6, marginTop: 6, flexWrap: "wrap", alignItems: "center" }}>
+                  <input
+                    type="number"
+                    min={1}
+                    max={99}
+                    value={dietaryLine.count}
+                    onChange={(e) => setDietaryLine((p) => ({ ...p, count: Math.max(1, parseInt(e.target.value, 10) || 1) }))}
+                    style={{ ...kitchenInputStyle, width: 44, padding: "4px 6px" }}
+                  />
+                  <select
+                    value={dietaryLine.type}
+                    onChange={(e) => setDietaryLine((p) => ({ ...p, type: e.target.value }))}
+                    style={{ ...kitchenInputStyle, width: 100 }}
+                  >
+                    <option value="Gluten free">Gluten free</option>
+                    <option value="Vegetarian">Vegetarian</option>
+                    <option value="Vegan">Vegan</option>
+                    <option value="Dairy free">Dairy free</option>
+                    <option value="Nut free">Nut free</option>
+                    <option value="Other">Other</option>
+                  </select>
+                  <input
+                    type="text"
+                    value={dietaryLine.item}
+                    onChange={(e) => setDietaryLine((p) => ({ ...p, item: e.target.value }))}
+                    placeholder="Item (e.g. Crab Cakes)"
+                    style={{ ...kitchenInputStyle, flex: 1, minWidth: 60 }}
+                  />
+                  <button type="button" onClick={addDietaryMealLine} style={{ ...buttonStyle, padding: "6px 10px", fontSize: 12 }}>Add line</button>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+        {/* Service style pill — closes after selection */}
+        <div style={pillBaseStyle}>
+          <button
+            type="button"
+            onClick={() => setOpenKitchenPill((p) => (p === "serviceStyle" ? null : "serviceStyle"))}
+            style={pillHeaderStyle(openKitchenPill === "serviceStyle")}
+          >
+            <span style={{ fontSize: 12, fontWeight: 600, color: "#fff", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+              Service style{serviceStyleValue ? `: ${serviceStyleValue}` : ""}
+            </span>
+            <span style={{ fontSize: 10, color: "rgba(255,255,255,0.6)", transform: openKitchenPill === "serviceStyle" ? "rotate(90deg)" : "none" }}>▶</span>
+          </button>
+          {openKitchenPill === "serviceStyle" && (
+            <div style={{ padding: "0 12px 12px" }}>
+              <select
+                value={serviceStyleValue}
+                disabled={!canEdit}
+                onChange={async (e) => {
+                  const value = e.target.value || "";
+                  if (!selectedEventId) return;
+                  await saveKitchenField(FIELD_IDS.SERVICE_STYLE, value);
+                  setOpenKitchenPill(null);
+                }}
+                style={kitchenInputStyle}
+              >
+                <option value="">—</option>
+                {SERVICE_STYLE_OPTIONS.map((opt) => (
+                  <option key={opt} value={opt}>{opt}</option>
+                ))}
+              </select>
+            </div>
+          )}
+        </div>
+      </div>
 
       {isDelivery ? (
         /* ── DELIVERY: HOT, DELI, KITCHEN, SALADS, DESSERTS ── */
@@ -1172,7 +1697,7 @@ export const MenuSection = ({ embedded = false, isDelivery = false }: MenuSectio
                   />
                 ))}
               </div>
-              <button type="button" disabled={!canEdit} onClick={() => openPicker("passed", "passedApps", "Passed Appetizers")} style={deliveryButtonStyle}>+ Add Passed Appetizer</button>
+              <button type="button" disabled={!canEdit} onClick={() => openPicker("passed", "passedApps", "Passed Appetizers")} style={deliverySmallAddStyle}>+ Add Passed Appetizer</button>
               <CustomFoodItemsBlock
                 value={customFields.customPassedApp}
                 fieldId={FIELD_IDS.CUSTOM_PASSED_APP}
@@ -1183,7 +1708,7 @@ export const MenuSection = ({ embedded = false, isDelivery = false }: MenuSectio
                 label="Custom (not in menu)"
                 inputStyle={inputStyle}
                 labelStyle={labelStyle}
-                buttonStyle={deliveryButtonStyle}
+                buttonStyle={deliverySmallAddStyle}
               />
               <div style={{ marginTop: "12px" }}>
                 <label style={labelStyle}>Presented Appetizers</label>
@@ -1203,7 +1728,7 @@ export const MenuSection = ({ embedded = false, isDelivery = false }: MenuSectio
                     />
                   ))}
                 </div>
-                <button type="button" disabled={!canEdit} onClick={() => openPicker("presented", "presentedApps", "Presented Appetizers")} style={deliveryButtonStyle}>+ Add Presented Appetizer</button>
+                <button type="button" disabled={!canEdit} onClick={() => openPicker("presented", "presentedApps", "Presented Appetizers")} style={deliverySmallAddStyle}>+ Add Presented Appetizer</button>
                 <CustomFoodItemsBlock
                   value={customFields.customPresentedApp}
                   fieldId={FIELD_IDS.CUSTOM_PRESENTED_APP}
@@ -1214,7 +1739,7 @@ export const MenuSection = ({ embedded = false, isDelivery = false }: MenuSectio
                   label="Custom (not in menu)"
                   inputStyle={inputStyle}
                   labelStyle={labelStyle}
-                  buttonStyle={deliveryButtonStyle}
+                  buttonStyle={deliverySmallAddStyle}
                 />
               </div>
               <div style={{ marginTop: "12px" }}>
@@ -1235,7 +1760,7 @@ export const MenuSection = ({ embedded = false, isDelivery = false }: MenuSectio
                   />
                 ))}
                 </div>
-                <button type="button" disabled={!canEdit} onClick={() => openPicker("buffet_metal", "buffetMetal", "Select Hot Buffet Items")} style={deliveryButtonStyle}>+ Add Hot Buffet Item</button>
+                <button type="button" disabled={!canEdit} onClick={() => openPicker("buffet_metal", "buffetMetal", "Select Hot Buffet Items")} style={deliverySmallAddStyle}>+ Add Hot Buffet Item</button>
               </div>
             </div>
           </CollapsibleSubsection>
@@ -1243,6 +1768,9 @@ export const MenuSection = ({ embedded = false, isDelivery = false }: MenuSectio
           <CollapsibleSubsection title="DELI - DISPOSABLE" icon="🥪" defaultOpen isDelivery>
             <div style={{ gridColumn: "1 / -1" }}>
               <label style={labelStyle}>Sandwiches & Wraps</label>
+              <p style={{ fontSize: 12, color: "#888", margin: "0 0 8px 0" }}>
+                Add individual items from the menu, or use <strong>Sandwich Platter</strong> for preset groups (e.g. Classic Sandwiches, Signature Specialty) so the BEO prints the same way as your existing BEOs.
+              </p>
               <div style={{ marginBottom: "8px" }}>
                 {selections.deliveryDeli.map((itemId) => (
                   <MenuItemCard
@@ -1260,9 +1788,9 @@ export const MenuSection = ({ embedded = false, isDelivery = false }: MenuSectio
                 ))}
               </div>
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
-                <button type="button" disabled={!canEdit} onClick={() => openPicker("deli", "deliveryDeli", "Select Deli Items (Sandwiches & Wraps)")} style={deliveryButtonStyle}>+ Add Deli Item</button>
-                <button type="button" onClick={() => setPlatterModalOpen((v) => !v)} style={{ ...deliveryButtonStyle, borderColor: "#f97316", color: "#f97316" }}>{platterModalOpen ? "− Hide Platter Config" : "+ Add Sandwich Platter"}</button>
-                <button type="button" onClick={() => setBoxedLunchModalOpen((v) => !v)} style={deliveryButtonStyle}>{boxedLunchModalOpen ? "− Hide Boxed Lunch Config" : "+ Add Boxed Lunches"}</button>
+                <button type="button" disabled={!canEdit} onClick={() => openPicker("deli", "deliveryDeli", "Select Deli Items (Sandwiches & Wraps)")} style={deliverySmallAddStyle}>+ Add Deli Item</button>
+                <button type="button" onClick={() => setPlatterModalOpen((v) => !v)} style={{ ...deliverySmallAddStyle, borderColor: "#f97316", color: "#f97316" }}>{platterModalOpen ? "− Hide Platter Config" : "+ Add Sandwich Platter"}</button>
+                <button type="button" onClick={() => setBoxedLunchModalOpen((v) => !v)} style={deliverySmallAddStyle}>{boxedLunchModalOpen ? "− Hide Boxed Lunch Config" : "+ Add Boxed Lunches"}</button>
               </div>
               {platterModalOpen && (
                 <SandwichPlatterConfigModal
@@ -1309,7 +1837,7 @@ export const MenuSection = ({ embedded = false, isDelivery = false }: MenuSectio
                 label="+ Add Custom (not in menu)"
                 inputStyle={inputStyle}
                 labelStyle={labelStyle}
-                buttonStyle={deliveryButtonStyle}
+                buttonStyle={deliverySmallAddStyle}
               />
             </div>
           </CollapsibleSubsection>
@@ -1325,19 +1853,19 @@ export const MenuSection = ({ embedded = false, isDelivery = false }: MenuSectio
                   </div>
                 ))}
               </div>
-              <button type="button" disabled={!canEdit} onClick={() => openPicker("buffet_china", "buffetChina", "Buffet – China")} style={deliveryButtonStyle}>+ Add Kitchen Item</button>
-              <CustomFoodItemsBlock
-                value={customFields.customBuffetChina}
-                fieldId={FIELD_IDS.CUSTOM_BUFFET_CHINA}
-                placeholder="Item name"
-                notesPlaceholder="Notes (optional)"
-                canEdit={canEdit}
-                onSave={saveCustomField}
-                label="+ Add Custom (not in menu)"
-                inputStyle={inputStyle}
-                labelStyle={labelStyle}
-                buttonStyle={deliveryButtonStyle}
-              />
+<button type="button" disabled={!canEdit} onClick={() => openPicker("buffet_china", "buffetChina", "Buffet – China")} style={deliverySmallAddStyle}>+ Add Kitchen Item</button>
+                <CustomFoodItemsBlock
+                  value={customFields.customBuffetChina}
+                  fieldId={FIELD_IDS.CUSTOM_BUFFET_CHINA}
+                  placeholder="Item name"
+                  notesPlaceholder="Notes (optional)"
+                  canEdit={canEdit}
+                  onSave={saveCustomField}
+                  label="+ Add Custom (not in menu)"
+                  inputStyle={inputStyle}
+                  labelStyle={labelStyle}
+                  buttonStyle={deliverySmallAddStyle}
+                />
             </div>
           </CollapsibleSubsection>
 
@@ -1360,7 +1888,7 @@ export const MenuSection = ({ embedded = false, isDelivery = false }: MenuSectio
                   />
                 ))}
               </div>
-              <button type="button" disabled={!canEdit} onClick={() => openPicker("room_temp", "roomTempDisplay", "Select Room Temp / Salad Items")} style={deliveryButtonStyle}>+ Add Salad Item</button>
+              <button type="button" disabled={!canEdit} onClick={() => openPicker("room_temp", "roomTempDisplay", "Select Room Temp / Salad Items")} style={deliverySmallAddStyle}>+ Add Salad Item</button>
               <CustomFoodItemsBlock
                 value={customFields.customRoomTemp}
                 fieldId={FIELD_IDS.CUSTOM_ROOM_TEMP_DISPLAY}
@@ -1371,7 +1899,7 @@ export const MenuSection = ({ embedded = false, isDelivery = false }: MenuSectio
                 label="+ Add Custom (not in menu)"
                 inputStyle={inputStyle}
                 labelStyle={labelStyle}
-                buttonStyle={deliveryButtonStyle}
+                buttonStyle={deliverySmallAddStyle}
               />
             </div>
           </CollapsibleSubsection>
@@ -1395,7 +1923,7 @@ export const MenuSection = ({ embedded = false, isDelivery = false }: MenuSectio
                   />
                 ))}
               </div>
-              <button type="button" disabled={!canEdit} onClick={() => openPicker("desserts", "desserts", "Desserts")} style={deliveryButtonStyle}>+ Add Dessert</button>
+              <button type="button" disabled={!canEdit} onClick={() => openPicker("desserts", "desserts", "Desserts")} style={deliverySmallAddStyle}>+ Add Dessert</button>
               <CustomFoodItemsBlock
                 value={customFields.customDessert}
                 fieldId={FIELD_IDS.CUSTOM_DESSERTS}
@@ -1406,120 +1934,542 @@ export const MenuSection = ({ embedded = false, isDelivery = false }: MenuSectio
                 label="Custom Desserts (not in menu)"
                 inputStyle={inputStyle}
                 labelStyle={labelStyle}
-                buttonStyle={deliveryButtonStyle}
+                buttonStyle={deliverySmallAddStyle}
               />
             </div>
           </CollapsibleSubsection>
         </>
       ) : (
         /* ── FULL SERVICE: Passed, Presented, Stations, Buffet Metal, Buffet China, Desserts ── */
-        <>
-      {/* Passed Appetizers */}
-      <CollapsibleSubsection title="Passed Appetizers" icon="▶" defaultOpen={false}>
-      <div style={{ gridColumn: "1 / -1" }}>
+        <div style={{ gridColumn: "1 / -1", width: "100%", display: "flex", justifyContent: "center" }}>
+          <div style={{ maxWidth: 640, width: "100%" }}>
+      {/* Passed Appetizers — every item on its own row for speck: parent line then sauce/child line(s); specKey matches BEO print */}
+      <CourseStyleBlock title="PASSED APPETIZERS" dotColor="#22c55e">
         <label style={labelStyle}>Passed Appetizers</label>
-        <div style={{ marginBottom: "8px" }}>
-          {selections.passedAppetizers.map((itemId) => (
-            <MenuItemCard
-              key={itemId}
-              itemId={itemId}
-              itemName={getItemName(itemId)}
-              defaultSauce={menuItemSauce[itemId] ?? null}
-              sauceOverrides={sauceOverrides}
-              onSauceChange={handleSauceChange}
-              onRemove={() => removeMenuItem("passedAppetizers", itemId)}
-              canEdit={canEdit}
-              removeColor="#ff6b6b"
-              itemBorder="1px solid #ff6b6b"
-            />
-          ))}
-        </div>
-        <button type="button" disabled={!canEdit} onClick={() => openPicker("passed", "passedApps", "Passed Appetizers")} style={buttonStyle}>
-          + Add Passed Appetizer
-        </button>
-        <CustomFoodItemsBlock
-          value={customFields.customPassedApp}
-          fieldId={FIELD_IDS.CUSTOM_PASSED_APP}
-          placeholder="Item name"
-          notesPlaceholder="Notes (optional)"
-          canEdit={canEdit}
-          onSave={saveCustomField}
-          label="Custom Passed Appetizers (not in menu)"
-          inputStyle={inputStyle}
-          labelStyle={labelStyle}
-          buttonStyle={buttonStyle}
-        />
-      </div>
-      </CollapsibleSubsection>
+        {(() => {
+          const fieldId = FIELD_IDS.PASSED_APPETIZERS;
+          const guestCount = selectedEventData?.[FIELD_IDS.GUEST_COUNT] != null ? Number(selectedEventData[FIELD_IDS.GUEST_COUNT]) : 0;
+          const itemIds = selections.passedAppetizers;
+          const rows: { rowKey: string; parentId: string; isChild: boolean; childId?: string; isFirstChild?: boolean; rowIdx: number }[] = [];
+          itemIds.forEach((parentId) => {
+            rows.push({ rowKey: `parent-${parentId}`, parentId, isChild: false, rowIdx: 0 });
+            (menuItemChildIds[parentId] ?? []).forEach((childId, idx) => {
+              rows.push({ rowKey: `child-${parentId}-${childId}`, parentId, isChild: true, childId, isFirstChild: idx === 0, rowIdx: idx + 1 });
+            });
+          });
+          return (
+            <>
+              <div style={{ border: "1px solid rgba(255,255,255,0.12)", borderRadius: 6, overflow: "hidden", background: "rgba(0,0,0,0.25)", marginBottom: 6 }}>
+                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                  <thead>
+                    <tr>
+                      <th style={{ textAlign: "left", padding: "6px 8px", borderBottom: "1px solid rgba(255,255,255,0.12)", fontWeight: 600, color: "#fff", width: "22%" }}>Auto speck</th>
+                      <th style={{ textAlign: "left", padding: "6px 8px", borderBottom: "1px solid rgba(255,255,255,0.12)", fontWeight: 600, color: "#fff", width: "44%" }}>Items</th>
+                      <th style={{ textAlign: "left", padding: "6px 8px", borderBottom: "1px solid rgba(255,255,255,0.12)", fontWeight: 600, color: "#fff", width: "24%" }}>Override</th>
+                      <th style={{ width: 32 }} />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rows.map((r) => {
+                      const specKey = getSpecOverrideKey(fieldId, r.parentId, r.rowIdx);
+                      if (r.isChild && r.childId != null) {
+                        const override = sauceOverrides[r.parentId];
+                        const defSauce = menuItemSauce[r.parentId] ?? "";
+                        const showSauce = r.isFirstChild && (defSauce || override);
+                        const childDisplaySpec = (menuSpecOverrides[specKey] ?? "").trim() !== "" ? menuSpecOverrides[specKey] : "";
+                        return (
+                          <tr key={r.rowKey} style={{ borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
+                            <td style={{ padding: "4px 8px", color: "#fff" }}>{childDisplaySpec}</td>
+                            <td style={{ padding: "4px 8px", color: "#fff", paddingLeft: 24 }}>
+                              {showSauce ? (
+                                <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                                  <select
+                                    value={override?.sauceOverride === "Other" ? "Other" : override?.sauceOverride === "None" ? "None" : "Default"}
+                                    disabled={!canEdit}
+                                    onChange={(e) => {
+                                      const v = e.target.value as SauceOverrideValue;
+                                      handleSauceChange(r.parentId, { sauceOverride: v, customSauce: v === "Other" ? override?.customSauce ?? null : null });
+                                    }}
+                                    style={{ ...inputStyle, padding: "4px 6px", fontSize: 12 }}
+                                  >
+                                    <option value="Default">{defSauce?.trim() || "Default"}</option>
+                                    <option value="None">None</option>
+                                    <option value="Other">Other…</option>
+                                  </select>
+                                  {override?.sauceOverride === "Other" && (
+                                    <input
+                                      type="text"
+                                      value={override?.customSauce ?? ""}
+                                      onChange={(e) => handleSauceChange(r.parentId, { sauceOverride: "Other", customSauce: e.target.value || null })}
+                                      placeholder="Custom sauce name"
+                                      disabled={!canEdit}
+                                      style={{ ...inputStyle, padding: "4px 6px", fontSize: 12 }}
+                                    />
+                                  )}
+                                </div>
+                              ) : (
+                                getItemName(r.childId)
+                              )}
+                            </td>
+                            <td style={{ padding: 2 }}>
+                              <input type="text" value={menuSpecOverrides[specKey] ?? ""} disabled={!canEdit} onChange={(e) => handleSpecOverrideChange(specKey, e.target.value)} placeholder="—" style={{ width: "100%", padding: "4px 6px", borderRadius: 4, border: "1px solid rgba(255,255,255,0.12)", background: "rgba(0,0,0,0.2)", color: "#fff", fontSize: 12 }} />
+                            </td>
+                            <td />
+                          </tr>
+                        );
+                      }
+                      const name = getItemName(r.parentId);
+                      const spec = calculateAutoSpec(name, "passed", guestCount);
+                      const displaySpec = (menuSpecOverrides[specKey] ?? "").trim() !== "" ? menuSpecOverrides[specKey] : spec.quantity;
+                      return (
+                        <tr key={r.rowKey} style={{ borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
+                          <td style={{ padding: "4px 8px", color: "#fff" }}>{displaySpec}</td>
+                          <td style={{ padding: "4px 8px", color: "#fff" }}>{name}</td>
+                          <td style={{ padding: 2 }}>
+                            <input type="text" value={menuSpecOverrides[specKey] ?? ""} disabled={!canEdit} onChange={(e) => handleSpecOverrideChange(specKey, e.target.value)} placeholder="—" style={{ width: "100%", padding: "4px 6px", borderRadius: 4, border: "1px solid rgba(255,255,255,0.12)", background: "rgba(0,0,0,0.2)", color: "#fff", fontSize: 12 }} />
+                          </td>
+                          <td style={{ padding: "2px 6px" }}>
+                            <button type="button" disabled={!canEdit} onClick={() => removeMenuItem("passedAppetizers", r.parentId)} style={{ background: "none", border: "none", color: "#ff6b6b", cursor: "pointer", fontSize: "16px", fontWeight: "bold" }} title="Remove">✕</button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              <button type="button" disabled={!canEdit} onClick={() => openPicker("passed", "passedApps", "Passed Appetizers")} style={smallAddButtonStyle}>+ Add</button>
+              <div style={{ marginTop: 6 }}>
+                <CustomFoodItemsBlock value={customFields.customPassedApp} fieldId={FIELD_IDS.CUSTOM_PASSED_APP} placeholder="Item name" notesPlaceholder="Notes (optional)" canEdit={canEdit} onSave={saveCustomField} label="Custom Passed Appetizers (not in menu)" inputStyle={inputStyle} labelStyle={labelStyle} buttonStyle={smallAddButtonStyle} />
+              </div>
+            </>
+          );
+        })()}
+      </CourseStyleBlock>
 
-      {/* Presented Appetizers */}
-      <CollapsibleSubsection title="Presented Appetizers" icon="▶" defaultOpen={false}>
-      <div style={{ gridColumn: "1 / -1" }}>
+      {/* Presented Appetizers — every item on its own row for speck: parent line then sauce/child line(s); specKey matches BEO print */}
+      <CourseStyleBlock title="PRESENTED APPETIZERS" dotColor="#f97316">
         <label style={labelStyle}>Presented Appetizers</label>
-        <div style={{ marginBottom: "8px" }}>
-          {selections.presentedAppetizers.map((itemId) => (
-            <MenuItemCard
-              key={itemId}
-              itemId={itemId}
-              itemName={getItemName(itemId)}
-              defaultSauce={menuItemSauce[itemId] ?? null}
-              sauceOverrides={sauceOverrides}
-              onSauceChange={handleSauceChange}
-              onRemove={() => removeMenuItem("presentedAppetizers", itemId)}
-              canEdit={canEdit}
-              removeColor="#ff6b6b"
-              itemBorder="1px solid #ff6b6b"
-            />
-          ))}
-        </div>
-        <button type="button" disabled={!canEdit} onClick={() => openPicker("presented", "presentedApps", "Presented Appetizers")} style={buttonStyle}>
-          + Add Presented Appetizer
-        </button>
-        <CustomFoodItemsBlock
-          value={customFields.customPresentedApp}
-          fieldId={FIELD_IDS.CUSTOM_PRESENTED_APP}
-          placeholder="Item name"
-          notesPlaceholder="Notes (optional)"
-          canEdit={canEdit}
-          onSave={saveCustomField}
-          label="Custom Presented Appetizers (not in menu)"
-          inputStyle={inputStyle}
-          labelStyle={labelStyle}
-          buttonStyle={buttonStyle}
-        />
+        <p style={{ fontSize: 11, color: "rgba(255,255,255,0.5)", marginBottom: 4 }}>Override cell to edit. Speck engine will use when wired. Every item on its own line.</p>
+        {(() => {
+          const fieldId = FIELD_IDS.PRESENTED_APPETIZERS;
+          const guestCount = selectedEventData?.[FIELD_IDS.GUEST_COUNT] != null ? Number(selectedEventData[FIELD_IDS.GUEST_COUNT]) : 0;
+          const itemIds = selections.presentedAppetizers;
+          const rows: { rowKey: string; parentId: string; isChild: boolean; childId?: string; isFirstChild?: boolean; rowIdx: number }[] = [];
+          itemIds.forEach((parentId) => {
+            rows.push({ rowKey: `parent-${parentId}`, parentId, isChild: false, rowIdx: 0 });
+            (menuItemChildIds[parentId] ?? []).forEach((childId, idx) => {
+              rows.push({ rowKey: `child-${parentId}-${childId}`, parentId, isChild: true, childId, isFirstChild: idx === 0, rowIdx: idx + 1 });
+            });
+          });
+          return (
+            <>
+              <div style={{ border: "1px solid rgba(255,255,255,0.12)", borderRadius: 6, overflow: "hidden", background: "rgba(0,0,0,0.25)", marginBottom: 6 }}>
+                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                  <thead>
+                    <tr>
+                      <th style={{ textAlign: "left", padding: "6px 8px", borderBottom: "1px solid rgba(255,255,255,0.12)", fontWeight: 600, color: "#fff", width: "22%" }}>Auto speck</th>
+                      <th style={{ textAlign: "left", padding: "6px 8px", borderBottom: "1px solid rgba(255,255,255,0.12)", fontWeight: 600, color: "#fff", width: "44%" }}>Items</th>
+                      <th style={{ textAlign: "left", padding: "6px 8px", borderBottom: "1px solid rgba(255,255,255,0.12)", fontWeight: 600, color: "#fff", width: "24%" }}>Override</th>
+                      <th style={{ width: 32 }} />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rows.map((r) => {
+                      const specKey = getSpecOverrideKey(fieldId, r.parentId, r.rowIdx);
+                      if (r.isChild && r.childId != null) {
+                        const override = sauceOverrides[r.parentId];
+                        const defSauce = menuItemSauce[r.parentId] ?? "";
+                        const showSauce = r.isFirstChild && (defSauce || override);
+                        const childDisplaySpec = (menuSpecOverrides[specKey] ?? "").trim() !== "" ? menuSpecOverrides[specKey] : "";
+                        return (
+                          <tr key={r.rowKey} style={{ borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
+                            <td style={{ padding: "4px 8px", color: "#fff" }}>{childDisplaySpec}</td>
+                            <td style={{ padding: "4px 8px", color: "#fff", paddingLeft: 24 }}>
+                              {showSauce ? (
+                                <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                                  <select
+                                    value={override?.sauceOverride === "Other" ? "Other" : override?.sauceOverride === "None" ? "None" : "Default"}
+                                    disabled={!canEdit}
+                                    onChange={(e) => {
+                                      const v = e.target.value as SauceOverrideValue;
+                                      handleSauceChange(r.parentId, { sauceOverride: v, customSauce: v === "Other" ? override?.customSauce ?? null : null });
+                                    }}
+                                    style={{ ...inputStyle, padding: "4px 6px", fontSize: 12 }}
+                                  >
+                                    <option value="Default">{defSauce?.trim() || "Default"}</option>
+                                    <option value="None">None</option>
+                                    <option value="Other">Other…</option>
+                                  </select>
+                                  {override?.sauceOverride === "Other" && (
+                                    <input
+                                      type="text"
+                                      value={override?.customSauce ?? ""}
+                                      onChange={(e) => handleSauceChange(r.parentId, { sauceOverride: "Other", customSauce: e.target.value || null })}
+                                      placeholder="Custom sauce name"
+                                      disabled={!canEdit}
+                                      style={{ ...inputStyle, padding: "4px 6px", fontSize: 12 }}
+                                    />
+                                  )}
+                                </div>
+                              ) : (
+                                getItemName(r.childId)
+                              )}
+                            </td>
+                            <td style={{ padding: 2 }}>
+                              <input type="text" value={menuSpecOverrides[specKey] ?? ""} disabled={!canEdit} onChange={(e) => handleSpecOverrideChange(specKey, e.target.value)} placeholder="—" style={{ width: "100%", padding: "4px 6px", borderRadius: 4, border: "1px solid rgba(255,255,255,0.12)", background: "rgba(0,0,0,0.2)", color: "#fff", fontSize: 12 }} />
+                            </td>
+                            <td />
+                          </tr>
+                        );
+                      }
+                      const name = getItemName(r.parentId);
+                      const spec = calculateAutoSpec(name, "presented", guestCount);
+                      const displaySpec = (menuSpecOverrides[specKey] ?? "").trim() !== "" ? menuSpecOverrides[specKey] : spec.quantity;
+                      return (
+                        <tr key={r.rowKey} style={{ borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
+                          <td style={{ padding: "4px 8px", color: "#fff" }}>{displaySpec}</td>
+                          <td style={{ padding: "4px 8px", color: "#fff" }}>{name}</td>
+                          <td style={{ padding: 2 }}>
+                            <input type="text" value={menuSpecOverrides[specKey] ?? ""} disabled={!canEdit} onChange={(e) => handleSpecOverrideChange(specKey, e.target.value)} placeholder="—" style={{ width: "100%", padding: "4px 6px", borderRadius: 4, border: "1px solid rgba(255,255,255,0.12)", background: "rgba(0,0,0,0.2)", color: "#fff", fontSize: 12 }} />
+                          </td>
+                          <td style={{ padding: "2px 6px" }}>
+                            <button type="button" disabled={!canEdit} onClick={() => removeMenuItem("presentedAppetizers", r.parentId)} style={{ background: "none", border: "none", color: "#ff6b6b", cursor: "pointer", fontSize: "16px", fontWeight: "bold" }} title="Remove">✕</button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              <button type="button" disabled={!canEdit} onClick={() => openPicker("presented", "presentedApps", "Presented Appetizers")} style={smallAddButtonStyle}>+ Add</button>
+              <div style={{ marginTop: 6 }}>
+                <CustomFoodItemsBlock value={customFields.customPresentedApp} fieldId={FIELD_IDS.CUSTOM_PRESENTED_APP} placeholder="Item name" notesPlaceholder="Notes (optional)" canEdit={canEdit} onSave={saveCustomField} label="Custom Presented Appetizers (not in menu)" inputStyle={inputStyle} labelStyle={labelStyle} buttonStyle={smallAddButtonStyle} />
+              </div>
+            </>
+          );
+        })()}
+      </CourseStyleBlock>
+
+      {/* DELI (full service) — table layout */}
+      <div id="beo-menu-deli">
+      <CourseStyleBlock title="DELI" dotColor="#eab308">
+        <label style={labelStyle}>DELI</label>
+        <p style={{ fontSize: 11, color: "rgba(255,255,255,0.5)", marginBottom: 4 }}>Override cell to edit. Speck engine will use when wired.</p>
+        {(() => {
+          const fieldId = FIELD_IDS.FULL_SERVICE_DELI;
+          const guestCount = selectedEventData?.[FIELD_IDS.GUEST_COUNT] != null ? Number(selectedEventData[FIELD_IDS.GUEST_COUNT]) : 0;
+          const itemIds = selections.fullServiceDeli;
+          const rows: { rowKey: string; parentId: string; isChild: boolean; childId?: string; rowIdx: number }[] = [];
+          itemIds.forEach((parentId) => {
+            rows.push({ rowKey: `parent-${parentId}`, parentId, isChild: false, rowIdx: 0 });
+            (menuItemChildIds[parentId] ?? []).forEach((childId, idx) => {
+              rows.push({ rowKey: `child-${parentId}-${childId}`, parentId, isChild: true, childId, rowIdx: idx + 1 });
+            });
+          });
+          return (
+            <>
+              <div style={{ border: "1px solid rgba(255,255,255,0.12)", borderRadius: 6, overflow: "hidden", background: "rgba(0,0,0,0.25)", marginBottom: 6 }}>
+                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                  <thead>
+                    <tr>
+                      <th style={{ textAlign: "left", padding: "6px 8px", borderBottom: "1px solid rgba(255,255,255,0.12)", fontWeight: 600, color: "#fff", width: "22%" }}>Auto speck</th>
+                      <th style={{ textAlign: "left", padding: "6px 8px", borderBottom: "1px solid rgba(255,255,255,0.12)", fontWeight: 600, color: "#fff", width: "44%" }}>Items</th>
+                      <th style={{ textAlign: "left", padding: "6px 8px", borderBottom: "1px solid rgba(255,255,255,0.12)", fontWeight: 600, color: "#fff", width: "24%" }}>Override</th>
+                      <th style={{ width: 32 }} />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rows.map((r) => {
+                      const specKey = getSpecOverrideKey(fieldId, r.parentId, r.rowIdx);
+                      if (r.isChild && r.childId != null) {
+                        const childDisplaySpec = (menuSpecOverrides[specKey] ?? "").trim() !== "" ? menuSpecOverrides[specKey] : "";
+                        return (
+                          <tr key={r.rowKey} style={{ borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
+                            <td style={{ padding: "4px 8px", color: "#fff" }}>{childDisplaySpec}</td>
+                            <td style={{ padding: "4px 8px", color: "#fff", paddingLeft: 24 }}>{getItemName(r.childId)}</td>
+                            <td style={{ padding: 2 }}>
+                              <input type="text" value={menuSpecOverrides[specKey] ?? ""} disabled={!canEdit} onChange={(e) => handleSpecOverrideChange(specKey, e.target.value)} placeholder="—" style={{ width: "100%", padding: "4px 6px", borderRadius: 4, border: "1px solid rgba(255,255,255,0.12)", background: "rgba(0,0,0,0.2)", color: "#fff", fontSize: 12 }} />
+                            </td>
+                            <td />
+                          </tr>
+                        );
+                      }
+                      const name = getItemName(r.parentId);
+                      const spec = calculateAutoSpec(name, "buffet", guestCount);
+                      const displaySpec = (menuSpecOverrides[specKey] ?? "").trim() !== "" ? menuSpecOverrides[specKey] : spec.quantity;
+                      return (
+                        <tr key={r.rowKey} style={{ borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
+                          <td style={{ padding: "4px 8px", color: "#fff" }}>{displaySpec}</td>
+                          <td style={{ padding: "4px 8px", color: "#fff" }}>{name}</td>
+                          <td style={{ padding: 2 }}>
+                            <input type="text" value={menuSpecOverrides[specKey] ?? ""} disabled={!canEdit} onChange={(e) => handleSpecOverrideChange(specKey, e.target.value)} placeholder="—" style={{ width: "100%", padding: "4px 6px", borderRadius: 4, border: "1px solid rgba(255,255,255,0.12)", background: "rgba(0,0,0,0.2)", color: "#fff", fontSize: 12 }} />
+                          </td>
+                          <td style={{ padding: "2px 6px" }}>
+                            <button type="button" disabled={!canEdit} onClick={() => removeMenuItem("fullServiceDeli", r.parentId)} style={{ background: "none", border: "none", color: "#ff6b6b", cursor: "pointer", fontSize: "16px", fontWeight: "bold" }} title="Remove">✕</button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              <button type="button" disabled={!canEdit} onClick={() => openPicker("deli", "fullServiceDeli", "Select Deli Items (Sandwiches, Wraps)")} style={smallAddButtonStyle}>+ Add</button>
+              <p style={{ fontSize: 11, color: "rgba(255,255,255,0.5)", marginTop: 4 }}>For sandwich platters and other DELI items. Slider rolls, lettuce & tomato, condiments are picked in the station (e.g. Configure Station All-American).</p>
+              <div style={{ marginTop: 6 }}>
+                <CustomFoodItemsBlock value={customFields.customFullServiceDeli} fieldId={FIELD_IDS.CUSTOM_FULL_SERVICE_DELI} placeholder="Item name" notesPlaceholder="Notes (optional)" canEdit={canEdit} onSave={saveCustomField} label="Custom DELI (not in menu)" inputStyle={inputStyle} labelStyle={labelStyle} buttonStyle={smallAddButtonStyle} />
+              </div>
+            </>
+          );
+        })()}
+      </CourseStyleBlock>
       </div>
-      </CollapsibleSubsection>
 
-      {/* Sandwich Platters (full service) */}
-      <CollapsibleSubsection title="Sandwich Platters" icon="🥪" defaultOpen={false}>
-        <div style={{ gridColumn: "1 / -1" }}>
-          <label style={labelStyle}>Sandwich & Wrap Platters</label>
-          <p style={{ fontSize: 12, color: "#888", marginBottom: 10 }}>Available for full service and delivery events. Selections are scoped to each platter tier.</p>
-          <button
-            type="button"
-            onClick={() => setPlatterModalOpen((v) => !v)}
-            style={{ ...buttonStyle, borderColor: "#f97316", color: "#f97316", background: "rgba(249,115,22,0.1)" }}
-          >
-            {platterModalOpen ? "− Hide Platter Config" : "+ Configure Sandwich Platters"}
-          </button>
-          {platterModalOpen && (
-            <SandwichPlatterConfigModal
-              open
-              inline
-              onClose={() => setPlatterModalOpen(false)}
-              onConfirm={(rows) => {
-                if (!selectedEventId) { setError("Select an event first"); return; }
-                setPlatterOrdersForEvent(selectedEventId, rows);
-                setPlatterModalOpen(false);
-              }}
-              initialRows={selectedEventId ? getPlatterOrdersByEventId(selectedEventId) : []}
-            />
-          )}
-        </div>
-      </CollapsibleSubsection>
+      {/* Buffet – Metal — table layout */}
+      <CourseStyleBlock title="BUFFET – METAL" dotColor="#3b82f6">
+        <label style={labelStyle}>Buffet – Metal</label>
+        <p style={{ fontSize: 11, color: "rgba(255,255,255,0.5)", marginBottom: 4 }}>Override cell to edit. Speck engine will use when wired.</p>
+        {(() => {
+          const fieldId = FIELD_IDS.BUFFET_METAL;
+          const guestCount = selectedEventData?.[FIELD_IDS.GUEST_COUNT] != null ? Number(selectedEventData[FIELD_IDS.GUEST_COUNT]) : 0;
+          const itemIds = selections.buffetMetal;
+          const rows: { rowKey: string; parentId: string; isChild: boolean; childId?: string; rowIdx: number }[] = [];
+          itemIds.forEach((parentId) => {
+            rows.push({ rowKey: `parent-${parentId}`, parentId, isChild: false, rowIdx: 0 });
+            (menuItemChildIds[parentId] ?? []).forEach((childId, idx) => {
+              rows.push({ rowKey: `child-${parentId}-${childId}`, parentId, isChild: true, childId, rowIdx: idx + 1 });
+            });
+          });
+          return (
+            <>
+              <div style={{ border: "1px solid rgba(255,255,255,0.12)", borderRadius: 6, overflow: "hidden", background: "rgba(0,0,0,0.25)", marginBottom: 6 }}>
+                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                  <thead>
+                    <tr>
+                      <th style={{ textAlign: "left", padding: "6px 8px", borderBottom: "1px solid rgba(255,255,255,0.12)", fontWeight: 600, color: "#fff", width: "22%" }}>Auto speck</th>
+                      <th style={{ textAlign: "left", padding: "6px 8px", borderBottom: "1px solid rgba(255,255,255,0.12)", fontWeight: 600, color: "#fff", width: "44%" }}>Items</th>
+                      <th style={{ textAlign: "left", padding: "6px 8px", borderBottom: "1px solid rgba(255,255,255,0.12)", fontWeight: 600, color: "#fff", width: "24%" }}>Override</th>
+                      <th style={{ width: 32 }} />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rows.map((r) => {
+                      const specKey = getSpecOverrideKey(fieldId, r.parentId, r.rowIdx);
+                      if (r.isChild && r.childId != null) {
+                        const childDisplaySpec = (menuSpecOverrides[specKey] ?? "").trim() !== "" ? menuSpecOverrides[specKey] : "";
+                        return (
+                          <tr key={r.rowKey} style={{ borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
+                            <td style={{ padding: "4px 8px", color: "#fff" }}>{childDisplaySpec}</td>
+                            <td style={{ padding: "4px 8px", color: "#fff", paddingLeft: 24 }}>{getItemName(r.childId)}</td>
+                            <td style={{ padding: 2 }}>
+                              <input type="text" value={menuSpecOverrides[specKey] ?? ""} disabled={!canEdit} onChange={(e) => handleSpecOverrideChange(specKey, e.target.value)} placeholder="—" style={{ width: "100%", padding: "4px 6px", borderRadius: 4, border: "1px solid rgba(255,255,255,0.12)", background: "rgba(0,0,0,0.2)", color: "#fff", fontSize: 12 }} />
+                            </td>
+                            <td />
+                          </tr>
+                        );
+                      }
+                      const name = getItemName(r.parentId);
+                      const spec = calculateAutoSpec(name, "buffet", guestCount);
+                      const displaySpec = (menuSpecOverrides[specKey] ?? "").trim() !== "" ? menuSpecOverrides[specKey] : spec.quantity;
+                      return (
+                        <tr key={r.rowKey} style={{ borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
+                          <td style={{ padding: "4px 8px", color: "#fff" }}>{displaySpec}</td>
+                          <td style={{ padding: "4px 8px", color: "#fff" }}>{name}</td>
+                          <td style={{ padding: 2 }}>
+                            <input type="text" value={menuSpecOverrides[specKey] ?? ""} disabled={!canEdit} onChange={(e) => handleSpecOverrideChange(specKey, e.target.value)} placeholder="—" style={{ width: "100%", padding: "4px 6px", borderRadius: 4, border: "1px solid rgba(255,255,255,0.12)", background: "rgba(0,0,0,0.2)", color: "#fff", fontSize: 12 }} />
+                          </td>
+                          <td style={{ padding: "2px 6px" }}>
+                            <button type="button" disabled={!canEdit} onClick={() => removeMenuItem("buffetMetal", r.parentId)} style={{ background: "none", border: "none", color: "#ff6b6b", cursor: "pointer", fontSize: "16px", fontWeight: "bold" }} title="Remove">✕</button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              <button type="button" disabled={!canEdit} onClick={() => openPicker("buffet_metal", "buffetMetal", "Buffet – Metal")} style={smallAddButtonStyle}>+ Add</button>
+              <div style={{ marginTop: 6 }}>
+                <CustomFoodItemsBlock value={customFields.customBuffetMetal} fieldId={FIELD_IDS.CUSTOM_BUFFET_METAL} placeholder="Item name" notesPlaceholder="Notes (optional)" canEdit={canEdit} onSave={saveCustomField} label="Custom Buffet Metal (not in menu)" inputStyle={inputStyle} labelStyle={labelStyle} buttonStyle={smallAddButtonStyle} />
+              </div>
+            </>
+          );
+        })()}
+      </CourseStyleBlock>
 
-      {/* Creation Station */}
-      <CollapsibleSubsection title="Creation Station" icon="▶" defaultOpen={false}>
+      {/* Buffet – China — table layout */}
+      <CourseStyleBlock title="BUFFET – CHINA" dotColor="#3b82f6">
+        <label style={labelStyle}>Buffet – China</label>
+        <p style={{ fontSize: 11, color: "rgba(255,255,255,0.5)", marginBottom: 4 }}>Override cell to edit. Speck engine will use when wired.</p>
+        {(() => {
+          const fieldId = FIELD_IDS.BUFFET_CHINA;
+          const guestCount = selectedEventData?.[FIELD_IDS.GUEST_COUNT] != null ? Number(selectedEventData[FIELD_IDS.GUEST_COUNT]) : 0;
+          const itemIds = selections.buffetChina;
+          const rows: { rowKey: string; parentId: string; isChild: boolean; childId?: string; rowIdx: number }[] = [];
+          itemIds.forEach((parentId) => {
+            rows.push({ rowKey: `parent-${parentId}`, parentId, isChild: false, rowIdx: 0 });
+            (menuItemChildIds[parentId] ?? []).forEach((childId, idx) => {
+              rows.push({ rowKey: `child-${parentId}-${childId}`, parentId, isChild: true, childId, rowIdx: idx + 1 });
+            });
+          });
+          return (
+            <>
+              <div style={{ border: "1px solid rgba(255,255,255,0.12)", borderRadius: 6, overflow: "hidden", background: "rgba(0,0,0,0.25)", marginBottom: 6 }}>
+                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                  <thead>
+                    <tr>
+                      <th style={{ textAlign: "left", padding: "6px 8px", borderBottom: "1px solid rgba(255,255,255,0.12)", fontWeight: 600, color: "#fff", width: "22%" }}>Auto speck</th>
+                      <th style={{ textAlign: "left", padding: "6px 8px", borderBottom: "1px solid rgba(255,255,255,0.12)", fontWeight: 600, color: "#fff", width: "44%" }}>Items</th>
+                      <th style={{ textAlign: "left", padding: "6px 8px", borderBottom: "1px solid rgba(255,255,255,0.12)", fontWeight: 600, color: "#fff", width: "24%" }}>Override</th>
+                      <th style={{ width: 32 }} />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rows.map((r) => {
+                      const specKey = getSpecOverrideKey(fieldId, r.parentId, r.rowIdx);
+                      if (r.isChild && r.childId != null) {
+                        const childDisplaySpec = (menuSpecOverrides[specKey] ?? "").trim() !== "" ? menuSpecOverrides[specKey] : "";
+                        return (
+                          <tr key={r.rowKey} style={{ borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
+                            <td style={{ padding: "4px 8px", color: "#fff" }}>{childDisplaySpec}</td>
+                            <td style={{ padding: "4px 8px", color: "#fff", paddingLeft: 24 }}>{getItemName(r.childId)}</td>
+                            <td style={{ padding: 2 }}>
+                              <input type="text" value={menuSpecOverrides[specKey] ?? ""} disabled={!canEdit} onChange={(e) => handleSpecOverrideChange(specKey, e.target.value)} placeholder="—" style={{ width: "100%", padding: "4px 6px", borderRadius: 4, border: "1px solid rgba(255,255,255,0.12)", background: "rgba(0,0,0,0.2)", color: "#fff", fontSize: 12 }} />
+                            </td>
+                            <td />
+                          </tr>
+                        );
+                      }
+                      const name = getItemName(r.parentId);
+                      const spec = calculateAutoSpec(name, "buffet", guestCount);
+                      const displaySpec = (menuSpecOverrides[specKey] ?? "").trim() !== "" ? menuSpecOverrides[specKey] : spec.quantity;
+                      return (
+                        <tr key={r.rowKey} style={{ borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
+                          <td style={{ padding: "4px 8px", color: "#fff" }}>{displaySpec}</td>
+                          <td style={{ padding: "4px 8px", color: "#fff" }}>{name}</td>
+                          <td style={{ padding: 2 }}>
+                            <input type="text" value={menuSpecOverrides[specKey] ?? ""} disabled={!canEdit} onChange={(e) => handleSpecOverrideChange(specKey, e.target.value)} placeholder="—" style={{ width: "100%", padding: "4px 6px", borderRadius: 4, border: "1px solid rgba(255,255,255,0.12)", background: "rgba(0,0,0,0.2)", color: "#fff", fontSize: 12 }} />
+                          </td>
+                          <td style={{ padding: "2px 6px" }}>
+                            <button type="button" disabled={!canEdit} onClick={() => removeMenuItem("buffetChina", r.parentId)} style={{ background: "none", border: "none", color: "#ff6b6b", cursor: "pointer", fontSize: "16px", fontWeight: "bold" }} title="Remove">✕</button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              <button type="button" disabled={!canEdit} onClick={() => openPicker("buffet_china", "buffetChina", "Select Buffet Items (China)")} style={smallAddButtonStyle}>+ Add</button>
+              <div style={{ marginTop: 6, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                <span style={labelStyle}>Salads & dressings</span>
+                <button type="button" disabled={!canEdit} onClick={() => setShowDressingPicker(true)} style={smallAddButtonStyle}>+ Add dressing</button>
+              </div>
+              <div style={{ marginTop: 6 }}>
+                <CustomFoodItemsBlock value={customFields.customBuffetChina} fieldId={FIELD_IDS.CUSTOM_BUFFET_CHINA} placeholder="Item name" notesPlaceholder="Notes (optional)" canEdit={canEdit} onSave={saveCustomField} label="Custom Buffet China (not in menu)" inputStyle={inputStyle} labelStyle={labelStyle} buttonStyle={smallAddButtonStyle} />
+              </div>
+            </>
+          );
+        })()}
+      </CourseStyleBlock>
+
+      {/* Desserts — table layout */}
+      <CourseStyleBlock title="DESSERTS" dotColor="#ef4444">
+        <label style={labelStyle}>Desserts</label>
+        <p style={{ fontSize: 11, color: "rgba(255,255,255,0.5)", marginBottom: 4 }}>Override cell to edit. Speck engine will use when wired.</p>
+        {(() => {
+          const fieldId = FIELD_IDS.DESSERTS;
+          const guestCount = selectedEventData?.[FIELD_IDS.GUEST_COUNT] != null ? Number(selectedEventData[FIELD_IDS.GUEST_COUNT]) : 0;
+          const itemIds = selections.desserts;
+          const rows: { rowKey: string; parentId: string; isChild: boolean; childId?: string; rowIdx: number }[] = [];
+          itemIds.forEach((parentId) => {
+            rows.push({ rowKey: `parent-${parentId}`, parentId, isChild: false, rowIdx: 0 });
+            (menuItemChildIds[parentId] ?? []).forEach((childId, idx) => {
+              rows.push({ rowKey: `child-${parentId}-${childId}`, parentId, isChild: true, childId, rowIdx: idx + 1 });
+            });
+          });
+          return (
+            <>
+              <div style={{ border: "1px solid rgba(255,255,255,0.12)", borderRadius: 6, overflow: "hidden", background: "rgba(0,0,0,0.25)", marginBottom: 6 }}>
+                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                  <thead>
+                    <tr>
+                      <th style={{ textAlign: "left", padding: "6px 8px", borderBottom: "1px solid rgba(255,255,255,0.12)", fontWeight: 600, color: "#fff", width: "22%" }}>Auto speck</th>
+                      <th style={{ textAlign: "left", padding: "6px 8px", borderBottom: "1px solid rgba(255,255,255,0.12)", fontWeight: 600, color: "#fff", width: "44%" }}>Items</th>
+                      <th style={{ textAlign: "left", padding: "6px 8px", borderBottom: "1px solid rgba(255,255,255,0.12)", fontWeight: 600, color: "#fff", width: "24%" }}>Override</th>
+                      <th style={{ width: 32 }} />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rows.map((r) => {
+                      const specKey = getSpecOverrideKey(fieldId, r.parentId, r.rowIdx);
+                      if (r.isChild && r.childId != null) {
+                        const childDisplaySpec = (menuSpecOverrides[specKey] ?? "").trim() !== "" ? menuSpecOverrides[specKey] : "";
+                        return (
+                          <tr key={r.rowKey} style={{ borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
+                            <td style={{ padding: "4px 8px", color: "#fff" }}>{childDisplaySpec}</td>
+                            <td style={{ padding: "4px 8px", color: "#fff", paddingLeft: 24 }}>{getItemName(r.childId)}</td>
+                            <td style={{ padding: 2 }}>
+                              <input type="text" value={menuSpecOverrides[specKey] ?? ""} disabled={!canEdit} onChange={(e) => handleSpecOverrideChange(specKey, e.target.value)} placeholder="—" style={{ width: "100%", padding: "4px 6px", borderRadius: 4, border: "1px solid rgba(255,255,255,0.12)", background: "rgba(0,0,0,0.2)", color: "#fff", fontSize: 12 }} />
+                            </td>
+                            <td />
+                          </tr>
+                        );
+                      }
+                      const name = getItemName(r.parentId);
+                      const spec = calculateAutoSpec(name, "dessert", guestCount);
+                      const displaySpec = (menuSpecOverrides[specKey] ?? "").trim() !== "" ? menuSpecOverrides[specKey] : spec.quantity;
+                      return (
+                        <tr key={r.rowKey} style={{ borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
+                          <td style={{ padding: "4px 8px", color: "#fff" }}>{displaySpec}</td>
+                          <td style={{ padding: "4px 8px", color: "#fff" }}>{name}</td>
+                          <td style={{ padding: 2 }}>
+                            <input type="text" value={menuSpecOverrides[specKey] ?? ""} disabled={!canEdit} onChange={(e) => handleSpecOverrideChange(specKey, e.target.value)} placeholder="—" style={{ width: "100%", padding: "4px 6px", borderRadius: 4, border: "1px solid rgba(255,255,255,0.12)", background: "rgba(0,0,0,0.2)", color: "#fff", fontSize: 12 }} />
+                          </td>
+                          <td style={{ padding: "2px 6px" }}>
+                            <button type="button" disabled={!canEdit} onClick={() => removeMenuItem("desserts", r.parentId)} style={{ background: "none", border: "none", color: "#ff6b6b", cursor: "pointer", fontSize: "16px", fontWeight: "bold" }} title="Remove">✕</button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              <button type="button" disabled={!canEdit} onClick={() => openPicker("desserts", "desserts", "Desserts")} style={smallAddButtonStyle}>+ Add</button>
+              <div style={{ marginTop: 6 }}>
+                <CustomFoodItemsBlock value={customFields.customDessert} fieldId={FIELD_IDS.CUSTOM_DESSERTS} placeholder="Dessert name" notesPlaceholder="Notes (optional)" canEdit={canEdit} onSave={saveCustomField} label="Custom Desserts (not in menu)" inputStyle={inputStyle} labelStyle={labelStyle} buttonStyle={smallAddButtonStyle} />
+              </div>
+            </>
+          );
+        })()}
+      </CourseStyleBlock>
+
+
+      {/* Sandwich Platters — bottom, same block style */}
+      <CourseStyleBlock title="SANDWICH PLATTERS" dotColor="#d97706">
+        <label style={labelStyle}>Sandwich & Wrap Platters</label>
+        <p style={{ fontSize: 12, color: "#888", marginBottom: 10 }}>Available for full service and delivery events. Selections are scoped to each platter tier.</p>
+        <button
+          type="button"
+          onClick={() => setPlatterModalOpen((v) => !v)}
+          style={{ ...buttonStyle, borderColor: "#f97316", color: "#f97316", background: "rgba(249,115,22,0.1)" }}
+        >
+          {platterModalOpen ? "− Hide Platter Config" : "+ Configure Sandwich Platters"}
+        </button>
+        {platterModalOpen && (
+          <SandwichPlatterConfigModal
+            open
+            inline
+            onClose={() => setPlatterModalOpen(false)}
+            onConfirm={(rows) => {
+              if (!selectedEventId) { setError("Select an event first"); return; }
+              setPlatterOrdersForEvent(selectedEventId, rows);
+              setPlatterModalOpen(false);
+            }}
+            initialRows={selectedEventId ? getPlatterOrdersByEventId(selectedEventId) : []}
+          />
+        )}
+      </CourseStyleBlock>
+
+      {/* Creation Station — bottom, same block style */}
+      <CourseStyleBlock title="CREATION STATION" dotColor="#8b5cf6">
         <CreationStationContent
           selectedEventId={selectedEventId}
           canEdit={canEdit}
@@ -1530,116 +2480,12 @@ export const MenuSection = ({ embedded = false, isDelivery = false }: MenuSectio
           inputStyle={inputStyle}
           labelStyle={labelStyle}
           buttonStyle={buttonStyle}
+          addButtonStyle={smallAddButtonStyle}
         />
-      </CollapsibleSubsection>
+      </CourseStyleBlock>
 
-      {/* Buffet - Metal */}
-      <CollapsibleSubsection title="Buffet – Metal" icon="▶" defaultOpen={false}>
-      <div style={{ gridColumn: "1 / -1" }}>
-        <label style={labelStyle}>Buffet – Metal</label>
-        <div style={{ marginBottom: "8px" }}>
-          {selections.buffetMetal.map((itemId) => (
-            <div key={itemId} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", backgroundColor: "#2a2a2a", border: "1px solid #ff6b6b", borderRadius: "6px", padding: "8px 12px", marginBottom: "6px" }}>
-              <span style={{ fontSize: "14px", color: "#e0e0e0" }}>{getItemName(itemId)}</span>
-              <button type="button" disabled={!canEdit} onClick={() => removeMenuItem("buffetMetal", itemId)} style={{ background: "none", border: "none", color: "#ff6b6b", cursor: "pointer", fontSize: "16px", fontWeight: "bold" }}>✕</button>
-            </div>
-          ))}
+          </div>
         </div>
-        <button type="button" disabled={!canEdit} onClick={() => openPicker("buffet_metal", "buffetMetal", "Buffet – Metal")} style={buttonStyle}>
-          + Add Buffet Item (Metal)
-        </button>
-        <CustomFoodItemsBlock
-          value={customFields.customBuffetMetal}
-          fieldId={FIELD_IDS.CUSTOM_BUFFET_METAL}
-          placeholder="Item name"
-          notesPlaceholder="Notes (optional)"
-          canEdit={canEdit}
-          onSave={saveCustomField}
-          label="Custom Buffet Metal (not in menu)"
-          inputStyle={inputStyle}
-          labelStyle={labelStyle}
-          buttonStyle={buttonStyle}
-        />
-      </div>
-      </CollapsibleSubsection>
-
-      {/* Buffet - China */}
-      <CollapsibleSubsection title="Buffet – China" icon="▶" defaultOpen={false}>
-      <div style={{ gridColumn: "1 / -1" }}>
-        <label style={labelStyle}>Buffet – China</label>
-        <div style={{ marginBottom: "8px" }}>
-          {selections.buffetChina.map((itemId) => (
-            <MenuItemCard
-              key={itemId}
-              itemId={itemId}
-              itemName={getItemName(itemId)}
-              defaultSauce={menuItemSauce[itemId] ?? null}
-              sauceOverrides={sauceOverrides}
-              onSauceChange={handleSauceChange}
-              onRemove={() => removeMenuItem("buffetChina", itemId)}
-              canEdit={canEdit}
-              removeColor="#ff6b6b"
-              itemBorder="1px solid #ff6b6b"
-            />
-          ))}
-        </div>
-        <button type="button" disabled={!canEdit} onClick={() => openPicker("buffet_china", "buffetChina", "Select Buffet Items (China)")} style={buttonStyle}>
-          + Add Buffet Item (China)
-        </button>
-        <CustomFoodItemsBlock
-          value={customFields.customBuffetChina}
-          fieldId={FIELD_IDS.CUSTOM_BUFFET_CHINA}
-          placeholder="Item name"
-          notesPlaceholder="Notes (optional)"
-          canEdit={canEdit}
-          onSave={saveCustomField}
-          label="Custom Buffet China (not in menu)"
-          inputStyle={inputStyle}
-          labelStyle={labelStyle}
-          buttonStyle={buttonStyle}
-        />
-      </div>
-      </CollapsibleSubsection>
-
-      {/* Desserts */}
-      <CollapsibleSubsection title="Desserts" icon="▶" defaultOpen={false}>
-      <div style={{ gridColumn: "1 / -1" }}>
-        <label style={labelStyle}>Desserts</label>
-        <div style={{ marginBottom: "8px" }}>
-          {selections.desserts.map((itemId) => (
-            <MenuItemCard
-              key={itemId}
-              itemId={itemId}
-              itemName={getItemName(itemId)}
-              defaultSauce={menuItemSauce[itemId] ?? null}
-              sauceOverrides={sauceOverrides}
-              onSauceChange={handleSauceChange}
-              onRemove={() => removeMenuItem("desserts", itemId)}
-              canEdit={canEdit}
-              removeColor="#ff6b6b"
-              itemBorder="1px solid #ff6b6b"
-            />
-          ))}
-        </div>
-        <button type="button" disabled={!canEdit} onClick={() => openPicker("desserts", "desserts", "Desserts")} style={buttonStyle}>
-          + Add Dessert
-        </button>
-        <CustomFoodItemsBlock
-          value={customFields.customDessert}
-          fieldId={FIELD_IDS.CUSTOM_DESSERTS}
-          placeholder="Dessert name"
-          notesPlaceholder="Notes (optional)"
-          canEdit={canEdit}
-          onSave={saveCustomField}
-          label="Custom Desserts (not in menu)"
-          inputStyle={inputStyle}
-          labelStyle={labelStyle}
-          buttonStyle={buttonStyle}
-        />
-      </div>
-      </CollapsibleSubsection>
-
-        </>
       )}
 
       {/* ── Dressing Picker (pops up when salad selected in Buffet China) ── */}
@@ -1694,7 +2540,8 @@ export const MenuSection = ({ embedded = false, isDelivery = false }: MenuSectio
                   autoFocus
                 />
                 <div style={{ fontSize: "11px", color: "#999", marginTop: "8px" }}>
-                  {dressingFilteredItems.length} of {dressingCategoryFiltered.length} dressings
+                  {dressingFilteredItems.length} from menu
+                  {dressingCategoryFiltered.length === 0 && " — use common options below"}
                 </div>
               </div>
               <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "16px" }}>
@@ -1729,11 +2576,60 @@ export const MenuSection = ({ embedded = false, isDelivery = false }: MenuSectio
                     </div>
                   </div>
                 ))}
-                {dressingFilteredItems.length === 0 && (
-                  <div style={{ textAlign: "center", padding: "32px", color: "#999" }}>
-                    <div>No dressings found</div>
+                <div style={{ marginTop: 16, marginBottom: 8, fontSize: "12px", color: "#aaa", fontWeight: 600 }}>Common dressings (add to Buffet China)</div>
+                {(SALAD_BAR.dressingOptions as readonly string[]).map((name) => (
+                  <div
+                    key={name}
+                    onClick={() => addDressingOrSaladCustom(name)}
+                    style={{
+                      padding: "10px 12px",
+                      marginBottom: "6px",
+                      backgroundColor: "#2a2a2a",
+                      border: "1px solid #444",
+                      borderRadius: "6px",
+                      cursor: "pointer",
+                      color: "#e0e0e0",
+                      fontSize: "14px",
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.backgroundColor = "#3a3a3a";
+                      e.currentTarget.style.borderColor = "#ff6b6b";
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.backgroundColor = "#2a2a2a";
+                      e.currentTarget.style.borderColor = "#444";
+                    }}
+                  >
+                    {name}
                   </div>
-                )}
+                ))}
+                <div style={{ marginTop: 16, marginBottom: 8, fontSize: "12px", color: "#aaa", fontWeight: 600 }}>Common salads (add to Buffet China)</div>
+                {["Field of Greens Salad", "Tri-Colored Rotini Pasta Salad", "Seasonal Fruit Salad", "Wedge Salad", "Bruschetta Tortellini Pasta Salad", "Caesar Salad", "Greek Salad"].map((name) => (
+                  <div
+                    key={name}
+                    onClick={() => addDressingOrSaladCustom(name)}
+                    style={{
+                      padding: "10px 12px",
+                      marginBottom: "6px",
+                      backgroundColor: "#2a2a2a",
+                      border: "1px solid #444",
+                      borderRadius: "6px",
+                      cursor: "pointer",
+                      color: "#e0e0e0",
+                      fontSize: "14px",
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.backgroundColor = "#3a3a3a";
+                      e.currentTarget.style.borderColor = "#ff6b6b";
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.backgroundColor = "#2a2a2a";
+                      e.currentTarget.style.borderColor = "#444";
+                    }}
+                  >
+                    {name}
+                  </div>
+                ))}
               </div>
             </div>
           </div>,

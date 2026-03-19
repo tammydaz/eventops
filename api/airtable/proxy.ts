@@ -42,7 +42,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     });
   }
 
-  const url = `${AIRTABLE_API}/${baseId}${path}`;
+  // Encode path segments so table names with spaces (e.g. "Event Menu (SHADOW SYSTEM)") work
+  const [pathPart, ...queryParts] = path.split("?");
+  const queryPart = queryParts.length ? "?" + queryParts.join("?") : "";
+  const encodedPath =
+    pathPart
+      .split("/")
+      .map((s) => (s ? encodeURIComponent(s) : ""))
+      .join("/") + queryPart;
+
+  const url = `${AIRTABLE_API}/${baseId}${encodedPath}`;
 
   try {
     const init: RequestInit = {

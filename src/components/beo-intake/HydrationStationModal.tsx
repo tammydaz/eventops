@@ -23,6 +23,7 @@ const FALLBACK_DRINK_OPTIONS: SingleSelectOption[] = [
   { id: "unsweet-tea", name: "Unsweet Tea" },
   { id: "bottled-water", name: "Bottled Water" },
   { id: "sparkling-water", name: "Sparkling Water" },
+  { id: "mimosa-bar", name: "Mimosa Bar" },
 ];
 
 export const HydrationStationModal = ({
@@ -50,7 +51,10 @@ export const HydrationStationModal = ({
         return;
       }
       const opts = result[FIELD_IDS.HYDRATION_STATION_DRINK_OPTIONS] ?? [];
-      setDrinkOptions(opts.length > 0 ? opts : FALLBACK_DRINK_OPTIONS);
+      // Merge with fallback so "Mimosa Bar" and others always appear even if not in Airtable yet
+      const fallbackNames = new Set(FALLBACK_DRINK_OPTIONS.map((o) => o.name));
+      const fromAirtable = (opts as SingleSelectOption[]).filter((o) => !fallbackNames.has(o.name));
+      setDrinkOptions([...FALLBACK_DRINK_OPTIONS, ...fromAirtable]);
     }).catch(() => {
       if (!cancelled) {
         setLoading(false);

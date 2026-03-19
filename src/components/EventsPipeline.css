@@ -177,3 +177,45 @@
 .dp-todays-tasks-followup:hover {
   background: rgba(0, 212, 255, 0.25);
 }
+
+/* New client step-by-step (FOH) — in-app help for staff demos */
+.dp-new-client-help-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border-radius: 8px;
+  border: 1px solid rgba(0, 212, 255, 0.4);
+  background: rgba(0, 212, 255, 0.08);
+  color: #00d4ff;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.dp-new-client-help-btn:hover {
+  background: rgba(0, 212, 255, 0.15);
+}
+.dp-new-client-help-btn.open {
+  background: rgba(0, 212, 255, 0.2);
+}
+.dp-new-client-help-panel {
+  margin-bottom: 16px;
+}
+.dp-new-client-help-steps {
+  margin: 0;
+  padding-left: 22px;
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.9);
+  line-height: 1.6;
+}
+.dp-new-client-help-steps li {
+  margin-bottom: 10px;
+}
+.dp-new-client-help-steps li:last-child {
+  margin-bottom: 0;
+}
+.dp-new-client-help-steps strong {
+  color: #00d4ff;
+  font-weight: 600;
+}

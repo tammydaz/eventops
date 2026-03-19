@@ -29,6 +29,8 @@ const _getMasterMenuSpecsTable = () => (import.meta.env.VITE_AIRTABLE_MASTER_MEN
 const _getMenuItemsTable = () => (import.meta.env.VITE_AIRTABLE_MENU_ITEMS_TABLE as string | undefined)?.trim();
 const _getLeadsTable = () => (import.meta.env.VITE_AIRTABLE_LEADS_TABLE as string | undefined)?.trim();
 const _getTasksTable = () => (import.meta.env.VITE_AIRTABLE_TASKS_TABLE as string | undefined)?.trim();
+const _getEventMenuTable = () => (import.meta.env.VITE_AIRTABLE_EVENT_MENU_TABLE as string | undefined)?.trim();
+const _getEventMenuShadowTable = () => (import.meta.env.VITE_AIRTABLE_EVENT_MENU_SHADOW_TABLE as string | undefined)?.trim();
 
 const getEnvValue = (value: string | undefined, name: string): string | AirtableErrorResult => {
   if (!value) {
@@ -66,6 +68,14 @@ export const getLeadsTable = (): string | undefined =>
 export const getTasksTable = (): string | undefined =>
   _getTasksTable() || undefined;
 
+/** Event Menu table (shadow system). When unset, defaults to "Event Menu". Set VITE_AIRTABLE_EVENT_MENU_TABLE to table ID if needed. */
+export const getEventMenuTable = (): string =>
+  _getEventMenuTable() || "Event Menu";
+
+/** Event Menu (SHADOW SYSTEM) table. Use table ID (tbl...) to avoid encoding: set VITE_AIRTABLE_EVENT_MENU_SHADOW_TABLE=tblYourId in .env */
+export const getEventMenuShadowTable = (): string =>
+  _getEventMenuShadowTable() || "Event Menu (SHADOW SYSTEM)";
+
 export const getBaseId = (): string | AirtableErrorResult =>
   getEnvValue(_getBaseId(), "VITE_AIRTABLE_BASE_ID");
 
@@ -88,6 +98,24 @@ export const airtableFetch = async <T>(
   try {
     const method = (init?.method as string) || "GET";
     const body = init?.body != null ? (typeof init.body === "string" ? init.body : JSON.stringify(init.body)) : undefined;
+
+    if (body && (method === "POST" || method === "PATCH")) {
+      const tableName = path.split("?")[0].replace(/^\//, "").split("/")[0] || path;
+      let fields: unknown = undefined;
+      try {
+        const parsed = JSON.parse(body) as { records?: Array<{ fields?: unknown }>; fields?: unknown };
+        if (parsed.records?.length) {
+          fields = parsed.records.map((r) => r.fields);
+        } else if (parsed.fields !== undefined) {
+          fields = parsed.fields;
+        } else {
+          fields = parsed;
+        }
+      } catch {
+        fields = body;
+      }
+      console.log("AIRTABLE REQUEST", { tableName, baseId, fields });
+    }
 
     const response = await fetch(PROXY_URL, {
       method: "POST",

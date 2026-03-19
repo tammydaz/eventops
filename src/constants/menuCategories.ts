@@ -9,21 +9,32 @@ const APPETIZER_CATEGORIES = [
   "App",
 ];
 
+/** Categories for Presented Appetizers: appetizers + station-type items that are presented (e.g. Mezze Display). */
+const PRESENTED_CATEGORIES = [
+  ...APPETIZER_CATEGORIES,
+  "Station Item",
+  "Station",
+];
+
 export const CATEGORY_MAP: Record<string, string[]> = {
   passed: APPETIZER_CATEGORIES,
-  presented: APPETIZER_CATEGORIES,
+  presented: PRESENTED_CATEGORIES,
 
-  buffet_metal: ["Buffet Metal", "Buffet", "Buffet Item", "Side"],
+  buffet_metal: [
+    "Buffet Metal", "Buffet", "Buffet Item", "Side",
+    // Full-service entrée & side categories from Airtable
+    "Entrée", "Protein (Entrée)", "Pasta (Entrée)", "Pasta (Side)", "Starch (Side)", "Vegetable (Side)",
+  ],
   buffet_china: ["Buffet China", "Salad", "Bread", "Side"],
 
-  desserts: ["Dessert", "Dessert/Metal", "Dessert/China"],
+  desserts: ["Dessert", "Dessert/Metal", "Dessert/China", "Dessert (Display)", "Dessert (Individual)"],
   stations:     ['Station', 'Stations', 'Station Item'],
   dressing:     ['Dressing'],
-  deli: ["Deli/Sandwhiches", "Deli/Breads", "Deli/Sandwiches"],
+  deli: ["Deli/Sandwhiches", "Deli/Breads", "Deli/Sandwiches", "Deli"],
   room_temp: ["Room Temp Display", "Display", "Buffet China"],
   displays:     ['Display', 'Buffet China'],
-  beverage_service: ['Beverage', 'Beverages', 'Drink'],
-  bar_service:     ['Bar', 'Bar Item', 'Beverage', 'Beverages'],
+  beverage_service: ['Beverage', 'Beverages', 'Drink', 'Bar / Beverage Component'],
+  bar_service:     ['Bar', 'Bar Item', 'Beverage', 'Beverages', 'Bar / Beverage Component'],
   creation_station: ['Station', 'Stations', 'Station Item'],
 };
 

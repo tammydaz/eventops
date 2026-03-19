@@ -6,3 +6,4 @@ export * from "./linkedRecords";
 export * from "./stationComponents";
 export * from "./tasks";
 export * from "./boxedLunchOrders";
+export * from "./eventMenu";

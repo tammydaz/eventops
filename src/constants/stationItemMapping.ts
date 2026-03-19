@@ -5,6 +5,8 @@
 
 export const STATION_ITEM_IDS: Record<string, string[]> = {
   "All-American": ["rec5ISty68i5FHM0J","recELSGOhJcLZi8HR","recIqx2LXUxfPuw8b"],
+  "All American Station": ["rec5ISty68i5FHM0J","recELSGOhJcLZi8HR","recIqx2LXUxfPuw8b"],
+  "Build Your Own Sliders": ["recM7ld6ofcGyUWwj","recfetv3D3oelJQ4J","recodH0dXUWTwxgeV"],
   "BarWerx Appetizer Sampler": ["rec0MnkolhUFBvHF3","rec9xgfnkRzaqmMAo","recXnkMbxhY6UPhz9"],
   "Buffet – Full Pan (Hot)": ["reclK8bJGR88pjJGj"],
   "Carving Station": ["rec1KAz5OzhnxHCsw","recc7klJAfiFJJjY1"],
@@ -70,6 +72,9 @@ export const STATION_INSTRUCTIONS: Record<string, string> = {
   "Iced Raw Bar": "Choose 1",
   "Grande Charcuterie Display": "Choose 1",
   "All-American": "Choose items",
+  "All American Station": "Choose items",
+  "Build Your Own Sliders": "Choose slider items",
+  "Slider Station": "Choose slider items",
   "Make Your Own Ramen Noodle Bar": "Build your own",
   "Chicken & Waffle Station": "Choose items",
 };
@@ -89,6 +94,9 @@ export const STATION_PICK_COUNT: Record<string, number> = {
   "Iced Raw Bar": 1,
   "Grande Charcuterie Display": 1,
   "All-American": 0,
+  "All American Station": 0,
+  "Build Your Own Sliders": 0,
+  "Slider Station": 0,
   "Make Your Own Ramen Noodle Bar": 0,
   "Chicken & Waffle Station": 0,
 };

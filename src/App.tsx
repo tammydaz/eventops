@@ -32,10 +32,11 @@ function App() {
     loadEvents();
   }, [loadEvents]);
 
-  // Extract event ID from URL and load it
+  // Sync store to URL when pathname changes (e.g. user picked event from dropdown via navigate())
   useEffect(() => {
     if (pathname.startsWith("/beo-intake/")) {
-      const eventIdFromUrl = pathname.split("/beo-intake/")[1];
+      const raw = pathname.split("/beo-intake/")[1] ?? "";
+      const eventIdFromUrl = raw.split("/")[0]?.trim() ?? "";
       if (eventIdFromUrl && eventIdFromUrl !== selectedEventId) {
         selectEvent(eventIdFromUrl);
       }

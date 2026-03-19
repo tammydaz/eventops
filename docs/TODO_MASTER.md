@@ -64,6 +64,45 @@ User reported: "made shit up on some stations, missing shit on others." Need to 
 
 ---
 
+## OPS CHIEF — Signature Drink Non-Standard Items
+
+Bar/Signature Drink intake and server BEO are done (pills, alcohol vs mixers & garnish, in-speck highlighting, non-standard banner on BEO). Ops Chief view still needs to surface these so expediter doesn’t miss events that need sig drink items sourced.
+
+| # | Task | File(s) | Status | Notes |
+|---|------|---------|--------|-------|
+| 21 | **Surface signature drink non-standard items in Ops Chief** — When an event has a signature drink, Foodwerx supplies mixers/garnish, and any item is *not* in the standard bar speck, show an alert/card so Ops Chief sees “needs sourcing” | `OpsChiefDashboard.tsx`, `BeoPrintPage.tsx` (reference) | Pending | Logic already in place: `getNonStandardBarItems(mixers + garnishes)`; banner shows on Server BEO 2nd page. Reuse same logic in Ops Chief when wiring to real event data. See TODO in `getCriticalAlerts` and next to `nonStandardSigDrinkItems` in `BeoPrintPage.tsx`. |
+
+---
+
+## VERIFY WHEN YOU SWITCH BACK (recent changes)
+
+| # | Task | Status | Notes |
+|---|------|--------|-------|
+| 22 | **Verify Hydration Station + Mimosa Bar** — Confirm in UI: (1) Hydration/Coffee/Ice pills show and collapse as expected, (2) "Mimosa Bar" appears in hydration drink options and selecting it prints MIMOSA BAR section on server BEO with mango-peach, cranberry-pineapple-OJ, pineapple-strawberry-raspberry-blueberry rows | Pending | Added Mimosa Bar to `HydrationStationModal` fallback options; BEO outputs mimosa rows when selected. Quick smoke test: create event, set Hydration = Yes, open options, select Mimosa Bar, save, print server BEO. |
+
+---
+
+## INTAKE → BEO PRINT: FLAWLESS FLOW (priority)
+
+**Goal:** Make the flow from intake to BEO print flawless. Use old BEOs as test data: enter each old event as if it were a new client, then compare printed BEO to the original. Fix every glitch, bug, missing food item, and incorrect print.
+
+| # | Task | Status | Notes |
+|---|------|--------|-------|
+| 23 | **Run old BEOs through intake and compare** — For each old BEO: extract event + menu + bar + hydration + etc., enter into intake (or seed event), generate BEO, diff vs original. Log: missing items, wrong sections, print errors. | Pending | See "How to use old BEOs with an agent" below. |
+
+### How to use old BEOs with an agent
+
+- **Put old BEOs in the repo** so an AI/agent can read them. For example:
+  - **Folder:** `docs/old_beos/` or `test_data/old_beos/`
+  - **Formats that work best:** (1) **Text or CSV** — e.g. copy-paste from Excel into `.txt` or export to CSV; (2) **Images** — PNG/JPEG of each BEO page (agent can read and describe); (3) **Same format as `BEO_RAW_DUMP.txt`** — if you already have a dump, add more there or as separate files.
+- **One file per event** helps: e.g. `old_beos/event_001_clientname.txt` with client name, date, menu sections, bar, hydration, etc. Either structured (headings) or free text the agent can parse.
+- **Agent task (when ready):** "For each file in `docs/old_beos/`, extract: client, event date, service style, passed apps, buffet/presented items, stations, bar service, signature drink, hydration options, coffee, ice, dietary, notes. Then either (a) create a seed event or intake checklist for that data, or (b) compare our app's BEO print (for a manually created event matching this data) to the old BEO and list discrepancies (missing line, wrong section, wrong wording)."
+- **Limitation:** Full automation (agent creates the event in Airtable and triggers print) would require running the app and/or API. A practical flow: you (or a script) create the event from the extracted data; agent gets the printed BEO output or a saved HTML/PDF and compares it to the old BEO text/image. Or: agent produces a **checklist per old BEO** (what to enter in intake, what should appear on Kitchen BEO, Server BEO, etc.) and you run through and tick off; agent can then help fix any bugs you log.
+
+**Quick start:** Add a few old BEOs (text or images) into `docs/old_beos/`, then in a new chat or agent session: "Use every file in `docs/old_beos/` to validate intake → BEO flow: for each, list what should be entered and what should print; then we'll run one event and fix issues."
+
+---
+
 ## LOCKED — Do Not Modify
 
 - **Passed Appetizers** — `.cursor/rules/passed-appetizers-locked.mdc` — Do not touch logic, rendering, or data wiring for Passed Apps.
@@ -103,6 +142,9 @@ Boxed lunches appear in the **DELI - DISPOSABLE** section of the BEO, but **only
 
 ## Quick Start When Resuming
 
-1. **Omni flow:** Start with items 1–4 (with Omni) and 5–7 (code).
-2. **Stations:** When ready, go through items 8–17 (you verify), then 18 (we fix).
-3. **Buffet menu signs:** Item 19 when stations are solid.
+1. **Intake → BEO flawless (boss priority):** Item 23 — put old BEOs in `docs/old_beos/`, then use an agent or new chat to validate each: extract data, compare to app print, fix glitches. See "How to use old BEOs with an agent" above.
+2. **Verify recent changes:** Item 22 — when you switch back, test Hydration pills and Mimosa Bar (select in options, confirm MIMOSA BAR section on server BEO).
+3. **Omni flow:** Items 1–4 (with Omni) and 5–7 (code).
+4. **Stations:** When ready, items 8–17 (you verify), then 18 (we fix).
+5. **Buffet menu signs:** Item 19 when stations are solid.
+6. **Ops Chief — sig drink:** Item 21 when you want expediter to see events with non-standard signature drink items (surface in Ops Chief view).

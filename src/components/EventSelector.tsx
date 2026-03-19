@@ -289,11 +289,13 @@ export const EventSelector = ({ variant = "default" }: EventSelectorProps) => {
               e.currentTarget.style.borderColor = "#666";
             }}
           >
-            <span>
+            <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
               {selectedEvent ? (selectedEvent.eventName || selectedEvent.id) : EVENT_SELECTOR_PLACEHOLDER}
             </span>
-            <span style={{ transform: isOpen ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 0.2s" }}>
-              ▼
+            <span style={{ flexShrink: 0, display: "inline-flex", alignItems: "center", transform: isOpen ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 0.2s" }} aria-hidden>
+              <svg style={{ width: 16, height: 16 }} viewBox="0 0 24 24" fill="currentColor">
+                <path d="M7 10l5 5 5-5z" />
+              </svg>
             </span>
           </div>
           {portalDropdown}
@@ -311,15 +313,17 @@ export const EventSelector = ({ variant = "default" }: EventSelectorProps) => {
       <div className="relative">
         <button
           type="button"
-          className="w-full px-4 py-3 border-2 border-gray-700 rounded-md bg-gray-800 text-gray-100 cursor-pointer flex items-center justify-between hover:border-red-600 transition"
+          className="w-full px-4 py-3 border-2 border-gray-700 rounded-md bg-gray-800 text-gray-100 cursor-pointer flex items-center justify-between gap-2 hover:border-red-600 transition"
           onClick={toggleOpen}
         >
-          <span className={selectedEvent ? "text-gray-100" : "text-gray-500"}>
+          <span className={`flex-1 min-w-0 truncate text-left ${selectedEvent ? "text-gray-100" : "text-gray-500"}`}>
             {selectedEvent ? (selectedEvent.eventName || selectedEvent.id) : EVENT_SELECTOR_PLACEHOLDER}
           </span>
-          <svg className="w-5 h-5 text-red-600 transition" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M7 10l5 5 5-5z" />
-          </svg>
+          <span className="flex-shrink-0 inline-flex items-center justify-center w-5 h-5 text-red-600 transition" aria-hidden>
+            <svg style={{ width: 20, height: 20 }} viewBox="0 0 24 24" fill="currentColor">
+              <path d="M7 10l5 5 5-5z" />
+            </svg>
+          </span>
         </button>
 
         {isOpen ? (

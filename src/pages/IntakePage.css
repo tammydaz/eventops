@@ -209,6 +209,69 @@
     padding: 10px 16px !important;
     font-size: 12px !important;
   }
+  /* Main layout: stack Live Preview above content on mobile */
+  .beo-main-layout {
+    flex-direction: column !important;
+    gap: 16px !important;
+  }
+  .beo-live-preview-sidebar {
+    width: 100% !important;
+    max-width: 100% !important;
+    position: static !important;
+    max-height: 400px !important;
+  }
+  .beo-main-content {
+    min-width: 0 !important;
+  }
+  /* Sections grid: single column on mobile */
+  .beo-sections-grid {
+    grid-template-columns: 1fr !important;
+    gap: 12px !important;
+  }
+  /* Header + form grid: single column on mobile */
+  .beo-header-form-grid {
+    grid-template-columns: 1fr !important;
+  }
+  /* Menu add buttons: horizontal scroll on mobile */
+  .beo-menu-add-buttons {
+    justify-content: flex-start !important;
+    -webkit-overflow-scrolling: touch;
+    margin-left: -8px;
+    margin-right: -8px;
+    padding-left: 8px;
+    padding-right: 8px;
+  }
+  /* Edit modal: full width on mobile */
+  .beo-edit-modal-backdrop {
+    padding: 12px !important;
+    align-items: flex-start !important;
+    overflow-y: auto !important;
+  }
+  .beo-edit-modal {
+    max-width: 100% !important;
+    margin: auto 0 !important;
+  }
+  /* Menu: allow horizontal scroll on very narrow screens */
+  .beo-menu-inner {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+/* ═══ BEO INTAKE SMALL PHONE (≤480px) ═══ */
+@media (max-width: 480px) {
+  .beo-header {
+    padding: 12px !important;
+  }
+  .beo-content {
+    padding: 10px 12px !important;
+    padding-bottom: 120px !important;
+  }
+  .beo-action-bar button {
+    min-width: 100px !important;
+    padding: 8px 12px !important;
+    font-size: 11px !important;
+  }
 }
 
 /* ═══ Locked overlay (blocks form when event is locked) ═══ */
@@ -394,4 +457,10 @@
 .reopen-locked-confirm:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+/* Override input placeholder — lighter font */
+.beo-override-input::placeholder {
+  color: rgba(255, 255, 255, 0.35);
+  font-weight: 400;
 }

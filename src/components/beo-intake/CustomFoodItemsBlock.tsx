@@ -70,13 +70,16 @@ export function CustomFoodItemsBlock({
 }: CustomFoodItemsBlockProps) {
   const [items, setItems] = useState<CustomFoodItem[]>(() => parseStoredText(value));
   const skipLoadRef = useRef(false);
+  const [isOpen, setIsOpen] = useState(() => parseStoredText(value).length > 0);
 
   useEffect(() => {
     if (skipLoadRef.current) {
       skipLoadRef.current = false; // Reset so next load (e.g. event switch) isn't skipped
       return;
     }
-    setItems(parseStoredText(value));
+    const parsed = parseStoredText(value);
+    setItems(parsed);
+    setIsOpen(parsed.length > 0);
   }, [value]);
 
   const save = useCallback(
@@ -101,6 +104,7 @@ export function CustomFoodItemsBlock({
       debounceRef.current = null;
     }
     setItems(next);
+    if (next.length === 0) setIsOpen(false);
     await save(next); // Save immediately so print page sees the change
   };
 
@@ -142,32 +146,35 @@ export function CustomFoodItemsBlock({
   };
 
   return (
-    <div style={{ marginTop: "8px" }}>
-      <label style={{ display: "block", fontSize: "11px", color: "#999", marginBottom: "6px", fontWeight: 600, ...labelStyle }}>
+    <div style={{ marginTop: "6px" }}>
+      <label style={{ display: "block", fontSize: "11px", color: "#999", marginBottom: "4px", fontWeight: 600, ...labelStyle }}>
         {label}
       </label>
-      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
         <button
           type="button"
           disabled={!canEdit}
-          onClick={addItem}
+          onClick={() => {
+            if (!isOpen && items.length === 0) {
+              setIsOpen(true);
+              addItem();
+            } else {
+              setIsOpen((prev) => !prev);
+            }
+          }}
           style={{
-            padding: "8px 14px",
-            border: "2px solid #22c55e",
-            borderRadius: "8px",
-            backgroundColor: "transparent",
-            color: "#22c55e",
-            fontSize: "13px",
-            cursor: "pointer",
-            fontWeight: 600,
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
             ...buttonStyle,
           }}
         >
           + Add Custom Item
         </button>
       </div>
-      <div style={{ maxHeight: 200, overflowY: "auto" }}>
-        {items.length > 0 && (
+      {isOpen && (
+        <div style={{ maxHeight: 220, overflowY: "auto", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 6, padding: 8, background: "rgba(0,0,0,0.25)" }}>
+          {items.length > 0 && (
           <div
             style={{
               display: "grid",
@@ -184,8 +191,8 @@ export function CustomFoodItemsBlock({
             <span>Sauce / dressing / modifier (or notes)</span>
             <span />
           </div>
-        )}
-        {items.map((it) => (
+          )}
+          {items.map((it) => (
           <div
             key={it.id}
             style={{
@@ -223,8 +230,9 @@ export function CustomFoodItemsBlock({
               ✕
             </button>
           </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

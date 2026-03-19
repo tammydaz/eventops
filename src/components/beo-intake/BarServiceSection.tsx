@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useEventStore } from "../../state/eventStore";
 import { FIELD_IDS } from "../../services/airtable/events";
-import { asSingleSelectName, asString } from "../../services/airtable/selectors";
+import { asBarServicePrimary, asString, asSingleSelectName } from "../../services/airtable/selectors";
 import { FormSection, Helper, inputStyle, labelStyle } from "./FormSection";
 
 export const BarServiceSection = () => {
@@ -15,7 +15,7 @@ export const BarServiceSection = () => {
     }
     
     const newDetails = {
-      barService: asSingleSelectName(selectedEventData[FIELD_IDS.BAR_SERVICE]),
+      barService: asBarServicePrimary(selectedEventData[FIELD_IDS.BAR_SERVICE]),
       sigDrink: asSingleSelectName(selectedEventData[FIELD_IDS.BAR_SIGNATURE_DRINK_YES_NO]),
       drinkName: asString(selectedEventData[FIELD_IDS.BAR_DRINK_NAME]),
       recipe: asString(selectedEventData[FIELD_IDS.BAR_RECIPE]),
@@ -54,6 +54,7 @@ export const BarServiceSection = () => {
           <option value="">Select</option>
           <option value="None">None</option>
           <option value="Full Bar Package">Full Bar Package</option>
+          <option value="Mimosa Bar">Mimosa Bar</option>
           <option value="Foodwerx bartender only">Foodwerx bartender only</option>
           <option value="Foodwerx Mixers Only">Foodwerx Mixers Only</option>
         </select>

@@ -6,10 +6,10 @@ import LeadsLandingPage from "./LeadsLandingPage";
 export type FOHViewMode = "leads" | "events";
 
 const INTAKE_FOH_NAV = [
-  { label: "Add Event", href: "/quick-intake" },
-  { label: "Open Event", href: "/beo-intake" },
+  { label: "Add Event", href: "/event/new" },
+  { label: "Event Overview", href: "/intake-foh" },
+  { label: "Open BEO Intake", href: "/beo-intake" },
   { label: "Leads", href: "/foh/leads" },
-  { label: "Events", href: "/intake-foh" },
 ];
 
 type IntakeFOHLandingPageProps = {

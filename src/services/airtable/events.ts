@@ -17,7 +17,9 @@ import {
 import {
   asAttachments,
   asBoolean,
+  asBarServicePrimary,
   asLinkedRecordIds,
+  asMultiSelectNames,
   asSingleSelectName,
   asString,
   asStringArray,
@@ -90,7 +92,7 @@ export const FIELD_IDS = {
   CUSTOM_BUFFET_CHINA: "fldtquSPyLWUEYX6P",
   DESSERTS: "flddPGfYJQxixWRq9",
   CUSTOM_DESSERTS: "fld95NEZsIfHpVvAk",
-  CUSTOM_DELIVERY_DELI: "fldCustomDeliTODO",      // Create Long Text in Airtable, replace with real ID
+  CUSTOM_DELIVERY_DELI: "fld5YbZaLNHvaBlKx",      // Custom Delivery DELI (Long Text)
   CUSTOM_ROOM_TEMP_DISPLAY: "fldCustomRoomTempTODO", // Create Long Text in Airtable, replace with real ID
   ROOM_TEMP_DISPLAY: "fld1373dtkeXhufoL",
   DISPLAYS: "fld9Yesa5cazu27W2",           // Display items (linked to Menu Items)
@@ -101,6 +103,8 @@ export const FIELD_IDS = {
   // ── Delivery-only (linked to Menu Items; no metal/china/appetizer lanes) ──
   DELIVERY_HOT: "fldowVMZrulZLR8X5",   // Entrées (used for hot delivery items)
   DELIVERY_DELI: "fldKRlrDNIJjxg9jn",  // Deli (linked to Menu Items)
+  FULL_SERVICE_DELI: "fldDV1mhz6i2ODDUE",    // DELI (Full Service) — linked to Menu Items
+  CUSTOM_FULL_SERVICE_DELI: "fldyf5pQRMIzYW0aj",    // Custom DELI (Full Service) (Long Text)
   BOXED_LUNCH_ORDERS: "fldHCcFbEH7bEwwkb",  // Boxed Lunch Orders (linked to Boxed Lunch Orders table)
   MENU_ITEM_SPECS: "fldX9ayAyjMqYT2Oi",
   LOADED: "fldrKmicpgzVJRGjp",
@@ -188,11 +192,11 @@ export const FIELD_IDS = {
   RENTALS_NEEDED: "fldKFjPzm1w9OoqOD",
 
   // ── Timeline & Logistics ──
-  DISPATCH_TIME: "fldbbHmaWqOBNUlJP",  // was wrong: flddmE3MvGNzCbt8K doesn't exist in Events
+  DISPATCH_TIME: "fld7m8eBhiJ58glyZ",  // CORE FIELD (source of truth). NEVER write to Dispatch Time (Print) fldbbHmaWqOBNUlJP
   EVENT_START_TIME: "fldDwDE87M9kFAIDn",  // duration (seconds) - was wrong ID
   EVENT_END_TIME: "fld7xeCnV751pxmWz",     // duration (seconds) - was wrong ID
-  FOODWERX_ARRIVAL: "fldFoodwerxArrivalResolved",  // Resolved at runtime via getFoodwerxArrivalFieldId(); fld598p was invalid
-  VENUE_ARRIVAL_TIME: "fld807MPvraEV8QvN",
+  FOODWERX_ARRIVAL: "fldMYjGf8dQPNiY4Y",  // CORE FIELD (authoritative). DO NOT resolve by name; never use getFoodwerxArrivalFieldId() for arrival.
+  VENUE_ARRIVAL_TIME: "fld807MPvraEV8QvN",  // Secondary/optional; NOT used for Event Arrival display or write
   // PARKING_LOAD_IN_NOTES deprecated — use LOAD_IN_NOTES (fldc75GFDDO1vv5rK)
 
   // ── Kitchen / Hot Food Logic ──
@@ -395,7 +399,7 @@ export async function getBarServiceFieldId(): Promise<string | null> {
   }
   const table = data.tables.find((t) => t.id === tableKey || t.name === tableKey);
   const barServiceFields = table?.fields.filter(
-    (f) => f.type === "singleSelect" && /bar\s*service/i.test(f.name)
+    (f) => (f.type === "singleSelect" || f.type === "multipleSelects") && /bar\s*service/i.test(f.name)
   ) ?? [];
   const field = barServiceFields.find((f) => /needed/i.test(f.name)) ?? barServiceFields[0];
   // Fall back to the confirmed field ID if Meta API doesn't return a match
@@ -542,9 +546,7 @@ export async function getBOHProductionFieldIds(): Promise<BOHProductionFieldIds 
 }
 
 /** Field IDs resolved at runtime (e.g. Bar Service by name) — allowed in PATCH */
-const additionalAllowedFieldIds = new Set<string>([
-  FIELD_IDS.FOODWERX_ARRIVAL,  // Placeholder; updateEventMultiple/createEvent replace with resolved ID
-]);
+const additionalAllowedFieldIds = new Set<string>([]);
 
 export const loadEvent = async (recordId: string): Promise<EventRecordData | AirtableErrorResult> => {
   const table = getEventsTable();
@@ -558,11 +560,7 @@ export const loadEvent = async (recordId: string): Promise<EventRecordData | Air
   if (isErrorResult(data)) return data;
 
   const fields = data.fields ?? {};
-  // Alias resolved FoodWerx Arrival field so UI can use FIELD_IDS.FOODWERX_ARRIVAL
-  const foodwerxArrivalId = await getFoodwerxArrivalFieldId();
-  if (foodwerxArrivalId && fields[foodwerxArrivalId] !== undefined) {
-    fields[FIELD_IDS.FOODWERX_ARRIVAL] = fields[foodwerxArrivalId];
-  }
+  // FOODWERX_ARRIVAL is hardcoded (fldMYjGf8dQPNiY4Y); no alias needed.
 
   return {
     id: data.id,
@@ -675,6 +673,235 @@ export const loadEvents = async (): Promise<EventListItem[] | AirtableErrorResul
     return item;
   });
 };
+
+/** Parse Airtable time value (seconds number or ISO dateTime string) to seconds since midnight. */
+function parseTimeToSecondsSinceMidnight(
+  value: number | string | null | undefined,
+  eventDateYyyyMmDd: string
+): number | null {
+  if (value === undefined || value === null) return null;
+  if (typeof value === "number" && !isNaN(value)) {
+    return value >= 0 && value < 24 * 3600 ? value : value % (24 * 3600);
+  }
+  if (typeof value === "string") {
+    const d = new Date(value);
+    if (isNaN(d.getTime())) return null;
+    const y = parseInt(eventDateYyyyMmDd.slice(0, 4), 10);
+    const m = parseInt(eventDateYyyyMmDd.slice(5, 7), 10) - 1;
+    const day = parseInt(eventDateYyyyMmDd.slice(8, 10), 10);
+    const localD = new Date(y, m, day, d.getUTCHours(), d.getUTCMinutes(), d.getUTCSeconds());
+    return localD.getHours() * 3600 + localD.getMinutes() * 60 + localD.getSeconds();
+  }
+  return null;
+}
+
+export type OpsChiefDayItem = {
+  id: string;
+  eventName: string;
+  eventDate: string;
+  eventType: "delivery" | "pickup" | "full-service";
+  venue: string;
+  venueAddress: string;
+  /** Current dispatch time (seconds since midnight), if set */
+  dispatchTimeSeconds: number | null;
+  /** Event/delivery start time (seconds since midnight) */
+  eventStartTimeSeconds: number | null;
+  /** Staff/venue arrival (seconds since midnight) for full-service */
+  arrivalTimeSeconds: number | null;
+  /** Suggested dispatch (seconds since midnight); formula-based */
+  suggestedDispatchSeconds: number | null;
+  /** Human-readable reason for suggestion */
+  suggestedReason: string;
+  /** Whether delivery has hot items (affects buffer); not yet from Airtable in this load */
+  foodMustGoHot?: boolean;
+};
+
+const DEFAULT_DRIVE_MINUTES = 30;
+const FULL_SERVICE_READY_BEFORE_ARRIVAL_MINUTES = 90;
+const DELIVERY_HOT_BUFFER_MINUTES = 15;
+
+/** Load events for a given date (YYYY-MM-DD) for Ops Chief: job # ordering and suggested dispatch times.
+ * Full-service: suggested = arrival − 1.5 hr. Delivery/pickup: suggested = delivery time − drive time − (hot buffer if applicable). */
+export async function loadEventsForOpsChiefDate(
+  dateYyyyMmDd: string
+): Promise<OpsChiefDayItem[] | AirtableErrorResult> {
+  const table = getEventsTable();
+  if (typeof table !== "string") return table;
+
+  const fwArrivalId = await getFoodwerxArrivalFieldId();
+  const params = new URLSearchParams();
+  params.set("pageSize", "100");
+  params.set("cellFormat", "json");
+  params.set("returnFieldsByFieldId", "true");
+  params.append("fields[]", FIELD_IDS.EVENT_NAME);
+  params.append("fields[]", FIELD_IDS.EVENT_DATE);
+  params.append("fields[]", FIELD_IDS.DISPATCH_TIME);
+  params.append("fields[]", FIELD_IDS.EVENT_TYPE);
+  params.append("fields[]", FIELD_IDS.EVENT_START_TIME);
+  params.append("fields[]", FIELD_IDS.VENUE_ARRIVAL_TIME);
+  params.append("fields[]", FIELD_IDS.VENUE);
+  params.append("fields[]", FIELD_IDS.VENUE_ADDRESS);
+  if (fwArrivalId) params.append("fields[]", fwArrivalId);
+
+  const formula = `DATESTR({Event Date}) = '${dateYyyyMmDd}'`;
+  params.set("filterByFormula", formula);
+
+  const data = await airtableFetch<AirtableListResponse<Record<string, unknown>>>(`/${table}?${params.toString()}`);
+  if (isErrorResult(data)) return data;
+
+  const eventTypeToCategory = (raw: string): "delivery" | "pickup" | "full-service" => {
+    const lower = (raw || "").toLowerCase();
+    if (lower.includes("pick") || lower.includes("pickup")) return "pickup";
+    if (lower.includes("full") || lower.includes("service")) return "full-service";
+    return "delivery";
+  };
+
+  const records = data.records.filter((record) => {
+    const fields = record.fields ?? {};
+    const eventType = (asSingleSelectName(fields[FIELD_IDS.EVENT_TYPE]) || asString(fields[FIELD_IDS.EVENT_TYPE]) || "").toLowerCase();
+    return eventType.includes("delivery") || eventType.includes("pick") || eventType.includes("full");
+  });
+
+  const items: OpsChiefDayItem[] = records.map((record) => {
+    const fields = record.fields ?? {};
+    const eventDate = typeof fields[FIELD_IDS.EVENT_DATE] === "string" ? (fields[FIELD_IDS.EVENT_DATE] as string).slice(0, 10) : dateYyyyMmDd;
+    const eventTypeRaw = asSingleSelectName(fields[FIELD_IDS.EVENT_TYPE]) || asString(fields[FIELD_IDS.EVENT_TYPE]) || "";
+    const eventType = eventTypeToCategory(eventTypeRaw);
+
+    const dispatchTimeSeconds = parseTimeToSecondsSinceMidnight(fields[FIELD_IDS.DISPATCH_TIME], eventDate);
+    const eventStartTimeSeconds = parseTimeToSecondsSinceMidnight(fields[FIELD_IDS.EVENT_START_TIME], eventDate);
+    const venueArrivalSeconds = parseTimeToSecondsSinceMidnight(fields[FIELD_IDS.VENUE_ARRIVAL_TIME], eventDate);
+    const fwArrivalSeconds = fwArrivalId ? parseTimeToSecondsSinceMidnight(fields[fwArrivalId], eventDate) : null;
+    const arrivalTimeSeconds = fwArrivalSeconds ?? venueArrivalSeconds;
+
+    let suggestedDispatchSeconds: number | null = null;
+    let suggestedReason = "";
+
+    if (eventType === "full-service") {
+      if (arrivalTimeSeconds != null) {
+        suggestedDispatchSeconds = Math.max(0, arrivalTimeSeconds - FULL_SERVICE_READY_BEFORE_ARRIVAL_MINUTES * 60);
+        suggestedReason = `Ready 1.5 hr before staff/venue arrival`;
+      } else {
+        suggestedReason = "Set staff/venue arrival to suggest dispatch";
+      }
+    } else {
+      if (eventStartTimeSeconds != null) {
+        const driveSec = DEFAULT_DRIVE_MINUTES * 60;
+        suggestedDispatchSeconds = Math.max(0, eventStartTimeSeconds - driveSec);
+        suggestedReason = `Delivery time − ${DEFAULT_DRIVE_MINUTES} min drive`;
+      } else {
+        suggestedReason = "Set delivery/event start time to suggest dispatch";
+      }
+    }
+
+    return {
+      id: record.id,
+      eventName: asString(fields[FIELD_IDS.EVENT_NAME]) || "Untitled",
+      eventDate,
+      eventType,
+      venue: asString(fields[FIELD_IDS.VENUE]) || "—",
+      venueAddress: asString(fields[FIELD_IDS.VENUE_ADDRESS]) || "—",
+      dispatchTimeSeconds,
+      eventStartTimeSeconds,
+      arrivalTimeSeconds,
+      suggestedDispatchSeconds,
+      suggestedReason,
+    };
+  });
+
+  items.sort((a, b) => {
+    const aSec = a.suggestedDispatchSeconds ?? a.dispatchTimeSeconds ?? 999999;
+    const bSec = b.suggestedDispatchSeconds ?? b.dispatchTimeSeconds ?? 999999;
+    return aSec - bSec;
+  });
+
+  return items;
+}
+
+export type OpsChiefExceptionItem = {
+  id: string;
+  eventName: string;
+  eventDate: string;
+  eventType: string;
+  venue: string;
+  dispatchTimeDisplay: string;
+  specialNotes: string;
+  dietaryNotes: string;
+  beoNotes: string;
+  opsExceptions: string;
+  /** True if any of the note fields have content */
+  hasAnyNote: boolean;
+};
+
+/** Load events in date range for Ops Chief exceptions/special-instructions view. Includes note fields. */
+export async function loadEventsWithExceptionsForRange(
+  startYyyyMmDd: string,
+  endYyyyMmDd: string
+): Promise<OpsChiefExceptionItem[] | AirtableErrorResult> {
+  const table = getEventsTable();
+  if (typeof table !== "string") return table;
+
+  const params = new URLSearchParams();
+  params.set("pageSize", "100");
+  params.set("cellFormat", "json");
+  params.set("returnFieldsByFieldId", "true");
+  params.append("fields[]", FIELD_IDS.EVENT_NAME);
+  params.append("fields[]", FIELD_IDS.EVENT_DATE);
+  params.append("fields[]", FIELD_IDS.DISPATCH_TIME);
+  params.append("fields[]", FIELD_IDS.EVENT_TYPE);
+  params.append("fields[]", FIELD_IDS.VENUE);
+  params.append("fields[]", FIELD_IDS.SPECIAL_NOTES);
+  params.append("fields[]", FIELD_IDS.DIETARY_NOTES);
+  params.append("fields[]", FIELD_IDS.BEO_NOTES);
+  params.append("fields[]", FIELD_IDS.OPS_EXCEPTIONS_SPECIAL_HANDLING);
+
+  const formula = `AND(DATESTR({Event Date}) >= '${startYyyyMmDd}', DATESTR({Event Date}) <= '${endYyyyMmDd}')`;
+  params.set("filterByFormula", formula);
+
+  const data = await airtableFetch<AirtableListResponse<Record<string, unknown>>>(`/${table}?${params.toString()}`);
+  if (isErrorResult(data)) return data;
+
+  const { secondsTo12HourString } = await import("../../utils/timeHelpers");
+
+  const items: OpsChiefExceptionItem[] = data.records.map((record) => {
+    const fields = record.fields ?? {};
+    const eventDate = typeof fields[FIELD_IDS.EVENT_DATE] === "string" ? (fields[FIELD_IDS.EVENT_DATE] as string).slice(0, 10) : "";
+    const rawDispatch = fields[FIELD_IDS.DISPATCH_TIME];
+    let dispatchTimeDisplay = "—";
+    if (typeof rawDispatch === "number" && !isNaN(rawDispatch)) {
+      dispatchTimeDisplay = secondsTo12HourString(rawDispatch);
+    } else if (typeof rawDispatch === "string") {
+      dispatchTimeDisplay = rawDispatch;
+    }
+    const specialNotes = asString(fields[FIELD_IDS.SPECIAL_NOTES]) || "";
+    const dietaryNotes = asString(fields[FIELD_IDS.DIETARY_NOTES]) || "";
+    const beoNotes = asString(fields[FIELD_IDS.BEO_NOTES]) || "";
+    const opsExceptions = asString(fields[FIELD_IDS.OPS_EXCEPTIONS_SPECIAL_HANDLING]) || "";
+    const hasAnyNote = !!(specialNotes.trim() || dietaryNotes.trim() || beoNotes.trim() || opsExceptions.trim());
+
+    return {
+      id: record.id,
+      eventName: asString(fields[FIELD_IDS.EVENT_NAME]) || "Untitled",
+      eventDate,
+      eventType: asSingleSelectName(fields[FIELD_IDS.EVENT_TYPE]) || asString(fields[FIELD_IDS.EVENT_TYPE]) || "—",
+      venue: asString(fields[FIELD_IDS.VENUE]) || "—",
+      dispatchTimeDisplay,
+      specialNotes,
+      dietaryNotes,
+      beoNotes,
+      opsExceptions,
+      hasAnyNote,
+    };
+  });
+
+  items.sort((a, b) => {
+    const d = a.eventDate.localeCompare(b.eventDate);
+    if (d !== 0) return d;
+    return a.dispatchTimeDisplay.localeCompare(b.dispatchTimeDisplay);
+  });
+
+  return items;
+}
 
 /** Load today's dispatch items (delivery, pickup, full-service) for autopopulation.
  * Server name: use serverNameFieldId when set, else CAPTAIN. Van #: use vanNumberFieldId when set.
@@ -897,7 +1124,7 @@ const SAVE_WHITELIST = new Set([
   "fld4OK9zVwr16qMIt",   // PRIMARY_CONTACT_PHONE
   // NOTE: fld9LnsDlMBTl7C1G is "Client Name Autofill - LEGACY" (formula) - READ ONLY, never write
   "fldMTRGNFa4pHbjY5",   // PRIMARY_CONTACT_ROLE
-  "fldbbHmaWqOBNUlJP",   // DISPATCH_TIME
+  "fld7m8eBhiJ58glyZ",   // DISPATCH_TIME (core field only; Print fldbbHmaWqOBNUlJP is formula — do not write)
   "fldDwDE87M9kFAIDn",   // EVENT_START_TIME
   "fld7xeCnV751pxmWz",   // EVENT_END_TIME
   "fld807MPvraEV8QvN",   // VENUE_ARRIVAL_TIME
@@ -919,6 +1146,7 @@ const SAVE_WHITELIST = new Set([
   "fldkEYTytozApTWxo",   // CLIENT_SUPPLIED_FOOD
   "fldL0tIU2I5oFI1gr",   // RELIGIOUS_RESTRICTIONS
   "fldhGj51bQQWLJSX0",   // DIETARY_NOTES
+  // DIETARY_SUMMARY (fldN3z0LgsiM8eE5C) — not in whitelist: add to SAVE_WHITELIST once the field exists in your Airtable base
   "fldlTlYgvPTIUzzMn",   // SPECIAL_NOTES
   "fld3C67SAUsTxCS8E",   // SERVICE_WARE
   "fldMKe8NjFvQABy5j",   // RENTALS
@@ -957,10 +1185,13 @@ const SAVE_WHITELIST = new Set([
   "flddPGfYJQxixWRq9",   // DESSERTS
   "fldowVMZrulZLR8X5",   // DELIVERY_HOT (Entrées)
   "fldKRlrDNIJjxg9jn",   // DELIVERY_DELI (Deli)
+  "fld5YbZaLNHvaBlKx",   // CUSTOM_DELIVERY_DELI
+  "fldDV1mhz6i2ODDUE",   // FULL_SERVICE_DELI (DELI - China/Metal)
+  "fldyf5pQRMIzYW0aj",   // CUSTOM_FULL_SERVICE_DELI
   "fldRb454yd3EQhcbo",   // BEVERAGES
   "fld7n9gmBURwXzrnB",   // MENU_ITEMS
   "fldX9ayAyjMqYT2Oi",   // MENU_ITEM_SPECS
-  "fldoMjEaGZek6pgXG",   // SPEC_OVERRIDE — editable override; SPEC_DEFAULT (fldt09eXgXYoMkrbT) is formula, never write
+  // SPEC_OVERRIDE (fldoMjEaGZek6pgXG) — add back when you create "Spec – Override" Long text field in Airtable
   "fldwdqfHaKXmqObE2",   // STATUS
   "fldUfOemMR4gpALQR",   // BOOKING_STATUS
   "fld84akZRtjijhCHQ",   // PAYMENT_STATUS
@@ -1018,7 +1249,6 @@ export const EDITABLE_FIELD_IDS = SAVE_WHITELIST;
 const PLACEHOLDER_FIELD_IDS = new Set([
   "fldCarafesPerTableTODO",
   "fldCoffeeMugTypeTODO",
-  "fldCustomDeliTODO",
   "fldCustomRoomTempTODO",
 ]);
 
@@ -1038,15 +1268,18 @@ export function filterToEditableOnly(fields: Record<string, unknown>): Record<st
 const DATE_TIME_FIELD_IDS = new Set([
   FIELD_IDS.DISPATCH_TIME,
   FIELD_IDS.VENUE_ARRIVAL_TIME,
+  FIELD_IDS.FOODWERX_ARRIVAL,
 ]);
 
 // Field IDs Airtable rejects — strip before PATCH (Bar Service now resolved dynamically by name)
 const STRIP_FIELD_IDS = new Set<string>([]);
 
-// Single-select fields that REQUIRE { name } format: normalize value to { name } or null before PATCH.
-// ⚠️ DO NOT add BAR_SERVICE (fldXm91QjyvVKbiyO) here — this base rejects { name } format
-// for that field and returns "Cannot parse value". Plain string or null is the correct format.
-const SINGLE_SELECT_FIELD_IDS = new Set<string>([]);
+// Single-select fields that REQUIRE { name } format: normalize value to { name } or null before PATCH/CREATE.
+// ⚠️ DO NOT add BAR_SERVICE or EVENT_TYPE here — this base rejects { name } format for those
+// and returns "Cannot parse value". Plain string or null is the correct format for both.
+const SINGLE_SELECT_FIELD_IDS = new Set<string>([
+  // EVENT_TYPE removed: send plain string "Full Service" etc. to avoid parse error
+]);
 
 /** Convert seconds (from midnight) + date string → ISO datetime for Airtable */
 function secondsAndDateToIso(seconds: number, dateStr: string): string {
@@ -1066,20 +1299,13 @@ export const updateEventMultiple = async (
   const table = getEventsTable();
   if (typeof table !== "string") return table;
 
-  // Resolve FOODWERX_ARRIVAL: replace placeholder with real field ID (fld598p was invalid)
   const obj = { ...updatesObject };
-  if (obj[FIELD_IDS.FOODWERX_ARRIVAL] !== undefined) {
-    const resolvedId = await getFoodwerxArrivalFieldId();
-    if (resolvedId) {
-      obj[resolvedId] = obj[FIELD_IDS.FOODWERX_ARRIVAL];
-    }
-    delete obj[FIELD_IDS.FOODWERX_ARRIVAL];
-  }
-
+  const barServiceFieldId = await getBarServiceFieldId();
+  const foodwerxArrivalFieldId = await getFoodwerxArrivalFieldId();
   const filteredFields: Record<string, unknown> = {};
   const blockedFields: string[] = [];
-  const eventDate = asString(obj[FIELD_IDS.EVENT_DATE]) || "";
-  const foodwerxArrivalFieldId = await getFoodwerxArrivalFieldId();
+  let eventDate = asString(obj[FIELD_IDS.EVENT_DATE]) || "";
+  if (eventDate && eventDate.length > 10) eventDate = eventDate.slice(0, 10);
 
   for (const [key, value] of Object.entries(obj)) {
     if (STRIP_FIELD_IDS.has(key)) {
@@ -1099,10 +1325,15 @@ export const updateEventMultiple = async (
     }
     if (value === undefined) continue;
 
-    // dateTime fields: convert seconds (number) → ISO string for Airtable (incl. resolved FOODWERX_ARRIVAL)
-    const isDateTimeField = DATE_TIME_FIELD_IDS.has(key) || (foodwerxArrivalFieldId && key === foodwerxArrivalFieldId);
+    // dateTime fields: convert seconds (number) → ISO string for Airtable (incl. FOODWERX_ARRIVAL)
+    const isDateTimeField = DATE_TIME_FIELD_IDS.has(key) || key === FIELD_IDS.FOODWERX_ARRIVAL || (foodwerxArrivalFieldId && key === foodwerxArrivalFieldId);
     if (isDateTimeField && typeof value === "number" && !isNaN(value)) {
       filteredFields[key] = secondsAndDateToIso(value, eventDate);
+    } else if (key === FIELD_IDS.EVENT_DATE && typeof value === "string" && value.length > 10) {
+      filteredFields[key] = value.slice(0, 10);
+    } else if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(value) && !isDateTimeField) {
+      blockedFields.push(key);
+      continue;
     } else if (SINGLE_SELECT_FIELD_IDS.has(key)) {
       if (value === null || value === "") {
         filteredFields[key] = null;
@@ -1112,6 +1343,17 @@ export const updateEventMultiple = async (
         filteredFields[key] = { name: value.trim() };
       } else {
         filteredFields[key] = null;
+      }
+    } else if ((barServiceFieldId && key === barServiceFieldId) || key === FIELD_IDS.BAR_SERVICE) {
+      // Bar Service Needed: Airtable multi-select expects an array of option names. Single string → [string].
+      if (Array.isArray(value)) {
+        filteredFields[key] = value.filter((v) => typeof v === "string" && v.trim()).map((v) => String(v).trim());
+      } else if (value === null || value === "") {
+        filteredFields[key] = [];
+      } else if (typeof value === "string" && value.trim()) {
+        filteredFields[key] = [value.trim()];
+      } else {
+        filteredFields[key] = [];
       }
     } else {
       filteredFields[key] = value;
@@ -1125,6 +1367,24 @@ export const updateEventMultiple = async (
     }
     console.warn("⚠️ BLOCKED:", blockedFields.length, "fields");
   }
+  const MENU_LINKED_FIELD_IDS = new Set([
+    FIELD_IDS.PASSED_APPETIZERS,
+    FIELD_IDS.PRESENTED_APPETIZERS,
+    FIELD_IDS.BUFFET_METAL,
+    FIELD_IDS.BUFFET_CHINA,
+    FIELD_IDS.DESSERTS,
+    FIELD_IDS.FULL_SERVICE_DELI,
+    FIELD_IDS.DELIVERY_DELI,
+    FIELD_IDS.ROOM_TEMP_DISPLAY,
+  ]);
+  const keys = Object.keys(filteredFields);
+  const allMenuFields = keys.length > 0 && keys.every((k) => MENU_LINKED_FIELD_IDS.has(k));
+  const allEmptyArrays = keys.every((k) => Array.isArray(filteredFields[k]) && (filteredFields[k] as unknown[]).length === 0);
+  if (allMenuFields && allEmptyArrays) {
+    console.log("⏭️ Skipping updateEventMultiple: all menu fields are empty arrays (likely race before state loaded)");
+    return { success: true };
+  }
+
   console.log("✅ updateEventMultiple - AFTER filter:", JSON.stringify(filteredFields, null, 2));
 
   if (Object.keys(filteredFields).length === 0) {
@@ -1379,7 +1639,7 @@ export const getBarServiceDetails = async (
 
   const fields = data.fields;
   return {
-    barServiceNeeded: asSingleSelectName(fields[FIELD_IDS.BAR_SERVICE_NEEDED]),
+    barServiceNeeded: asBarServicePrimary(fields[FIELD_IDS.BAR_SERVICE_NEEDED]),
     infusedWater: asSingleSelectName(fields[FIELD_IDS.INFUSED_WATER]),
     infusionIngredients: asString(fields[FIELD_IDS.INFUSION_INGREDIENTS]),
     dispenserCount:

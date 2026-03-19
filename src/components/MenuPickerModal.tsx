@@ -15,8 +15,15 @@ function getDisplayLabel(item: PickerItem): string {
   return childLines.length > 0 ? `${parent} – ${childLines.join(" – ")}` : parent;
 }
 
-/** Group by base name (before " – ", " – ", or "— "), keep only the longest display label in each group. */
-function preferMostDescriptive(items: PickerItem[]): PickerItem[] {
+/** Valid item: has Child Items OR has no " – " in name. Excludes malformed duplicates like "Chicken Marsala – Mushroom-Shallot Demi" (dash in name, no children). */
+function isValidPickerItem(item: PickerItem): boolean {
+  const hasChildItems = (item.childItems?.length ?? 0) > 0;
+  const hasDashInName = item.name.includes(" – ");
+  return hasChildItems || !hasDashInName;
+}
+
+/** Group by base name. When duplicates exist, prefer item with Child Items; ignore items without children. */
+function preferItemWithChildren(items: PickerItem[]): PickerItem[] {
   const DASH_SPLIT = /\s*[-–—]\s+/;
   const byBase = new Map<string, PickerItem[]>();
   for (const item of items) {
@@ -28,7 +35,9 @@ function preferMostDescriptive(items: PickerItem[]): PickerItem[] {
   }
   const result: PickerItem[] = [];
   for (const group of byBase.values()) {
-    const best = group.reduce((a, b) =>
+    const withChildren = group.filter((i) => (i.childItems?.length ?? 0) > 0);
+    const candidates = withChildren.length > 0 ? withChildren : group;
+    const best = candidates.reduce((a, b) =>
       getDisplayLabel(a).length >= getDisplayLabel(b).length ? a : b
     );
     result.push(best);
@@ -57,7 +66,8 @@ export const MenuPickerModal: React.FC<MenuPickerModalProps> = ({ onAdd, already
     fetchMenuItemsByCategory(pickerType)
       .then((results) => {
         const raw = results || [];
-        setItems(preferMostDescriptive(raw));
+        const valid = raw.filter(isValidPickerItem);
+        setItems(preferItemWithChildren(valid));
       })
       .catch(() => setItems([]))
       .finally(() => setLoading(false));
@@ -93,7 +103,7 @@ export const MenuPickerModal: React.FC<MenuPickerModalProps> = ({ onAdd, already
         style={{
           backgroundColor: "#1a1a1a",
           borderRadius: "12px",
-          border: "2px solid #ff6b6b",
+          border: "1px solid rgba(255,255,255,0.2)",
           maxWidth: "600px",
           width: "100%",
           maxHeight: "80vh",
@@ -103,9 +113,14 @@ export const MenuPickerModal: React.FC<MenuPickerModalProps> = ({ onAdd, already
         }}
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 style={{ margin: "0 0 12px 0", fontSize: "18px", fontWeight: "bold", color: "#e0e0e0", padding: "16px 16px 0" }}>
+        <h2 style={{ margin: "0 0 4px 0", fontSize: "16px", fontWeight: 600, color: "#fff", padding: "16px 16px 0" }}>
           {pickerTitle}
         </h2>
+        {pickerType === "deli" && (
+          <p style={{ margin: "0 0 12px 0", fontSize: 12, color: "rgba(255,255,255,0.6)", padding: "0 16px" }}>
+            These appear under DELI - DISPOSABLE on the BEO. Use Sandwich Platter for grouped options.
+          </p>
+        )}
 
         {!loading && items.length > 0 && (
           <div style={{ padding: "0 16px 12px" }}>
@@ -120,13 +135,13 @@ export const MenuPickerModal: React.FC<MenuPickerModalProps> = ({ onAdd, already
                 width: "100%",
                 padding: "10px 12px",
                 borderRadius: "6px",
-                border: "1px solid #444",
-                background: "#2a2a2a",
-                color: "#e0e0e0",
+                border: "1px solid rgba(255,255,255,0.15)",
+                background: "rgba(0,0,0,0.2)",
+                color: "#fff",
                 fontSize: "14px",
               }}
             />
-            <div style={{ marginTop: 8, fontSize: 12, color: "#888" }}>
+            <div style={{ marginTop: 8, fontSize: 12, color: "rgba(255,255,255,0.5)" }}>
               {filteredItems.length} of {items.length} items
             </div>
           </div>
@@ -134,9 +149,9 @@ export const MenuPickerModal: React.FC<MenuPickerModalProps> = ({ onAdd, already
 
         <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "16px" }}>
           {loading ? (
-            <div style={{ color: "#999", fontSize: "14px" }}>Loading items…</div>
+            <div style={{ color: "rgba(255,255,255,0.6)", fontSize: "14px" }}>Loading items…</div>
           ) : (
-            <div className="picker-list" style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+            <div className="picker-list" style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
               {filteredItems.map((item) => {
                 const isAdded = alreadyAddedIds.includes(item.id);
                 return (
@@ -144,12 +159,13 @@ export const MenuPickerModal: React.FC<MenuPickerModalProps> = ({ onAdd, already
                     key={item.id}
                     className={`picker-item ${isAdded ? "active" : ""}`}
                     style={{
-                      padding: "12px",
-                      backgroundColor: isAdded ? "#2a3a2a" : "#2a2a2a",
-                      border: `1px solid ${isAdded ? "#22c55e" : "#444"}`,
+                      padding: "10px 12px",
+                      backgroundColor: isAdded ? "rgba(255,255,255,0.06)" : "transparent",
+                      border: "1px solid rgba(255,255,255,0.1)",
                       borderRadius: "6px",
                       cursor: isAdded ? "default" : "pointer",
-                      color: "#e0e0e0",
+                      color: "#fff",
+                      fontSize: "14px",
                       transition: "all 0.2s",
                     }}
                     onClick={() => {
@@ -161,14 +177,14 @@ export const MenuPickerModal: React.FC<MenuPickerModalProps> = ({ onAdd, already
                     }}
                   >
                     <span style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                      {isAdded && <span style={{ color: "#22c55e" }}>✓</span>}
+                      {isAdded && <span style={{ color: "rgba(255,255,255,0.7)" }}>✓</span>}
                       {getDisplayLabel(item)}
                     </span>
                   </div>
                 );
               })}
               {filteredItems.length === 0 && !loading && (
-                <div style={{ textAlign: "center", padding: "32px", color: "#999" }}>
+                <div style={{ textAlign: "center", padding: "32px", color: "rgba(255,255,255,0.5)" }}>
                   {items.length === 0 ? "No items found" : "No matching items"}
                 </div>
               )}
@@ -176,7 +192,7 @@ export const MenuPickerModal: React.FC<MenuPickerModalProps> = ({ onAdd, already
           )}
         </div>
 
-        <div className="picker-actions" style={{ padding: "16px", borderTop: "1px solid #ff6b6b", display: "flex", gap: "12px", justifyContent: "flex-end" }}>
+        <div className="picker-actions" style={{ padding: "16px", borderTop: "1px solid rgba(255,255,255,0.1)", display: "flex", gap: "12px", justifyContent: "flex-end" }}>
           <button
             type="button"
             className="picker-done-button"
@@ -187,13 +203,14 @@ export const MenuPickerModal: React.FC<MenuPickerModalProps> = ({ onAdd, already
               usePickerStore.getState().closePicker();
             }}
             style={{
-              padding: "10px 20px",
-              background: "rgba(255,107,107,0.2)",
-              color: "#ff6b6b",
-              border: "2px solid #ff6b6b",
-              borderRadius: "8px",
+              padding: "8px 18px",
+              background: "rgba(255,255,255,0.08)",
+              color: "#fff",
+              border: "1px solid rgba(255,255,255,0.2)",
+              borderRadius: "6px",
               cursor: "pointer",
-              fontWeight: 600,
+              fontWeight: 500,
+              fontSize: "14px",
             }}
           >
             Done

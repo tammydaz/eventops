@@ -1,6 +1,6 @@
 /**
- * Sandwich Platter Config — Pick X from list. Aligns with foodwerx Corporate Catering Menu.
- * "Please pick up to 5 selections" / "pick up to 2 selections for every 10 guests"
+ * Sandwich Platter Config — Pick X from list. Aligns with foodwerx Corporate Catering Menu and BEO wording.
+ * Names match legacy BEOs so printed output looks the same (e.g. "Petite Cut Gourmet Sandwiches", "foodwerx Classic Sandwiches").
  */
 
 export type PlatterType = keyof typeof PLATTER_CHOICES;
@@ -10,6 +10,20 @@ export const PLATTER_CHOICES: Record<
   string,
   { label: string; options: string[]; maxPick: number; instruction: string }
 > = {
+  "foodwerx Classic Sandwiches - Topped w/ Sliced Roma Tomato & Green Leaf Lettuce": {
+    label: "foodwerx Classic Sandwiches - Topped w/ Sliced Roma Tomato & Green Leaf Lettuce",
+    options: [
+      "Honey Ham & American Cheese",
+      "Oven Roasted Turkey & Swiss",
+      "Roast Beef & White Cheddar",
+      "Grilled Chicken & Pepper Jack",
+      "Tuna Salad",
+      "White Grape Chicken Salad",
+      "Genoa Salami, Capicola & Provolone",
+    ],
+    maxPick: 5,
+    instruction: "Pick up to 5 selections per order",
+  },
   "Classic Sandwiches": {
     label: "Classic Sandwiches",
     options: [
@@ -99,6 +113,28 @@ export const PLATTER_CHOICES: Record<
     ],
     maxPick: 5,
     instruction: "Select your favorites from both sandwiches & wraps",
+  },
+  "Petite Cut Gourmet Sandwiches": {
+    label: "Petite Cut Gourmet Sandwiches",
+    options: [
+      "Charcuterie Sandwich - Honey-Goat Cheese Spread, Fig Jam, Olive Tapenade, Arugula, Prosciutto and Salami",
+      "Smoked Turkey - Thinly Sliced Green Apples, Toasted Walnuts, Brie, Green Leaf Lettuce, & Cranberry Orange Relish",
+      "Savory & Sweet Flank Steak - w/ Brie, Caramelized Onion, Arugula & Fig Jam",
+      "Chicken Salad - w/ Celery, Walnuts & Dried Cranberries",
+      "Prosciutto de Parma - Buffalo Mozzarella w/ Roasted Peppers Roma Tomato, Arugula, Cracked Pepper Basil Leaves",
+      "Acapulco Turkey BLT",
+      "The Greek",
+      "Honey Stung Chicken",
+      "Beef, Blue & Balsamic",
+      "Honey Ham & Brie",
+      "Napa Valley",
+      "Sharp Caprese",
+      "Buffalo Chicken Wrap",
+      "Turkey Club Wrap",
+      "Caesar Wrap",
+    ],
+    maxPick: 5,
+    instruction: "Pick selections — prints as on BEO with platter name + choices",
   },
   "Panini Press": {
     label: "Panini Press",

@@ -1,543 +1,204 @@
-import { useEffect, useMemo, useState, type ChangeEvent, type FormEvent } from "react";
-import { Link, useNavigate } from "react-router-dom";
-import { FIELD_IDS, createEvent, loadSingleSelectOptions, type SingleSelectOption } from "../services/airtable/events";
+import { useMemo, useState, type ChangeEvent, type FormEvent } from "react";
+import { useNavigate } from "react-router-dom";
+import { FIELD_IDS, createEvent } from "../services/airtable/events";
 import { isErrorResult } from "../services/airtable/selectors";
 import { useEventStore } from "../state/eventStore";
+import { inputStyle, labelStyle } from "../components/beo-intake/FormSection";
+import "./QuickIntake.css";
 
-/** Fallback when Meta API fails (schema.bases:read) — must match Airtable Event Type options */
-const FALLBACK_EVENT_TYPES: SingleSelectOption[] = [
-  { id: "Full Service", name: "Full Service" },
-  { id: "Delivery", name: "Delivery" },
-  { id: "Pickup", name: "Pickup" },
-  { id: "Grazing Display / Interactive Station", name: "Grazing Display / Interactive Station" },
-  { id: "Tasting", name: "Tasting" },
-];
+/** Only these four event types; sent to Airtable as plain string. */
+const EVENT_TYPES = [
+  { id: "Full Service", name: "Full Service", color: "#00bcd4" },   // turquoise — full service app-wide
+  { id: "Delivery",     name: "Delivery",     color: "#eab308" },   // yellow
+  { id: "Pickup",       name: "Pickup",       color: "#a855f7" },   // purple
+  { id: "Tasting",      name: "Tasting",      color: "#ec4899" },   // pink
+] as const;
 
-const initialForm = {
-  clientFirstName: "",
-  clientLastName: "",
-  clientPhone: "",
-  eventDate: "",
-  eventTypeId: "",
-};
+const initialForm = { clientFirstName: "", clientLastName: "", clientPhone: "", eventDate: "", eventTypeId: "" };
 
 export const QuickIntake = () => {
   const navigate = useNavigate();
-  const { loadEvents, selectEvent } = useEventStore();
+  const { loadEvents } = useEventStore();
   const [form, setForm] = useState(initialForm);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [submitMessage, setSubmitMessage] = useState<string | null>(null);
-  const [createdId, setCreatedId] = useState<string | null>(null);
-  const [eventTypeOptions, setEventTypeOptions] = useState<SingleSelectOption[]>(FALLBACK_EVENT_TYPES);
-  const [optionsError, setOptionsError] = useState<string | null>(null);
 
-  useEffect(() => {
-    let isMounted = true;
-
-    const loadOptions = async () => {
-      const result = await loadSingleSelectOptions([FIELD_IDS.EVENT_TYPE]);
-      if (!isMounted) return;
-      if (isErrorResult(result)) {
-        const msg = result.message ?? "Unable to load select options.";
-        const isSchemaScope =
-          msg.includes("Invalid permissions") ||
-          msg.includes("model was not found") ||
-          msg.includes("Metadata API 403") ||
-          msg.includes("403");
-        if (!isSchemaScope) setOptionsError(msg);
-        setEventTypeOptions(FALLBACK_EVENT_TYPES);
-        return;
-      }
-      const opts = result[FIELD_IDS.EVENT_TYPE] ?? [];
-      setEventTypeOptions(opts.length > 0 ? opts : FALLBACK_EVENT_TYPES);
-    };
-
-    loadOptions();
-
-    return () => {
-      isMounted = false;
-    };
-  }, []);
-
+  const hasType = Boolean(form.eventTypeId);
   const canSubmit = useMemo(
-    () =>
-      form.clientFirstName.trim().length > 0 &&
-      form.clientLastName.trim().length > 0 &&
-      form.clientPhone.trim().length > 0 &&
-      form.eventTypeId.trim().length > 0,
-    [form.clientFirstName, form.clientLastName, form.clientPhone, form.eventTypeId]
+    () => form.clientFirstName.trim().length > 0 && form.clientLastName.trim().length > 0 && form.clientPhone.trim().length > 0 && hasType,
+    [form, hasType]
   );
+  const accentColor = EVENT_TYPES.find((t) => t.id === form.eventTypeId)?.color ?? "#444";
 
+  const set = (f: keyof typeof initialForm) => (e: ChangeEvent<HTMLInputElement>) =>
+    setForm((p) => ({ ...p, [f]: e.target.value }));
 
-  const handleChange = (field: keyof typeof initialForm) => (event: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    setForm((prev) => ({
-      ...prev,
-      [field]: event.target.value,
-    }));
-  };
-
-  const validateForm = () => {
-    if (!form.clientFirstName.trim()) {
-      setError("Client First Name is required");
-      return false;
-    }
-    if (!form.clientLastName.trim()) {
-      setError("Client Last Name is required");
-      return false;
-    }
-    if (!form.clientPhone.trim()) {
-      setError("Client Phone is required");
-      return false;
-    }
-    if (!form.eventTypeId.trim()) {
-      setError("Event Type is required. Please select an event type.");
-      return false;
-    }
-    return true;
-  };
-
-  const handleSubmit = async (event: FormEvent) => {
-    event.preventDefault();
+  const handleSubmit = async (e: FormEvent) => {
+    e.preventDefault();
     setError(null);
-    setSubmitMessage(null);
-    setCreatedId(null);
-
-    if (!validateForm()) return;
-
-    const selectedOption = eventTypeOptions.find((opt) => opt.id === form.eventTypeId);
-    if (!selectedOption || !form.eventTypeId?.trim()) {
-      setError("Event Type is required. You must select an event type before creating the event.");
-      return;
-    }
-
+    if (!canSubmit) return;
+    const selected = EVENT_TYPES.find((o) => o.id === form.eventTypeId);
+    if (!selected) { setError("Please select an event type."); return; }
     setIsSubmitting(true);
-
-    const fields: Record<string, unknown> = {};
-
-    // Required fields
-    fields[FIELD_IDS.CLIENT_FIRST_NAME] = form.clientFirstName.trim();
-    fields[FIELD_IDS.CLIENT_LAST_NAME] = form.clientLastName.trim();
-    fields[FIELD_IDS.CLIENT_PHONE] = form.clientPhone.trim();
-    fields[FIELD_IDS.EVENT_TYPE] = selectedOption.name;
-
-    // Optional fields
-    if (form.eventDate && form.eventDate.trim()) {
-      fields[FIELD_IDS.EVENT_DATE] = form.eventDate;
-    }
-
-    console.log("📤 Fields being sent to Airtable:", JSON.stringify(fields, null, 2));
-
+    const fields: Record<string, unknown> = {
+      [FIELD_IDS.CLIENT_FIRST_NAME]: form.clientFirstName.trim(),
+      [FIELD_IDS.CLIENT_LAST_NAME]:  form.clientLastName.trim(),
+      [FIELD_IDS.CLIENT_PHONE]:      form.clientPhone.trim(),
+      [FIELD_IDS.EVENT_TYPE]:        selected.name, // plain string for Airtable
+    };
+    if (form.eventDate) fields[FIELD_IDS.EVENT_DATE] = form.eventDate;
     const result = await createEvent(fields);
-    console.log("📤 Create Event Request:", fields);
     if (isErrorResult(result)) {
-      console.error("❌ Create Event Error:", result);
       setError(result.message ?? "Unable to create event.");
       setIsSubmitting(false);
       return;
     }
-    console.log("✅ Create Event Success:", result);
-
-    setForm(initialForm);
-    setIsSubmitting(false);
-    loadEvents(); // refresh list in background
+    loadEvents();
     navigate(`/event/${result.id}`);
   };
 
-  const handleOpenFullIntake = async () => {
-    if (!createdId) return;
-    await selectEvent(createdId);
-    window.location.href = `/beo-intake/${createdId}`;
-  };
+  /* Same page background and card style as BEO intake / form sections */
+  const pageBg = "linear-gradient(135deg, #0a0a0a 0%, #1a0a0a 50%, #0f0a15 100%)";
+  const cardBorder = hasType ? accentColor : "#00bcd4";
+  const cardShadow = hasType
+    ? `0 15px 35px rgba(0,0,0,0.4), 0 0 20px ${accentColor}40, inset 0 0 0 1px rgba(255,255,255,0.04)`
+    : "0 15px 35px rgba(0,0,0,0.4), 0 0 20px rgba(0,188,212,0.25), inset 0 0 0 1px rgba(255,255,255,0.04)";
 
   return (
-    <div
-      style={{
-        minHeight: "100vh",
-        backgroundColor: "#1a1a1a",
-        padding: "24px",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-      }}
-    >
-      <div style={{ maxWidth: "600px", width: "100%", backgroundColor: "#1a1a1a" }}>
+    <div className="quick-intake-page" style={{ minHeight: "100vh", background: pageBg, color: "#e0e0e0", display: "flex", alignItems: "center", justifyContent: "center", padding: 24, fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif" }}>
+      <div style={{ width: "100%", maxWidth: 500 }}>
+        {/* Card — same section look as IntakePage (cyan/turquoise panels) */}
         <div
           style={{
-            textAlign: "center",
-            marginBottom: "32px",
-            borderBottom: "3px solid #ff6b6b",
-            paddingBottom: "24px",
+            background: "linear-gradient(135deg, rgba(10, 20, 30, 0.92), rgba(15, 18, 28, 0.9))",
+            border: `2px solid ${cardBorder}`,
+            borderRadius: 12,
+            padding: 28,
+            boxShadow: cardShadow,
+            transition: "border-color 0.2s, box-shadow 0.2s",
           }}
         >
-          <h1
+          {/* Logo / wordmark */}
+          <div style={{ textAlign: "center", marginBottom: 24 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: "#00bcd4", textTransform: "uppercase", letterSpacing: "0.15em", marginBottom: 4 }}>Werx</div>
+            <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: "#fff" }}>New Event</h1>
+            <p style={{ margin: "5px 0 0", fontSize: 12, color: "rgba(255,255,255,0.55)" }}>Name · Phone · Event Type — everything else in the BEO</p>
+          </div>
+
+          {/* Form card inner */}
+          <div
             style={{
-              fontSize: "36px",
-              fontWeight: "bold",
-              color: "#ff6b6b",
-              margin: "0 0 8px 0",
+              backgroundColor: "rgba(0,0,0,0.2)",
+              border: "1px solid rgba(255,255,255,0.1)",
+              borderRadius: 10,
+              padding: "24px 22px",
             }}
           >
-            🎯 Quick Intake
-          </h1>
-          <p style={{ color: "#888", fontSize: "14px", margin: 0 }}>
-            Get your event into the system in 60 seconds
-          </p>
-          <Link
-            to="/invoice-intake"
-            style={{
-              display: "inline-block",
-              marginTop: 12,
-              fontSize: 13,
-              color: "#4ade80",
-              textDecoration: "none",
-              fontWeight: 600,
-            }}
-          >
-            📄 Or upload an invoice PDF instead →
-          </Link>
-        </div>
-
-        <div
-          style={{
-            backgroundColor: "#2d2d2d",
-            border: "2px solid #ff6b6b",
-            borderRadius: "8px",
-            padding: "24px",
-            marginBottom: "20px",
-          }}
-        >
-          {optionsError ? (
-            <div
-              style={{
-                backgroundColor: "rgba(255, 193, 7, 0.1)",
-                border: "2px solid #ffc107",
-                borderRadius: "6px",
-                padding: "12px",
-                marginBottom: "16px",
-                color: "#ffc107",
-                fontSize: "13px",
-                fontWeight: "600",
-              }}
-            >
-              {optionsError}
-            </div>
-          ) : null}
-          {error ? (
-            <div
-              style={{
-                backgroundColor: "rgba(255, 107, 107, 0.1)",
-                border: "2px solid #ff6b6b",
-                borderRadius: "6px",
-                padding: "12px",
-                marginBottom: "16px",
-                color: "#ff6b6b",
-                fontSize: "13px",
-                fontWeight: "600",
-              }}
-            >
-              {error}
-            </div>
-          ) : null}
-
-          {submitMessage ? (
-            <div
-              style={{
-                backgroundColor: "rgba(76, 175, 80, 0.1)",
-                border: "2px solid #4caf50",
-                borderRadius: "6px",
-                padding: "12px",
-                marginBottom: "16px",
-                color: "#4caf50",
-                fontSize: "13px",
-                fontWeight: "600",
-              }}
-            >
-              {submitMessage}
-            </div>
-          ) : null}
-
           <form onSubmit={handleSubmit}>
-            <div
-              style={{
-                marginBottom: "24px",
-                paddingBottom: "20px",
-                borderBottom: "1px solid #444",
-              }}
-            >
-              <h3
-                style={{
-                  color: "#ff6b6b",
-                  fontSize: "14px",
-                  fontWeight: "700",
-                  textTransform: "uppercase",
-                  letterSpacing: "0.5px",
-                  margin: "0 0 16px 0",
-                }}
-              >
-                👤 Client Information (Required)
-              </h3>
 
-              <div style={{ marginBottom: "16px" }}>
-                <label
-                  style={{
-                    fontSize: "13px",
-                    fontWeight: "600",
-                    color: "#ff6b6b",
-                    display: "block",
-                    marginBottom: "6px",
-                  }}
-                >
-                  Client First Name *
-                </label>
-                <input
-                  type="text"
-                  placeholder="e.g. John"
-                  value={form.clientFirstName}
-                  onChange={handleChange("clientFirstName")}
-                  style={{
-                    width: "100%",
-                    padding: "12px",
-                    borderRadius: "6px",
-                    border: "2px solid #ff6b6b",
-                    backgroundColor: "#1a1a1a",
-                    color: "#fff",
-                    fontSize: "14px",
-                    outline: "none",
-                    boxSizing: "border-box",
-                  }}
-                />
+            {/* Error */}
+            {error && (
+              <div style={{ background: "rgba(255,107,107,0.1)", border: "1px solid #ff6b6b", borderRadius: 7, padding: "9px 13px", color: "#ff6b6b", fontSize: 12, fontWeight: 600, marginBottom: 16 }}>
+                {error}
               </div>
+            )}
 
-              <div style={{ marginBottom: "16px" }}>
-                <label
-                  style={{
-                    fontSize: "13px",
-                    fontWeight: "600",
-                    color: "#ff6b6b",
-                    display: "block",
-                    marginBottom: "6px",
-                  }}
-                >
-                  Client Last Name *
-                </label>
-                <input
-                  type="text"
-                  placeholder="e.g. Smith"
-                  value={form.clientLastName}
-                  onChange={handleChange("clientLastName")}
-                  style={{
-                    width: "100%",
-                    padding: "12px",
-                    borderRadius: "6px",
-                    border: "2px solid #ff6b6b",
-                    backgroundColor: "#1a1a1a",
-                    color: "#fff",
-                    fontSize: "14px",
-                    outline: "none",
-                    boxSizing: "border-box",
-                  }}
-                />
+            {/* Name row */}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
+              <div>
+                <label style={labelStyle}>First Name *</label>
+                <input type="text" placeholder="First" value={form.clientFirstName} onChange={set("clientFirstName")} style={inputStyle} autoFocus />
               </div>
-
-              <div style={{ marginBottom: "0" }}>
-                <label
-                  style={{
-                    fontSize: "13px",
-                    fontWeight: "600",
-                    color: "#ff6b6b",
-                    display: "block",
-                    marginBottom: "6px",
-                  }}
-                >
-                  Client Phone *
-                </label>
-                <input
-                  type="tel"
-                  placeholder="e.g. (555) 123-4567"
-                  value={form.clientPhone}
-                  onChange={handleChange("clientPhone")}
-                  style={{
-                    width: "100%",
-                    padding: "12px",
-                    borderRadius: "6px",
-                    border: "2px solid #ff6b6b",
-                    backgroundColor: "#1a1a1a",
-                    color: "#fff",
-                    fontSize: "14px",
-                    outline: "none",
-                    boxSizing: "border-box",
-                  }}
-                />
+              <div>
+                <label style={labelStyle}>Last Name *</label>
+                <input type="text" placeholder="Last" value={form.clientLastName} onChange={set("clientLastName")} style={inputStyle} />
               </div>
             </div>
 
-            <div
-              style={{
-                marginBottom: "24px",
-                paddingBottom: "20px",
-                borderBottom: "1px solid #444",
-              }}
-            >
-              <h3
-                style={{
-                  color: "#ff6b6b",
-                  fontSize: "14px",
-                  fontWeight: "700",
-                  textTransform: "uppercase",
-                  letterSpacing: "0.5px",
-                  margin: "0 0 16px 0",
-                }}
-              >
-                🎉 Event Type (Required – must be filled out)
-              </h3>
+            {/* Phone */}
+            <div style={{ marginBottom: 22 }}>
+              <label style={labelStyle}>Phone *</label>
+              <input type="tel" placeholder="(555) 123-4567" value={form.clientPhone} onChange={set("clientPhone")} style={inputStyle} />
+            </div>
 
-              <div style={{ marginBottom: "16px" }}>
-                <label
-                  style={{
-                    fontSize: "13px",
-                    fontWeight: "600",
-                    color: "#ff6b6b",
-                    display: "block",
-                    marginBottom: "6px",
-                  }}
-                >
-                  Event Type *
-                </label>
-                <p style={{ color: "#888", fontSize: "12px", margin: "0 0 8px 0" }}>
-                  This field must be filled out before creating the event.
-                </p>
-                <select
-                  value={form.eventTypeId}
-                  onChange={handleChange("eventTypeId")}
-                  required
-                  style={{
-                    width: "100%",
-                    padding: "12px",
-                    borderRadius: "6px",
-                    border: "2px solid #ff6b6b",
-                    backgroundColor: "#1a1a1a",
-                    color: "#fff",
-                    fontSize: "14px",
-                    outline: "none",
-                    cursor: "pointer",
-                    boxSizing: "border-box",
-                  }}
-                >
-                  <option value="" style={{ backgroundColor: "#2d2d2d", color: "#fff" }}>
-                    Select event type (required)...
-                  </option>
-                  {eventTypeOptions.map((option) => (
-                    <option key={option.id} value={option.id} style={{ backgroundColor: "#2d2d2d", color: "#fff" }}>
-                      {option.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div style={{ marginBottom: "0" }}>
-                <label
-                  style={{
-                    fontSize: "13px",
-                    fontWeight: "600",
-                    color: "#d4a574",
-                    display: "block",
-                    marginBottom: "6px",
-                  }}
-                >
-                  Event Date (optional)
-                </label>
-                <input
-                  type="date"
-                  value={form.eventDate}
-                  onChange={handleChange("eventDate")}
-                  style={{
-                    width: "100%",
-                    padding: "12px",
-                    borderRadius: "6px",
-                    border: "2px solid #d4a574",
-                    backgroundColor: "#1a1a1a",
-                    color: "#fff",
-                    fontSize: "14px",
-                    outline: "none",
-                    boxSizing: "border-box",
-                  }}
-                />
+            {/* Event Type — each button shaded with its color (same system as rest of app) */}
+            <div style={{ marginBottom: 22 }}>
+              <label style={labelStyle}>Event Type *</label>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 6 }}>
+                {EVENT_TYPES.map((opt) => {
+                  const active = form.eventTypeId === opt.id;
+                  const color = opt.color;
+                  return (
+                    <button
+                      key={opt.id}
+                      type="button"
+                      onClick={() => setForm((p) => ({ ...p, eventTypeId: opt.id }))}
+                      style={{
+                        padding: "8px 16px",
+                        borderRadius: 8,
+                        border: active ? `2px solid ${color}` : `1px solid ${color}66`,
+                        background: active ? `${color}28` : `${color}18`,
+                        color: active ? color : `${color}dd`,
+                        fontSize: 13,
+                        fontWeight: active ? 700 : 500,
+                        cursor: "pointer",
+                        transition: "all 0.15s",
+                        letterSpacing: "0.02em",
+                      }}
+                    >
+                      {opt.name}
+                    </button>
+                  );
+                })}
               </div>
             </div>
 
+            {/* Date — optional */}
+            <div style={{ marginBottom: 24 }}>
+              <label style={{ ...labelStyle, color: "rgba(255,255,255,0.3)" }}>
+                Event Date <span style={{ fontWeight: 400 }}>(optional)</span>
+              </label>
+              <input
+                type="date"
+                value={form.eventDate}
+                onChange={set("eventDate")}
+                style={{ ...inputStyle, color: form.eventDate ? "#e0e0e0" : "rgba(255,255,255,0.25)" }}
+              />
+            </div>
+
+            {/* Submit — same accent as rest of forms; neutral when disabled (no red) */}
             <button
               type="submit"
               disabled={isSubmitting || !canSubmit}
               style={{
                 width: "100%",
-                padding: "16px",
-                backgroundColor: "#ff6b6b",
-                color: "#fff",
-                border: "none",
-                borderRadius: "8px",
-                fontSize: "16px",
-                fontWeight: "700",
-                cursor: isSubmitting || !canSubmit ? "not-allowed" : "pointer",
-                opacity: isSubmitting || !canSubmit ? 0.6 : 1,
-                marginTop: "24px",
-                marginBottom: "16px",
+                padding: "12px",
+                borderRadius: 8,
+                border: canSubmit ? `2px solid ${accentColor}` : "1px solid rgba(255,255,255,0.12)",
+                background: canSubmit ? `${accentColor}28` : "rgba(255,255,255,0.05)",
+                color: canSubmit ? accentColor : "rgba(255,255,255,0.4)",
+                fontSize: 14,
+                fontWeight: 700,
+                cursor: canSubmit && !isSubmitting ? "pointer" : "not-allowed",
+                transition: "all 0.2s",
+                marginBottom: 8,
+                letterSpacing: "0.03em",
+                boxShadow: canSubmit ? `0 2px 12px ${accentColor}40` : "none",
               }}
             >
-              {isSubmitting ? "⏳ Creating Event..." : "✅ Create Event"}
+              {isSubmitting ? "Creating…" : hasType ? "Create Event →" : "Pick an event type above"}
             </button>
-          </form>
 
-          {createdId ? (
             <button
               type="button"
-              onClick={handleOpenFullIntake}
-              style={{
-                width: "100%",
-                padding: "14px",
-                backgroundColor: "#2d2d2d",
-                color: "#ff6b6b",
-                border: "2px solid #ff6b6b",
-                borderRadius: "8px",
-                fontSize: "14px",
-                fontWeight: "700",
-                cursor: "pointer",
-                marginBottom: "16px",
-              }}
+              onClick={() => navigate("/")}
+              style={{ width: "100%", padding: "9px", background: "rgba(255,255,255,0.05)", color: "rgba(255,255,255,0.6)", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 8, fontSize: 12, cursor: "pointer" }}
             >
-              Open Full BEO Intake
+              Back to Dashboard
             </button>
-          ) : null}
 
-          <button
-            type="button"
-            onClick={() => {
-              window.location.href = "/";
-            }}
-            style={{
-              width: "100%",
-              padding: "12px",
-              backgroundColor: "transparent",
-              color: "#888",
-              border: "1px solid #444",
-              borderRadius: "8px",
-              fontSize: "13px",
-              cursor: "pointer",
-            }}
-          >
-            Back to Dashboard
-          </button>
-
-          <p
-            style={{
-              textAlign: "center",
-              color: "#666",
-              fontSize: "12px",
-              margin: "16px 0 0 0",
-            }}
-          >
-            * = Required field (Client Name, Phone, and Event Type must be filled out)
-          </p>
+          </form>
+        </div>
         </div>
       </div>
     </div>

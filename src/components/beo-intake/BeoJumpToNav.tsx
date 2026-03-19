@@ -9,32 +9,25 @@ type JumpSection = {
 };
 
 const SECTIONS: JumpSection[] = [
-  { id: "beo-section-client",      label: "Client & Contact",         icon: "👤" },
+  { id: "beo-section-header",      label: "Event details/Header",     icon: "📋", hint: "Client, venue, date, guests, times, FW staff" },
   { id: "beo-section-event",       label: "Event Details",             icon: "📅" },
-  { id: "beo-section-venue",       label: "Venue / Location",          icon: "📍" },
-  { id: "beo-section-menu",        label: "Menu & Beverages",          icon: "🍽️" },
-  { id: "beo-section-bar",         label: "Bar Service",               icon: "🍸" },
+  { id: "beo-section-menu",        label: "Menu",                     icon: "🍽️" },
+  { id: "beo-section-bar",         label: "Beverage Services",         icon: "🍸" },
   { id: "beo-section-serviceware", label: "Plates / Serviceware",      icon: "🥂" },
   { id: "beo-section-timeline",    label: "Timeline",                  icon: "⏱️" },
   { id: "beo-section-notes",       label: "Notes / Logistics",         icon: "📝", hint: "Kitchen, allergies, ops exceptions" },
 ];
 
-function jumpTo(sectionId: string) {
-  // Expand the section first
+/** Shared jump logic: expand section, scroll, flash. Used by nav and by ?section= on BEO Intake. */
+export function jumpToBeoSection(sectionId: string) {
   window.dispatchEvent(new CustomEvent("beo-jump-to-section", { detail: sectionId }));
-
-  // After expand animation has had time to start, scroll to the element
   setTimeout(() => {
     const el = document.getElementById(sectionId);
     if (!el) return;
-
-    // Use getBoundingClientRect + window.scrollY for reliable cross-browser scroll
     const rect = el.getBoundingClientRect();
-    const HEADER_OFFSET = 80; // account for sticky toolbar
+    const HEADER_OFFSET = 80;
     const targetY = rect.top + window.scrollY - HEADER_OFFSET;
     window.scrollTo({ top: targetY, behavior: "smooth" });
-
-    // Flash highlight so the user knows where they landed
     el.style.outline = "2px solid #ff6b6b";
     el.style.outlineOffset = "3px";
     setTimeout(() => {
@@ -42,6 +35,10 @@ function jumpTo(sectionId: string) {
       el.style.outlineOffset = "";
     }, 1400);
   }, 200);
+}
+
+function jumpTo(sectionId: string) {
+  jumpToBeoSection(sectionId);
 }
 
 export const BeoJumpToNav = () => {

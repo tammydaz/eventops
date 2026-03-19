@@ -41,10 +41,10 @@ export const DepartmentCircles = () => {
               className="subfolder-item"
               role="button"
               tabIndex={0}
-              onClick={() => (window.location.href = "/quick-intake")}
+              onClick={() => (window.location.href = "/event/new")}
               onKeyDown={(event) => {
                 if (event.key === "Enter" || event.key === " ") {
-                  window.location.href = "/quick-intake";
+                  window.location.href = "/event/new";
                 }
               }}
             >

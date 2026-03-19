@@ -10,6 +10,7 @@ import type { QuestionTargetDepartment } from "../state/questionStore";
 import type { EventListItem } from "../services/airtable/events";
 import { AcceptTransferModal } from "../components/AcceptTransferModal";
 import { AskFOHPopover } from "../components/AskFOHPopover";
+import { NewEventModal } from "../components/NewEventModal";
 
 /* ═══════════════════════════════════════════
    EVENT DATA (from Airtable)
@@ -165,7 +166,7 @@ const CAT_COLORS: Record<string, string> = {
 type NavItem = { label: string; href: string; expandable?: boolean; subtitle?: string };
 const NAV: NavItem[] = [
   { label: "Dashboard", href: "/" },
-  { label: "Add Event", href: "/quick-intake" },
+  { label: "Add Event", href: "/event/new" },
   { label: "Open Event", href: "/beo-intake" },
   { label: "Departments", href: "#departments", expandable: true },
   { label: "Watchtower", href: "/watchtower", subtitle: "Papa Chulo Watchtower" },
@@ -178,7 +179,7 @@ const NAV: NavItem[] = [
 const DEPT_ITEMS = [
   { id: "kitchen",   label: "Kitchen",                href: "/kitchen" },
   { id: "logistics", label: "Delivery & Operations Hub", href: "/delivery-command" },
-  { id: "intake",    label: "Central Command Center", href: "/quick-intake" },
+  { id: "intake",    label: "Central Command Center", href: "/event/new" },
   { id: "intake_foh", label: "Intake/FOH",            href: "/intake-foh" },
   { id: "flair",     label: "Flair/Equipment",       href: "/flair" },
   { id: "feedback",  label: "Suggestions / Questions / Bugs", href: "/feedback-issues" },
@@ -210,6 +211,7 @@ export default function DashboardPage() {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [taglineSettled, setTaglineSettled] = useState(false);
   const [pendingAcceptEvent, setPendingAcceptEvent] = useState<EventData | null>(null);
+  const [showNewEventModal, setShowNewEventModal] = useState(false);
   const searchWrapRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {

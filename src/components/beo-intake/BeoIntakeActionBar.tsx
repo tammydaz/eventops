@@ -1,5 +1,8 @@
 import { useState, useEffect } from "react";
 import { useEventStore } from "../../state/eventStore";
+import { syncShadowToEvent } from "../../services/airtable/eventMenu";
+
+type ShadowMenuRow = { id: string; section: string; catalogItemId: string | null; catalogItemName?: string };
 
 type BeoIntakeActionBarProps = {
   eventId: string | null;
@@ -7,9 +10,11 @@ type BeoIntakeActionBarProps = {
   onReopenRequest?: () => void;
   /** Show Send to BOH button (full intake only, when not locked) */
   onSendToBOH?: () => void;
+  /** Current shadow menu rows — used to sync to Events before print when load returns 0 */
+  shadowMenuRows?: ShadowMenuRow[];
 };
 
-export const BeoIntakeActionBar = ({ eventId, isLocked, onReopenRequest, onSendToBOH }: BeoIntakeActionBarProps) => {
+export const BeoIntakeActionBar = ({ eventId, isLocked, onReopenRequest, onSendToBOH, shadowMenuRows }: BeoIntakeActionBarProps) => {
   const { setFields, saveCurrentEvent, saveError: storeSaveError, setSaveError: clearStoreError } = useEventStore();
   const [isSaving, setIsSaving] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
@@ -70,6 +75,10 @@ export const BeoIntakeActionBar = ({ eventId, isLocked, onReopenRequest, onSendT
       const err = useEventStore.getState().saveError;
       setSaveError(err ?? "Failed to save before opening BEO");
     } else {
+      const injectedRows = (shadowMenuRows ?? [])
+        .filter((r) => r.section && r.catalogItemId?.startsWith("rec"))
+        .map((r) => ({ section: r.section, catalogItemId: r.catalogItemId! }));
+      await syncShadowToEvent(eventId, injectedRows.length > 0 ? { injectedRows } : undefined);
       window.location.href = `/beo-print/${eventId}`;
     }
     setIsSaving(false);

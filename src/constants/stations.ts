@@ -28,13 +28,16 @@ export const STATION_NOTES_FIELD_ID = "fldCf9uvjWQdtJkZs";
 
 /** Station Type single-select options (from Stations table). Fallback when Airtable returns none. */
 export const STATION_TYPE_OPTIONS = [
+  "Build Your Own Sliders",
+  "Slider Station",
+  "All American Station",
+  "All-American",
   "Carving Station",
   "Grande Charcuterie Display",
   "Pasta Flight Presentation",
   "Viva La Pasta",
   "Tex-Mex",
   "Make Your Own Ramen Noodle Bar",
-  "All-American",
   "Street Food Station",
   "Hi Bachi Station",
   "Chicken & Waffle Station",

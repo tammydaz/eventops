@@ -5,6 +5,8 @@ import { CATEGORY_MAP } from "../../constants/menuCategories";
 
 const MENU_ITEMS_TABLE_ID_DEFAULT = "tbl0aN33DGG6R1sPZ";
 const MENU_ITEMS_DESCRIPTION_NAME_FIELD_ID = "fldQ83gpgOmMxNMQw"; // Description Name/Formula (display label)
+/** Field name for filterByFormula (Airtable formulas use names, not IDs) */
+const MENU_ITEMS_DESCRIPTION_NAME_FIELD_NAME = "Description Name";
 const MENU_ITEMS_CHILD_ITEMS_FIELD_ID = "fldIu6qmlUwAEn2W9"; // Child Items (linked)
 
 export interface MenuItemRecord {
@@ -119,6 +121,120 @@ export async function fetchMenuItemsByCategory(categoryKey: string): Promise<Men
       name,
       childItems: childItems.length > 0 ? childItems : undefined,
     };
+  });
+}
+
+/** Fetch menu item display names by record IDs. Returns id -> name. */
+export async function fetchMenuItemNamesByIds(
+  ids: string[]
+): Promise<Record<string, string>> {
+  const tableId = getMenuItemsTable() || MENU_ITEMS_TABLE_ID_DEFAULT;
+  const result: Record<string, string> = {};
+  if (ids.length === 0) return result;
+  const cleanIds = ids.filter((id) => id && id.startsWith("rec"));
+  for (let i = 0; i < cleanIds.length; i += 10) {
+    const chunk = cleanIds.slice(i, i + 10);
+    const formula = `OR(${chunk.map((id) => `RECORD_ID()='${id}'`).join(",")})`;
+    const params = new URLSearchParams();
+    params.set("filterByFormula", formula);
+    params.set("returnFieldsByFieldId", "true");
+    params.append("fields[]", MENU_ITEMS_DESCRIPTION_NAME_FIELD_ID);
+    const path = `/${tableId}?${params.toString()}`;
+    const data = await airtableFetch<{
+      records?: Array<{ id: string; fields: Record<string, unknown> }>;
+      error?: { message?: string };
+    }>(path);
+    if (isErrorResult(data) || !data?.records) continue;
+    for (const rec of data.records) {
+      const nameRaw = rec.fields[MENU_ITEMS_DESCRIPTION_NAME_FIELD_ID];
+      const name =
+        typeof nameRaw === "string"
+          ? nameRaw
+          : nameRaw && typeof nameRaw === "object" && "name" in nameRaw
+            ? String((nameRaw as { name: string }).name)
+            : rec.id;
+      result[rec.id] = cleanDisplayName(name || "") || rec.id;
+    }
+  }
+  return result;
+}
+
+/** Fetch child items (id + name) for a catalog menu item from its Child Items field. Does NOT modify Menu Items. */
+export async function fetchMenuItemChildren(
+  catalogItemId: string
+): Promise<{ id: string; name: string }[] | AirtableErrorResult> {
+  if (!catalogItemId) return [];
+  const tableId = getMenuItemsTable() || MENU_ITEMS_TABLE_ID_DEFAULT;
+
+  // If Airtable returns the linked value as a display name (instead of a record id),
+  // resolve it back to the Menu Items record id so we can read its linked Child Items.
+  let catalogRecId: string | null = catalogItemId.startsWith("rec") ? catalogItemId : null;
+  if (!catalogRecId) {
+    const escaped = String(catalogItemId).replace(/"/g, '\\"');
+    const params = new URLSearchParams();
+    // filterByFormula must use field NAME not field ID
+    const formula = `FIND("${escaped}", {${MENU_ITEMS_DESCRIPTION_NAME_FIELD_NAME}})`;
+    params.set("filterByFormula", formula);
+    params.set("maxRecords", "1");
+    const path = `/${tableId}?${params.toString()}`;
+    const data = await airtableFetch<{
+      records?: Array<{ id: string; fields: Record<string, unknown> }>;
+      error?: { message?: string };
+    }>(path);
+    if (isErrorResult(data) || !data?.records?.[0]) return [];
+    catalogRecId = data.records[0].id;
+  }
+
+  // Use list GET with RECORD_ID() filter and returnFieldsByFieldId=true (same pattern as BeoPrintPage).
+  // Single-record endpoint with fields[] causes 422; list GET avoids that.
+  const listParams = new URLSearchParams();
+  listParams.set("filterByFormula", `RECORD_ID()='${catalogRecId}'`);
+  listParams.set("maxRecords", "1");
+  listParams.set("returnFieldsByFieldId", "true");
+  listParams.append("fields[]", MENU_ITEMS_CHILD_ITEMS_FIELD_ID);
+  listParams.append("fields[]", MENU_ITEMS_DESCRIPTION_NAME_FIELD_ID);
+  const data = await airtableFetch<{
+    records?: Array<{ id: string; fields: Record<string, unknown> }>;
+    error?: { message?: string };
+  }>(`/${tableId}?${listParams.toString()}`);
+  if (isErrorResult(data) || !data?.records?.[0]) return [];
+  const fields = data.records[0].fields;
+  const raw = fields[MENU_ITEMS_CHILD_ITEMS_FIELD_ID];
+  // Linked field returns array of rec IDs when returnFieldsByFieldId=true
+
+  const childValues: Array<{ id?: string; name: string }> = [];
+  const pushItem = (item: unknown) => {
+    if (typeof item === "string") {
+      childValues.push({ id: item.startsWith("rec") ? item : undefined, name: item });
+      return;
+    }
+    if (!item || typeof item !== "object") return;
+    const maybeId = typeof (item as { id?: unknown }).id === "string" ? String((item as { id?: string }).id) : undefined;
+    const maybeName = typeof (item as { name?: unknown }).name === "string" ? String((item as { name?: string }).name) : undefined;
+    const fallbackName = maybeId ? maybeId : undefined;
+    const name = maybeName ?? fallbackName;
+    if (name) childValues.push({ id: maybeId, name });
+  };
+
+  if (Array.isArray(raw)) {
+    raw.forEach(pushItem);
+  } else {
+    // Linked-record field can be returned as a single value/object depending on Airtable configuration.
+    pushItem(raw);
+  }
+
+  if (childValues.length === 0) return [];
+
+  const recChildIds = childValues.map((c) => c.id).filter((id): id is string => Boolean(id) && id.startsWith("rec"));
+  const namesById = recChildIds.length ? await fetchMenuItemNamesByIds(recChildIds) : {};
+
+  // Preserve ordering from the linked field.
+  return childValues.map((c) => {
+    if (c.id && c.id.startsWith("rec")) {
+      return { id: c.id, name: namesById[c.id] ?? c.name };
+    }
+    // No record id available; still render it as a component name.
+    return { id: c.name, name: c.name };
   });
 }
 

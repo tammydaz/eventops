@@ -1,0 +1,19 @@
+/* Quick Intake — same coloring as BEO intake / form sections so it doesn’t look lost */
+
+.quick-intake-page {
+  /* Override global red focus: use turquoise to match form accent */
+}
+.quick-intake-page input:focus,
+.quick-intake-page select:focus,
+.quick-intake-page textarea:focus {
+  outline: none !important;
+  border-color: rgba(0, 188, 212, 0.6) !important;
+  box-shadow: 0 0 0 1px rgba(0, 188, 212, 0.25) !important;
+}
+
+.quick-intake-page button:disabled {
+  /* Neutral when disabled, not red */
+  border-color: rgba(255, 255, 255, 0.12) !important;
+  background: rgba(255, 255, 255, 0.05) !important;
+  color: rgba(255, 255, 255, 0.4) !important;
+}

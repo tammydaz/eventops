@@ -203,6 +203,7 @@ export function EventsPipeline({ title = "10-Day Pipeline", compact = false, dep
   const [todaysTasksOpen, setTodaysTasksOpen] = useState(false);
   const [todaysTasksLoading, setTodaysTasksLoading] = useState(false);
   const [followUpTask, setFollowUpTask] = useState<Task | null>(null);
+  const [newClientHelpOpen, setNewClientHelpOpen] = useState(false);
 
   const isFOH = departmentContext === "intake_foh";
 
@@ -401,12 +402,18 @@ export function EventsPipeline({ title = "10-Day Pipeline", compact = false, dep
         isChangeConfirmation={!!pendingAcceptEvent && !!deptKey && (isProductionFrozen(pendingAcceptEvent) || needsChangeConfirmation(pendingAcceptEvent, deptKey))}
         isProductionFrozen={!!pendingAcceptEvent && isProductionFrozen(pendingAcceptEvent)}
       />
-      {title && !isFOH && (
+      {title && (
         <div style={{ marginBottom: 16 }}>
           <h2 style={{ fontSize: 18, fontWeight: 700, color: "#fff", margin: "0 0 4px 0" }}>{title}</h2>
           <p style={{ fontSize: 13, color: "rgba(255,255,255,0.6)", margin: 0 }}>
             {today} – {endDate10} · {events.length} events
+            {departmentContext === "intake_foh" && " · Click an event to open Event Overview (booking steps)"}
           </p>
+          {departmentContext === "intake_foh" && (
+            <p style={{ fontSize: 12, color: "rgba(255,255,255,0.45)", margin: "6px 0 0 0" }}>
+              <strong style={{ color: "rgba(255,255,255,0.7)" }}>New client?</strong> Use the <strong>Show steps</strong> button in the toolbar below, or click <strong>Add Event</strong> in the sidebar to start.
+            </p>
+          )}
         </div>
       )}
 
@@ -454,17 +461,30 @@ export function EventsPipeline({ title = "10-Day Pipeline", compact = false, dep
         </div>
         <div className="dp-tabs-right">
           {isFOH && (
-            <div className="dp-todays-tasks-toggle">
-              <button
-                type="button"
-                className={`dp-todays-tasks-btn ${todaysTasksOpen ? "open" : ""}`}
-                onClick={() => setTodaysTasksOpen((o) => !o)}
-                aria-expanded={todaysTasksOpen}
-              >
-                <span>Today&apos;s Tasks ({todaysTasks.length})</span>
-                <span className="dp-todays-tasks-caret">{todaysTasksOpen ? "▾" : "▸"}</span>
-              </button>
-            </div>
+            <>
+              <div className="dp-todays-tasks-toggle">
+                <button
+                  type="button"
+                  className={`dp-new-client-help-btn ${newClientHelpOpen ? "open" : ""}`}
+                  onClick={() => setNewClientHelpOpen((o) => !o)}
+                  aria-expanded={newClientHelpOpen}
+                >
+                  <span>New client? Show steps</span>
+                  <span className="dp-todays-tasks-caret">{newClientHelpOpen ? "▾" : "▸"}</span>
+                </button>
+              </div>
+              <div className="dp-todays-tasks-toggle">
+                <button
+                  type="button"
+                  className={`dp-todays-tasks-btn ${todaysTasksOpen ? "open" : ""}`}
+                  onClick={() => setTodaysTasksOpen((o) => !o)}
+                  aria-expanded={todaysTasksOpen}
+                >
+                  <span>Today&apos;s Tasks ({todaysTasks.length})</span>
+                  <span className="dp-todays-tasks-caret">{todaysTasksOpen ? "▾" : "▸"}</span>
+                </button>
+              </div>
+            </>
           )}
           <div className="dp-toolbar-view">
             <span className="dp-toolbar-view-label">View</span>
@@ -502,6 +522,19 @@ export function EventsPipeline({ title = "10-Day Pipeline", compact = false, dep
           </div>
         </div>
       </div>
+
+      {/* ── New client step-by-step (FOH only, collapsible) — visible in app when showing staff ── */}
+      {isFOH && newClientHelpOpen && (
+        <div className="dp-todays-tasks-panel dp-new-client-help-panel">
+          <ol className="dp-new-client-help-steps">
+            <li>Click <strong>Add Event</strong> in the left sidebar.</li>
+            <li>Enter <strong>first name</strong>, <strong>last name</strong>, <strong>phone</strong>, <strong>event type</strong>, and <strong>date</strong> (optional).</li>
+            <li>Click <strong>Create Event →</strong>. You’ll be taken to <strong>BEO Intake</strong> for that event.</li>
+            <li>From BEO Intake, click <strong>Event Overview</strong> in the header to track <strong>invoice</strong>, <strong>deposit</strong>, <strong>contract</strong>, <strong>questionnaire</strong>, and <strong>reminders</strong>.</li>
+            <li>Fill the rest of the BEO as you get info. When it’s complete, use <strong>Send to BOH</strong> so the event is finalized.</li>
+          </ol>
+        </div>
+      )}
 
       {/* ── Today's Tasks (FOH only, collapsible) ── */}
       {isFOH && todaysTasksOpen && (

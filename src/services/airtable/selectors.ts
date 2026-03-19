@@ -42,6 +42,23 @@ export const asStringArray = (value: unknown): string[] => {
   return value.filter((item): item is string => typeof item === "string");
 };
 
+/** Multi-select field: returns array of option names. Handles array of strings or array of { name }. Backward compat: single string → [string]. */
+export const asMultiSelectNames = (value: unknown): string[] => {
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => (typeof item === "string" ? item : item && typeof item === "object" && "name" in item ? String((item as { name?: string }).name ?? "") : ""))
+      .filter(Boolean);
+  }
+  if (typeof value === "string" && value.trim()) return [value];
+  return [];
+};
+
+/** Bar Service field (single or multi-select): returns first selected option for display. Use when field may be array. */
+export const asBarServicePrimary = (value: unknown): string => {
+  const arr = asMultiSelectNames(value);
+  return arr[0] ?? "";
+};
+
 export const asLinkedRecordIds = (value: unknown): string[] => {
   if (!Array.isArray(value)) return [];
   return value

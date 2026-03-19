@@ -1,8 +1,8 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useEventStore } from "../../state/eventStore";
 import { useAuthStore } from "../../state/authStore";
 import { FIELD_IDS, getFoodwerxArrivalFieldId } from "../../services/airtable/events";
-import { asSingleSelectName, asString } from "../../services/airtable/selectors";
+import { asSingleSelectName, asString, asBoolean } from "../../services/airtable/selectors";
 import { FormSection, Helper, inputStyle, labelStyle } from "./FormSection";
 import type { EventCore } from "./types";
 import { secondsToTimeString, MINUTE_INCREMENTS } from "../../utils/timeHelpers";
@@ -32,7 +32,8 @@ const SERVICE_STYLE_OPTIONS = [
   "Plated",
 ];
 
-export const EventCoreSection = ({ isDelivery = false }: { isDelivery?: boolean }) => {
+/** When true, date/guests/times/captain are shown in HeaderSection instead; this section only shows Event Type, Occasion, Service Style, and delivery-specific fields. */
+export const EventCoreSection = ({ isDelivery = false, hideHeaderFields = false }: { isDelivery?: boolean; hideHeaderFields?: boolean }) => {
   const { selectedEventId, selectedEventData, setFields } = useEventStore();
   const { user } = useAuthStore();
   const isUpdatingRef = useRef(false);
@@ -48,6 +49,9 @@ export const EventCoreSection = ({ isDelivery = false }: { isDelivery?: boolean 
     eventEndTime: "",
     eventArrivalTime: "",
   });
+  const [captain, setCaptain] = useState("");
+  const [deliveryNotes, setDeliveryNotes] = useState("");
+  const [foodMustGoHot, setFoodMustGoHot] = useState(false);
 
   useEffect(() => {
     getFoodwerxArrivalFieldId().then(setFwArrivalFieldId);
@@ -67,6 +71,9 @@ export const EventCoreSection = ({ isDelivery = false }: { isDelivery?: boolean 
         eventEndTime: "",
         eventArrivalTime: "",
       });
+      setCaptain("");
+      setDeliveryNotes("");
+      setFoodMustGoHot(false);
       return;
     }
     const arrivalFieldId = fwArrivalFieldId ?? FIELD_IDS.VENUE_ARRIVAL_TIME;
@@ -84,6 +91,9 @@ export const EventCoreSection = ({ isDelivery = false }: { isDelivery?: boolean 
       eventEndTime: secondsToTimeString(selectedEventData[FIELD_IDS.EVENT_END_TIME]),
       eventArrivalTime: secondsToTimeString(arrivalRaw),
     });
+    setCaptain(asString(selectedEventData[FIELD_IDS.CAPTAIN]));
+    setDeliveryNotes(asString(selectedEventData[FIELD_IDS.LOAD_IN_NOTES]));
+    setFoodMustGoHot(asBoolean(selectedEventData[FIELD_IDS.FOOD_MUST_GO_HOT]));
   }, [selectedEventId, selectedEventData, fwArrivalFieldId]);
 
   const canEdit = Boolean(selectedEventId);
@@ -113,8 +123,22 @@ export const EventCoreSection = ({ isDelivery = false }: { isDelivery?: boolean 
     }
   };
 
+  const eventSummary = useMemo(() => {
+    if (hideHeaderFields) return details.eventType ? details.eventType : undefined;
+    const parts: string[] = [];
+    if (details.eventDate) {
+      const d = new Date(details.eventDate + "T12:00:00");
+      if (!isNaN(d.getTime())) parts.push(d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }));
+    }
+    if (details.guestCount) parts.push(`${details.guestCount} guests`);
+    if (details.eventStartTime) parts.push(details.eventStartTime);
+    return parts.length ? parts.join("  ·  ") : undefined;
+  }, [hideHeaderFields, details.eventType, details.eventDate, details.guestCount, details.eventStartTime]);
+
   return (
-    <FormSection title={isDelivery ? "Delivery Event Details" : "Event Details"} dotColor={isDelivery ? "#22c55e" : undefined} isDelivery={isDelivery} sectionId="beo-section-event">
+    <FormSection title={isDelivery ? "Delivery Event Details" : "Event Details"} subtitle={eventSummary} dotColor={isDelivery ? "#eab308" : undefined} isDelivery={isDelivery} sectionId="beo-section-event">
+      {!hideHeaderFields && (
+        <>
       <div>
         <label style={labelStyle}>Event Date</label>
         <input
@@ -154,6 +178,8 @@ export const EventCoreSection = ({ isDelivery = false }: { isDelivery?: boolean 
         />
         <Helper>Total expected guests. Used for quantities, pack-out, and staffing.</Helper>
       </div>
+        </>
+      )}
 
       <div>
         <label style={labelStyle}>Event Type</label>
@@ -231,8 +257,10 @@ export const EventCoreSection = ({ isDelivery = false }: { isDelivery?: boolean 
         </>
       )}
 
-      {((isDelivery ? ["dispatchTime"] : ["dispatchTime", "eventStartTime", "eventEndTime", "eventArrivalTime"]) as const).map((key) => {
-        const fieldIdMap = {
+      {(() => {
+        const timeKeys = isDelivery ? (["dispatchTime"] as const) : (hideHeaderFields ? ([] as const) : (["dispatchTime", "eventStartTime", "eventEndTime", "eventArrivalTime"] as const));
+        return timeKeys.map((key) => {
+        const fieldIdMap: Record<typeof timeKeys[number], string> = {
           dispatchTime: FIELD_IDS.DISPATCH_TIME,
           eventStartTime: FIELD_IDS.EVENT_START_TIME,
           eventEndTime: FIELD_IDS.EVENT_END_TIME,
@@ -308,8 +336,67 @@ export const EventCoreSection = ({ isDelivery = false }: { isDelivery?: boolean 
             </div>
           </div>
         );
-      })}
+      });
+      })()}
 
+      {isDelivery && (
+        <>
+          {/* ── Send Hot ── */}
+          <div style={{ gridColumn: "1 / -1" }}>
+            <label style={{ ...labelStyle, display: "flex", alignItems: "center", gap: 10, cursor: canEdit ? "pointer" : "default" }}>
+              <input
+                type="checkbox"
+                checked={foodMustGoHot}
+                disabled={!canEdit}
+                onChange={async (e) => {
+                  const value = e.target.checked;
+                  setFoodMustGoHot(value);
+                  await saveField(FIELD_IDS.FOOD_MUST_GO_HOT, value);
+                }}
+                style={{ width: 18, height: 18, accentColor: "#ef4444", cursor: canEdit ? "pointer" : "default" }}
+              />
+              <span style={{ color: foodMustGoHot ? "#ef4444" : undefined, fontWeight: foodMustGoHot ? 700 : undefined }}>
+                SEND HOT 🔥
+              </span>
+            </label>
+            <Helper>Check if kitchen must send this order hot. Triggers kitchen flag on BEO.</Helper>
+          </div>
+
+          {!hideHeaderFields && (
+          <div>
+            <label style={labelStyle}>Employee / Driver</label>
+            <input
+              type="text"
+              value={captain}
+              disabled={!canEdit}
+              onChange={(e) => setCaptain(e.target.value)}
+              onBlur={async (e) => {
+                await saveField(FIELD_IDS.CAPTAIN, e.target.value);
+              }}
+              style={inputStyle}
+              placeholder="e.g. JA/JM"
+            />
+            <Helper>Staff initials or name assigned to this delivery.</Helper>
+          </div>
+          )}
+
+          {/* ── Delivery Notes ── */}
+          <div style={{ gridColumn: "1 / -1" }}>
+            <label style={labelStyle}>Delivery Notes</label>
+            <textarea
+              value={deliveryNotes}
+              disabled={!canEdit}
+              onChange={(e) => setDeliveryNotes(e.target.value)}
+              onBlur={async (e) => {
+                await saveField(FIELD_IDS.LOAD_IN_NOTES, e.target.value);
+              }}
+              style={{ ...inputStyle, minHeight: 72, resize: "vertical" }}
+              placeholder="e.g. One story building. Between middle/high schools. Bring lighter for sternos."
+            />
+            <Helper>Building access, parking, load-in details, and equipment reminders for the driver.</Helper>
+          </div>
+        </>
+      )}
     </FormSection>
   );
 };

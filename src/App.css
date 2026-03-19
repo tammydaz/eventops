@@ -181,3 +181,47 @@ body {
   position: relative;
   z-index: 3;
 }
+
+/* ================================
+   MOBILE RESPONSIVE
+=================================== */
+@media (max-width: 768px) {
+  .hero-overlay {
+    padding-top: 40px;
+    margin-bottom: 40px;
+  }
+  .hero-title {
+    font-size: 2rem;
+    letter-spacing: 1px;
+  }
+  .hero-tagline {
+    font-size: 1rem;
+    margin-top: 8px;
+  }
+  .module-grid {
+    grid-template-columns: 1fr;
+    gap: 16px;
+    padding: 20px 16px;
+    max-width: 100%;
+  }
+  .module-card {
+    padding: 20px;
+    font-size: 1.1rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .hero-title {
+    font-size: 1.6rem;
+  }
+  .hero-tagline {
+    font-size: 0.9rem;
+  }
+  .module-grid {
+    padding: 16px 12px;
+  }
+  .module-card {
+    padding: 16px;
+    font-size: 1rem;
+  }
+}

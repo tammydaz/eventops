@@ -2,7 +2,8 @@
  * DepartmentHeader — Shared header for all department landing pages.
  * Left: Logo, Werx, tagline, search. Center: Large Werx + tagline. Right: Copyright.
  */
-import { useState, useRef, useEffect, useMemo, useDeferredValue } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
+import { createPortal } from "react-dom";
 import { Link, useNavigate } from "react-router-dom";
 import { useEventStore } from "../state/eventStore";
 import "./DepartmentHeader.css";
@@ -37,9 +38,10 @@ export function DepartmentHeader({ departmentContext, rightActions, embedded, le
   const navigate = useNavigate();
   const { events: rawEvents, loadEvents, selectEvent } = useEventStore();
   const [searchQuery, setSearchQuery] = useState("");
-  const deferredSearchQuery = useDeferredValue(searchQuery);
   const [taglineSettled, setTaglineSettled] = useState(false);
+  const [dropdownRect, setDropdownRect] = useState<DOMRect | null>(null);
   const searchWrapRef = useRef<HTMLDivElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const t = setTimeout(() => setTaglineSettled(true), 120000); // 2 minutes
@@ -74,11 +76,35 @@ export function DepartmentHeader({ departmentContext, rightActions, embedded, le
     );
   }, [eventDataList, searchQuery]);
 
+  // Position dropdown below input (for portal)
+  useEffect(() => {
+    if (!searchQuery.trim() || !searchInputRef.current) {
+      setDropdownRect(null);
+      return;
+    }
+    const update = () => {
+      if (searchInputRef.current) {
+        const rect = searchInputRef.current.getBoundingClientRect();
+        setDropdownRect(new DOMRect(rect.left, rect.bottom + 4, Math.max(rect.width, 280), 0));
+      }
+    };
+    update();
+    window.addEventListener("scroll", update, true);
+    window.addEventListener("resize", update);
+    return () => {
+      window.removeEventListener("scroll", update, true);
+      window.removeEventListener("resize", update);
+    };
+  }, [searchQuery]);
+
   useEffect(() => {
     const handleClick = (e: MouseEvent) => {
-      if (searchQuery.trim() && searchWrapRef.current && !searchWrapRef.current.contains(e.target as Node)) {
-        setSearchQuery("");
-      }
+      const target = e.target as Node;
+      if (!searchQuery.trim()) return;
+      if (searchWrapRef.current?.contains(target)) return;
+      const portal = document.getElementById("dept-search-dropdown-portal");
+      if (portal?.contains(target)) return;
+      setSearchQuery("");
     };
     document.addEventListener("mousedown", handleClick);
     return () => document.removeEventListener("mousedown", handleClick);
@@ -97,9 +123,46 @@ export function DepartmentHeader({ departmentContext, rightActions, embedded, le
     setTimeout(() => selectEvent(evt.id), 0);
   };
 
+  const embeddedDropdown =
+    embedded && searchQuery.trim().length > 0 && dropdownRect
+      ? createPortal(
+          <div
+            id="dept-search-dropdown-portal"
+            className="dp-search-dropdown dp-search-dropdown-portal"
+            style={{
+              position: "fixed",
+              left: dropdownRect.left,
+              top: dropdownRect.top,
+              minWidth: dropdownRect.width,
+              zIndex: 10000,
+            }}
+          >
+            {searchResults.length === 0 ? (
+              <div className="dp-search-item dp-search-empty">No events match</div>
+            ) : (
+              searchResults.slice(0, 8).map((evt) => (
+                <button
+                  key={evt.id}
+                  type="button"
+                  className="dp-search-item"
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    handleSelectEvent(evt);
+                  }}
+                >
+                  <span className="dp-search-item-name">{evt.name}</span>
+                  <span className="dp-search-item-meta">{evt.time} · {evt.guests} guests</span>
+                </button>
+              ))
+            )}
+          </div>,
+          document.body
+        )
+      : null;
+
   if (embedded) {
     return (
-      <header className="dp-header">
+      <header className="dp-header dp-header-overflow-visible">
         <div className="dp-header-top" style={{ gap: 12 }}>
           {rightActions}
           <span className="dp-header-copyright">
@@ -111,34 +174,16 @@ export function DepartmentHeader({ departmentContext, rightActions, embedded, le
             {leftSlot}
             <div className="dp-search-wrap" ref={searchWrapRef}>
               <input
+                ref={searchInputRef}
                 className="dp-search"
                 placeholder="Search events..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 autoComplete="off"
+                aria-expanded={searchQuery.trim().length > 0}
+                aria-haspopup="listbox"
               />
-              {searchQuery.trim().length > 0 && (
-                <div className="dp-search-dropdown">
-                  {searchResults.length === 0 ? (
-                    <div className="dp-search-item dp-search-empty">No events match</div>
-                  ) : (
-                    searchResults.slice(0, 8).map((evt) => (
-                      <button
-                        key={evt.id}
-                        type="button"
-                        className="dp-search-item"
-                        onMouseDown={(e) => {
-                          e.preventDefault();
-                          handleSelectEvent(evt);
-                        }}
-                      >
-                        <span className="dp-search-item-name">{evt.name}</span>
-                        <span className="dp-search-item-meta">{evt.time} · {evt.guests} guests</span>
-                      </button>
-                    ))
-                  )}
-                </div>
-              )}
+              {embeddedDropdown}
             </div>
           </div>
           <div className="dp-header-title dp-werx-brand">

@@ -1,9 +1,9 @@
 import React, { useEffect, useRef, useState, useCallback } from "react";
-import { useParams, Link } from "react-router-dom";
+import { useParams, Link, useNavigate } from "react-router-dom";
 import "./EventOverviewPage.css";
 import { useEventStore } from "../state/eventStore";
-import { FIELD_IDS, uploadAttachment } from "../services/airtable/events";
-import { asString, asSingleSelectName, asAttachments } from "../services/airtable/selectors";
+import { FIELD_IDS, uploadAttachment, createEvent } from "../services/airtable/events";
+import { asString, asSingleSelectName, asAttachments, asBoolean, isErrorResult } from "../services/airtable/selectors";
 import type { AttachmentItem } from "../services/airtable/events";
 import {
   loadTasksForEvent,
@@ -23,11 +23,162 @@ import { FollowUpModal, type FollowUpResult } from "../components/FollowUpModal"
 const SECTION_COLORS = {
   summary: { accent: "#ff6b6b", border: "rgba(204,0,0,0.35)", bg: "rgba(204,0,0,0.06)", btnBg: "rgba(204,0,0,0.12)" },
   steps: { accent: "#3b82f6", border: "rgba(59,130,246,0.35)", bg: "rgba(59,130,246,0.06)", btnBg: "rgba(59,130,246,0.12)" },
+  call: { accent: "#f97316", border: "rgba(249,115,22,0.35)", bg: "rgba(249,115,22,0.06)", btnBg: "rgba(249,115,22,0.12)" },
   actions: { accent: "#22c55e", border: "rgba(34,197,94,0.35)", bg: "rgba(34,197,94,0.06)", btnBg: "rgba(34,197,94,0.12)" },
   documents: { accent: "#00bcd4", border: "rgba(0,188,212,0.35)", bg: "rgba(0,188,212,0.06)", btnBg: "rgba(0,188,212,0.12)" },
   tasks: { accent: "#eab308", border: "rgba(234,179,8,0.35)", bg: "rgba(234,179,8,0.06)", btnBg: "rgba(234,179,8,0.12)" },
   notes: { accent: "#a855f7", border: "rgba(168,85,247,0.35)", bg: "rgba(168,85,247,0.06)", btnBg: "rgba(168,85,247,0.12)" },
 } as const;
+
+/** Event types for new-event form (minimal create; rest filled in Header on BEO intake) */
+const NEW_EVENT_TYPES = [
+  { id: "Full Service", name: "Full Service", color: "#00bcd4" },
+  { id: "Delivery", name: "Delivery", color: "#eab308" },
+  { id: "Pickup", name: "Pickup", color: "#a855f7" },
+  { id: "Tasting", name: "Tasting", color: "#ec4899" },
+] as const;
+
+/** Minimal form to create an event. No Individual/Business/Contact here — that’s all in the Header section on BEO intake. */
+function NewEventForm({ onCreated, onBack }: { onCreated: (eventId: string) => void; onBack: () => void }) {
+  const [name, setName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [eventTypeId, setEventTypeId] = useState("");
+  const [eventDate, setEventDate] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const canSubmit = name.trim().length > 0 && phone.trim().length > 0 && eventTypeId.length > 0;
+  const accent = NEW_EVENT_TYPES.find((t) => t.id === eventTypeId)?.color ?? "#00bcd4";
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    if (!canSubmit) return;
+    const selected = NEW_EVENT_TYPES.find((o) => o.id === eventTypeId);
+    if (!selected) return;
+    setIsSubmitting(true);
+    const fields: Record<string, unknown> = {
+      [FIELD_IDS.CLIENT_FIRST_NAME]: name.trim(),
+      [FIELD_IDS.CLIENT_LAST_NAME]: "",
+      [FIELD_IDS.CLIENT_PHONE]: phone.trim(),
+      [FIELD_IDS.EVENT_TYPE]: selected.name,
+    };
+    if (eventDate) fields[FIELD_IDS.EVENT_DATE] = eventDate;
+    const result = await createEvent(fields);
+    if (isErrorResult(result)) {
+      setError(result.message ?? "Unable to create event.");
+      setIsSubmitting(false);
+      return;
+    }
+    onCreated(result.id);
+  };
+
+  return (
+    <div style={styles.container}>
+      <div style={{ ...styles.card, maxWidth: 520 }}>
+        <div style={{ marginBottom: 24, display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
+          <h1 style={{ ...styles.title, margin: 0 }}>New event</h1>
+          <button type="button" className="ev-overview-back" style={{ ...styles.backLink, background: "none", border: "none", cursor: "pointer", font: "inherit" }} onClick={onBack}>← Back</button>
+        </div>
+        <p style={{ fontSize: 14, color: "rgba(255,255,255,0.7)", marginBottom: 20 }}>
+          Add the minimum to create the event. Then open <strong>Event Overview</strong> and use <strong>Header</strong> (or BEO Intake) to fill client type, venue, date, guests, times, and staff in one place.
+        </p>
+        <div style={{ background: "rgba(0,0,0,0.2)", border: `1px solid ${accent}44`, borderRadius: 10, padding: 24 }}>
+          <form onSubmit={handleSubmit}>
+            {error && (
+              <div style={{ background: "rgba(255,107,107,0.1)", border: "1px solid #ff6b6b", borderRadius: 7, padding: "9px 13px", color: "#ff6b6b", fontSize: 12, fontWeight: 600, marginBottom: 16 }}>
+                {error}
+              </div>
+            )}
+            <div style={{ marginBottom: 14 }}>
+              <label style={{ display: "block", fontSize: 11, color: "rgba(255,255,255,0.6)", marginBottom: 4, fontWeight: 600 }}>Name *</label>
+              <input
+                type="text"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Person or business name"
+                style={{ width: "100%", padding: "8px 10px", borderRadius: 6, border: "1px solid rgba(255,255,255,0.15)", background: "rgba(0,0,0,0.25)", color: "#e0e0e0", fontSize: 14 }}
+              />
+            </div>
+            <div style={{ marginBottom: 14 }}>
+              <label style={{ display: "block", fontSize: 11, color: "rgba(255,255,255,0.6)", marginBottom: 4, fontWeight: 600 }}>Phone *</label>
+              <input
+                type="tel"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                placeholder="(555) 123-4567"
+                style={{ width: "100%", padding: "8px 10px", borderRadius: 6, border: "1px solid rgba(255,255,255,0.15)", background: "rgba(0,0,0,0.25)", color: "#e0e0e0", fontSize: 14 }}
+              />
+            </div>
+            <div style={{ marginBottom: 14 }}>
+              <label style={{ display: "block", fontSize: 11, color: "rgba(255,255,255,0.6)", marginBottom: 6, fontWeight: 600 }}>Event type *</label>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                {NEW_EVENT_TYPES.map((opt) => {
+                  const active = eventTypeId === opt.id;
+                  return (
+                    <button
+                      key={opt.id}
+                      type="button"
+                      onClick={() => setEventTypeId(opt.id)}
+                      style={{
+                        padding: "8px 14px",
+                        borderRadius: 8,
+                        border: active ? `2px solid ${opt.color}` : `1px solid ${opt.color}66`,
+                        background: active ? `${opt.color}28` : `${opt.color}18`,
+                        color: opt.color,
+                        fontSize: 13,
+                        fontWeight: active ? 700 : 500,
+                        cursor: "pointer",
+                      }}
+                    >
+                      {opt.name}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+            <div style={{ marginBottom: 20 }}>
+              <label style={{ display: "block", fontSize: 11, color: "rgba(255,255,255,0.4)", marginBottom: 4, fontWeight: 600 }}>Event date <span style={{ fontWeight: 400 }}>(optional)</span></label>
+              <input
+                type="date"
+                value={eventDate}
+                onChange={(e) => setEventDate(e.target.value)}
+                style={{ width: "100%", padding: "8px 10px", borderRadius: 6, border: "1px solid rgba(255,255,255,0.15)", background: "rgba(0,0,0,0.25)", color: "#e0e0e0", fontSize: 14 }}
+              />
+            </div>
+            <button
+              type="submit"
+              disabled={!canSubmit || isSubmitting}
+              style={{
+                width: "100%",
+                padding: 12,
+                borderRadius: 8,
+                border: canSubmit ? `2px solid ${accent}` : "1px solid rgba(255,255,255,0.12)",
+                background: canSubmit ? `${accent}28` : "rgba(255,255,255,0.05)",
+                color: canSubmit ? accent : "rgba(255,255,255,0.4)",
+                fontSize: 14,
+                fontWeight: 700,
+                cursor: canSubmit && !isSubmitting ? "pointer" : "not-allowed",
+              }}
+            >
+              {isSubmitting ? "Creating…" : "Create event →"}
+            </button>
+          </form>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** BEO sections for "During the call" — same order as jump nav; param value matches BeoIntakePage ?section= */
+const BEO_CALL_SECTIONS: { param: string; label: string }[] = [
+  { param: "header", label: "Header" },
+  { param: "menu", label: "Menu & Beverages" },
+  { param: "bar", label: "Bar Service" },
+  { param: "serviceware", label: "Plates / Serviceware" },
+  { param: "timeline", label: "Timeline" },
+  { param: "notes", label: "Notes / Logistics" },
+];
 
 const styles: Record<string, React.CSSProperties> = {
   container: {
@@ -188,7 +339,8 @@ function formatNoteTimestamp(): string {
 
 const EventOverviewPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
-  const { selectEvent, selectedEventId, selectedEventData, eventDataLoading, setFields, loadEventData } = useEventStore();
+  const navigate = useNavigate();
+  const { selectEvent, selectedEventId, selectedEventData, eventDataLoading, setFields, loadEventData, loadEvents } = useEventStore();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
@@ -198,11 +350,11 @@ const EventOverviewPage: React.FC = () => {
   const [noteDraft, setNoteDraft] = useState("");
 
   useEffect(() => {
-    if (id) selectEvent(id);
+    if (id && id !== "new") selectEvent(id);
   }, [id, selectEvent]);
 
   useEffect(() => {
-    if (!id) return;
+    if (!id || id === "new") return;
     setTasksLoading(true);
     loadTasksForEvent(id).then((result) => {
       setTasksLoading(false);
@@ -265,6 +417,19 @@ const EventOverviewPage: React.FC = () => {
     );
   }
 
+  // New event: show minimal create form; no client/contact/business/individual — that's all in Header on BEO intake
+  if (id === "new") {
+    return (
+      <NewEventForm
+        onCreated={(eventId) => {
+          loadEvents();
+          navigate(`/event/${eventId}`);
+        }}
+        onBack={() => navigate("/")}
+      />
+    );
+  }
+
   if (isLoading && !hasData) {
     return (
       <div style={styles.container}>
@@ -307,6 +472,20 @@ const EventOverviewPage: React.FC = () => {
   };
 
   const documents = asAttachments(eventData[FIELD_IDS.EVENT_DOCUMENTS]);
+
+  const invoiceSent = asBoolean(eventData[FIELD_IDS.INVOICE_SENT]);
+  const invoicePaid = asBoolean(eventData[FIELD_IDS.INVOICE_PAID]);
+  const contractSent = asBoolean(eventData[FIELD_IDS.CONTRACT_SENT]);
+  const contractSigned = asBoolean(eventData[FIELD_IDS.CONTRACT_SIGNED]);
+  const hasQuestionnaireTask = tasks.some((t) => t.taskName?.toLowerCase().includes("questionnaire"));
+  const bookingSteps = [
+    { label: "Send invoice", done: invoiceSent, fieldId: FIELD_IDS.INVOICE_SENT },
+    { label: "Secure deposit / payment", done: invoicePaid, fieldId: FIELD_IDS.INVOICE_PAID },
+    { label: "Contract sent", done: contractSent, fieldId: FIELD_IDS.CONTRACT_SENT },
+    { label: "Contract signed", done: contractSigned, fieldId: FIELD_IDS.CONTRACT_SIGNED },
+    { label: "Send client questionnaire", done: hasQuestionnaireTask, fieldId: null },
+    { label: "Confirm contact details", done: false, fieldId: null },
+  ];
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -371,14 +550,75 @@ const EventOverviewPage: React.FC = () => {
             </div>
           </div>
 
-          {/* FOH Required Steps */}
+          {/* Booking steps — driven by Airtable so nothing falls through */}
           <div style={{ ...styles.section, borderColor: s.steps.border, background: s.steps.bg }}>
-            <h2 style={{ ...styles.sectionTitle, color: s.steps.accent }}>FOH Required Steps</h2>
-            <div style={styles.step}>⬜ Send Client Questionnaire</div>
-            <div style={styles.step}>⬜ Set Follow-Up Reminder</div>
-            <div style={styles.step}>⬜ Confirm Contact Details</div>
-            <div style={styles.step}>⬜ Send Proposal / Estimate</div>
-            <div style={styles.step}>⬜ Record Deposit</div>
+            <h2 style={{ ...styles.sectionTitle, color: s.steps.accent }}>Booking Steps</h2>
+            <p style={{ fontSize: 11, color: "rgba(255,255,255,0.5)", marginBottom: 12 }}>Track each step; mark done when complete.</p>
+            {bookingSteps.map((step) => (
+              <div key={step.label} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8, gap: 8 }}>
+                <span style={styles.step}>
+                  {step.done ? "✅" : "⬜"} {step.label}
+                </span>
+                {step.fieldId && (
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      if (!id) return;
+                      await setFields(id, { [step.fieldId!]: !step.done });
+                      loadEventData();
+                    }}
+                    style={{
+                      padding: "4px 10px",
+                      fontSize: 11,
+                      fontWeight: 600,
+                      borderRadius: 6,
+                      border: `1px solid ${s.steps.border}`,
+                      background: step.done ? "rgba(34,197,94,0.2)" : s.steps.btnBg,
+                      color: step.done ? "#22c55e" : s.steps.accent,
+                      cursor: "pointer",
+                    }}
+                  >
+                    {step.done ? "Undo" : "Mark done"}
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+
+          {/* During the call — jump to BEO section so staff can open the part they're discussing */}
+          <div style={{ ...styles.section, borderColor: s.call.border, background: s.call.bg }}>
+            <h2 style={{ ...styles.sectionTitle, color: s.call.accent }}>During the call</h2>
+            <p style={{ fontSize: 11, color: "rgba(255,255,255,0.5)", marginBottom: 12 }}>Click a section to open BEO Intake with that part ready.</p>
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              {BEO_CALL_SECTIONS.map(({ param, label }) => (
+                <Link
+                  key={param}
+                  to={`/beo-intake/${id}?section=${param}`}
+                  style={{
+                    display: "block",
+                    padding: "8px 12px",
+                    borderRadius: 6,
+                    background: "rgba(30,30,30,0.5)",
+                    border: "1px solid rgba(249,115,22,0.2)",
+                    color: s.call.accent,
+                    fontSize: 13,
+                    fontWeight: 500,
+                    textDecoration: "none",
+                    transition: "background 0.15s, border-color 0.15s",
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = "rgba(249,115,22,0.12)";
+                    e.currentTarget.style.borderColor = "rgba(249,115,22,0.4)";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = "rgba(30,30,30,0.5)";
+                    e.currentTarget.style.borderColor = "rgba(249,115,22,0.2)";
+                  }}
+                >
+                  {label}
+                </Link>
+              ))}
+            </div>
           </div>
 
           {/* Actions */}

@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from "react";
 import { useEventStore } from "../state/eventStore";
 import { FIELD_IDS, getFoodwerxArrivalFieldId } from "../services/airtable/events";
-import { asString, asSingleSelectName, asBoolean, asStringArray, asLinkedRecordIds, isErrorResult } from "../services/airtable/selectors";
+import { asString, asBarServicePrimary, asMultiSelectNames, asBoolean, asStringArray, asLinkedRecordIds, isErrorResult } from "../services/airtable/selectors";
 import { loadStationsByEventId } from "../services/airtable/linkedRecords";
 import { loadBoxedLunchOrdersByEventId, type BoxedLunchOrder } from "../services/airtable/boxedLunchOrders";
 import { getPlatterOrdersByEventId } from "../state/platterOrdersStore";
 import { airtableFetch } from "../services/airtable/client";
 import { EventSelector } from "../components/EventSelector";
 import { secondsTo12HourString } from "../utils/timeHelpers";
+import { MIMOSA_BAR_FRUIT_GARNISH_ITEMS } from "../constants/fullBarPackage";
 
 // ── Types ──
 type SubItem = {
@@ -945,12 +946,13 @@ const renderPaperProductsDelivery = (beo: BEOData) => (
 );
 
 // ── Section config for building from event data (with custom text fields) ──
-// Hard print order: Passed → Presented → Buffet Metal → Buffet China → Dessert.
+// Hard print order: Passed → Presented → DELI → Buffet Metal → Buffet China → Dessert.
 // Kitchen BEO ALWAYS ends after Dessert. Stations route into their placement section.
 // STATIONS and ROOM TEMP/DISPLAYS are intentionally excluded — no section header for them.
 const MENU_SECTION_CONFIG: { title: string; fieldId: string; customFieldId: string }[] = [
   { title: "PASSED APPETIZERS", fieldId: FIELD_IDS.PASSED_APPETIZERS, customFieldId: FIELD_IDS.CUSTOM_PASSED_APP },
   { title: "PRESENTED APPETIZERS", fieldId: FIELD_IDS.PRESENTED_APPETIZERS, customFieldId: FIELD_IDS.CUSTOM_PRESENTED_APP },
+  { title: "DELI", fieldId: FIELD_IDS.FULL_SERVICE_DELI, customFieldId: FIELD_IDS.CUSTOM_FULL_SERVICE_DELI },
   { title: "BUFFET – METAL", fieldId: FIELD_IDS.BUFFET_METAL, customFieldId: FIELD_IDS.CUSTOM_BUFFET_METAL },
   { title: "BUFFET – CHINA", fieldId: FIELD_IDS.BUFFET_CHINA, customFieldId: FIELD_IDS.CUSTOM_BUFFET_CHINA },
   { title: "DESSERTS", fieldId: FIELD_IDS.DESSERTS, customFieldId: FIELD_IDS.CUSTOM_DESSERTS },
@@ -1005,14 +1007,14 @@ function dedupeBeverageLines(lines: string[]): string[] {
   });
 }
 
-/** Safely parse beverage lines from BAR_SERVICE_KITCHEN_BEO (formula) or fallback to BAR_SERVICE. Avoids "cannot parse" errors from malformed/object values. */
+/** Safely parse beverage lines from BAR_SERVICE_KITCHEN_BEO (formula) or fallback to BAR_SERVICE. Avoids "cannot parse" errors from malformed/object values. Handles multi-select (array). */
 function safeBeveragesFoodwerx(fields: Record<string, unknown> | null): string[] | undefined {
   if (!fields) return undefined;
   try {
     const raw = fields[FIELD_IDS.BAR_SERVICE_KITCHEN_BEO];
     if (raw == null) {
-      const fallback = asSingleSelectName(fields[FIELD_IDS.BAR_SERVICE]);
-      return fallback ? [fallback] : undefined;
+      const fallback = asMultiSelectNames(fields[FIELD_IDS.BAR_SERVICE]);
+      return fallback.length > 0 ? fallback : undefined;
     }
     if (typeof raw === "string") {
       const lines = raw.split("\n").map((s) => s.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, "").trim()).filter(Boolean);
@@ -1025,11 +1027,11 @@ function safeBeveragesFoodwerx(fields: Record<string, unknown> | null): string[]
     if (typeof raw === "object" && "error" in raw) {
       return undefined;
     }
-    const fallback = asSingleSelectName(fields[FIELD_IDS.BAR_SERVICE]);
-    return fallback ? [fallback] : undefined;
+    const fallback = asMultiSelectNames(fields[FIELD_IDS.BAR_SERVICE]);
+    return fallback.length > 0 ? fallback : undefined;
   } catch {
-    const fallback = asSingleSelectName(fields[FIELD_IDS.BAR_SERVICE]);
-    return fallback ? [fallback] : undefined;
+    const fallback = asMultiSelectNames(fields[FIELD_IDS.BAR_SERVICE]);
+    return fallback.length > 0 ? fallback : undefined;
   }
 }
 
@@ -1370,13 +1372,27 @@ const KitchenBEOPrintPage: React.FC = () => {
             }
           }
         }
-        // Merge platter orders (from localStorage) into DELI section
+        // Merge platter orders (from localStorage) into DELI section — header + sub-items to match BEO samples
         if (config.title.includes("DELI") && selectedEventId) {
           const platterRows = getPlatterOrdersByEventId(selectedEventId);
           for (const row of platterRows) {
             if (!(row.quantity > 0) || row.picks.length === 0) continue;
-            const qty = `${row.picks.join(", ")} × ${row.quantity}`;
-            allItems.push({ qty, name: row.platterType });
+            allItems.push({
+              qty: String(row.quantity),
+              name: row.platterType,
+              subItems: row.picks.length > 0 ? row.picks.map((text) => ({ text })) : undefined,
+            });
+          }
+        }
+        if (config.title.includes("DESSERT")) {
+          const barServiceSelected = asMultiSelectNames(selectedEventData?.[FIELD_IDS.BAR_SERVICE]);
+          if (barServiceSelected.some((s) => s.trim().toLowerCase() === "mimosa bar")) {
+            MIMOSA_BAR_FRUIT_GARNISH_ITEMS.forEach((name) => {
+              if (!seenNames.has(name)) {
+                seenNames.add(name);
+                allItems.push({ qty: "—", name });
+              }
+            });
           }
         }
         if (allItems.length > 0) {
@@ -1388,8 +1404,8 @@ const KitchenBEOPrintPage: React.FC = () => {
         }
       }
     } else {
-      // Helper: convert station to MenuItem
-      const stationToMenuItem = (st: { stationType: string; stationItems: string[]; stationNotes: string }): MenuItem => {
+      // Helper: convert station to MenuItem (include preset customItems e.g. All-American Main, Potato, Chicken, Salad)
+      const stationToMenuItem = (st: { stationType: string; stationItems: string[]; stationNotes: string; customItems?: string }): MenuItem => {
         const itemLines: string[] = st.stationItems
           .map((id) => menuItemData[id]?.name)
           .filter((n): n is string => !!n && n !== "—");
@@ -1397,10 +1413,29 @@ const KitchenBEOPrintPage: React.FC = () => {
           .split(/\r?\n/)
           .map((l) => l.trim())
           .filter(Boolean);
-        const allLines = [...itemLines, ...notesLines];
+        const rawCustom = (st.customItems || "").split(/\r?\n/).map((l) => l.trim()).filter((l) => l && !/^BEO Placement:/i.test(l));
+        const customLines: string[] = [];
+        for (const line of rawCustom) {
+          const multi = line.match(/^(Toppings?|Condiments?|Dressings?|Salads?):\s*(.+)$/i);
+          if (multi) {
+            customLines.push(...multi[2].split(",").map((v) => v.trim()).filter(Boolean));
+          } else {
+            const keyVal = line.match(/^([A-Za-z\s]+):\s*(.+)$/);
+            if (keyVal) {
+              const key = keyVal[1].trim();
+              const val = keyVal[2].trim();
+              if (/^Salad\s*shooters?$/i.test(key) && /^yes$/i.test(val)) customLines.push("Salad shooters (included)");
+              else if (!/^yes$/i.test(val) || !/^Salad/i.test(key)) customLines.push(val);
+            } else customLines.push(line);
+          }
+        }
+        const stripPlatter = (s: string) => s.replace(/^PLATTER\s+/i, "");
+        const cleanedCustomLines = customLines.map(stripPlatter);
+        const allLines = [...itemLines, ...cleanedCustomLines, ...notesLines];
+        const stationDisplayName = /all-american|all american/i.test(st.stationType || "") ? "The All-American Station" : (st.stationType || "—");
         return {
           qty: "—",
-          name: st.stationType || "—",
+          name: stationDisplayName,
           subItems: allLines.length > 0 ? allLines.map((text) => ({ text })) : undefined,
         };
       };
@@ -1436,7 +1471,31 @@ const KitchenBEOPrintPage: React.FC = () => {
             combined.push(it);
           }
         });
-        if (combined.length > 0) {
+        // Merge platter orders into full-service DELI section (header + sub-items like delivery)
+        if (config.fieldId === FIELD_IDS.FULL_SERVICE_DELI && selectedEventId) {
+          const platterRows = getPlatterOrdersByEventId(selectedEventId);
+          for (const row of platterRows) {
+            if (!(row.quantity > 0) || row.picks.length === 0) continue;
+            combined.push({
+              qty: String(row.quantity),
+              name: row.platterType,
+              subItems: row.picks.length > 0 ? row.picks.map((text) => ({ text })) : undefined,
+            });
+          }
+        }
+        if (config.fieldId === FIELD_IDS.DESSERTS) {
+          const barServiceSelectedDesserts = asMultiSelectNames(selectedEventData?.[FIELD_IDS.BAR_SERVICE]);
+          if (barServiceSelectedDesserts.some((s) => s.trim().toLowerCase() === "mimosa bar")) {
+            MIMOSA_BAR_FRUIT_GARNISH_ITEMS.forEach((name) => {
+              if (!seenNames.has(name)) {
+                seenNames.add(name);
+                combined.push({ qty: "—", name });
+              }
+            });
+          }
+        }
+        // Always show DELI for full service (like old BEOs); other sections only when they have items
+        if (combined.length > 0 || config.title === "DELI") {
           sections.push({
             title: config.title,
             vessel: getVesselForSection(config.title, false),

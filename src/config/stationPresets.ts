@@ -89,12 +89,22 @@ export const RAMEN = {
   includedSauces: ["Sriracha", "Lime", "Soy sauce"],
 };
 
-/** All-American: Main + Potato + Chicken + Salad */
+/** All-American: Main + Potato + Chicken + Salad + slider rolls, toppings, condiments (per old BEOs) */
 export const ALL_AMERICAN = {
   mainOptions: ["Mini Angus beef burgers", "Braised brisket", "Pulled pork"] as const,
   potatoOptions: ["Crispy boardwalk potato wedges (sea salt & malt vinegar)", "Baked potato salad"] as const,
   chickenOptions: ["Honey hot chicken tenders", "No chicken"] as const,
   saladShooters: ["Yes", "No"] as const,
+  /** Slider rolls / bread — appears under station on BEO */
+  sliderRollOptions: ["Assorted slider rolls", "Regular slider rolls", "Mini brioche rolls", "Seeded rolls", "Long seeded roll", "Semolina dinner roll"] as const,
+  /** Toppings (lettuce, tomato, cheese) — per old BEO "PLATTER Lettuce & Tomato" */
+  toppingsOptions: ["PLATTER Lettuce & Tomato", "Cheese, Lettuce, Tomatoes", "Lettuce & Tomato", "Sliced American Cheese", "Green Leaf Lettuce", "Roma Tomatoes"] as const,
+  /** Condiments listed under station */
+  condimentOptions: ["Pickles", "Ketchup", "Mustard", "Ranch", "BBQ sauce"] as const,
+  /** Dressings for salad shooters / station */
+  dressingOptions: ["Ranch", "Balsamic vinaigrette", "Caesar", "Blue cheese", "Honey mustard", "On side"] as const,
+  /** Salad choices (greens / salad types) — show on BEO under station */
+  saladOptions: ["Field of Greens", "Caesar Salad", "Greek Salad", "Mixed Greens", "Wedge Salad", "Bruschetta Tortellini Pasta Salad", "Seasonal Fruit Salad", "Garden Salad Shooters"] as const,
 };
 
 /** Street Food: Choose 5 items */
@@ -119,6 +129,26 @@ export const STREET_FOOD = {
 export const RAW_BAR = {
   includedProteins: ["Shrimp", "Crab claws", "Oysters"] as const,
   includedGarnishes: ["Classic cocktail sauce", "Louisiana hot sauce", "Jalapeno remoulade", "Sweet Vidalia vinegar", "Horseradish"],
+};
+
+/** Grande Charcuterie Display: core board components per legacy BEOs */
+export const CHARCUTERIE = {
+  included: [
+    "Assorted meats",
+    "Imported & domestic cheeses",
+    "Veggie crudité",
+    "Sliced fruit",
+    "Grapes & berries",
+    "Dried fruit",
+    "Nuts",
+    "Olives",
+    "Gherkin pickles",
+    "Crackers & crostini",
+    "Toasted pita triangles",
+    "Hummus",
+    "Sundried tomato ranch",
+    "Mustard",
+  ] as const,
 };
 
 /** Carving Station: Choose 2 meats + potato */

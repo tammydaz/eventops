@@ -47,7 +47,7 @@ async function getStationsFieldIds(): Promise<StationsFieldIds | null> {
     stationPreset: byName("Station Preset") || byName("Station Presets") || undefined,
     stationComponents: byName("Station Components") || undefined,
     customComponents: byName("Custom Components") || undefined,
-    customItems: byName("Custom Items") || byName("Additional Components") || undefined,
+    customItems: byName("Custom Items") || byName("Additional Components") || byName("Station Options") || byName("Components") || undefined,
     beoPlacement: byName("BEO Placement") || byName("Placement") || byName("BEO Section") || undefined,
   };
   return cachedStationsFieldIds;

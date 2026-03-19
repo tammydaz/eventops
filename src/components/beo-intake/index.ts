@@ -1,4 +1,5 @@
 export { ClientAndContactSection } from "./ClientAndContactSection";
+export { HeaderSection } from "./HeaderSection";
 export { EventCoreSection } from "./EventCoreSection";
 export { VenueDetailsSection } from "./VenueDetailsSection";
 export { TimelineSection } from "./TimelineSection";
