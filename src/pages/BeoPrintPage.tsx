@@ -17,6 +17,7 @@ import { ConfirmSendToBOHModal } from "../components/ConfirmSendToBOHModal";
 import { AcceptTransferModal } from "../components/AcceptTransferModal";
 import { getSauceOverrides } from "../state/sauceOverrideStore";
 import { getBeoSpecStorageKey, getSpecOverrideKey } from "../utils/beoSpecStorage";
+import { loadEventMenuRows, type EventMenuRow, type ChildOverridesData } from "../services/airtable/eventMenu";
 
 // ── Types ──
 type MenuLineItem = {
@@ -2284,6 +2285,7 @@ const BeoPrintPage: React.FC = () => {
   const PACKOUT_STORAGE_KEY = (eid: string) => `beo-packout-edits-${eid}`;
   const CHECK_STORAGE_KEY = (eid: string) => `beo-check-state-${eid}`;
   const [hiddenMenuItems, setHiddenMenuItems] = useState<Set<string>>(new Set());
+  const [eventMenuRows, setEventMenuRows] = useState<EventMenuRow[]>([]);
   const [barServiceFieldId, setBarServiceFieldId] = useState<string | null>(null);
   const [lockoutIds, setLockoutIds] = useState<Awaited<ReturnType<typeof getLockoutFieldIds>>>(null);
   const [bohIds, setBohIds] = useState<Awaited<ReturnType<typeof getBOHProductionFieldIds>>>(null);
@@ -2621,6 +2623,18 @@ const BeoPrintPage: React.FC = () => {
     fetchMenuItems();
     // Refetch when navigating to BEO page so station config (e.g. All-American customItems) is fresh after saving from intake
   }, [eventData, eventId, location.pathname]);
+
+  // Load Event Menu (shadow) for customText + added items to show on Print/View BEO
+  useEffect(() => {
+    if (!eventId) {
+      setEventMenuRows([]);
+      return;
+    }
+    loadEventMenuRows(eventId).then((result) => {
+      if (!isErrorResult(result)) setEventMenuRows(result);
+      else setEventMenuRows([]);
+    });
+  }, [eventId]);
 
   // ── Extract event fields ──
   const f = (id: string): string => {
@@ -2962,9 +2976,40 @@ const BeoPrintPage: React.FC = () => {
     if (override?.sauceOverride === "Other") return override.customSauce?.trim() || null;
     return data?.sauce?.trim() || null;
   };
+
+  // Build Event Menu map: catalogItemId -> { customText, components } for Print/View BEO
+  const eventMenuByCatalogId: Record<string, { customText?: string; components?: { name: string; isAdded: boolean }[] }> = (() => {
+    const map: Record<string, { customText?: string; components?: { name: string; isAdded: boolean }[] }> = {};
+    for (const row of eventMenuRows) {
+      const cid = row.catalogItemId;
+      if (!cid) continue;
+      const customText = row.customText?.trim();
+      const co = row.childOverrides as ChildOverridesData | null | undefined;
+      const defaultChildIds = menuItemData[cid]?.childIds ?? [];
+      const overrides = co?.overrides ?? {};
+      const added = co?.added ?? [];
+      const components: { name: string; isAdded: boolean }[] = [];
+      for (const childId of defaultChildIds) {
+        const o = overrides[childId];
+        if ((o?.enabled ?? true) === false) continue;
+        const label = o?.label?.trim();
+        const name = (label !== undefined && label !== "") ? label : (menuItemData[childId]?.name ?? childId);
+        components.push({ name, isAdded: false });
+      }
+      added.forEach((s) => { const t = s?.trim(); if (t) components.push({ name: t, isAdded: true }); });
+      if (customText || components.length > 0) {
+        map[cid] = {};
+        if (customText) map[cid].customText = customText;
+        if (components.length > 0) map[cid].components = components;
+      }
+    }
+    return map;
+  })();
+
   // Expand items: Item name, Sauce: Sauce Name (one leading space), blank line before next item. No dashes or "w/".
   const expandItemToRows = (item: MenuLineItem): { lineName: string; isChild: boolean; itemId: string }[] => {
     const data = menuItemData[item.id];
+    const emRow = eventMenuByCatalogId[item.id];
     const rows: { lineName: string; isChild: boolean; itemId: string }[] = [];
     // Station items (id starts with "station-hdr-"): name encodes header + components separated by \n
     if (item.id.startsWith("station-hdr-")) {
@@ -2992,23 +3037,31 @@ const BeoPrintPage: React.FC = () => {
     } else {
       const rawName = data?.name || item.name || "Loading...";
       const dashIdx = rawName.indexOf(" – ");
-      const parentName = dashIdx >= 0 ? rawName.slice(0, dashIdx).trim() : rawName;
+      let parentName = dashIdx >= 0 ? rawName.slice(0, dashIdx).trim() : rawName;
       const nameSuffixChild = dashIdx >= 0 ? rawName.slice(dashIdx + 3).trim() : "";
+      if (emRow?.customText) parentName = emRow.customText;
       rows.push({ lineName: parentName, isChild: false, itemId: item.id });
-      if (nameSuffixChild) rows.push({ lineName: ` • ✓ ${nameSuffixChild}`, isChild: true, itemId: `${item.id}-namesuffix` });
-      const effectiveSauce = getEffectiveSauce(item.id);
-      if (effectiveSauce && effectiveSauce !== nameSuffixChild) rows.push({ lineName: ` • ✓ ${effectiveSauce}`, isChild: true, itemId: `${item.id}-sauce` });
-      const desc = buffetMenuEdits[item.id] ?? data?.description;
-      const parentLabel = [parentName, desc, effectiveSauce, nameSuffixChild].filter(Boolean).join(" ").toLowerCase();
-      if (data?.childIds?.length) {
-        const childIdsToShow = data.childIds.filter((childId) => {
-          const childName = menuItemData[childId]?.name || "";
-          return childName && !parentLabel.includes(childName.toLowerCase());
+      if (emRow?.components && emRow.components.length > 0) {
+        emRow.components.forEach((c, i) => {
+          const prefix = c.isAdded ? " • + " : " • ✓ ";
+          rows.push({ lineName: `${prefix}${c.name}`, isChild: true, itemId: `${item.id}-emc${i}` });
         });
-        childIdsToShow.forEach((childId) => {
-          const childName = menuItemData[childId]?.name || "Loading...";
-          rows.push({ lineName: ` • ✓ ${childName}`, isChild: true, itemId: childId });
-        });
+      } else {
+        if (nameSuffixChild) rows.push({ lineName: ` • ✓ ${nameSuffixChild}`, isChild: true, itemId: `${item.id}-namesuffix` });
+        const effectiveSauce = getEffectiveSauce(item.id);
+        if (effectiveSauce && effectiveSauce !== nameSuffixChild) rows.push({ lineName: ` • ✓ ${effectiveSauce}`, isChild: true, itemId: `${item.id}-sauce` });
+        const desc = buffetMenuEdits[item.id] ?? data?.description;
+        const parentLabel = [parentName, desc, effectiveSauce, nameSuffixChild].filter(Boolean).join(" ").toLowerCase();
+        if (data?.childIds?.length) {
+          const childIdsToShow = data.childIds.filter((childId) => {
+            const childName = menuItemData[childId]?.name || "";
+            return childName && !parentLabel.includes(childName.toLowerCase());
+          });
+          childIdsToShow.forEach((childId) => {
+            const childName = menuItemData[childId]?.name || "Loading...";
+            rows.push({ lineName: ` • ✓ ${childName}`, isChild: true, itemId: childId });
+          });
+        }
       }
     }
     rows.push({ lineName: "", isChild: false, itemId: `${item.id}-blank` });

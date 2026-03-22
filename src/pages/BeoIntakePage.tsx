@@ -116,7 +116,8 @@ export const BeoIntakePage = () => {
   const [showMissingFieldsModal, setShowMissingFieldsModal] = useState(false);
   const [shadowMenuRows, setShadowMenuRows] = useState<(EventMenuRow & { catalogItemName: string; components?: EventMenuRowComponent[] })[]>([]);
   const [editingShadowRow, setEditingShadowRow] = useState<(EventMenuRow & { catalogItemName: string; components?: EventMenuRowComponent[] }) | null>(null);
-  const [editDraft, setEditDraft] = useState<{ customText: string; sauceOverride: string; packOutNotes: string }>({ customText: "", sauceOverride: "Default", packOutNotes: "" });
+  const [editDraft, setEditDraft] = useState<{ customText: string; packOutNotes: string }>({ customText: "", packOutNotes: "" });
+  const [editDisplayNameEditing, setEditDisplayNameEditing] = useState(false);
   const [editDefaultChildren, setEditDefaultChildren] = useState<{ id: string; name: string }[]>([]);
   const [editChildOverrides, setEditChildOverrides] = useState<ChildOverridesData>({ overrides: {}, added: [] });
   const [editAddNewItem, setEditAddNewItem] = useState("");
@@ -682,9 +683,9 @@ export const BeoIntakePage = () => {
                                       <table style={{ width: "100%", borderCollapse: "collapse" }}>
                                         <tbody>
                                           <tr>
-                                            <td style={{ width: 56, padding: 0 }} />
+                                            <td style={{ width: 100, minWidth: 100, padding: 0 }} />
                                             <td style={{ padding: 0, textAlign: "center" }}><span style={{ fontSize: 13, fontWeight: 700, letterSpacing: "0.05em", color: sectionColor }}>{section.toUpperCase()}</span></td>
-                                            <td style={{ width: 90, padding: 0 }} />
+                                            <td style={{ width: 140, minWidth: 140, padding: 0 }} />
                                           </tr>
                                         </tbody>
                                       </table>
@@ -705,7 +706,7 @@ export const BeoIntakePage = () => {
                                         const sauceVal = row.sauceOverride?.trim();
                                         const sauceDisplay = !sauceVal || sauceVal === "None" ? null : sauceVal === "Default" ? "Default" : sauceVal;
                                         const componentsStartIdx = nameSuffixChild ? 2 : (showSauceRow && sauceDisplay ? 2 : 1);
-                                        const inputStyle = { width: "100%", padding: "2px 6px", borderRadius: 4, border: "1px solid rgba(255,255,255,0.12)", background: "rgba(0,0,0,0.2)", color: "#fff", fontSize: 12, lineHeight: 1.2 };
+                                        const inputStyle = { width: "100%", minWidth: 140, padding: "2px 6px", borderRadius: 4, border: "1px solid rgba(255,255,255,0.12)", background: "rgba(0,0,0,0.2)", color: "#fff", fontSize: 12, lineHeight: 1.2 };
                                         const itemBorder = rowIdx > 0 ? { borderTop: "1px solid rgba(255,255,255,0.12)" } : {};
                                         const childRows: { key: string; specKey: string; label: string }[] = [];
                                         if (nameSuffixChild) childRows.push({ key: "name", specKey: getSpecOverrideKey(fieldId, itemId, 1), label: nameSuffixChild });
@@ -716,26 +717,26 @@ export const BeoIntakePage = () => {
                                             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, lineHeight: 1.2 }}>
                                               <tbody>
                                               <tr>
-                                                <td style={{ width: 56, padding: "2px 8px 0", color: "#fff", fontSize: 12, textAlign: "left", verticalAlign: "top" }}>{displaySpec}</td>
+                                                <td style={{ width: 100, minWidth: 100, padding: "2px 8px 0", color: "#fff", fontSize: 12, textAlign: "left", verticalAlign: "top" }}>{displaySpec}</td>
                                                 <td style={{ padding: "2px 8px 0", color: "#fff", textAlign: "center", verticalAlign: "top" }}><span style={{ fontWeight: 600, fontSize: 13 }}>{parentName}</span></td>
-                                                <td style={{ width: 90, padding: "2px 0 0", verticalAlign: "top" }}><input type="text" value={menuSpecOverrides[parentSpecKey] ?? ""} disabled={isLocked} onChange={(e) => handleSpecOverrideChange(parentSpecKey, e.target.value)} placeholder="Override" style={inputStyle} /></td>
+                                                <td style={{ width: 140, minWidth: 140, padding: "2px 0 0", verticalAlign: "top" }}><input type="text" value={menuSpecOverrides[parentSpecKey] ?? ""} disabled={isLocked} onChange={(e) => handleSpecOverrideChange(parentSpecKey, e.target.value)} placeholder="Override" style={inputStyle} /></td>
                                               </tr>
                                               {childRows.map((cr) => (
                                                 <tr key={cr.key}>
-                                                  <td style={{ width: 56, padding: "2px 8px 0", color: "rgba(255,255,255,0.9)", fontSize: 12, textAlign: "left", verticalAlign: "top" }}>{(menuSpecOverrides[cr.specKey] ?? "").trim() || "—"}</td>
+                                                  <td style={{ width: 100, minWidth: 100, padding: "2px 8px 0", color: "rgba(255,255,255,0.9)", fontSize: 12, textAlign: "left", verticalAlign: "top" }}>{(menuSpecOverrides[cr.specKey] ?? "").trim() || "—"}</td>
                                                   <td style={{ padding: "2px 8px 0", color: "rgba(255,255,255,0.9)", fontSize: 12, textAlign: "center", verticalAlign: "top" }}>• ✓ {cr.label}</td>
-                                                  <td style={{ width: 90, padding: "2px 0 0", verticalAlign: "top" }}><input type="text" value={menuSpecOverrides[cr.specKey] ?? ""} disabled={isLocked} onChange={(e) => handleSpecOverrideChange(cr.specKey, e.target.value)} placeholder="Override" style={inputStyle} /></td>
+                                                  <td style={{ width: 140, minWidth: 140, padding: "2px 0 0", verticalAlign: "top" }}><input type="text" value={menuSpecOverrides[cr.specKey] ?? ""} disabled={isLocked} onChange={(e) => handleSpecOverrideChange(cr.specKey, e.target.value)} placeholder="Override" style={inputStyle} /></td>
                                                 </tr>
                                               ))}
                                               <tr>
-                                                <td style={{ width: 56, padding: "2px 8px 0 8px", paddingBottom: 12, verticalAlign: "top" }} />
+                                                <td style={{ width: 100, minWidth: 100, padding: "2px 8px 0 8px", paddingBottom: 12, verticalAlign: "top" }} />
                                                 <td style={{ padding: "2px 8px 0 8px", paddingBottom: 12, paddingLeft: 0, verticalAlign: "top", textAlign: "center" }}>
                                                   <span style={{ display: "inline-flex", gap: 4 }}>
-                                                    <button type="button" disabled={isLocked} onClick={() => { setEditingShadowRow(row); setEditDraft({ customText: row.customText ?? "", sauceOverride: row.sauceOverride ?? "Default", packOutNotes: row.packOutNotes ?? "" }); }} style={btnStyle} title="Edit">Edit</button>
+                                                    <button type="button" disabled={isLocked} onClick={() => { setEditingShadowRow(row); setEditDraft({ customText: row.customText ?? "", packOutNotes: row.packOutNotes ?? "" }); setEditDisplayNameEditing(false); }} style={btnStyle} title="Edit">Edit</button>
                                                     <button type="button" disabled={isLocked} onClick={async () => { await deleteEventMenuRow(row.id); await syncShadowToEvent(selectedEventId!); await loadShadowMenu(); }} style={btnStyle} title="Remove">Remove</button>
                                                   </span>
                                                 </td>
-                                                <td style={{ width: 90, padding: "2px 0 0", paddingBottom: 12, verticalAlign: "top" }} />
+                                                <td style={{ width: 140, minWidth: 140, padding: "2px 0 0", paddingBottom: 12, verticalAlign: "top" }} />
                                               </tr>
                                               </tbody>
                                             </table>
@@ -807,19 +808,45 @@ export const BeoIntakePage = () => {
               <div className="beo-edit-modal" style={{ background: "#1a1a1a", borderRadius: 12, border: "1px solid rgba(255,255,255,0.2)", padding: 20, maxWidth: 420, width: "100%", maxHeight: "90vh", overflowY: "auto" }} onClick={(e) => e.stopPropagation()}>
                 <div style={{ fontSize: 16, fontWeight: 600, color: "#fff", marginBottom: 16 }}>Edit: {editingShadowRow.catalogItemName}</div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 16 }}>
-                  <label style={{ fontSize: 12, color: "rgba(255,255,255,0.7)" }}>Custom Text</label>
-                  <input type="text" value={editDraft.customText} onChange={(e) => setEditDraft((d) => ({ ...d, customText: e.target.value }))} placeholder="Override display name" style={{ padding: "8px 12px", borderRadius: 6, border: "1px solid #444", background: "#0a0a0a", color: "#fff", fontSize: 14 }} />
-                  <label style={{ fontSize: 12, color: "rgba(255,255,255,0.7)" }}>Sauce Override</label>
-                  <select value={editDraft.sauceOverride} onChange={(e) => setEditDraft((d) => ({ ...d, sauceOverride: e.target.value }))} style={{ padding: "8px 12px", borderRadius: 6, border: "1px solid #444", background: "#0a0a0a", color: "#fff", fontSize: 14 }}>
-                    <option value="Default">Default</option>
-                    <option value="None">None</option>
-                    <option value="Other">Other…</option>
-                  </select>
+                  <div>
+                    <label style={{ fontSize: 12, color: "rgba(255,255,255,0.7)" }}>Display name</label>
+                    {editDisplayNameEditing ? (
+                      <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 4 }}>
+                        <input type="text" value={editDraft.customText} onChange={(e) => setEditDraft((d) => ({ ...d, customText: e.target.value }))} placeholder={editingShadowRow.catalogItemName} style={{ flex: 1, padding: "8px 12px", borderRadius: 6, border: "1px solid #444", background: "#0a0a0a", color: "#fff", fontSize: 14 }} />
+                        <button type="button" onClick={() => setEditDisplayNameEditing(false)} style={{ padding: "6px 12px", fontSize: 12, borderRadius: 6, border: "1px solid rgba(255,255,255,0.3)", background: "rgba(255,255,255,0.1)", color: "#fff", cursor: "pointer" }}>Done</button>
+                      </div>
+                    ) : (
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 4 }}>
+                        <span style={{ fontSize: 14, color: "#fff" }}>{editDraft.customText.trim() || editingShadowRow.catalogItemName || "—"}</span>
+                        <button type="button" onClick={() => setEditDisplayNameEditing(true)} style={{ padding: "4px 10px", fontSize: 12, borderRadius: 6, border: "1px solid rgba(255,255,255,0.3)", background: "rgba(255,255,255,0.1)", color: "#fff", cursor: "pointer" }}>Edit</button>
+                      </div>
+                    )}
+                  </div>
+
                   <label style={{ fontSize: 12, color: "rgba(255,255,255,0.7)" }}>Pack-Out Notes</label>
                   <input type="text" value={editDraft.packOutNotes} onChange={(e) => setEditDraft((d) => ({ ...d, packOutNotes: e.target.value }))} placeholder="Notes" style={{ padding: "8px 12px", borderRadius: 6, border: "1px solid #444", background: "#0a0a0a", color: "#fff", fontSize: 14 }} />
 
                   <div style={{ borderTop: "1px solid rgba(255,255,255,0.2)", marginTop: 8, paddingTop: 12 }}>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: "#fff", marginBottom: 8 }}>SECTION A — Default Child Items</div>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: "#fff", marginBottom: 8 }}>Added Items</div>
+                    {(editChildOverrides.added ?? []).length === 0 ? (
+                      <div style={{ fontSize: 12, color: "rgba(255,255,255,0.5)", marginBottom: 8 }}>No added items</div>
+                    ) : (
+                      (editChildOverrides.added ?? []).map((label, idx) => (
+                        <div key={`added-${idx}`} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                          <span style={{ flex: 1, fontSize: 13, color: "#fff" }}>+ {label || "—"}</span>
+                          <input type="text" value={label} onChange={(e) => setEditChildOverrides((prev) => { const a = [...(prev.added ?? [])]; a[idx] = e.target.value; return { ...prev, added: a }; })} placeholder="Item name" style={{ flex: 1, padding: "6px 10px", borderRadius: 4, border: "1px solid #444", background: "#0a0a0a", color: "#fff", fontSize: 12 }} />
+                          <button type="button" onClick={() => setEditChildOverrides((prev) => ({ ...prev, added: (prev.added ?? []).filter((_, i) => i !== idx) }))} style={{ padding: "4px 10px", fontSize: 11, borderRadius: 4, border: "1px solid rgba(255,255,255,0.3)", background: "rgba(255,80,80,0.2)", color: "#ff6b6b", cursor: "pointer" }}>Remove</button>
+                        </div>
+                      ))
+                    )}
+                    <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+                      <input type="text" value={editAddNewItem} onChange={(e) => setEditAddNewItem(e.target.value)} placeholder="Add custom sauce or component" style={{ flex: 1, padding: "6px 10px", borderRadius: 4, border: "1px solid #444", background: "#0a0a0a", color: "#fff", fontSize: 12 }} />
+                      <button type="button" onClick={() => { const v = editAddNewItem.trim(); if (v) { setEditChildOverrides((prev) => ({ ...prev, added: [...(prev.added ?? []), v] })); setEditAddNewItem(""); } }} style={{ padding: "6px 12px", fontSize: 12, borderRadius: 4, border: "1px solid rgba(255,255,255,0.3)", background: "rgba(255,255,255,0.1)", color: "#fff", cursor: "pointer" }}>Add</button>
+                    </div>
+                  </div>
+
+                  <div style={{ borderTop: "1px solid rgba(255,255,255,0.2)", marginTop: 8, paddingTop: 12 }}>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: "#fff", marginBottom: 8 }}>Default Child Items</div>
                     {editDefaultChildren.length === 0 ? (
                       <div style={{ fontSize: 12, color: "rgba(255,255,255,0.5)", marginBottom: 8 }}>No default child items</div>
                     ) : (
@@ -830,24 +857,6 @@ export const BeoIntakePage = () => {
                         </div>
                       ))
                     )}
-                  </div>
-
-                  <div style={{ borderTop: "1px solid rgba(255,255,255,0.2)", marginTop: 8, paddingTop: 12 }}>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: "#fff", marginBottom: 8 }}>SECTION B — Added Items</div>
-                    {(editChildOverrides.added ?? []).map((label, idx) => (
-                      <div key={`added-${idx}`} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
-                        <input type="text" value={label} onChange={(e) => setEditChildOverrides((prev) => { const a = [...(prev.added ?? [])]; a[idx] = e.target.value; return { ...prev, added: a }; })} placeholder="Item name" style={{ flex: 1, padding: "6px 10px", borderRadius: 4, border: "1px solid #444", background: "#0a0a0a", color: "#fff", fontSize: 12 }} />
-                        <button type="button" onClick={() => setEditChildOverrides((prev) => ({ ...prev, added: (prev.added ?? []).filter((_, i) => i !== idx) }))} style={{ padding: "4px 10px", fontSize: 11, borderRadius: 4, border: "1px solid rgba(255,255,255,0.3)", background: "rgba(255,80,80,0.2)", color: "#ff6b6b", cursor: "pointer" }}>Remove</button>
-                      </div>
-                    ))}
-                  </div>
-
-                  <div style={{ borderTop: "1px solid rgba(255,255,255,0.2)", marginTop: 8, paddingTop: 12 }}>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: "#fff", marginBottom: 8 }}>SECTION C — Add New Item</div>
-                    <div style={{ display: "flex", gap: 8 }}>
-                      <input type="text" value={editAddNewItem} onChange={(e) => setEditAddNewItem(e.target.value)} placeholder="Custom sauce or component" style={{ flex: 1, padding: "6px 10px", borderRadius: 4, border: "1px solid #444", background: "#0a0a0a", color: "#fff", fontSize: 12 }} />
-                      <button type="button" onClick={() => { const v = editAddNewItem.trim(); if (v) { setEditChildOverrides((prev) => ({ ...prev, added: [...(prev.added ?? []), v] })); setEditAddNewItem(""); } }} style={{ padding: "6px 12px", fontSize: 12, borderRadius: 4, border: "1px solid rgba(255,255,255,0.3)", background: "rgba(255,255,255,0.1)", color: "#fff", cursor: "pointer" }}>Add</button>
-                    </div>
                   </div>
                 </div>
                 <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
@@ -867,7 +876,7 @@ export const BeoIntakePage = () => {
                       const hasOverrides = Object.keys(overrides).length > 0;
                       const hasAdded = added.length > 0;
                       const finalCo: ChildOverridesData | null = hasOverrides || hasAdded ? { ...(hasOverrides && { overrides }), ...(hasAdded && { added }) } : null;
-                      const updateResult = await updateEventMenuRow(editingShadowRow.id, { customText: editDraft.customText || null, sauceOverride: editDraft.sauceOverride || null, packOutNotes: editDraft.packOutNotes || null, childOverrides: finalCo });
+                      const updateResult = await updateEventMenuRow(editingShadowRow.id, { customText: editDraft.customText || null, sauceOverride: "Default", packOutNotes: editDraft.packOutNotes || null, childOverrides: finalCo });
                       if (isErrorResult(updateResult)) {
                         console.error("[Event Menu] Save failed:", updateResult);
                         alert(`Failed to save: ${updateResult.message ?? "Unknown error"}`);
@@ -885,7 +894,7 @@ export const BeoIntakePage = () => {
                             ? {
                                 ...r,
                                 customText: editDraft.customText || null,
-                                sauceOverride: editDraft.sauceOverride || null,
+                                sauceOverride: "Default",
                                 packOutNotes: editDraft.packOutNotes || null,
                                 childOverrides: finalCo,
                                 components: mergedComponents,
