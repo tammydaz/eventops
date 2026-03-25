@@ -1,5 +1,5 @@
-import React, { useEffect, useState, useCallback, useRef, type ReactNode } from "react";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import React, { useEffect, useLayoutEffect, useState, useCallback, useRef, type ReactNode } from "react";
+import { Link, useNavigate, useSearchParams, useLocation } from "react-router-dom";
 import { useEventStore } from "../state/eventStore";
 import { EventSelectorSimple } from "../components/EventSelectorSimple";
 import {
@@ -109,12 +109,15 @@ const SECTION_PARAM_TO_ID: Record<string, string> = {
 export const BeoIntakePage = () => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
+  const { pathname } = useLocation();
   const { loadEvents, selectedEventId, selectEvent, setSelectedEventId, setFields, loadEventData, eventDataLoading, selectedEventData, intakeDirty, setIntakeDirty, saveCurrentEvent, events } = useEventStore();
   const [lockoutIds, setLockoutIds] = useState<Awaited<ReturnType<typeof getLockoutFieldIds>>>(null);
   const [bohIds, setBohIds] = useState<Awaited<ReturnType<typeof getBOHProductionFieldIds>>>(null);
   const [showSendToBOHModal, setShowSendToBOHModal] = useState(false);
   const [showMissingFieldsModal, setShowMissingFieldsModal] = useState(false);
   const [shadowMenuRows, setShadowMenuRows] = useState<(EventMenuRow & { catalogItemName: string; components?: EventMenuRowComponent[] })[]>([]);
+  /** Skip next sessionStorage write for shadow menu — avoids persisting previous event's rows under the new event id (passive effect can run before rows clear). */
+  const shadowMenuStorageSkipRef = useRef(false);
   const [editingShadowRow, setEditingShadowRow] = useState<(EventMenuRow & { catalogItemName: string; components?: EventMenuRowComponent[] }) | null>(null);
   const [editDraft, setEditDraft] = useState<{ customText: string; packOutNotes: string }>({ customText: "", packOutNotes: "" });
   const [editDisplayNameEditing, setEditDisplayNameEditing] = useState(false);
@@ -211,8 +214,11 @@ export const BeoIntakePage = () => {
         setChildSpecOverrides({});
         return;
       }
+      const eventIdForThisLoad = selectedEventId;
+      const loadStale = () => useEventStore.getState().selectedEventId !== eventIdForThisLoad;
+
       const fetchWithRetry = async (attempt = 0): Promise<EventMenuRow[] | { error: true }> => {
-        const res = await loadEventMenuRows(selectedEventId);
+        const res = await loadEventMenuRows(eventIdForThisLoad);
         if (!res || "error" in res) return res ?? { error: true };
         if (res.length === 0 && options?.retryIfEmpty && attempt < 2) {
           await new Promise((r) => setTimeout(r, 200));
@@ -221,49 +227,52 @@ export const BeoIntakePage = () => {
         return res;
       };
       const res = await fetchWithRetry();
+      if (loadStale()) return;
       if (!res || "error" in res) {
-        console.error("[Event Menu] loadShadowMenu failed, keeping existing rows", res);
+        console.error("[Event Menu] loadShadowMenu failed", res);
         if (!options?.retryIfEmpty) {
           try {
-            const stored = sessionStorage.getItem(getShadowMenuStorageKey(selectedEventId));
+            const stored = sessionStorage.getItem(getShadowMenuStorageKey(eventIdForThisLoad));
             if (stored) {
               const parsed = JSON.parse(stored) as (EventMenuRow & { catalogItemName: string; components?: EventMenuRowComponent[] })[];
               if (Array.isArray(parsed) && parsed.length > 0) {
-                setShadowMenuRows(parsed);
+                if (!loadStale()) setShadowMenuRows(parsed);
                 return;
               }
             }
           } catch {
             /* ignore */
           }
-          setShadowMenuRows((prev) => (prev.length > 0 ? prev : []));
+          if (!loadStale()) setShadowMenuRows([]);
         }
         return;
       }
       if (res.length === 0) {
         try {
-          const stored = sessionStorage.getItem(getShadowMenuStorageKey(selectedEventId));
+          const stored = sessionStorage.getItem(getShadowMenuStorageKey(eventIdForThisLoad));
           if (stored) {
             const parsed = JSON.parse(stored) as (EventMenuRow & { catalogItemName: string; components?: EventMenuRowComponent[] })[];
             if (Array.isArray(parsed) && parsed.length > 0) {
-              setShadowMenuRows(parsed);
+              if (!loadStale()) setShadowMenuRows(parsed);
               return;
             }
           }
         } catch {
           /* ignore */
         }
-        setShadowMenuRows([]);
+        if (!loadStale()) setShadowMenuRows([]);
         return;
       }
       const catalogIds = res.map((r) => r.catalogItemId).filter((id): id is string => id != null);
       const names = catalogIds.length ? await fetchMenuItemNamesByIds(catalogIds) : {};
+      if (loadStale()) return;
       const uniqueCatalogIds = [...new Set(catalogIds)];
       const childrenMap: Record<string, { id: string; name: string }[]> = {};
       for (const id of uniqueCatalogIds) {
         const children = await fetchMenuItemChildren(id);
         childrenMap[id] = Array.isArray(children) ? children : [];
       }
+      if (loadStale()) return;
       const rowsWithComponents = res.map((r) => {
         const defaultChildren = (r.catalogItemId && childrenMap[r.catalogItemId]) || [];
         const co = r.childOverrides;
@@ -286,13 +295,27 @@ export const BeoIntakePage = () => {
           components,
         };
       });
-      setShadowMenuRows(rowsWithComponents);
+      if (!loadStale()) setShadowMenuRows(rowsWithComponents);
     },
     [selectedEventId]
   );
 
+  /** Clear menu UI before paint so you never see the previous event's food under the new header. */
+  useLayoutEffect(() => {
+    if (!selectedEventId) {
+      shadowMenuStorageSkipRef.current = true;
+      setShadowMenuRows([]);
+      setEditingShadowRow(null);
+      return;
+    }
+    shadowMenuStorageSkipRef.current = true;
+    setShadowMenuRows([]);
+    setEditingShadowRow(null);
+  }, [selectedEventId]);
+
   useEffect(() => {
-    if (selectedEventId) loadShadowMenu();
+    if (!selectedEventId) return;
+    void loadShadowMenu();
   }, [selectedEventId, loadShadowMenu]);
 
   useEffect(() => {
@@ -319,14 +342,20 @@ export const BeoIntakePage = () => {
     }
   }, [selectedEventId, menuSpecOverrides]);
 
+  /** Persist by shadowMenuRows only — do NOT depend on selectedEventId (that caused event A's rows to save under B's key mid-switch). */
   useEffect(() => {
-    if (!selectedEventId || shadowMenuRows.length === 0) return;
+    if (shadowMenuStorageSkipRef.current) {
+      shadowMenuStorageSkipRef.current = false;
+      return;
+    }
+    const sid = useEventStore.getState().selectedEventId;
+    if (!sid || shadowMenuRows.length === 0) return;
     try {
-      sessionStorage.setItem(getShadowMenuStorageKey(selectedEventId), JSON.stringify(shadowMenuRows));
+      sessionStorage.setItem(getShadowMenuStorageKey(sid), JSON.stringify(shadowMenuRows));
     } catch {
       /* ignore */
     }
-  }, [selectedEventId, shadowMenuRows]);
+  }, [shadowMenuRows]);
 
   const beoSentToBOH = bohIds?.beoSentToBOH && selectedEventData ? selectedEventData[bohIds.beoSentToBOH] === true : false;
   const isLocked =

@@ -12,10 +12,10 @@ type EventListItem = {
 };
 
 const Watchtower = () => {
-  const { events, eventsLoading, setSelectedEventId } = useEventStore() as {
+  const { events, eventsLoading, selectEvent } = useEventStore() as {
     events: EventListItem[];
     eventsLoading: boolean;
-    setSelectedEventId: (id: string | null) => void;
+    selectEvent: (id: string) => Promise<void>;
   };
 
   const [hoveredEventId, setHoveredEventId] = useState<string | null>(null);
@@ -337,7 +337,7 @@ const Watchtower = () => {
                       style={styles.actionItem}
                       onClick={(e) => {
                         e.stopPropagation();
-                        setSelectedEventId(evt.id);
+                        void selectEvent(evt.id);
                       }}
                       onMouseEnter={(e) => {
                         e.currentTarget.style.background = styles.actionItemHover.background as string;
@@ -357,7 +357,7 @@ const Watchtower = () => {
                       style={styles.actionItem}
                       onClick={(e) => {
                         e.stopPropagation();
-                        setSelectedEventId(evt.id);
+                        void selectEvent(evt.id);
                       }}
                       onMouseEnter={(e) => {
                         e.currentTarget.style.background = styles.actionItemHover.background as string;

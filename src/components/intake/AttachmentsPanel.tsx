@@ -56,7 +56,7 @@ export const AttachmentsPanel = () => {
   };
 
   const removeAttachment = async (fieldId: string, itemToRemove: AttachmentItem) => {
-    if (!selectedEventId) return;
+    if (!selectedEventId || !selectedEventData) return;
     const raw = selectedEventData[fieldId];
     const arr = Array.isArray(raw) ? raw : [];
     const remaining = arr.filter(

@@ -617,7 +617,7 @@ function CreationStationContent(props: {
   menuItems: LinkedRecordItem[];
   menuItemNames: Record<string, string>;
   getItemName: (id: string) => string;
-  fetchItemNames: (recordIds: string[]) => void;
+  fetchItemNames: (eventId: string | null, recordIds: string[], options?: { clearWhenEmpty?: boolean }) => void | Promise<void>;
   inputStyle: React.CSSProperties;
   labelStyle: React.CSSProperties;
   buttonStyle: React.CSSProperties;
@@ -643,7 +643,8 @@ function CreationStationContent(props: {
 
   useEffect(() => {
     loadStationPresets().then((result) => {
-      if (!isErrorResult(result) && result.length > 0) setStationPresets(result);
+      if (!isErrorResult(result)) setStationPresets(result);
+      else setStationPresets([]);
     });
   }, []);
 
@@ -1097,12 +1098,18 @@ export const MenuSection = ({ embedded = false, isDelivery = false }: MenuSectio
       try {
         const items = await loadMenuItems();
         if (isErrorResult(items)) {
-          if (active) setError(items.message ?? "Failed to load menu items.");
+          if (active) {
+            setMenuItems([]);
+            setError(items.message ?? "Failed to load menu items.");
+          }
           return;
         }
         if (active) setMenuItems(items);
       } catch (err) {
-        if (active) setError(err instanceof Error ? err.message : "Unknown error");
+        if (active) {
+          setMenuItems([]);
+          setError(err instanceof Error ? err.message : "Unknown error");
+        }
       }
     };
     loadItems();
@@ -1112,9 +1119,19 @@ export const MenuSection = ({ embedded = false, isDelivery = false }: MenuSectio
   // Fetch item names from Airtable when event data has linked record IDs.
   // Batches all fetches and applies a single setState to avoid re-render storm when switching events.
   // Skips update if event changed during fetch (cancellation).
-  const fetchItemNames = useCallback(async (eventId: string | null, recordIds: string[]) => {
+  const fetchItemNames = useCallback(
+    async (eventId: string | null, recordIds: string[], options?: { clearWhenEmpty?: boolean }) => {
     const baseId = (import.meta.env.VITE_AIRTABLE_BASE_ID as string)?.trim();
-    if (!recordIds?.length || !baseId) return;
+    if (!baseId) return;
+    if (!recordIds?.length) {
+      if (options?.clearWhenEmpty) {
+        if (eventId && useEventStore.getState().selectedEventId !== eventId) return;
+        setMenuItemNames({});
+        setMenuItemChildIds({});
+        setMenuItemSauce({});
+      }
+      return;
+    }
 
     const uniqueIds = [...new Set(recordIds.filter((id) => typeof id === "string" && id.startsWith("rec")))];
     const allNames: Record<string, string> = {};
@@ -1199,10 +1216,18 @@ export const MenuSection = ({ embedded = false, isDelivery = false }: MenuSectio
       if (firstChildName) allSauce[recId] = firstChildName;
     }
 
-    setMenuItemNames((prev) => ({ ...prev, ...allNames }));
-    setMenuItemChildIds((prev) => ({ ...prev, ...childIdsByParent }));
-    setMenuItemSauce((prev) => ({ ...prev, ...allSauce }));
-  }, []);
+    if (options?.clearWhenEmpty) {
+      setMenuItemNames(allNames);
+      setMenuItemChildIds(childIdsByParent);
+      setMenuItemSauce(allSauce);
+    } else {
+      setMenuItemNames((prev) => ({ ...prev, ...allNames }));
+      setMenuItemChildIds((prev) => ({ ...prev, ...childIdsByParent }));
+      setMenuItemSauce((prev) => ({ ...prev, ...allSauce }));
+    }
+  },
+  []
+);
 
   // Load selections from event data whenever selectedEventData changes
   // (e.g. after save, after navigating back from print, or when event loads)
@@ -1257,9 +1282,7 @@ export const MenuSection = ({ embedded = false, isDelivery = false }: MenuSectio
       ...newSelections.roomTempDisplay,
       ...newSelections.displays,
     ];
-    if (allRecordIds.length > 0) {
-      fetchItemNames(selectedEventId, allRecordIds);
-    }
+    fetchItemNames(selectedEventId, allRecordIds, { clearWhenEmpty: true });
 
     setSauceOverridesState(getSauceOverrides(selectedEventId));
 
@@ -1935,6 +1958,23 @@ export const MenuSection = ({ embedded = false, isDelivery = false }: MenuSectio
                 inputStyle={inputStyle}
                 labelStyle={labelStyle}
                 buttonStyle={deliverySmallAddStyle}
+              />
+            </div>
+          </CollapsibleSubsection>
+
+          <CollapsibleSubsection title="CREATION STATION" icon="🍳" defaultOpen={false} isDelivery>
+            <div style={{ gridColumn: "1 / -1" }}>
+              <CreationStationContent
+                selectedEventId={selectedEventId}
+                canEdit={canEdit}
+                menuItems={menuItems}
+                menuItemNames={menuItemNames}
+                getItemName={getItemName}
+                fetchItemNames={fetchItemNames}
+                inputStyle={inputStyle}
+                labelStyle={labelStyle}
+                buttonStyle={buttonStyle}
+                addButtonStyle={deliverySmallAddStyle}
               />
             </div>
           </CollapsibleSubsection>

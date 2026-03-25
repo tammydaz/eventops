@@ -2241,13 +2241,15 @@ const BeoPrintPage: React.FC = () => {
   const {
     selectedEventId,
     selectEvent,
-    eventData,
+    eventData: eventDataFromStore,
     loadEventData,
     loadEvents,
     updateEvent,
     setFields,
     events,
   } = useEventStore();
+  /** Store may set null while switching events — print page must not index null */
+  const eventData = eventDataFromStore ?? ({} as Record<string, unknown>);
   const isKitchenDept = (user?.role ?? "") === "kitchen";
   const [topTab, setTopTab] = useState<TopTab>("kitchenBEO");
   const [leftCheck, setLeftCheck] = useState<LeftCheck>("spec");
@@ -2356,14 +2358,29 @@ const BeoPrintPage: React.FC = () => {
   // ── Step 1: Grab event ID from URL and select it ──
   useEffect(() => {
     const urlEventId = getEventIdFromUrl();
-    if (urlEventId && urlEventId !== selectedEventId) {
-      selectEvent(urlEventId).then(() => setLoading(false));
-    } else if (selectedEventId) {
-      loadEventData().then(() => setLoading(false));
+    const storeId = useEventStore.getState().selectedEventId;
+    const storeEventData = useEventStore.getState().eventData;
+    let cancelled = false;
+    const done = () => {
+      if (!cancelled) setLoading(false);
+    };
+    if (urlEventId && urlEventId !== storeId) {
+      setLoading(true);
+      void selectEvent(urlEventId).finally(done);
+    } else if (storeId && storeEventData) {
+      // Reuse already-loaded event data when opening print for the currently selected event.
+      setLoading(false);
+      void loadEventData();
+    } else if (storeId) {
+      setLoading(true);
+      void loadEventData().finally(done);
     } else {
       setLoading(false);
     }
-  }, []);
+    return () => {
+      cancelled = true;
+    };
+  }, [location.pathname, selectEvent, loadEventData]);
 
   // ── Load spec overrides from Airtable (SPEC_OVERRIDE) then merge localStorage (per event) ──
   useEffect(() => {
@@ -2575,8 +2592,15 @@ const BeoPrintPage: React.FC = () => {
       };
 
       try {
-        for (let i = 0; i < toFetch.length; i += 10) {
-          await fetchChunk(toFetch.slice(i, i + 10));
+        // Parent menu items: was strictly sequential (one HTTP round-trip per 10 ids) — very slow for large menus.
+        const PARENT_CHUNK = 10;
+        const PARENT_CONCURRENT = 4;
+        const parentChunks: string[][] = [];
+        for (let i = 0; i < toFetch.length; i += PARENT_CHUNK) {
+          parentChunks.push(toFetch.slice(i, i + PARENT_CHUNK));
+        }
+        for (let w = 0; w < parentChunks.length; w += PARENT_CONCURRENT) {
+          await Promise.all(parentChunks.slice(w, w + PARENT_CONCURRENT).map((ids) => fetchChunk(ids)));
         }
         const childIdsToFetch = new Set<string>();
         Object.values(newData).forEach((d) => {
@@ -2585,33 +2609,46 @@ const BeoPrintPage: React.FC = () => {
           });
         });
         if (childIdsToFetch.size > 0) {
-          const childParams = new URLSearchParams();
-          childParams.set("filterByFormula", `OR(${[...childIdsToFetch].map((id) => `RECORD_ID()='${id}'`).join(",")})`);
-          childParams.set("returnFieldsByFieldId", "true");
-          childParams.append("fields[]", ITEM_NAME);
-          childParams.append("fields[]", DIETARY_TAGS);
-          const childData = await airtableFetch<{ records?: Array<{ id: string; fields: Record<string, unknown> }> }>(
-            `/${MENU_TABLE}?${childParams.toString()}`
-          );
-          if (!isErrorResult(childData) && childData?.records) {
-            (childData as { records: Array<{ id: string; fields: Record<string, unknown> }> }).records.forEach((rec) => {
-              const name = rec.fields[ITEM_NAME];
-              const tagsRaw = rec.fields[DIETARY_TAGS];
-              const dietaryTags = Array.isArray(tagsRaw)
-                ? tagsRaw.map((t) => (typeof t === "string" ? t : (t && typeof t === "object" && "name" in t ? String((t as { name: string }).name) : ""))).filter(Boolean).join(" ")
-                : typeof tagsRaw === "string" ? tagsRaw
-                : tagsRaw && typeof tagsRaw === "object" && "name" in tagsRaw ? String((tagsRaw as { name: string }).name) : undefined;
-              if (!newData[rec.id]) {
-                newData[rec.id] = {
-                  name: typeof name === "string" ? name : rec.id,
-                  childIds: [],
-                  dietaryTags: dietaryTags || undefined,
-                };
-              } else {
-                newData[rec.id].name = typeof name === "string" ? name : rec.id;
-                newData[rec.id].dietaryTags = dietaryTags || undefined;
-              }
-            });
+          const mergeChildRecord = (rec: { id: string; fields: Record<string, unknown> }) => {
+            const name = rec.fields[ITEM_NAME];
+            const tagsRaw = rec.fields[DIETARY_TAGS];
+            const dietaryTags = Array.isArray(tagsRaw)
+              ? tagsRaw.map((t) => (typeof t === "string" ? t : (t && typeof t === "object" && "name" in t ? String((t as { name: string }).name) : ""))).filter(Boolean).join(" ")
+              : typeof tagsRaw === "string" ? tagsRaw
+              : tagsRaw && typeof tagsRaw === "object" && "name" in tagsRaw ? String((tagsRaw as { name: string }).name) : undefined;
+            if (!newData[rec.id]) {
+              newData[rec.id] = {
+                name: typeof name === "string" ? name : rec.id,
+                childIds: [],
+                dietaryTags: dietaryTags || undefined,
+              };
+            } else {
+              newData[rec.id].name = typeof name === "string" ? name : rec.id;
+              newData[rec.id].dietaryTags = dietaryTags || undefined;
+            }
+          };
+          const childList = [...childIdsToFetch];
+          const CHILD_CHUNK = 10;
+          const CHILD_CONCURRENT = 4;
+          const childChunks: string[][] = [];
+          for (let i = 0; i < childList.length; i += CHILD_CHUNK) {
+            childChunks.push(childList.slice(i, i + CHILD_CHUNK));
+          }
+          const fetchChildChunk = async (ids: string[]) => {
+            const childParams = new URLSearchParams();
+            childParams.set("filterByFormula", `OR(${ids.map((id) => `RECORD_ID()='${id}'`).join(",")})`);
+            childParams.set("returnFieldsByFieldId", "true");
+            childParams.append("fields[]", ITEM_NAME);
+            childParams.append("fields[]", DIETARY_TAGS);
+            const childData = await airtableFetch<{ records?: Array<{ id: string; fields: Record<string, unknown> }> }>(
+              `/${MENU_TABLE}?${childParams.toString()}`
+            );
+            if (!isErrorResult(childData) && childData?.records) {
+              (childData as { records: Array<{ id: string; fields: Record<string, unknown> }> }).records.forEach(mergeChildRecord);
+            }
+          };
+          for (let w = 0; w < childChunks.length; w += CHILD_CONCURRENT) {
+            await Promise.all(childChunks.slice(w, w + CHILD_CONCURRENT).map((ids) => fetchChildChunk(ids)));
           }
         }
         setMenuItemData(newData);

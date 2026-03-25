@@ -127,8 +127,9 @@ function autoFillServiceware(
         ]),
       };
 
-    case "Premium Paper":
-    case "Premium":
+    case "premium paper":
+    case "premium":
+    case "prem":
       return {
         plates: withIds([
           { item: "Small Plates – Premium (app + dessert)", supplier: "FoodWerx Premium", qty: appetizerQty },
@@ -338,7 +339,6 @@ export const ServicewareSection = ({ embedded = false }: ServicewareSectionProps
   const [notes, setNotes] = useState("");
   const [carafesPerTable, setCarafesPerTable] = useState<number | "">("");
   const [sectionsExpanded, setSectionsExpanded] = useState(false);
-  const lastFillParamsRef = useRef<{ source: "FoodWerx" | "Client"; guestCount: number; paperType: string; carafes: number; hasApps: boolean } | null>(null);
   const hasLoadedRef = useRef(false);
   const skipLoadRef = useRef(false);
 
@@ -396,7 +396,6 @@ export const ServicewareSection = ({ embedded = false }: ServicewareSectionProps
     setNotes(notesRaw);
     setCarafesPerTable(carafesVal);
     setSectionsExpanded(false);
-    lastFillParamsRef.current = null;
     hasLoadedRef.current = true;
   }, [selectedEventId, selectedEventData]);
 
@@ -491,20 +490,7 @@ export const ServicewareSection = ({ embedded = false }: ServicewareSectionProps
   const handleAutoFill = () => {
     const effectivePaperType = (paperType || "Standard Paper").trim();
     const carafes = typeof carafesPerTable === "number" ? carafesPerTable : (parseInt(String(carafesPerTable), 10) || 0);
-    const hasItems = plates.length > 0 || cutlery.length > 0 || glassware.length > 0;
-    const paramsChanged =
-      !lastFillParamsRef.current ||
-      lastFillParamsRef.current.source !== "FoodWerx" ||
-      lastFillParamsRef.current.guestCount !== guestCount ||
-      lastFillParamsRef.current.paperType !== effectivePaperType ||
-      lastFillParamsRef.current.carafes !== carafes ||
-      lastFillParamsRef.current.hasApps !== hasAppetizersAndDesserts;
-    if (hasItems && !paramsChanged) {
-      setSectionsExpanded((prev) => !prev);
-      return;
-    }
     const defaults = autoFillServiceware(effectivePaperType, guestCount, hasAppetizersAndDesserts, carafes);
-    lastFillParamsRef.current = { source: "FoodWerx", guestCount, paperType: effectivePaperType, carafes, hasApps: hasAppetizersAndDesserts };
     if (!servicewareSource) setServicewareSource("FoodWerx");
     if (!paperType) setPaperType("Standard Paper");
     setPlates(defaults.plates);
@@ -518,26 +504,12 @@ export const ServicewareSection = ({ embedded = false }: ServicewareSectionProps
     setCutlery([]);
     setGlassware([]);
     setSectionsExpanded(false);
-    lastFillParamsRef.current = null;
   };
 
   const handleAutoFillClient = () => {
     const effectivePaperType = (paperType || "Standard Paper").trim();
     const carafes = typeof carafesPerTable === "number" ? carafesPerTable : (parseInt(String(carafesPerTable), 10) || 0);
-    const hasItems = plates.length > 0 || cutlery.length > 0 || glassware.length > 0;
-    const paramsChanged =
-      !lastFillParamsRef.current ||
-      lastFillParamsRef.current.source !== "Client" ||
-      lastFillParamsRef.current.guestCount !== guestCount ||
-      lastFillParamsRef.current.paperType !== effectivePaperType ||
-      lastFillParamsRef.current.carafes !== carafes ||
-      lastFillParamsRef.current.hasApps !== hasAppetizersAndDesserts;
-    if (hasItems && !paramsChanged) {
-      setSectionsExpanded((prev) => !prev);
-      return;
-    }
     const defaults = autoFillClientServiceware(effectivePaperType, guestCount, hasAppetizersAndDesserts, carafes);
-    lastFillParamsRef.current = { source: "Client", guestCount, paperType: effectivePaperType, carafes, hasApps: hasAppetizersAndDesserts };
     if (!servicewareSource) setServicewareSource("Client");
     if (!paperType) setPaperType("Standard Paper");
     setPlates(defaults.plates);

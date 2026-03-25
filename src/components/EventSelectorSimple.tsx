@@ -14,7 +14,7 @@ type EventSelectorSimpleProps = {
 
 export function EventSelectorSimple({ onBeforeSelectEvent }: EventSelectorSimpleProps = {}) {
   const navigate = useNavigate();
-  const { events, eventsLoading, selectedEventId, selectEvent } = useEventStore();
+  const { events, eventsLoading, selectedEventId } = useEventStore();
   const [filter, setFilter] = useState("");
 
   const filtered = useMemo(() => {
@@ -36,7 +36,6 @@ export function EventSelectorSimple({ onBeforeSelectEvent }: EventSelectorSimple
       }
     }
     navigate(`/beo-intake/${id}`, { replace: false });
-    selectEvent(id).catch(() => null);
   };
 
   return (

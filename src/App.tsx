@@ -32,16 +32,19 @@ function App() {
     loadEvents();
   }, [loadEvents]);
 
-  // Sync store to URL when pathname changes (e.g. user picked event from dropdown via navigate())
   useEffect(() => {
-    if (pathname.startsWith("/beo-intake/")) {
-      const raw = pathname.split("/beo-intake/")[1] ?? "";
-      const eventIdFromUrl = raw.split("/")[0]?.trim() ?? "";
-      if (eventIdFromUrl && eventIdFromUrl !== selectedEventId) {
-        selectEvent(eventIdFromUrl);
-      }
+    if (!pathname.startsWith("/beo-intake/")) return;
+
+    const raw = pathname.split("/beo-intake/")[1] ?? "";
+    const eventIdFromUrl = raw.split("/")[0]?.trim() ?? "";
+    if (!eventIdFromUrl) return;
+
+    const currentId = useEventStore.getState().selectedEventId;
+
+    if (eventIdFromUrl !== currentId) {
+      selectEvent(eventIdFromUrl);
     }
-  }, [pathname, selectedEventId, selectEvent]);
+  }, [pathname, selectEvent]);
 
   if (isPrintTest || isHome || isQuickIntake || isWatchtower || isPapaChulo || isFOH || isDashboardOld || isBeoIntake || isBeoPrint || isSeedDemo || isInvoiceIntake || isFeedbackIssues || isAdmin || isKitchen || isFlair || isDeliveryCommand || isIntakeFOH || isEventOverview || isEarlyEventSections) {
     return (

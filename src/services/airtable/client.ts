@@ -99,24 +99,6 @@ export const airtableFetch = async <T>(
     const method = (init?.method as string) || "GET";
     const body = init?.body != null ? (typeof init.body === "string" ? init.body : JSON.stringify(init.body)) : undefined;
 
-    if (body && (method === "POST" || method === "PATCH")) {
-      const tableName = path.split("?")[0].replace(/^\//, "").split("/")[0] || path;
-      let fields: unknown = undefined;
-      try {
-        const parsed = JSON.parse(body) as { records?: Array<{ fields?: unknown }>; fields?: unknown };
-        if (parsed.records?.length) {
-          fields = parsed.records.map((r) => r.fields);
-        } else if (parsed.fields !== undefined) {
-          fields = parsed.fields;
-        } else {
-          fields = parsed;
-        }
-      } catch {
-        fields = body;
-      }
-      console.log("AIRTABLE REQUEST", { tableName, baseId, fields });
-    }
-
     const response = await fetch(PROXY_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
