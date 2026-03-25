@@ -314,24 +314,20 @@ export default function DashboardPage() {
 
   const eventDataList = useMemo(() => rawEvents.map(listItemToEventData), [rawEvents]);
   const today = todayStr();
-  const weekEndDate = useMemo(() => {
-    const d = new Date(today);
-    d.setDate(d.getDate() + 6);
-    return d.toISOString().slice(0, 10);
-  }, [today]);
+  const { monday: weekMonday, sunday: weekSunday } = useMemo(() => weekRangeMondaySunday(today), [today]);
   const filteredEvents = useMemo(() => {
     if (activeTab === "Today's Events") return eventDataList.filter((e) => e.eventDate === today);
     if (activeTab === "Weekly") {
       const real = eventDataList.filter((e) => {
         const d = e.eventDate ?? "";
-        return d >= today && d <= weekEndDate;
+        return d >= weekMonday && d <= weekSunday;
       });
       const realIds = new Set(real.map((e) => e.id));
-      const demos = getDemoEventsForPipeline(today, weekEndDate, realIds);
+      const demos = getDemoEventsForPipeline(weekMonday, weekSunday, realIds);
       const combined = [...real, ...demos].sort((a, b) => (a.eventDate ?? "").localeCompare(b.eventDate ?? ""));
       if (combined.length >= MIN_EVENTS_TO_FILL) return combined;
       const usedIds = new Set(combined.map((e) => e.id));
-      const extra = getDemoEventsForPipeline(today, weekEndDate, usedIds).slice(0, MIN_EVENTS_TO_FILL - combined.length);
+      const extra = getDemoEventsForPipeline(weekMonday, weekSunday, usedIds).slice(0, MIN_EVENTS_TO_FILL - combined.length);
       return [...combined, ...extra].sort((a, b) => (a.eventDate ?? "").localeCompare(b.eventDate ?? ""));
     }
     if (activeTab === "Upcoming Events") return eventDataList.filter((e) => (e.eventDate ?? "") >= today);
