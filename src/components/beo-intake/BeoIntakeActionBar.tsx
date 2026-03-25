@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useEventStore } from "../../state/eventStore";
+import { DASHBOARD_CALENDAR_TO } from "../../lib/dashboardRoutes";
 import { syncShadowToEvent } from "../../services/airtable/eventMenu";
 
 type ShadowMenuRow = { id: string; section: string; catalogItemId: string | null; catalogItemName?: string };
@@ -85,7 +86,7 @@ export const BeoIntakeActionBar = ({ eventId, isLocked, onReopenRequest, onSendT
   };
 
   const handleReturnToDashboard = () => {
-    window.location.href = "/";
+    window.location.href = DASHBOARD_CALENDAR_TO;
   };
 
   if (!eventId) return null;

@@ -1,5 +1,5 @@
 /**
- * Ops Chief: "Fired" vs "Not yet fired" for the next 10 days.
+ * Ops Chief: "Fired" vs "Not yet fired" for the next 7 days.
  * Fired = BEO Sent to BOH (beoSentToBOH === true). Not yet fired = same window, not sent.
  */
 import { useEffect, useMemo } from "react";
@@ -82,7 +82,7 @@ export function OpsChiefFiredView() {
     <div style={{ display: "flex", flexDirection: "column", gap: 24, height: "100%" }}>
       <section>
         <h3 style={{ margin: "0 0 8px 0", fontSize: 14, color: "#9ca3af", textTransform: "uppercase" }}>
-          Fired (Sent to BOH) — next 10 days
+          Fired (Sent to BOH) — next 7 days
         </h3>
         <ul style={listStyles}>
           {fired.length === 0 ? (
@@ -101,7 +101,7 @@ export function OpsChiefFiredView() {
       </section>
       <section style={{ flex: 1, minHeight: 0 }}>
         <h3 style={{ margin: "0 0 8px 0", fontSize: 14, color: "#f59e0b", textTransform: "uppercase" }}>
-          Not yet fired — next 10 days
+          Not yet fired — next 7 days
         </h3>
         <ul style={listStyles}>
           {notFired.length === 0 ? (

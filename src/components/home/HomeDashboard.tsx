@@ -4,6 +4,7 @@ import { HomeHeader } from "./HomeHeader";
 import { EventGrid } from "./EventGrid";
 import type { EventCardData } from "./EventCard";
 import { Link } from "react-router-dom";
+import { DASHBOARD_CALENDAR_TO } from "../../lib/dashboardRoutes";
 import { DepartmentCircles } from "./DepartmentCircles";
 
 const sampleEvents: EventCardData[] = [
@@ -86,7 +87,7 @@ export const HomeDashboard = () => {
         </div>
         <ul className="sidebar-menu">
           <li>
-            <a className="active" href="/">
+            <a className="active" href={DASHBOARD_CALENDAR_TO}>
               <span className="sidebar-icon"></span>
               Dashboard
             </a>

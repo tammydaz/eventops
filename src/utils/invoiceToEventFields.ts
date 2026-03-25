@@ -1,4 +1,4 @@
-import { FIELD_IDS } from "../services/airtable/events";
+import { FIELD_IDS, FW_STAFF_SUMMARY_FIELD_ID } from "../services/airtable/events";
 import { timeStringToSeconds, secondsTo12HourString } from "./timeHelpers";
 import { isVendorOrPlaceholderName, type ParsedInvoice } from "../services/invoiceParser";
 
@@ -39,7 +39,9 @@ export function parsedInvoiceToFields(parsed: ParsedInvoice): Record<string, unk
     const sec = timeStringToSeconds(parsed.staffArrivalTime);
     if (sec != null) fields[FIELD_IDS.FOODWERX_ARRIVAL] = sec;
   }
-  if (parsed.fwStaff) fields[FIELD_IDS.CAPTAIN] = parsed.fwStaff;
+  if (parsed.fwStaff) {
+    if (FW_STAFF_SUMMARY_FIELD_ID) fields[FW_STAFF_SUMMARY_FIELD_ID] = parsed.fwStaff;
+  }
   // EVENT_TYPE omitted on create — Airtable rejects if value doesn't match base options. User sets in BEO Intake.
   // Build BEO timeline from parsed times (e.g. "1:00 PM – Staff arrival\n2:00 PM – Event begins")
   const timelineParts: string[] = [];

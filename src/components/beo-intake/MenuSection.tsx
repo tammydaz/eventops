@@ -610,8 +610,8 @@ function StationItemsConfigModal(props: {
   );
 }
 
-/** Creation Station subsection — Station Type, Station Items, Station Notes. */
-function CreationStationContent(props: {
+/** BEO stations — grouped by BEO placement; station type, items, notes. */
+export function CreationStationContent(props: {
   selectedEventId: string | null;
   canEdit: boolean;
   menuItems: LinkedRecordItem[];
@@ -626,7 +626,29 @@ function CreationStationContent(props: {
 }) {
   const { selectedEventId, canEdit, getItemName, fetchItemNames, inputStyle, labelStyle, buttonStyle, addButtonStyle } = props;
   const compactStyle = addButtonStyle ?? buttonStyle;
-  const { selectedEventData } = useEventStore();
+  const { selectedEventData, setFields } = useEventStore();
+
+  const appendStationIdOnEvent = async (stationId: string) => {
+    const sid = useEventStore.getState().selectedEventId;
+    if (!sid) return;
+    const ev = useEventStore.getState().selectedEventData;
+    const existing = asLinkedRecordIds(ev[FIELD_IDS.STATIONS]);
+    const next = [...new Set([...existing, stationId])];
+    const ok = await setFields(sid, { [FIELD_IDS.STATIONS]: next });
+    if (!ok) {
+      window.alert("Station was saved, but linking it on the event failed. Try again or add it manually on the Events record (Stations field).");
+    }
+  };
+
+  const removeStationIdOnEvent = async (stationId: string) => {
+    const sid = useEventStore.getState().selectedEventId;
+    if (!sid) return;
+    const ev = useEventStore.getState().selectedEventData;
+    const existing = asLinkedRecordIds(ev[FIELD_IDS.STATIONS]);
+    const next = existing.filter((id) => id !== stationId);
+    const ok = await setFields(sid, { [FIELD_IDS.STATIONS]: next });
+    if (!ok) window.alert("Could not remove this station from the event link. You can fix the Stations field in Airtable.");
+  };
   const [stations, setStations] = useState<Array<{ id: string; stationType: string; stationItems: string[]; stationNotes: string; stationPresetId?: string; stationComponents?: string[]; customItems?: string; beoPlacement?: "Presented Appetizer" | "Buffet Metal" | "Buffet China" }>>([]);
   const [stationTypeOptions, setStationTypeOptions] = useState<string[]>([]);
   const [stationPresets, setStationPresets] = useState<Array<{ id: string; name: string }>>([]);
@@ -637,6 +659,13 @@ function CreationStationContent(props: {
   const [showComponentsModal, setShowComponentsModal] = useState(false);
   const [editingStationId, setEditingStationId] = useState<string | null>(null);
   const [componentNames, setComponentNames] = useState<Record<string, string>>({});
+  /** When true, station row is expanded; omitted = use default (expanded until items are picked, then collapsed). */
+  const [stationRowExpanded, setStationRowExpanded] = useState<Record<string, boolean>>({});
+  /** BEO placement groups default expanded; `false` = user collapsed that header. */
+  const [placementGroupExpanded, setPlacementGroupExpanded] = useState<Record<string, boolean>>({});
+  useEffect(() => {
+    setPlacementGroupExpanded({});
+  }, [selectedEventId]);
   useEffect(() => {
     getStationTypeOptions().then((opts) => setStationTypeOptions(opts.length > 0 ? opts : [...STATION_TYPE_OPTIONS]));
   }, []);
@@ -697,8 +726,10 @@ function CreationStationContent(props: {
     });
     if (isErrorResult(result)) {
       console.error("Failed to create station:", result);
+      window.alert(result.message ?? "Could not create station. Check Airtable fields and permissions.");
       return;
     }
+    await appendStationIdOnEvent(result.id);
     setStations((prev) => [...prev, { id: result.id, stationType: newStationType.trim(), stationItems: itemIds, stationNotes: newStationNotes.trim() }]);
     setNewStationType("");
     setNewStationNotes("");
@@ -719,8 +750,10 @@ function CreationStationContent(props: {
     });
     if (isErrorResult(result)) {
       console.error("Failed to create station:", result);
+      window.alert(result.message ?? "Could not create station from preset. Check Airtable fields and permissions.");
       return;
     }
+    await appendStationIdOnEvent(result.id);
     setStations((prev) => [
       ...prev,
       { id: result.id, stationType: selectedPreset.name, stationItems: [], stationNotes: newStationNotes.trim(), stationPresetId: newStationPresetId, stationComponents: params.componentIds, customItems: params.customItems, beoPlacement: params.beoPlacement },
@@ -735,8 +768,10 @@ function CreationStationContent(props: {
     const result = await deleteStation(stationId);
     if (isErrorResult(result)) {
       console.error("Failed to delete station:", result);
+      window.alert(result.message ?? "Could not delete station.");
       return;
     }
+    await removeStationIdOnEvent(stationId);
     setStations((prev) => prev.filter((s) => s.id !== stationId));
   };
 
@@ -772,32 +807,99 @@ function CreationStationContent(props: {
 
   const selectStyle = { ...inputStyle, cursor: canEdit ? "pointer" : "not-allowed" };
 
-  return (
-    <div style={{ gridColumn: "1 / -1" }}>
-      {stations.map((st) => (
-        <div key={st.id} style={{ marginBottom: 16, padding: 12, backgroundColor: "#1a1a1a", borderRadius: 8, border: "1px solid #444" }}>
-          {canEdit && (
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginBottom: 8, flexWrap: "wrap" }}>
-              {(st.stationPresetId || stationPresets.some((p) => p.name === st.stationType) || (st.customItems != null && /^Main:\s/m.test(st.customItems))) && (
-                <button
-                  type="button"
-                  onClick={() => setEditingStationId(st.id)}
-                  style={{ padding: "4px 10px", fontSize: 11, fontWeight: 600, background: "rgba(139,92,246,0.2)", border: "1px solid #8b5cf6", color: "#a78bfa", borderRadius: 5, cursor: "pointer" }}
-                  title="Reopen station config to edit components, toppings, BEO placement"
-                >
-                  Edit
-                </button>
-              )}
-              <button
-                type="button"
-                onClick={() => handleDeleteStation(st.id)}
-                style={{ padding: "4px 10px", fontSize: 11, fontWeight: 600, background: "rgba(239,68,68,0.15)", border: "1px solid #ef4444", color: "#ef4444", borderRadius: 5, cursor: "pointer" }}
-                title="Remove this station from the event"
-              >
-                ✕ Remove Station
-              </button>
-            </div>
-          )}
+  const stationHasPickItems = (st: (typeof stations)[0]) =>
+    (st.stationComponents?.length ?? 0) > 0 || st.stationItems.length > 0 || Boolean(st.customItems?.trim());
+
+  const stationRowIsExpanded = (st: (typeof stations)[0]) =>
+    !stationHasPickItems(st) || stationRowExpanded[st.id] === true;
+
+  const toggleStationRow = (st: (typeof stations)[0]) => {
+    if (!stationHasPickItems(st)) return;
+    const now = stationRowIsExpanded(st);
+    setStationRowExpanded((p) => ({ ...p, [st.id]: !now }));
+  };
+
+  const creationStationTableBorder = "1px solid rgba(255,255,255,0.15)";
+  /** Match shadow menu item / section title contrast (white, not accent purple). */
+  const creationStationHeaderTitleColor = "#fff";
+
+  const STATION_PLACEMENT_GROUPS: Array<{
+    placement: "Presented Appetizer" | "Buffet Metal" | "Buffet China";
+    shadowTitle: string;
+    color: string;
+  }> = [
+    { placement: "Presented Appetizer", shadowTitle: "Presented Appetizers", color: "#FBC02D" },
+    { placement: "Buffet Metal", shadowTitle: "Buffet – Metal", color: "#4DD0E1" },
+    { placement: "Buffet China", shadowTitle: "Buffet – China", color: "#E8E8E8" },
+  ];
+
+  type StationRowState = (typeof stations)[number];
+
+  const renderStationCard = (st: StationRowState) => {
+        const expanded = stationRowIsExpanded(st);
+        const hasItems = stationHasPickItems(st);
+        return (
+        <div
+          key={st.id}
+          style={{ width: "100%", border: creationStationTableBorder, borderRadius: 8, backgroundColor: "rgba(0,0,0,0.2)", overflow: "hidden" }}
+        >
+          <div
+            role={hasItems ? "button" : undefined}
+            tabIndex={hasItems ? 0 : -1}
+            aria-expanded={hasItems ? expanded : undefined}
+            onClick={() => toggleStationRow(st)}
+            onKeyDown={(e) => { if (hasItems && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); toggleStationRow(st); } }}
+            style={{
+              padding: "8px 12px",
+              background: "rgba(0,0,0,0.15)",
+              borderBottom: expanded ? creationStationTableBorder : "none",
+              cursor: hasItems ? "pointer" : "default",
+            }}
+          >
+            <table style={{ width: "100%", borderCollapse: "collapse" }}>
+              <tbody>
+                <tr>
+                  <td style={{ width: 100, minWidth: 100, padding: 0, verticalAlign: "middle" }} />
+                  <td style={{ padding: 0, textAlign: "center", verticalAlign: "middle" }}>
+                    <span style={{ fontSize: 13, fontWeight: 700, letterSpacing: "0.05em", color: creationStationHeaderTitleColor }}>
+                      {(st.stationType || "Station").toUpperCase()}
+                    </span>
+                    {hasItems && (
+                      <span style={{ marginLeft: 8, fontSize: 11, color: "rgba(255,255,255,0.45)", userSelect: "none" }} aria-hidden>
+                        {expanded ? "▼" : "▶"}
+                      </span>
+                    )}
+                  </td>
+                  <td style={{ width: 140, minWidth: 140, padding: 0, textAlign: "right", verticalAlign: "middle" }} onClick={(e) => e.stopPropagation()}>
+                    {canEdit && (
+                      <div style={{ display: "flex", justifyContent: "flex-end", gap: 6, flexWrap: "wrap" }}>
+                        {(st.stationPresetId || stationPresets.some((p) => p.name === st.stationType) || (st.customItems != null && /^Main:\s/m.test(st.customItems))) && (
+                          <button
+                            type="button"
+                            onClick={() => { setStationRowExpanded((p) => ({ ...p, [st.id]: true })); setEditingStationId(st.id); }}
+                            style={{ padding: "4px 10px", fontSize: 10, fontWeight: 600, background: "rgba(139,92,246,0.2)", border: "1px solid #8b5cf6", color: "#a78bfa", borderRadius: 5, cursor: "pointer" }}
+                            title="Edit station config"
+                          >
+                            Edit
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteStation(st.id)}
+                          style={{ padding: "4px 10px", fontSize: 10, fontWeight: 600, background: "rgba(239,68,68,0.15)", border: "1px solid #ef4444", color: "#ef4444", borderRadius: 5, cursor: "pointer" }}
+                          title="Remove this station"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    )}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          {expanded && (
+          <div style={{ padding: 12 }} onClick={(e) => e.stopPropagation()}>
           <div style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))" }}>
             <div>
               <label style={labelStyle}>Station Type</label>
@@ -906,11 +1008,120 @@ function CreationStationContent(props: {
               <div style={{ color: "#e0e0e0", fontSize: 13, whiteSpace: "pre-wrap" }}>{st.stationNotes || "—"}</div>
             </div>
           </div>
+          </div>
+          )}
         </div>
-      ))}
+        );
+      };
+
+  const unassignedStations = stations.filter((s) => !s.beoPlacement);
+
+  return (
+    <div style={{ gridColumn: "1 / -1" }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 16, width: "100%" }}>
+        {STATION_PLACEMENT_GROUPS.map((g) => {
+          const groupStations = stations.filter((s) => s.beoPlacement === g.placement);
+          if (groupStations.length === 0) return null;
+          const groupOpen = placementGroupExpanded[g.placement] === true;
+          return (
+            <div key={g.placement} style={{ width: "100%", border: creationStationTableBorder, borderRadius: 8, backgroundColor: "rgba(0,0,0,0.2)", overflow: "hidden" }}>
+              <div
+                role="button"
+                tabIndex={0}
+                aria-expanded={groupOpen}
+                onClick={() => setPlacementGroupExpanded((p) => ({ ...p, [g.placement]: !p[g.placement] }))}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    setPlacementGroupExpanded((p) => ({ ...p, [g.placement]: !p[g.placement] }));
+                  }
+                }}
+                style={{ padding: "8px 12px", background: "rgba(0,0,0,0.15)", borderBottom: groupOpen ? creationStationTableBorder : "none", cursor: "pointer" }}
+              >
+                <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                  <tbody>
+                    <tr>
+                      <td style={{ width: 100, minWidth: 100, padding: 0 }} />
+                      <td style={{ padding: 0, textAlign: "center" }}>
+                        <span style={{ fontSize: 11, color: "rgba(255,255,255,0.45)", marginRight: 6, userSelect: "none" }} aria-hidden>
+                          {groupOpen ? "▼" : "▶"}
+                        </span>
+                        <span style={{ fontSize: 13, fontWeight: 700, letterSpacing: "0.05em", color: g.color }}>{g.shadowTitle.toUpperCase()}</span>
+                      </td>
+                      <td style={{ width: 140, minWidth: 140, padding: 0 }} />
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              {groupOpen && (
+              <div style={{ padding: 12, display: "flex", flexDirection: "column", gap: 12 }}>
+                {groupStations.map((st) => renderStationCard(st))}
+              </div>
+              )}
+            </div>
+          );
+        })}
+        {unassignedStations.length > 0 && (() => {
+          const uKey = "__unassigned__";
+          const uOpen = placementGroupExpanded[uKey] !== false;
+          return (
+            <div style={{ width: "100%", border: creationStationTableBorder, borderRadius: 8, backgroundColor: "rgba(0,0,0,0.2)", overflow: "hidden" }}>
+              <div
+                role="button"
+                tabIndex={0}
+                aria-expanded={uOpen}
+                onClick={() =>
+                  setPlacementGroupExpanded((p) =>
+                    p[uKey] === false
+                      ? (() => {
+                          const { [uKey]: _r, ...rest } = p;
+                          return rest;
+                        })()
+                      : { ...p, [uKey]: false }
+                  )
+                }
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    setPlacementGroupExpanded((p) =>
+                      p[uKey] === false
+                        ? (() => {
+                            const { [uKey]: _r, ...rest } = p;
+                            return rest;
+                          })()
+                        : { ...p, [uKey]: false }
+                    );
+                  }
+                }}
+                style={{ padding: "8px 12px", background: "rgba(0,0,0,0.15)", borderBottom: uOpen ? creationStationTableBorder : "none", cursor: "pointer" }}
+              >
+                <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                  <tbody>
+                    <tr>
+                      <td style={{ width: 100, minWidth: 100, padding: 0 }} />
+                      <td style={{ padding: 0, textAlign: "center" }}>
+                        <span style={{ fontSize: 11, color: "rgba(255,255,255,0.45)", marginRight: 6, userSelect: "none" }} aria-hidden>
+                          {uOpen ? "▼" : "▶"}
+                        </span>
+                        <span style={{ fontSize: 13, fontWeight: 700, letterSpacing: "0.05em", color: "#888" }}>OTHER STATIONS</span>
+                      </td>
+                      <td style={{ width: 140, minWidth: 140, padding: 0 }} />
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              {uOpen && (
+              <div style={{ padding: 12, display: "flex", flexDirection: "column", gap: 12 }}>
+                {unassignedStations.map((st) => renderStationCard(st))}
+              </div>
+              )}
+            </div>
+          );
+        })()}
+      </div>
       {canEdit && (
         <div style={{ marginTop: 16, padding: 12, border: "2px dashed #444", borderRadius: 8 }}>
-          <label style={labelStyle}>Add Creation Station</label>
+          <label style={labelStyle}>Add station</label>
           <div style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))" }}>
             {usePresetFlow ? (
               <div>
@@ -1980,7 +2191,7 @@ export const MenuSection = ({ embedded = false, isDelivery = false }: MenuSectio
           </CollapsibleSubsection>
         </>
       ) : (
-        /* ── FULL SERVICE: Passed, Presented, Stations, Buffet Metal, Buffet China, Desserts ── */
+        /* ── FULL SERVICE: Passed → Presented → Buffet Metal → China → Deli → Desserts → Platters → Stations ── */
         <div style={{ gridColumn: "1 / -1", width: "100%", display: "flex", justifyContent: "center" }}>
           <div style={{ maxWidth: 640, width: "100%" }}>
       {/* Passed Appetizers — every item on its own row for speck: parent line then sauce/child line(s); specKey matches BEO print */}
@@ -2190,80 +2401,6 @@ export const MenuSection = ({ embedded = false, isDelivery = false }: MenuSectio
         })()}
       </CourseStyleBlock>
 
-      {/* DELI (full service) — table layout */}
-      <div id="beo-menu-deli">
-      <CourseStyleBlock title="DELI" dotColor="#eab308">
-        <label style={labelStyle}>DELI</label>
-        <p style={{ fontSize: 11, color: "rgba(255,255,255,0.5)", marginBottom: 4 }}>Override cell to edit. Speck engine will use when wired.</p>
-        {(() => {
-          const fieldId = FIELD_IDS.FULL_SERVICE_DELI;
-          const guestCount = selectedEventData?.[FIELD_IDS.GUEST_COUNT] != null ? Number(selectedEventData[FIELD_IDS.GUEST_COUNT]) : 0;
-          const itemIds = selections.fullServiceDeli;
-          const rows: { rowKey: string; parentId: string; isChild: boolean; childId?: string; rowIdx: number }[] = [];
-          itemIds.forEach((parentId) => {
-            rows.push({ rowKey: `parent-${parentId}`, parentId, isChild: false, rowIdx: 0 });
-            (menuItemChildIds[parentId] ?? []).forEach((childId, idx) => {
-              rows.push({ rowKey: `child-${parentId}-${childId}`, parentId, isChild: true, childId, rowIdx: idx + 1 });
-            });
-          });
-          return (
-            <>
-              <div style={{ border: "1px solid rgba(255,255,255,0.12)", borderRadius: 6, overflow: "hidden", background: "rgba(0,0,0,0.25)", marginBottom: 6 }}>
-                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-                  <thead>
-                    <tr>
-                      <th style={{ textAlign: "left", padding: "6px 8px", borderBottom: "1px solid rgba(255,255,255,0.12)", fontWeight: 600, color: "#fff", width: "22%" }}>Auto speck</th>
-                      <th style={{ textAlign: "left", padding: "6px 8px", borderBottom: "1px solid rgba(255,255,255,0.12)", fontWeight: 600, color: "#fff", width: "44%" }}>Items</th>
-                      <th style={{ textAlign: "left", padding: "6px 8px", borderBottom: "1px solid rgba(255,255,255,0.12)", fontWeight: 600, color: "#fff", width: "24%" }}>Override</th>
-                      <th style={{ width: 32 }} />
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {rows.map((r) => {
-                      const specKey = getSpecOverrideKey(fieldId, r.parentId, r.rowIdx);
-                      if (r.isChild && r.childId != null) {
-                        const childDisplaySpec = (menuSpecOverrides[specKey] ?? "").trim() !== "" ? menuSpecOverrides[specKey] : "";
-                        return (
-                          <tr key={r.rowKey} style={{ borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
-                            <td style={{ padding: "4px 8px", color: "#fff" }}>{childDisplaySpec}</td>
-                            <td style={{ padding: "4px 8px", color: "#fff", paddingLeft: 24 }}>{getItemName(r.childId)}</td>
-                            <td style={{ padding: 2 }}>
-                              <input type="text" value={menuSpecOverrides[specKey] ?? ""} disabled={!canEdit} onChange={(e) => handleSpecOverrideChange(specKey, e.target.value)} placeholder="—" style={{ width: "100%", padding: "4px 6px", borderRadius: 4, border: "1px solid rgba(255,255,255,0.12)", background: "rgba(0,0,0,0.2)", color: "#fff", fontSize: 12 }} />
-                            </td>
-                            <td />
-                          </tr>
-                        );
-                      }
-                      const name = getItemName(r.parentId);
-                      const spec = calculateAutoSpec(name, "buffet", guestCount);
-                      const displaySpec = (menuSpecOverrides[specKey] ?? "").trim() !== "" ? menuSpecOverrides[specKey] : spec.quantity;
-                      return (
-                        <tr key={r.rowKey} style={{ borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
-                          <td style={{ padding: "4px 8px", color: "#fff" }}>{displaySpec}</td>
-                          <td style={{ padding: "4px 8px", color: "#fff" }}>{name}</td>
-                          <td style={{ padding: 2 }}>
-                            <input type="text" value={menuSpecOverrides[specKey] ?? ""} disabled={!canEdit} onChange={(e) => handleSpecOverrideChange(specKey, e.target.value)} placeholder="—" style={{ width: "100%", padding: "4px 6px", borderRadius: 4, border: "1px solid rgba(255,255,255,0.12)", background: "rgba(0,0,0,0.2)", color: "#fff", fontSize: 12 }} />
-                          </td>
-                          <td style={{ padding: "2px 6px" }}>
-                            <button type="button" disabled={!canEdit} onClick={() => removeMenuItem("fullServiceDeli", r.parentId)} style={{ background: "none", border: "none", color: "#ff6b6b", cursor: "pointer", fontSize: "16px", fontWeight: "bold" }} title="Remove">✕</button>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-              <button type="button" disabled={!canEdit} onClick={() => openPicker("deli", "fullServiceDeli", "Select Deli Items (Sandwiches, Wraps)")} style={smallAddButtonStyle}>+ Add</button>
-              <p style={{ fontSize: 11, color: "rgba(255,255,255,0.5)", marginTop: 4 }}>For sandwich platters and other DELI items. Slider rolls, lettuce & tomato, condiments are picked in the station (e.g. Configure Station All-American).</p>
-              <div style={{ marginTop: 6 }}>
-                <CustomFoodItemsBlock value={customFields.customFullServiceDeli} fieldId={FIELD_IDS.CUSTOM_FULL_SERVICE_DELI} placeholder="Item name" notesPlaceholder="Notes (optional)" canEdit={canEdit} onSave={saveCustomField} label="Custom DELI (not in menu)" inputStyle={inputStyle} labelStyle={labelStyle} buttonStyle={smallAddButtonStyle} />
-              </div>
-            </>
-          );
-        })()}
-      </CourseStyleBlock>
-      </div>
-
       {/* Buffet – Metal — table layout */}
       <CourseStyleBlock title="BUFFET – METAL" dotColor="#3b82f6">
         <label style={labelStyle}>Buffet – Metal</label>
@@ -2410,6 +2547,80 @@ export const MenuSection = ({ embedded = false, isDelivery = false }: MenuSectio
         })()}
       </CourseStyleBlock>
 
+      {/* DELI (full service) — before desserts */}
+      <div id="beo-menu-deli">
+      <CourseStyleBlock title="DELI" dotColor="#eab308">
+        <label style={labelStyle}>DELI</label>
+        <p style={{ fontSize: 11, color: "rgba(255,255,255,0.5)", marginBottom: 4 }}>Override cell to edit. Speck engine will use when wired.</p>
+        {(() => {
+          const fieldId = FIELD_IDS.FULL_SERVICE_DELI;
+          const guestCount = selectedEventData?.[FIELD_IDS.GUEST_COUNT] != null ? Number(selectedEventData[FIELD_IDS.GUEST_COUNT]) : 0;
+          const itemIds = selections.fullServiceDeli;
+          const rows: { rowKey: string; parentId: string; isChild: boolean; childId?: string; rowIdx: number }[] = [];
+          itemIds.forEach((parentId) => {
+            rows.push({ rowKey: `parent-${parentId}`, parentId, isChild: false, rowIdx: 0 });
+            (menuItemChildIds[parentId] ?? []).forEach((childId, idx) => {
+              rows.push({ rowKey: `child-${parentId}-${childId}`, parentId, isChild: true, childId, rowIdx: idx + 1 });
+            });
+          });
+          return (
+            <>
+              <div style={{ border: "1px solid rgba(255,255,255,0.12)", borderRadius: 6, overflow: "hidden", background: "rgba(0,0,0,0.25)", marginBottom: 6 }}>
+                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                  <thead>
+                    <tr>
+                      <th style={{ textAlign: "left", padding: "6px 8px", borderBottom: "1px solid rgba(255,255,255,0.12)", fontWeight: 600, color: "#fff", width: "22%" }}>Auto speck</th>
+                      <th style={{ textAlign: "left", padding: "6px 8px", borderBottom: "1px solid rgba(255,255,255,0.12)", fontWeight: 600, color: "#fff", width: "44%" }}>Items</th>
+                      <th style={{ textAlign: "left", padding: "6px 8px", borderBottom: "1px solid rgba(255,255,255,0.12)", fontWeight: 600, color: "#fff", width: "24%" }}>Override</th>
+                      <th style={{ width: 32 }} />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rows.map((r) => {
+                      const specKey = getSpecOverrideKey(fieldId, r.parentId, r.rowIdx);
+                      if (r.isChild && r.childId != null) {
+                        const childDisplaySpec = (menuSpecOverrides[specKey] ?? "").trim() !== "" ? menuSpecOverrides[specKey] : "";
+                        return (
+                          <tr key={r.rowKey} style={{ borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
+                            <td style={{ padding: "4px 8px", color: "#fff" }}>{childDisplaySpec}</td>
+                            <td style={{ padding: "4px 8px", color: "#fff", paddingLeft: 24 }}>{getItemName(r.childId)}</td>
+                            <td style={{ padding: 2 }}>
+                              <input type="text" value={menuSpecOverrides[specKey] ?? ""} disabled={!canEdit} onChange={(e) => handleSpecOverrideChange(specKey, e.target.value)} placeholder="—" style={{ width: "100%", padding: "4px 6px", borderRadius: 4, border: "1px solid rgba(255,255,255,0.12)", background: "rgba(0,0,0,0.2)", color: "#fff", fontSize: 12 }} />
+                            </td>
+                            <td />
+                          </tr>
+                        );
+                      }
+                      const name = getItemName(r.parentId);
+                      const spec = calculateAutoSpec(name, "buffet", guestCount);
+                      const displaySpec = (menuSpecOverrides[specKey] ?? "").trim() !== "" ? menuSpecOverrides[specKey] : spec.quantity;
+                      return (
+                        <tr key={r.rowKey} style={{ borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
+                          <td style={{ padding: "4px 8px", color: "#fff" }}>{displaySpec}</td>
+                          <td style={{ padding: "4px 8px", color: "#fff" }}>{name}</td>
+                          <td style={{ padding: 2 }}>
+                            <input type="text" value={menuSpecOverrides[specKey] ?? ""} disabled={!canEdit} onChange={(e) => handleSpecOverrideChange(specKey, e.target.value)} placeholder="—" style={{ width: "100%", padding: "4px 6px", borderRadius: 4, border: "1px solid rgba(255,255,255,0.12)", background: "rgba(0,0,0,0.2)", color: "#fff", fontSize: 12 }} />
+                          </td>
+                          <td style={{ padding: "2px 6px" }}>
+                            <button type="button" disabled={!canEdit} onClick={() => removeMenuItem("fullServiceDeli", r.parentId)} style={{ background: "none", border: "none", color: "#ff6b6b", cursor: "pointer", fontSize: "16px", fontWeight: "bold" }} title="Remove">✕</button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              <button type="button" disabled={!canEdit} onClick={() => openPicker("deli", "fullServiceDeli", "Select Deli Items (Sandwiches, Wraps)")} style={smallAddButtonStyle}>+ Add</button>
+              <p style={{ fontSize: 11, color: "rgba(255,255,255,0.5)", marginTop: 4 }}>For sandwich platters and other DELI items. Slider rolls, lettuce & tomato, condiments are picked in the station (e.g. Configure Station All-American).</p>
+              <div style={{ marginTop: 6 }}>
+                <CustomFoodItemsBlock value={customFields.customFullServiceDeli} fieldId={FIELD_IDS.CUSTOM_FULL_SERVICE_DELI} placeholder="Item name" notesPlaceholder="Notes (optional)" canEdit={canEdit} onSave={saveCustomField} label="Custom DELI (not in menu)" inputStyle={inputStyle} labelStyle={labelStyle} buttonStyle={smallAddButtonStyle} />
+              </div>
+            </>
+          );
+        })()}
+      </CourseStyleBlock>
+      </div>
+
       {/* Desserts — table layout */}
       <CourseStyleBlock title="DESSERTS" dotColor="#ef4444">
         <label style={labelStyle}>Desserts</label>
@@ -2481,7 +2692,6 @@ export const MenuSection = ({ embedded = false, isDelivery = false }: MenuSectio
         })()}
       </CourseStyleBlock>
 
-
       {/* Sandwich Platters — bottom, same block style */}
       <CourseStyleBlock title="SANDWICH PLATTERS" dotColor="#d97706">
         <label style={labelStyle}>Sandwich & Wrap Platters</label>
@@ -2508,8 +2718,7 @@ export const MenuSection = ({ embedded = false, isDelivery = false }: MenuSectio
         )}
       </CourseStyleBlock>
 
-      {/* Creation Station — bottom, same block style */}
-      <CourseStyleBlock title="CREATION STATION" dotColor="#8b5cf6">
+      <div className="beo-stations-embedded" style={{ marginTop: 20, width: "100%" }}>
         <CreationStationContent
           selectedEventId={selectedEventId}
           canEdit={canEdit}
@@ -2522,7 +2731,7 @@ export const MenuSection = ({ embedded = false, isDelivery = false }: MenuSectio
           buttonStyle={buttonStyle}
           addButtonStyle={smallAddButtonStyle}
         />
-      </CourseStyleBlock>
+      </div>
 
           </div>
         </div>

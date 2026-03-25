@@ -7,6 +7,7 @@ import { useState } from "react";
 import { createEvent, FIELD_IDS, loadEvents } from "../services/airtable/events";
 import { useEventStore } from "../state/eventStore";
 import { isErrorResult } from "../services/airtable/selectors";
+import { DASHBOARD_CALENDAR_TO } from "../lib/dashboardRoutes";
 
 const DEMO_FIELDS: Record<string, unknown> = {
   [FIELD_IDS.EVENT_DATE]: "2025-03-15",
@@ -216,7 +217,7 @@ export const SeedDemoEventPage = () => {
         </div>
 
         <a
-          href="/"
+          href={DASHBOARD_CALENDAR_TO}
           style={{ display: "inline-block", marginTop: 24, color: "#94a3b8", fontSize: 14 }}
         >
           ← Back to Dashboard

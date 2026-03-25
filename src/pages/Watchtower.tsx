@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from "react";
 import { Link } from "react-router-dom";
 import { useEventStore } from "../state/eventStore";
+import { DASHBOARD_CALENDAR_TO } from "../lib/dashboardRoutes";
 
 type EventListItem = {
   id: string;
@@ -115,7 +116,7 @@ const Watchtower = () => {
 
       {/* Header */}
       <header style={styles.header}>
-        <Link to="/" style={styles.backButton}>
+        <Link to={DASHBOARD_CALENDAR_TO} style={styles.backButton}>
           <div style={styles.logoSquare}>
             <span style={styles.logoLetter}>F</span>
           </div>
@@ -172,7 +173,7 @@ const Watchtower = () => {
                   View All Events
                 </button>
               )}
-              <Link to="/" style={styles.emptyButton}>
+              <Link to={DASHBOARD_CALENDAR_TO} style={styles.emptyButton}>
                 Go to Dashboard
               </Link>
             </div>

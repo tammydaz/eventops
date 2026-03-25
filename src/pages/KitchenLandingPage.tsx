@@ -9,7 +9,7 @@ const KITCHEN_NAV = [
 export default function KitchenLandingPage() {
   return (
     <DepartmentLayout title="Kitchen" navItems={KITCHEN_NAV} departmentContext="kitchen">
-      <EventsPipeline title="Kitchen — 10-Day Pipeline" departmentContext="kitchen" />
+      <EventsPipeline title="Kitchen — Weekly Pipeline" departmentContext="kitchen" />
     </DepartmentLayout>
   );
 }

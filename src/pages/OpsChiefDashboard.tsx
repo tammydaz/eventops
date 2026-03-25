@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { Link } from "react-router-dom";
+import { DASHBOARD_CALENDAR_TO } from "../lib/dashboardRoutes";
 import { OpsChiefDailyDispatch } from "../components/OpsChiefDailyDispatch";
 import { EventsPipeline } from "../components/EventsPipeline";
 import { OpsChiefFiredView } from "../components/OpsChiefFiredView";
@@ -332,7 +333,7 @@ const OpsChiefDashboard = () => {
 
       {/* Header */}
       <header style={styles.header}>
-        <Link to="/" style={styles.backButton}>
+        <Link to={DASHBOARD_CALENDAR_TO} style={styles.backButton}>
           <div style={styles.logoSquare}>
             <span style={styles.logoLetter}>F</span>
           </div>
@@ -364,7 +365,7 @@ const OpsChiefDashboard = () => {
           <div style={{ display: "grid", gridTemplateColumns: "1fr 320px", gap: 24, marginBottom: 24, minHeight: 480 }}>
             <div style={{ minWidth: 0, border: "1px solid #374151", borderRadius: 8, overflow: "hidden", background: "#111827" }}>
               <div style={{ padding: "12px 16px", borderBottom: "1px solid #374151", fontWeight: 600, color: "#f3f4f6" }}>
-                Intake / FOH — 10-Day Pipeline
+                Intake / FOH — Weekly Pipeline
               </div>
               <div style={{ height: "calc(100% - 52px)", overflow: "auto" }}>
                 <EventsPipeline title="" compact departmentContext="intake_foh" />
@@ -383,7 +384,7 @@ const OpsChiefDashboard = () => {
           <>
             <OpsChiefDailyDispatch />
             <section style={{ marginBottom: 24 }}>
-              <EventsPipeline title="Deliveries — 10-Day Pipeline" departmentContext="delivery" />
+              <EventsPipeline title="Deliveries — Weekly Pipeline" departmentContext="delivery" />
             </section>
           </>
         )}

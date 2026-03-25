@@ -5,6 +5,7 @@ import { isErrorResult } from "../services/airtable/selectors";
 import { useEventStore } from "../state/eventStore";
 import { inputStyle, labelStyle } from "../components/beo-intake/FormSection";
 import "./QuickIntake.css";
+import { DASHBOARD_CALENDAR_TO } from "../lib/dashboardRoutes";
 
 /** Only these four event types; sent to Airtable as plain string. */
 const EVENT_TYPES = [
@@ -191,7 +192,7 @@ export const QuickIntake = () => {
 
             <button
               type="button"
-              onClick={() => navigate("/")}
+              onClick={() => navigate(DASHBOARD_CALENDAR_TO)}
               style={{ width: "100%", padding: "9px", background: "rgba(255,255,255,0.05)", color: "rgba(255,255,255,0.6)", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 8, fontSize: 12, cursor: "pointer" }}
             >
               Back to Dashboard

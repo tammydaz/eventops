@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback } from "react";
 import { useEventStore } from "../../state/eventStore";
 import { FIELD_IDS, loadSingleSelectOptions, type SingleSelectOption } from "../../services/airtable/events";
 import { asString, asSingleSelectName } from "../../services/airtable/selectors";
-import { FormSection, CollapsibleSubsection, Helper, inputStyle, labelStyle } from "./FormSection";
+import { FormSection, BEO_SECTION_PILL_ACCENT, CollapsibleSubsection, Helper, inputStyle, labelStyle } from "./FormSection";
 import { KitchenLogisticsSection } from "./KitchenLogisticsSection";
 
 const STAIRS_FALLBACK = ["None", "1–2 steps", "3–5 steps", "Full flight", "Multiple floors"];
@@ -112,7 +112,7 @@ export const SiteVisitLogisticsSection = () => {
   const textareaStyle = { ...inputStyle, resize: "vertical" as const, fontFamily: "inherit" };
 
   return (
-    <FormSection title="Notes / Onsite event logistics" dotColor="#00bcd4" sectionId="beo-section-notes">
+    <FormSection title="Notes / Onsite event logistics" dotColor={BEO_SECTION_PILL_ACCENT} sectionId="beo-section-notes">
       <CollapsibleSubsection title="Parking & Load-In" defaultOpen={false}>
         <div style={{ gridColumn: "1 / -1" }}>
           <label style={labelStyle}>Parking Notes</label>

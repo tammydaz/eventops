@@ -2,7 +2,10 @@ import { useState, useEffect } from "react";
 import { Link, NavLink, useLocation } from "react-router-dom";
 import { useAuthStore } from "../state/authStore";
 import { DepartmentHeader } from "./DepartmentHeader";
+import { IntakeFOHCommandProvider } from "../context/IntakeFOHCommandContext";
+import { IntakeFOHCommandTop } from "./IntakeFOHCommandTop";
 import "../pages/DashboardPage.css";
+import { DASHBOARD_CALENDAR_TO } from "../lib/dashboardRoutes";
 
 type NavItem = {
   label: string;
@@ -20,10 +23,13 @@ type DepartmentLayoutProps = {
   departmentContext?: DepartmentContext;
   /** Optional header actions (e.g. Sign out, Upload Invoice) */
   headerActions?: React.ReactNode;
+  /** Full-width main area with no left sidebar (e.g. Intake/FOH command layout) */
+  hideSidebar?: boolean;
 };
 
-export function DepartmentLayout({ title, navItems, children, departmentContext, headerActions }: DepartmentLayoutProps) {
+export function DepartmentLayout({ title, navItems, children, departmentContext, headerActions, hideSidebar }: DepartmentLayoutProps) {
   const { pathname } = useLocation();
+  const dashboardNavActive = pathname === "/" || pathname.startsWith("/home");
   const { user, logout } = useAuthStore();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
@@ -38,10 +44,11 @@ export function DepartmentLayout({ title, navItems, children, departmentContext,
   }, []);
 
   return (
-    <div className="dp-container">
+    <div className={`dp-container ${hideSidebar ? "dp-container--no-sidebar dp-container-command" : ""}`.trim()}>
       {/* Sidebar — matches Dashboard exactly */}
+      {!hideSidebar && (
       <aside className="dp-sidebar">
-        <Link to="/" className="dp-logo-section" style={{ textDecoration: "none" }}>
+        <Link to={DASHBOARD_CALENDAR_TO} className="dp-logo-section" style={{ textDecoration: "none" }}>
           <div className="dp-logo-diamond">
             <span className="dp-logo-letter">W</span>
           </div>
@@ -52,7 +59,10 @@ export function DepartmentLayout({ title, navItems, children, departmentContext,
         </Link>
         <ul className="dp-nav" style={{ listStyle: "none", margin: 0, padding: 0 }}>
           <li>
-            <NavLink to="/" className={({ isActive }) => `dp-nav-link ${isActive ? "active" : ""}`}>
+            <NavLink
+              to={DASHBOARD_CALENDAR_TO}
+              className={() => `dp-nav-link ${dashboardNavActive ? "active" : ""}`}
+            >
               <span className="dp-nav-dot" />
               Dashboard
             </NavLink>
@@ -90,6 +100,7 @@ export function DepartmentLayout({ title, navItems, children, departmentContext,
           </div>
         )}
       </aside>
+      )}
 
       {/* Mobile nav overlay & drawer — matches Dashboard */}
       <div className={`dp-mobile-nav-overlay ${mobileNavOpen ? "open" : ""}`} onClick={() => setMobileNavOpen(false)} aria-hidden="true" />
@@ -103,7 +114,11 @@ export function DepartmentLayout({ title, navItems, children, departmentContext,
         </div>
         <ul className="dp-nav">
           <li>
-            <NavLink to="/" className={({ isActive }) => `dp-nav-link ${isActive ? "active" : ""}`} onClick={() => setMobileNavOpen(false)}>
+            <NavLink
+              to={DASHBOARD_CALENDAR_TO}
+              className={() => `dp-nav-link ${dashboardNavActive ? "active" : ""}`}
+              onClick={() => setMobileNavOpen(false)}
+            >
               <span className="dp-nav-dot" />
               Dashboard
             </NavLink>
@@ -133,21 +148,38 @@ export function DepartmentLayout({ title, navItems, children, departmentContext,
         )}
       </aside>
 
-      {/* Main — matches Dashboard: header inside main, then content */}
+      {/* Main — embedded header (dept pages) or full Werx command top (Intake/FOH) */}
       <main className="dp-main">
-        <DepartmentHeader
-          departmentContext={departmentContext}
-          rightActions={headerActions}
-          embedded
-          leftSlot={
-            <button type="button" className="dp-mobile-hamburger" onClick={() => setMobileNavOpen(true)} aria-label="Open menu">
-              <span /><span /><span />
-            </button>
-          }
-        />
-        <div className="dp-events-area" style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0, overflow: "auto" }}>
-          {children}
-        </div>
+        {hideSidebar ? (
+          <IntakeFOHCommandProvider>
+            <IntakeFOHCommandTop onOpenMobileMenu={() => setMobileNavOpen(true)} />
+            <div
+              className="dp-events-area dp-events-area--no-sidebar"
+              style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0, overflow: "hidden" }}
+            >
+              {children}
+            </div>
+          </IntakeFOHCommandProvider>
+        ) : (
+          <>
+            <DepartmentHeader
+              departmentContext={departmentContext}
+              rightActions={headerActions}
+              embedded
+              leftSlot={
+                <button type="button" className="dp-mobile-hamburger" onClick={() => setMobileNavOpen(true)} aria-label="Open menu">
+                  <span /><span /><span />
+                </button>
+              }
+            />
+            <div
+              className="dp-events-area"
+              style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0, overflow: "hidden" }}
+            >
+              {children}
+            </div>
+          </>
+        )}
       </main>
     </div>
   );

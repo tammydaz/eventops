@@ -6,6 +6,7 @@ import { createEvent, uploadAttachment, FIELD_IDS } from "../services/airtable/e
 import { isErrorResult } from "../services/airtable/selectors";
 import { useEventStore } from "../state/eventStore";
 import { parsedInvoiceToFields } from "../utils/invoiceToEventFields";
+import { DASHBOARD_CALENDAR_TO } from "../lib/dashboardRoutes";
 
 type Step = "idle" | "processing" | "creating" | "duplicate" | "done" | "error";
 type DuplicateEvent = { id: string; eventName: string; eventDate?: string };
@@ -212,7 +213,7 @@ export default function InvoiceIntakePage() {
         }}
       >
         <Link
-          to="/"
+          to={DASHBOARD_CALENDAR_TO}
           style={{
             display: "flex",
             alignItems: "center",

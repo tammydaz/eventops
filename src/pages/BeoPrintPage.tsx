@@ -3,7 +3,7 @@ import { useLocation } from "react-router-dom";
 import { useEventStore } from "../state/eventStore";
 import { useAuthStore } from "../state/authStore";
 import { useBeoPrintStore } from "../state/beoPrintStore";
-import { FIELD_IDS, getBarServiceFieldId, getLockoutFieldIds, getBOHProductionFieldIds } from "../services/airtable/events";
+import { FIELD_IDS, getBarServiceFieldId, getLockoutFieldIds, getBOHProductionFieldIds, resolveFwStaffLineFromFields } from "../services/airtable/events";
 import { airtableFetch } from "../services/airtable/client";
 import { loadStationsByEventId } from "../services/airtable/linkedRecords";
 import { loadStationComponentNamesByIds } from "../services/airtable/stationComponents";
@@ -2713,7 +2713,7 @@ const BeoPrintPage: React.FC = () => {
   const eventEnd = secondsTo12HourString(eventData[FIELD_IDS.EVENT_END_TIME]);
   const guestCount = f(FIELD_IDS.GUEST_COUNT);
   const dispatchTime = secondsTo12HourString(eventData[FIELD_IDS.DISPATCH_TIME]) || f(FIELD_IDS.DISPATCH_TIME) || "TBD";
-  const fwStaff = f(FIELD_IDS.CAPTAIN);
+  const fwStaff = resolveFwStaffLineFromFields(eventData as Record<string, unknown>);
   const eventArrival =
     secondsTo12HourString(eventData[FIELD_IDS.FOODWERX_ARRIVAL]) ||
     f(FIELD_IDS.VENUE_ARRIVAL_TIME);
@@ -2784,15 +2784,15 @@ const BeoPrintPage: React.FC = () => {
   const eventType = asSingleSelectName(eventData[FIELD_IDS.EVENT_TYPE]);
   const isDelivery = isDeliveryOrPickup(eventType);
 
-  // Hard print order: Passed Apps → Presented Apps → Buffet Metal → Buffet China → Dessert
+  // Hard print order: Passed → Presented → Buffet Metal → Buffet China → Deli → Desserts
   // Stations route into their placement section (Presented Appetizer / Buffet Metal / Buffet China).
   // No standalone STATIONS section — a station must have a BEO Placement to appear on the print.
   const FULL_SERVICE_SECTION_DEFS: { title: string; fieldId: string; linkedFieldId: string; customFieldId: string }[] = [
     { title: "PASSED APPETIZERS", fieldId: FIELD_IDS.PASSED_APPETIZERS, linkedFieldId: FIELD_IDS.PASSED_APPETIZERS, customFieldId: FIELD_IDS.CUSTOM_PASSED_APP },
     { title: "PRESENTED APPETIZERS", fieldId: FIELD_IDS.PRESENTED_APPETIZERS, linkedFieldId: FIELD_IDS.PRESENTED_APPETIZERS, customFieldId: FIELD_IDS.CUSTOM_PRESENTED_APP },
-    { title: "DELI", fieldId: FIELD_IDS.FULL_SERVICE_DELI, linkedFieldId: FIELD_IDS.FULL_SERVICE_DELI, customFieldId: FIELD_IDS.CUSTOM_FULL_SERVICE_DELI },
     { title: "BUFFET – METAL", fieldId: FIELD_IDS.BUFFET_METAL, linkedFieldId: FIELD_IDS.BUFFET_METAL, customFieldId: FIELD_IDS.CUSTOM_BUFFET_METAL },
     { title: "BUFFET – CHINA", fieldId: FIELD_IDS.BUFFET_CHINA, linkedFieldId: FIELD_IDS.BUFFET_CHINA, customFieldId: FIELD_IDS.CUSTOM_BUFFET_CHINA },
+    { title: "DELI", fieldId: FIELD_IDS.FULL_SERVICE_DELI, linkedFieldId: FIELD_IDS.FULL_SERVICE_DELI, customFieldId: FIELD_IDS.CUSTOM_FULL_SERVICE_DELI },
     { title: "DESSERTS", fieldId: FIELD_IDS.DESSERTS, linkedFieldId: FIELD_IDS.DESSERTS, customFieldId: FIELD_IDS.CUSTOM_DESSERTS },
   ];
 

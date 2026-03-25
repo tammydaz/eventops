@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useEventStore } from "../../state/eventStore";
 import { useAuthStore } from "../../state/authStore";
-import { FIELD_IDS, getFoodwerxArrivalFieldId } from "../../services/airtable/events";
+import { FIELD_IDS, FW_STAFF_SUMMARY_FIELD_ID, getFoodwerxArrivalFieldId, resolveFwStaffLineFromFields } from "../../services/airtable/events";
 import { asSingleSelectName, asString, asBoolean } from "../../services/airtable/selectors";
-import { FormSection, Helper, inputStyle, labelStyle } from "./FormSection";
+import { FormSection, BEO_SECTION_PILL_ACCENT, Helper, inputStyle, labelStyle } from "./FormSection";
 import type { EventCore } from "./types";
 import { secondsToTimeString, MINUTE_INCREMENTS } from "../../utils/timeHelpers";
 
@@ -91,7 +91,7 @@ export const EventCoreSection = ({ isDelivery = false, hideHeaderFields = false 
       eventEndTime: secondsToTimeString(selectedEventData[FIELD_IDS.EVENT_END_TIME]),
       eventArrivalTime: secondsToTimeString(arrivalRaw),
     });
-    setCaptain(asString(selectedEventData[FIELD_IDS.CAPTAIN]));
+    setCaptain(resolveFwStaffLineFromFields(selectedEventData));
     setDeliveryNotes(asString(selectedEventData[FIELD_IDS.LOAD_IN_NOTES]));
     setFoodMustGoHot(asBoolean(selectedEventData[FIELD_IDS.FOOD_MUST_GO_HOT]));
   }, [selectedEventId, selectedEventData, fwArrivalFieldId]);
@@ -136,7 +136,13 @@ export const EventCoreSection = ({ isDelivery = false, hideHeaderFields = false 
   }, [hideHeaderFields, details.eventType, details.eventDate, details.guestCount, details.eventStartTime]);
 
   return (
-    <FormSection title={isDelivery ? "Delivery Event Details" : "Event Details"} subtitle={eventSummary} dotColor={isDelivery ? "#eab308" : undefined} isDelivery={isDelivery} sectionId="beo-section-event">
+    <FormSection
+      title={isDelivery ? "Delivery Event Details" : "Event Details"}
+      subtitle={eventSummary}
+      dotColor={BEO_SECTION_PILL_ACCENT}
+      isDelivery={isDelivery}
+      sectionId="beo-section-event"
+    >
       {!hideHeaderFields && (
         <>
       <div>
@@ -371,7 +377,7 @@ export const EventCoreSection = ({ isDelivery = false, hideHeaderFields = false 
               disabled={!canEdit}
               onChange={(e) => setCaptain(e.target.value)}
               onBlur={async (e) => {
-                await saveField(FIELD_IDS.CAPTAIN, e.target.value);
+                await saveField(FW_STAFF_SUMMARY_FIELD_ID, e.target.value);
               }}
               style={inputStyle}
               placeholder="e.g. JA/JM"

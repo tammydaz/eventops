@@ -2,7 +2,7 @@ import { useEffect, useState, useRef } from "react";
 import { useEventStore } from "../../state/eventStore";
 import { FIELD_IDS } from "../../services/airtable/events";
 import { asString, asSingleSelectName } from "../../services/airtable/selectors";
-import { FormSection, labelStyle, textareaStyle } from "./FormSection";
+import { FormSection, BEO_SECTION_PILL_ACCENT, labelStyle, textareaStyle } from "./FormSection";
 
 const WEDDING_KEY_MOMENTS = [
   "Grand Entrance",
@@ -79,7 +79,7 @@ export const TimelineSection = () => {
     .join(" / ");
 
   return (
-    <FormSection title="Timeline" dotColor="#00bcd4" sectionId="beo-section-timeline">
+    <FormSection title="Timeline" dotColor={BEO_SECTION_PILL_ACCENT} sectionId="beo-section-timeline">
       {showKeyMoments && (
         <div style={{ gridColumn: "1 / -1", marginBottom: 10, padding: 8, backgroundColor: "rgba(59,130,246,0.08)", borderRadius: 6, border: "1px solid rgba(59,130,246,0.3)" }}>
           <div style={{ fontSize: 11, color: "#93c5fd", marginBottom: 4, fontWeight: 600 }}>

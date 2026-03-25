@@ -19,6 +19,7 @@ function addDays(date: Date, days: number): string {
   return d.toISOString().slice(0, 10);
 }
 import { FollowUpModal, type FollowUpResult } from "../components/FollowUpModal";
+import { DASHBOARD_CALENDAR_TO } from "../lib/dashboardRoutes";
 
 const SECTION_COLORS = {
   summary: { accent: "#ff6b6b", border: "rgba(204,0,0,0.35)", bg: "rgba(204,0,0,0.06)", btnBg: "rgba(204,0,0,0.12)" },
@@ -411,7 +412,7 @@ const EventOverviewPage: React.FC = () => {
       <div style={styles.container}>
         <div style={styles.card}>
           <div style={styles.notFound}>Event ID is required.</div>
-          <Link to="/" className="ev-overview-back" style={styles.backLink}>← Back to Dashboard</Link>
+          <Link to={DASHBOARD_CALENDAR_TO} className="ev-overview-back" style={styles.backLink}>← Back to Dashboard</Link>
         </div>
       </div>
     );
@@ -425,7 +426,7 @@ const EventOverviewPage: React.FC = () => {
           loadEvents();
           navigate(`/event/${eventId}`);
         }}
-        onBack={() => navigate("/")}
+        onBack={() => navigate(DASHBOARD_CALENDAR_TO)}
       />
     );
   }
@@ -435,7 +436,7 @@ const EventOverviewPage: React.FC = () => {
       <div style={styles.container}>
         <div style={styles.card}>
           <div style={styles.loading}>Loading event…</div>
-          <Link to="/" className="ev-overview-back" style={styles.backLink}>← Back to Dashboard</Link>
+          <Link to={DASHBOARD_CALENDAR_TO} className="ev-overview-back" style={styles.backLink}>← Back to Dashboard</Link>
         </div>
       </div>
     );
@@ -447,7 +448,7 @@ const EventOverviewPage: React.FC = () => {
       <div style={styles.container}>
         <div style={styles.card}>
           <div style={styles.notFound}>Event not found.</div>
-          <Link to="/" className="ev-overview-back" style={styles.backLink}>← Back to Dashboard</Link>
+          <Link to={DASHBOARD_CALENDAR_TO} className="ev-overview-back" style={styles.backLink}>← Back to Dashboard</Link>
         </div>
       </div>
     );
@@ -511,7 +512,7 @@ const EventOverviewPage: React.FC = () => {
     <div style={styles.container}>
       <div style={styles.card}>
         <div style={styles.header}>
-          <Link to="/" className="ev-overview-back" style={styles.backLink}>← Back to Dashboard</Link>
+          <Link to={DASHBOARD_CALENDAR_TO} className="ev-overview-back" style={styles.backLink}>← Back to Dashboard</Link>
           <h1 style={styles.title}>Event Overview</h1>
         </div>
         <div style={styles.tagline}>

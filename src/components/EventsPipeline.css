@@ -19,6 +19,10 @@
 .pipeline-view .dp-events-area {
   scrollbar-width: none;
   width: 100%;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
 }
 .pipeline-view .dp-events-area::-webkit-scrollbar {
   display: none;
@@ -30,66 +34,21 @@
   width: 100%;
 }
 
-/* ═══ FOH Bottom Dock — mini grey cards (sent to BOH) ═══ */
-.foh-dock {
-  margin-top: 24px;
-  padding: 20px 0 0;
-  border-top: 1px solid rgba(255, 255, 255, 0.7);
-  box-shadow: 0 -2px 0 0 rgba(255, 255, 255, 0.7);
-  background: linear-gradient(180deg, rgba(30, 30, 30, 0.6), rgba(20, 20, 20, 0.8));
-  border-radius: 0;
-}
-.foh-dock-inner {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  justify-content: flex-start;
-  align-items: stretch;
-}
-
-.foh-mini-card {
-  width: 200px;
-  min-height: 56px;
-  padding: 10px 36px 10px 12px; /* extra right for ? bubble */
-  background: linear-gradient(135deg, rgba(45, 45, 45, 0.9), rgba(35, 35, 35, 0.7));
-  border: 1px solid #6b7280;
-  border-radius: 8px;
-  cursor: pointer;
-  transition: all 0.2s;
+.pipeline-view .dp-events-list-with-sidebar {
+  flex: 1;
+  min-height: 0;
   display: flex;
   flex-direction: row;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+  align-items: stretch;
+  width: 100%;
 }
-.foh-mini-card:hover {
-  border-color: rgba(255, 255, 255, 0.3);
-  background: linear-gradient(135deg, rgba(55, 55, 55, 0.95), rgba(45, 45, 45, 0.8));
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-}
-.foh-mini-client {
-  font-size: 13px;
-  font-weight: 600;
-  color: #fff;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+
+.pipeline-view .dp-events-area-inner-fill {
   flex: 1;
   min-width: 0;
-}
-.foh-mini-lights {
+  min-height: 0;
   display: flex;
-  gap: 2px;
-  align-items: center;
-  flex-shrink: 0;
-}
-.foh-mini-light {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  font-size: 0;
-  display: inline-flex;
-  flex-shrink: 0;
+  flex-direction: column;
 }
 
 /* ═══ Today's Tasks (FOH) ── */
@@ -218,4 +177,96 @@
 .dp-new-client-help-steps strong {
   color: #00d4ff;
   font-weight: 600;
+}
+
+/* Intake / FOH: top toolbar strip (command-style row under header) */
+.dp-tabs-toolbar--intake-foh-top {
+  margin: 0;
+  padding: 12px 22px 14px !important;
+  border-top: 1px solid rgba(204, 0, 0, 0.22);
+  border-bottom: 1px solid rgba(204, 0, 0, 0.15);
+  background: #000;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.pipeline-view--intake-foh .dp-new-client-help-panel,
+.pipeline-view--intake-foh .dp-todays-tasks-panel {
+  margin-left: 22px;
+  margin-right: 22px;
+}
+
+.pipeline-view--intake-foh:not(.pipeline-view--intake-foh-list-fit) > .dp-events-area {
+  padding: 0 22px 24px !important;
+}
+
+/* Intake / FOH: list view fits viewport — no page scroll; columns clip if overcrowded */
+.pipeline-view--intake-foh {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.pipeline-view--intake-foh-list-fit {
+  padding-top: 8px;
+  padding-bottom: 8px;
+}
+
+.pipeline-view--intake-foh-list-fit .dp-tabs-toolbar {
+  flex-shrink: 0;
+  padding-top: 8px;
+  padding-bottom: 8px;
+}
+
+.pipeline-view--intake-foh-list-fit .dp-events-area {
+  flex: 1 !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+  margin-bottom: 0 !important;
+}
+
+.pipeline-view--intake-foh-list-fit .dp-events-list-with-sidebar {
+  flex: 1;
+  min-height: 0;
+  height: 100%;
+  max-height: 100%;
+  overflow: hidden;
+}
+
+.pipeline-view--intake-foh-list-fit .dp-events-area-inner-fill {
+  min-height: 0;
+}
+
+.pipeline-view--intake-foh-list-fit .dp-events-list.dp-list-by-day {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.pipeline-view--intake-foh-list-fit .dp-list-by-day-scroll {
+  flex: 1;
+  min-height: 0;
+  max-height: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  align-items: stretch;
+  padding-bottom: 4px;
+}
+
+.pipeline-view--intake-foh-list-fit .dp-list-day-column {
+  max-height: 100%;
+  min-height: 0;
+  flex: 1 0 200px;
+}
+
+.pipeline-view--intake-foh-list-fit .dp-list-day-column-body {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.pipeline-view--intake-foh-list-fit .dp-event-detail-sidebar--compact {
+  align-self: stretch;
+  max-height: 100%;
+  overflow: hidden;
 }

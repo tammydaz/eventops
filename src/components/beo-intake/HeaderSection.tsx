@@ -5,10 +5,10 @@
  */
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useEventStore } from "../../state/eventStore";
-import { FIELD_IDS, getFoodwerxArrivalFieldId } from "../../services/airtable/events";
-import { asString, asSingleSelectName } from "../../services/airtable/selectors";
+import { FIELD_IDS, FW_STAFF_SUMMARY_FIELD_ID, getFoodwerxArrivalFieldId, resolveFwStaffLineFromFields, STAFFING_CONFIRMED_FIELD_ID } from "../../services/airtable/events";
+import { asString, asSingleSelectName, asAirtableCheckbox } from "../../services/airtable/selectors";
 import { isDeliveryOrPickup } from "../../lib/deliveryHelpers";
-import { FormSection, Helper, inputStyle, labelStyle, helperStyle, MUTED_COLOR, LABEL_COLOR, ACCENT_LINK, LABEL_FONT_SIZE, HELPER_FONT_SIZE } from "./FormSection";
+import { FormSection, BEO_SECTION_PILL_ACCENT, Helper, inputStyle, labelStyle, helperStyle, MUTED_COLOR, LABEL_COLOR, ACCENT_LINK, LABEL_FONT_SIZE, HELPER_FONT_SIZE } from "./FormSection";
 import { secondsToTimeString, secondsTo12HourString, MINUTE_INCREMENTS } from "../../utils/timeHelpers";
 
 /** Link to Nowsta scheduling — update if your org uses a different URL */
@@ -99,6 +99,8 @@ export const HeaderSection = ({ jobNumberDisplay = "—", dispatchTimeDisplay = 
   const [city, setCity] = useState("");
   const [stateVal, setStateVal] = useState("");
   const [zip, setZip] = useState("");
+  /** While focused, CITY/ST/ZIP cell shows raw text; without this, filter(Boolean).join strips "Berlin," → "Berlin" */
+  const [cityStateLineDraft, setCityStateLineDraft] = useState<string | null>(null);
   const [contactSameAsClient, setContactSameAsClient] = useState(true);
   const [contactName, setContactName] = useState("");
   const [contactPhone, setContactPhone] = useState("");
@@ -133,6 +135,7 @@ export const HeaderSection = ({ jobNumberDisplay = "—", dispatchTimeDisplay = 
   const [eventArrivalTime, setEventArrivalTime] = useState("");
   const [dispatchTime, setDispatchTime] = useState("");
   const [captain, setCaptain] = useState("");
+  const [staffingConfirmedNowsta, setStaffingConfirmedNowsta] = useState(false);
 
   const eventType = selectedEventData ? asSingleSelectName(selectedEventData[FIELD_IDS.EVENT_TYPE]) : "";
   const isDelivery = isDeliveryOrPickup(eventType);
@@ -155,10 +158,12 @@ export const HeaderSection = ({ jobNumberDisplay = "—", dispatchTimeDisplay = 
     if (!selectedEventId || !selectedEventData) {
       setClientName(""); setPhone(""); setEmail("");
       setStreet(""); setCity(""); setStateVal(""); setZip("");
+      setCityStateLineDraft(null);
       setContactSameAsClient(true); setContactName(""); setContactPhone("");
       setShowAddress(false); setClientEditing(true);
       setVenue(""); setVenueAddress(""); setVenueCity(""); setVenueState(""); setVenueMode("same_as_client"); setAddressEditing(true); setVenueModalOpen(false); setContactModalOpen(false);
-      setEventDate(""); setGuestCount(null); setEventStartTime(""); setEventEndTime(""); setEventArrivalTime(""); setCaptain("");
+      setEventDate(""); setGuestCount(null); setEventStartTime(""); setEventEndTime(""); setEventArrivalTime(""); setDispatchTime(""); setCaptain("");
+      setStaffingConfirmedNowsta(false);
       setStaffBreakdownModalOpen(false); setStaffCounts({ lead: 0, captain: 0, server: 0, chef: 0, bartender: 0, utility: 0 });
       return;
     }
@@ -197,9 +202,11 @@ export const HeaderSection = ({ jobNumberDisplay = "—", dispatchTimeDisplay = 
     const arrivalId = fwArrivalFieldId ?? FIELD_IDS.VENUE_ARRIVAL_TIME;
     setEventArrivalTime(secondsToTimeString(d[arrivalId ?? FIELD_IDS.VENUE_ARRIVAL_TIME]));
     setDispatchTime(secondsToTimeString(d[FIELD_IDS.DISPATCH_TIME]));
-    const captainStr = asString(d[FIELD_IDS.CAPTAIN]);
+    const captainStr = resolveFwStaffLineFromFields(d);
     setCaptain(captainStr);
     setStaffCounts(parseStaffSummary(captainStr ?? ""));
+    setStaffingConfirmedNowsta(asAirtableCheckbox(d[STAFFING_CONFIRMED_FIELD_ID]));
+    setCityStateLineDraft(null);
   }, [selectedEventId, selectedEventData, isDelivery, fwArrivalFieldId]);
 
   const save = async (fieldId: string, value: unknown) => {
@@ -208,11 +215,11 @@ export const HeaderSection = ({ jobNumberDisplay = "—", dispatchTimeDisplay = 
     setIntakeDirty(false);
   };
 
-  const saveField = async (fieldId: string, value: unknown) => {
-    if (!selectedEventId) return;
+  const saveField = async (fieldId: string, value: unknown): Promise<boolean> => {
+    if (!selectedEventId) return false;
     isUpdatingRef.current = true;
     try {
-      await setFields(selectedEventId, { [fieldId]: value });
+      return await setFields(selectedEventId, { [fieldId]: value });
     } finally {
       isUpdatingRef.current = false;
     }
@@ -347,7 +354,7 @@ export const HeaderSection = ({ jobNumberDisplay = "—", dispatchTimeDisplay = 
     const summary = staffCountsToSummary(staffCounts);
     setCaptain(summary);
     setStaffBreakdownModalOpen(false);
-    if (selectedEventId) await saveField(FIELD_IDS.CAPTAIN, summary);
+    if (selectedEventId) await saveField(FW_STAFF_SUMMARY_FIELD_ID, summary);
   };
 
   const headerSummary = useMemo(() => {
@@ -443,6 +450,7 @@ export const HeaderSection = ({ jobNumberDisplay = "—", dispatchTimeDisplay = 
   const cityStateCell = venueMode === "same_as_client"
     ? [city, stateVal, zip].filter(Boolean).join(", ")
     : [venueCity, venueState, zip].filter(Boolean).join(", ");
+  const cityStateInputValue = cityStateLineDraft !== null ? cityStateLineDraft : cityStateCell;
   const venueNameDisplay = venueMode === "same_as_client" ? (street || city || stateVal || zip ? "Same as client" : "—") : (venue || "Residence");
 
   const tableCellLabel: React.CSSProperties = { padding: "6px 8px", fontSize: 11, fontWeight: 700, textTransform: "uppercase" as const, color: "#e0e0e0", border: "1px solid #444", background: "rgba(0,0,0,0.3)", width: "12%", verticalAlign: "middle" };
@@ -496,6 +504,7 @@ export const HeaderSection = ({ jobNumberDisplay = "—", dispatchTimeDisplay = 
       sectionId="beo-section-header"
       defaultOpen={false}
       titleAlign="center"
+      dotColor={BEO_SECTION_PILL_ACCENT}
     >
       <p style={{ gridColumn: "1 / -1", ...helperStyle, marginBottom: 14, marginTop: 0 }}>
         Click any cell to edit. Same layout as the printed BEO header.</p>
@@ -569,7 +578,40 @@ export const HeaderSection = ({ jobNumberDisplay = "—", dispatchTimeDisplay = 
             </tr>
             <tr>
               <td style={tableCellLabel}>CITY, ST</td>
-              <td style={tableCellValue}><input value={cityStateCell} disabled={!canEdit} onChange={(e) => { const v = e.target.value; if (venueMode === "same_as_client") { const parts = v.split(",").map((s) => s.trim()); setCity(parts[0] ?? ""); setStateVal(parts[1] ?? ""); setZip(parts[2] ?? ""); } else { const parts = v.split(",").map((s) => s.trim()); setVenueCity(parts[0] ?? ""); setVenueState(parts[1] ?? ""); } setIntakeDirty(true); }} onBlur={async () => { if (venueMode === "same_as_client" && selectedEventId) { await save(FIELD_IDS.CLIENT_CITY, city); await save(FIELD_IDS.CLIENT_STATE, stateVal); await save(FIELD_IDS.CLIENT_ZIP, zip); } else if (selectedEventId) { await saveField(FIELD_IDS.VENUE_CITY, venueCity); await saveField(FIELD_IDS.VENUE_STATE, venueState); } }} style={tableInput} placeholder="—" /></td>
+              <td style={tableCellValue}>
+                <input
+                  value={cityStateInputValue}
+                  disabled={!canEdit}
+                  onFocus={() => setCityStateLineDraft(cityStateCell)}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setCityStateLineDraft(v);
+                    const parts = v.split(",").map((s) => s.trim());
+                    if (venueMode === "same_as_client") {
+                      setCity(parts[0] ?? "");
+                      setStateVal(parts[1] ?? "");
+                      setZip(parts[2] ?? "");
+                    } else {
+                      setVenueCity(parts[0] ?? "");
+                      setVenueState(parts[1] ?? "");
+                    }
+                    setIntakeDirty(true);
+                  }}
+                  onBlur={async () => {
+                    setCityStateLineDraft(null);
+                    if (venueMode === "same_as_client" && selectedEventId) {
+                      await save(FIELD_IDS.CLIENT_CITY, city);
+                      await save(FIELD_IDS.CLIENT_STATE, stateVal);
+                      await save(FIELD_IDS.CLIENT_ZIP, zip);
+                    } else if (selectedEventId) {
+                      await saveField(FIELD_IDS.VENUE_CITY, venueCity);
+                      await saveField(FIELD_IDS.VENUE_STATE, venueState);
+                    }
+                  }}
+                  style={tableInput}
+                  placeholder="—"
+                />
+              </td>
               <td style={tableCellLabel}>EVENT END</td>
               <td style={tableCellValue}>{!isDelivery && timeSelectInCell(FIELD_IDS.EVENT_END_TIME, "eventEndTime")}</td>
             </tr>
@@ -596,9 +638,40 @@ export const HeaderSection = ({ jobNumberDisplay = "—", dispatchTimeDisplay = 
               <td style={tableCellLabel}>FW STAFF</td>
               <td style={tableCellValue}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", padding: "4px 8px" }}>
-                  <input value={captain} disabled={!canEdit} onChange={(e) => setCaptain(e.target.value)} onBlur={async (e) => { const v = e.target.value; setCaptain(v); if (selectedEventId) await saveField(FIELD_IDS.CAPTAIN, v); }} style={{ ...tableInput, flex: "1 1 100px" }} placeholder="e.g. 2 Servers, 1 Chef" />
+                  <input value={captain} disabled={!canEdit} onChange={(e) => setCaptain(e.target.value)} onBlur={async (e) => {
+                    const v = e.target.value;
+                    setCaptain(v);
+                    if (selectedEventId) await saveField(FW_STAFF_SUMMARY_FIELD_ID, v);
+                  }} style={{ ...tableInput, flex: "1 1 100px" }} placeholder="e.g. 2 Servers, 1 Chef" />
                   <button type="button" style={{ ...pillInactive, margin: 0 }} onClick={canEdit ? openStaffBreakdownModal : undefined} disabled={!canEdit}>Staff breakdown</button>
                   <a href={NOWSTA_URL} target="_blank" rel="noopener noreferrer" style={{ fontSize: 12, fontWeight: 600, color: ACCENT_LINK }}>Nowsta →</a>
+                  {/* Always show (not gated on delivery/pickup) so the control does not disappear after type loads or for hybrid jobs. */}
+                  <label
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 6,
+                      fontSize: 12,
+                      color: "#e0e0e0",
+                      cursor: canEdit ? "pointer" : "default",
+                      whiteSpace: "nowrap",
+                      userSelect: "none",
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={staffingConfirmedNowsta}
+                      disabled={!canEdit}
+                      onChange={async (e) => {
+                        const v = e.target.checked;
+                        setStaffingConfirmedNowsta(v);
+                        if (!selectedEventId) return;
+                        const ok = await saveField(STAFFING_CONFIRMED_FIELD_ID, v);
+                        if (ok === false) setStaffingConfirmedNowsta(!v);
+                      }}
+                    />
+                    Confirmed in Nowsta
+                  </label>
                 </div>
               </td>
             </tr>

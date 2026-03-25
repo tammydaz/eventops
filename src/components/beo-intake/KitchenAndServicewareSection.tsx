@@ -1,8 +1,8 @@
-import { FormSection } from "./FormSection";
+import { FormSection, BEO_SECTION_PILL_ACCENT } from "./FormSection";
 import { ServicewareSection } from "./ServicewareSection";
 
 export const KitchenAndServicewareSection = () => (
-  <FormSection title="Plates • Cutlery • Glassware" dotColor="#00bcd4" sectionId="beo-section-serviceware">
+  <FormSection title="Plates • Cutlery • Glassware" dotColor={BEO_SECTION_PILL_ACCENT} sectionId="beo-section-serviceware">
     <ServicewareSection embedded />
   </FormSection>
 );

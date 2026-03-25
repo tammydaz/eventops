@@ -1,10 +1,11 @@
 /**
  * DepartmentHeader — Shared header for all department landing pages.
- * Left: Logo, Werx, tagline, search. Center: Large Werx + tagline. Right: Copyright.
+ * Left: Logo, Werx, tagline, search. Right: Copyright (and optional actions).
  */
 import { useState, useRef, useEffect, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { Link, useNavigate } from "react-router-dom";
+import { DASHBOARD_CALENDAR_TO } from "../lib/dashboardRoutes";
 import { useEventStore } from "../state/eventStore";
 import "./DepartmentHeader.css";
 
@@ -38,15 +39,9 @@ export function DepartmentHeader({ departmentContext, rightActions, embedded, le
   const navigate = useNavigate();
   const { events: rawEvents, loadEvents, selectEvent } = useEventStore();
   const [searchQuery, setSearchQuery] = useState("");
-  const [taglineSettled, setTaglineSettled] = useState(false);
   const [dropdownRect, setDropdownRect] = useState<DOMRect | null>(null);
   const searchWrapRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    const t = setTimeout(() => setTaglineSettled(true), 120000); // 2 minutes
-    return () => clearTimeout(t);
-  }, []);
 
   useEffect(() => {
     loadEvents();
@@ -186,10 +181,6 @@ export function DepartmentHeader({ departmentContext, rightActions, embedded, le
               {embeddedDropdown}
             </div>
           </div>
-          <div className="dp-header-title dp-werx-brand">
-            <span className="dp-werx-logo">Werx</span>
-            <span className={`dp-werx-tagline ${taglineSettled ? "dp-werx-tagline-settled" : ""}`}>The engine behind the excellence!!</span>
-          </div>
           <div className="dp-header-spacer" aria-hidden="true" />
         </div>
       </header>
@@ -200,7 +191,7 @@ export function DepartmentHeader({ departmentContext, rightActions, embedded, le
     <header className="dept-header">
       <div className="dept-header-inner">
         <div className="dept-header-left">
-          <Link to="/" className="dept-header-logo-link">
+          <Link to={DASHBOARD_CALENDAR_TO} className="dept-header-logo-link">
             <div className="dept-header-logo-diamond">
               <span className="dept-header-logo-letter">W</span>
             </div>
@@ -240,10 +231,6 @@ export function DepartmentHeader({ departmentContext, rightActions, embedded, le
               </div>
             )}
           </div>
-        </div>
-        <div className="dept-header-center">
-          <span className="dept-header-werx-large">Werx</span>
-          <span className="dept-header-tagline-large">The engine behind the excellence!!</span>
         </div>
         <div className="dept-header-right">
           {rightActions}

@@ -3,6 +3,8 @@
  * Each department has a role, allowed routes, and a landing page.
  */
 
+import { DASHBOARD_CALENDAR_TO } from "./dashboardRoutes";
+
 export type Role =
   | "ops_admin"   // Full access, Watchtower, can edit dispatch/job#
   | "ops_chief"   // Ops Chief / Expediter, can edit dispatch/job#
@@ -35,16 +37,17 @@ export const ROLE_ROUTES: Record<Role, string[]> = {
 
 /** Landing page path for each role after login. */
 export const ROLE_LANDING: Record<Role, string> = {
-  ops_admin: "/",
+  ops_admin: DASHBOARD_CALENDAR_TO,
   ops_chief: "/ops-chief",
   kitchen: "/kitchen",
   logistics: "/delivery-command",
-  intake: "/",
+  intake: DASHBOARD_CALENDAR_TO,
   flair: "/flair",
   foh: "/intake-foh",
 };
 
-export function canAccessRoute(role: Role, pathname: string): boolean {
+export function canAccessRoute(role: Role, pathnameOrHref: string): boolean {
+  const pathname = pathnameOrHref.split("?")[0];
   const allowed = ROLE_ROUTES[role];
   if (allowed.includes("*")) return true;
   return allowed.some((route) => {

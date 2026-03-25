@@ -2,13 +2,17 @@
  * BeoLivePreview — live BEO document panel that updates in real-time as
  * the intake form is filled. Reads from the Zustand event store for header/event data
  * and from shadowMenuRows (Event Menu SHADOW SYSTEM) for the menu.
+ * Loads linked BEO stations separately for the preview (same placements as print).
  */
+import { useEffect, useState } from "react";
 import { useEventStore } from "../state/eventStore";
 import { FIELD_IDS } from "../services/airtable/events";
-import { asString, asSingleSelectName } from "../services/airtable/selectors";
+import { asString, asSingleSelectName, asLinkedRecordIds, isErrorResult } from "../services/airtable/selectors";
 import { secondsTo12HourString } from "../utils/timeHelpers";
 import { isDeliveryOrPickup } from "../lib/deliveryHelpers";
 import type { EventMenuRow, EventMenuRowComponent } from "../services/airtable/eventMenu";
+import { loadStationsByEventId } from "../services/airtable/linkedRecords";
+import { fetchMenuItemNamesByIds } from "../services/airtable/menuItems";
 
 export type ShadowMenuRowForPreview = EventMenuRow & {
   catalogItemName: string;
@@ -33,8 +37,22 @@ function fDate(raw: string): string {
   return d.toLocaleDateString("en-US", { weekday: "short", month: "long", day: "numeric", year: "numeric" });
 }
 
+type LiveStationPreview = {
+  id: string;
+  stationType: string;
+  beoPlacement?: "Presented Appetizer" | "Buffet Metal" | "Buffet China";
+  detailLines: string[];
+};
+
+const STATION_PREVIEW_GROUPS: Array<{ placement: "Presented Appetizer" | "Buffet Metal" | "Buffet China"; label: string }> = [
+  { placement: "Presented Appetizer", label: "Presented Appetizers" },
+  { placement: "Buffet Metal", label: "Buffet – Metal" },
+  { placement: "Buffet China", label: "Buffet – China" },
+];
+
 export function BeoLivePreview({ shadowMenuRows }: { shadowMenuRows: ShadowMenuRowForPreview[] }) {
-  const { selectedEventData } = useEventStore();
+  const { selectedEventData, selectedEventId } = useEventStore();
+  const [liveStations, setLiveStations] = useState<LiveStationPreview[]>([]);
   const data = selectedEventData ?? {};
   const eventType = asSingleSelectName(data[FIELD_IDS.EVENT_TYPE]) || "";
   const isDelivery = isDeliveryOrPickup(eventType);
@@ -77,6 +95,65 @@ export function BeoLivePreview({ shadowMenuRows }: { shadowMenuRows: ShadowMenuR
   const sectionsWithItems = SECTION_ORDER.filter((sec) => (bySection[sec]?.length ?? 0) > 0);
   const extraSections = Object.keys(bySection).filter((sec) => !SECTION_ORDER.includes(sec) && (bySection[sec]?.length ?? 0) > 0);
   const sections = [...sectionsWithItems, ...extraSections];
+
+  useEffect(() => {
+    if (!selectedEventId) {
+      setLiveStations([]);
+      return;
+    }
+    let cancelled = false;
+    const linkIds = asLinkedRecordIds((selectedEventData ?? {})[FIELD_IDS.STATIONS] ?? []);
+    (async () => {
+      const result = await loadStationsByEventId(selectedEventId, linkIds);
+      if (cancelled) return;
+      if (isErrorResult(result) || result.length === 0) {
+        setLiveStations([]);
+        return;
+      }
+      const allRecIds = [
+        ...new Set(
+          result.flatMap((st) => [...(st.stationComponents ?? []), ...st.stationItems].filter((id) => typeof id === "string" && id.startsWith("rec")))
+        ),
+      ];
+      const names = allRecIds.length > 0 ? await fetchMenuItemNamesByIds(allRecIds) : {};
+      if (cancelled) return;
+      const rows: LiveStationPreview[] = result.map((st) => {
+        const detailLines: string[] = [];
+        for (const id of st.stationComponents ?? []) {
+          const n = names[id];
+          if (n) detailLines.push(n);
+        }
+        for (const id of st.stationItems) {
+          const n = names[id];
+          if (n) detailLines.push(n);
+        }
+        const custom = (st as { customItems?: string }).customItems;
+        if (custom?.trim()) {
+          custom.split(/\r?\n/).forEach((line) => {
+            const t = line.trim();
+            if (t && !/^BEO Placement:/i.test(t)) detailLines.push(t);
+          });
+        }
+        const notes = (st.stationNotes || "")
+          .split(/\r?\n/)
+          .map((l) => l.replace(/^BEO Placement:\s*.+$/i, "").trim())
+          .filter(Boolean);
+        for (const n of notes) {
+          if (!detailLines.includes(n)) detailLines.push(n);
+        }
+        return {
+          id: st.id,
+          stationType: st.stationType?.trim() || "Station",
+          beoPlacement: st.beoPlacement,
+          detailLines,
+        };
+      });
+      setLiveStations(rows);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedEventId, selectedEventData]);
 
   const s = {
     doc: {

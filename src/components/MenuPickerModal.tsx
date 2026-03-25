@@ -171,8 +171,10 @@ export const MenuPickerModal: React.FC<MenuPickerModalProps> = ({ onAdd, already
                     onClick={() => {
                       if (!isAdded) {
                         onAdd(item);
-                        setSearch("");
-                        searchInputRef.current?.focus();
+                        closePicker();
+                        requestAnimationFrame(() => {
+                          document.querySelector(".beo-menu-add-buttons")?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+                        });
                       }
                     }}
                   >

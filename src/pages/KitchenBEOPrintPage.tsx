@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useEventStore } from "../state/eventStore";
-import { FIELD_IDS, getFoodwerxArrivalFieldId } from "../services/airtable/events";
+import { FIELD_IDS, getFoodwerxArrivalFieldId, resolveFwStaffLineFromFields } from "../services/airtable/events";
 import { asString, asBarServicePrimary, asMultiSelectNames, asBoolean, asStringArray, asLinkedRecordIds, isErrorResult } from "../services/airtable/selectors";
 import { loadStationsByEventId } from "../services/airtable/linkedRecords";
 import { loadBoxedLunchOrdersByEventId, type BoxedLunchOrder } from "../services/airtable/boxedLunchOrders";
@@ -1534,7 +1534,7 @@ const KitchenBEOPrintPage: React.FC = () => {
     guestCount: String(selectedEventData[FIELD_IDS.GUEST_COUNT] || ""),
     eventStart: secondsTo12HourString(selectedEventData[FIELD_IDS.EVENT_START_TIME]) || "",
     eventEnd: secondsTo12HourString(selectedEventData[FIELD_IDS.EVENT_END_TIME]) || "",
-    fwStaff: asString(selectedEventData[FIELD_IDS.CAPTAIN]) || asString(selectedEventData[FIELD_IDS.SERVERS]) || asString(selectedEventData[FIELD_IDS.STAFF]) || "",
+    fwStaff: resolveFwStaffLineFromFields(selectedEventData as Record<string, unknown>) || asString(selectedEventData[FIELD_IDS.SERVERS]) || asString(selectedEventData[FIELD_IDS.STAFF]) || "",
     foodMustBeReady: secondsTo12HourString(selectedEventData[FIELD_IDS.DISPATCH_TIME]) || asString(selectedEventData[FIELD_IDS.DISPATCH_TIME]) || "",
     staffArrival: (() => {
       const arrivalFieldId = fwArrivalFieldId ?? FIELD_IDS.VENUE_ARRIVAL_TIME;
@@ -1548,7 +1548,7 @@ const KitchenBEOPrintPage: React.FC = () => {
           return t ? (t.toUpperCase().includes("DELIVERY") ? t : `${t} DELIVERY`) : "";
         })(),
     deliveryNotes: asString(selectedEventData[FIELD_IDS.SPECIAL_NOTES]) || "",
-    employee: asString(selectedEventData[FIELD_IDS.CAPTAIN]) || "",
+    employee: resolveFwStaffLineFromFields(selectedEventData as Record<string, unknown>) || "",
     allergyBanner: asString(selectedEventData[FIELD_IDS.DIETARY_NOTES]) ? `ALLERGIES: ${asString(selectedEventData[FIELD_IDS.DIETARY_NOTES])}` : undefined,
     noKitchenOnSite: asSingleSelectName(selectedEventData[FIELD_IDS.KITCHEN_ON_SITE]) === "No",
     noKitchenResolution: asSingleSelectName(selectedEventData[FIELD_IDS.NO_KITCHEN_RESOLUTION]) || undefined,

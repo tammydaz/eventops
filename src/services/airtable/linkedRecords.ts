@@ -597,7 +597,7 @@ export const loadStationsByRecordIds = async (
   });
 };
 
-/** Create a station and link to event. Uses field names (not IDs) to avoid 403 on computed/renamed fields. */
+/** Create a station and link to event. Uses resolved field IDs (same as preset flow) so creates succeed when display names differ. */
 export const createStation = async (params: {
   stationType: string;
   stationItems: string[];
@@ -607,15 +607,19 @@ export const createStation = async (params: {
   const baseIdResult = getBaseId();
   const apiKeyResult = getApiKey();
   if (isErrorResult(baseIdResult) || isErrorResult(apiKeyResult)) return baseIdResult as AirtableErrorResult;
+  const fieldIds = await getStationsFieldIds();
+  if (!fieldIds?.event) {
+    return { error: true, message: "Could not resolve Stations table field IDs" };
+  }
   const tableId = getStationsTable();
 
   const fields: Record<string, unknown> = {
-    "Station Type": params.stationType,
-    "Station Items": params.stationItems,
-    "Event": [params.eventId],
+    [fieldIds.stationType]: params.stationType,
+    [fieldIds.stationItems]: params.stationItems,
+    [fieldIds.event]: [params.eventId],
   };
-  if (params.stationNotes?.trim()) {
-    fields["Station Notes"] = params.stationNotes.trim();
+  if (params.stationNotes?.trim() && fieldIds.stationNotes) {
+    fields[fieldIds.stationNotes] = params.stationNotes.trim();
   }
 
   const data = await airtableFetch<{ records?: Array<{ id: string }> }>(

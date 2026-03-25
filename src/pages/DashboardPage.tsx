@@ -1,5 +1,6 @@
-import { useState, useEffect, useMemo, useRef, useDeferredValue } from "react";
-import { Link, NavLink, useNavigate } from "react-router-dom";
+import { useState, useEffect, useMemo, useRef, useDeferredValue, useCallback } from "react";
+import { Link, NavLink, useNavigate, useSearchParams, useLocation } from "react-router-dom";
+import { DASHBOARD_CALENDAR_TO } from "../lib/dashboardRoutes";
 import "./DashboardPage.css";
 import type { ViewMode, HealthStatus } from "../components/dashboard/EventCard";
 import { useEventStore } from "../state/eventStore";
@@ -10,7 +11,11 @@ import type { QuestionTargetDepartment } from "../state/questionStore";
 import type { EventListItem } from "../services/airtable/events";
 import { AcceptTransferModal } from "../components/AcceptTransferModal";
 import { AskFOHPopover } from "../components/AskFOHPopover";
-import { NewEventModal } from "../components/NewEventModal";
+import { StaffingAttentionBadge } from "../components/StaffingAttentionBadge";
+import { EventListByDay } from "../components/EventListByDay";
+import { EventListDetailSidebar } from "../components/EventListDetailSidebar";
+import { listPrimaryLabel } from "../lib/eventListRowMeta";
+import { weekRangeMondaySunday } from "../lib/weekRange";
 
 /* ═══════════════════════════════════════════
    EVENT DATA (from Airtable)
@@ -46,9 +51,19 @@ interface EventData {
   eventChangeRequested?: boolean;
   changeConfirmedByBOH?: boolean;
   isDemo?: boolean;
+  staffingConfirmedInNowsta?: boolean;
+  fwStaffSummaryPresent?: boolean;
+  phone?: string;
+  dispatchTimeSeconds?: number;
+  beoFiredToBOH?: boolean;
+  speckComplete?: boolean;
+  beoNotes?: string;
+  timelineRaw?: string;
+  paymentStatus?: string;
+  invoicePaid?: boolean;
 }
 
-/* ── Demo events for 10-Day Pipeline (fill when sparse) ── */
+/* ── Demo events for Week View (fill when sparse) ── */
 const DEMO_TEMPLATES: Array<Omit<EventData, "eventDate" | "time" | "id"> & { dayOffset: number }> = [
   { dayOffset: 0, name: "Smith Wedding – Riverside Manor", client: "Smith Family", venue: "Riverside Manor", guests: 180, category: "Wedding", eventType: "Full Service", serviceStyle: "Plated", healthFOH: "green", healthBOH: "green", isDemo: true },
   { dayOffset: 0, name: "TechCorp Q1 Summit – Convention Center", client: "TechCorp", venue: "Convention Center", guests: 320, category: "Corporate", eventType: "Full Service", serviceStyle: "Buffet", healthFOH: "green", healthBOH: "green", isDemo: true },
@@ -82,6 +97,8 @@ function listItemToEventData(e: EventListItem): EventData {
   const client = parts[0]?.trim() || "—";
   const venue = parts[1]?.trim() || "—";
   const healthBOH = getHealthBOH(e);
+  const phone =
+    [e.primaryContactPhone, e.clientPhone].map((x) => (x ?? "").trim()).find((p) => p.length > 0) ?? "";
   return {
     id: e.id,
     eventDate: e.eventDate,
@@ -89,6 +106,7 @@ function listItemToEventData(e: EventListItem): EventData {
     time: formatEventDate(e.eventDate),
     client,
     venue,
+    phone,
     guests: e.guestCount ?? 0,
     category: e.eventType ?? e.eventOccasion ?? "—",
     eventType: e.eventType ?? "—",
@@ -112,6 +130,15 @@ function listItemToEventData(e: EventListItem): EventData {
     productionFrozen: e.productionFrozen,
     eventChangeRequested: e.eventChangeRequested,
     changeConfirmedByBOH: e.changeConfirmedByBOH,
+    staffingConfirmedInNowsta: e.staffingConfirmedInNowsta,
+    fwStaffSummaryPresent: e.fwStaffSummaryPresent,
+    dispatchTimeSeconds: e.dispatchTimeSeconds,
+    beoFiredToBOH: e.beoFiredToBOH,
+    speckComplete: e.speckComplete,
+    beoNotes: e.beoNotes,
+    timelineRaw: e.timelineRaw,
+    paymentStatus: e.paymentStatus,
+    invoicePaid: e.invoicePaid,
   };
 }
 
@@ -144,6 +171,7 @@ function getDemoEventsForPipeline(today: string, endDate: string, excludeIds: Se
         productionAcceptedFlair: t.productionAcceptedFlair,
         productionAcceptedDelivery: t.productionAcceptedDelivery,
         productionAcceptedOpsChief: t.productionAcceptedOpsChief,
+        dispatchTimeSeconds: 18 * 3600 + i * 1800,
       } as EventData;
     })
     .filter((e): e is EventData => e !== null);
@@ -165,7 +193,7 @@ const CAT_COLORS: Record<string, string> = {
 /* ── Sidebar nav items ── */
 type NavItem = { label: string; href: string; expandable?: boolean; subtitle?: string };
 const NAV: NavItem[] = [
-  { label: "Dashboard", href: "/" },
+  { label: "Dashboard", href: DASHBOARD_CALENDAR_TO },
   { label: "Add Event", href: "/event/new" },
   { label: "Open Event", href: "/beo-intake" },
   { label: "Departments", href: "#departments", expandable: true },
@@ -190,34 +218,49 @@ const DEPT_ITEMS = [
    ═══════════════════════════════════════════ */
 const todayStr = () => new Date().toISOString().slice(0, 10);
 
+function userInitials(name: string | undefined): string {
+  if (!name?.trim()) return "—";
+  const parts = name.trim().split(/\s+/);
+  if (parts.length >= 2) return (parts[0]![0] + parts[parts.length - 1]![0]).toUpperCase();
+  return name.slice(0, 2).toUpperCase();
+}
+
 export default function DashboardPage() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { user, logout } = useAuthStore();
   const { events: rawEvents, loadEvents, selectEvent, setFields, eventsLoading, eventsError } = useEventStore();
   const role = user?.role ?? "ops_admin";
+  const isIntakeFOHRole = role === "intake" || role === "foh";
   const allowedDepts = ROLE_DEPARTMENTS[role] ?? [];
   const visibleDeptItems = DEPT_ITEMS.filter((d) => role === "ops_admin" || allowedDepts.includes(d.id) || d.id === "feedback");
   const visibleNav = NAV.filter((item) => item.href.startsWith("#") || canAccessRoute(role, item.href));
   const [departmentsOpen, setDepartmentsOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState("10-Day Pipeline");
+  const [activeTab, setActiveTab] = useState("Weekly");
   const viewMode: ViewMode = "owner";
   const [sortBy, setSortBy] = useState<"date" | "client" | "venue" | "eventType" | "serviceStyle">("date");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
-  const [eventView, setEventView] = useState<"grid" | "list" | "calendar">("grid");
+  const [eventView, setEventView] = useState<"grid" | "list" | "calendar">(() => {
+    if (typeof window === "undefined") return "calendar";
+    const p = new URLSearchParams(window.location.search).get("eventView");
+    if (p === "grid" || p === "list" || p === "calendar") return p;
+    return "calendar";
+  });
+  const [barClientFilter, setBarClientFilter] = useState<string>("all");
+  const [barVenueFilter, setBarVenueFilter] = useState<string>("all");
+  const [barStatusFilter, setBarStatusFilter] = useState<"all" | "confirmed" | "setup">("all");
+  const [newTaskMenuOpen, setNewTaskMenuOpen] = useState(false);
+  const commandSearchInputRef = useRef<HTMLInputElement>(null);
+  const newTaskWrapRef = useRef<HTMLDivElement>(null);
   const [calendarMonth, setCalendarMonth] = useState(() => new Date().getMonth());
   const [calendarYear, setCalendarYear] = useState(() => new Date().getFullYear());
   const [searchQuery, setSearchQuery] = useState("");
   const deferredSearchQuery = useDeferredValue(searchQuery);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
-  const [taglineSettled, setTaglineSettled] = useState(false);
   const [pendingAcceptEvent, setPendingAcceptEvent] = useState<EventData | null>(null);
-  const [showNewEventModal, setShowNewEventModal] = useState(false);
+  const [listDetailEventId, setListDetailEventId] = useState<string | null>(null);
   const searchWrapRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const t = setTimeout(() => setTaglineSettled(true), 5000);
-    return () => clearTimeout(t);
-  }, []);
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -243,35 +286,86 @@ export default function DashboardPage() {
     loadEvents();
   }, [loadEvents]);
 
+  useEffect(() => {
+    const ev = searchParams.get("eventView");
+    if (ev === "grid" || ev === "list" || ev === "calendar") setEventView(ev);
+  }, [searchParams]);
+
+  useEffect(() => {
+    if (!newTaskMenuOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (newTaskWrapRef.current && !newTaskWrapRef.current.contains(e.target as Node)) setNewTaskMenuOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [newTaskMenuOpen]);
+
+  const setEventViewSync = useCallback((v: "grid" | "list" | "calendar") => {
+    setEventView(v);
+    setSearchParams(
+      (prev) => {
+        const n = new URLSearchParams(prev);
+        n.set("eventView", v);
+        return n;
+      },
+      { replace: true }
+    );
+  }, [setSearchParams]);
+
   const eventDataList = useMemo(() => rawEvents.map(listItemToEventData), [rawEvents]);
   const today = todayStr();
-  const endDate10 = useMemo(() => {
+  const weekEndDate = useMemo(() => {
     const d = new Date(today);
-    d.setDate(d.getDate() + 10);
+    d.setDate(d.getDate() + 6);
     return d.toISOString().slice(0, 10);
   }, [today]);
   const filteredEvents = useMemo(() => {
     if (activeTab === "Today's Events") return eventDataList.filter((e) => e.eventDate === today);
-    if (activeTab === "10-Day Pipeline") {
+    if (activeTab === "Weekly") {
       const real = eventDataList.filter((e) => {
         const d = e.eventDate ?? "";
-        return d >= today && d <= endDate10;
+        return d >= today && d <= weekEndDate;
       });
       const realIds = new Set(real.map((e) => e.id));
-      const demos = getDemoEventsForPipeline(today, endDate10, realIds);
+      const demos = getDemoEventsForPipeline(today, weekEndDate, realIds);
       const combined = [...real, ...demos].sort((a, b) => (a.eventDate ?? "").localeCompare(b.eventDate ?? ""));
       if (combined.length >= MIN_EVENTS_TO_FILL) return combined;
       const usedIds = new Set(combined.map((e) => e.id));
-      const extra = getDemoEventsForPipeline(today, endDate10, usedIds).slice(0, MIN_EVENTS_TO_FILL - combined.length);
+      const extra = getDemoEventsForPipeline(today, weekEndDate, usedIds).slice(0, MIN_EVENTS_TO_FILL - combined.length);
       return [...combined, ...extra].sort((a, b) => (a.eventDate ?? "").localeCompare(b.eventDate ?? ""));
     }
     if (activeTab === "Upcoming Events") return eventDataList.filter((e) => (e.eventDate ?? "") >= today);
     if (activeTab === "Completed" || activeTab === "Archive") return eventDataList.filter((e) => (e.eventDate ?? "") < today);
     return eventDataList;
-  }, [eventDataList, activeTab, today, endDate10]);
+  }, [eventDataList, activeTab, today, weekMonday, weekSunday]);
+
+  const clientOptions = useMemo(() => {
+    const s = new Set<string>();
+    eventDataList.forEach((e) => {
+      if (e.client && e.client !== "—") s.add(e.client);
+    });
+    return [...s].sort((a, b) => a.localeCompare(b));
+  }, [eventDataList]);
+
+  const venueOptions = useMemo(() => {
+    const s = new Set<string>();
+    eventDataList.forEach((e) => {
+      if (e.venue && e.venue !== "—") s.add(e.venue);
+    });
+    return [...s].sort((a, b) => a.localeCompare(b));
+  }, [eventDataList]);
+
+  const afterBarFilters = useMemo(() => {
+    let arr = filteredEvents;
+    if (barClientFilter !== "all") arr = arr.filter((e) => e.client === barClientFilter);
+    if (barVenueFilter !== "all") arr = arr.filter((e) => e.venue === barVenueFilter);
+    if (barStatusFilter === "confirmed") arr = arr.filter((e) => e.beoSentToBOH === true);
+    if (barStatusFilter === "setup") arr = arr.filter((e) => e.beoSentToBOH !== true);
+    return arr;
+  }, [filteredEvents, barClientFilter, barVenueFilter, barStatusFilter]);
 
   const events = useMemo(() => {
-    const arr = [...filteredEvents];
+    const arr = [...afterBarFilters];
     const mult = sortDir === "asc" ? 1 : -1;
     arr.sort((a, b) => {
       let cmp = 0;
@@ -283,7 +377,13 @@ export default function DashboardPage() {
       return mult * cmp;
     });
     return arr;
-  }, [filteredEvents, sortBy, sortDir]);
+  }, [afterBarFilters, sortBy, sortDir]);
+
+  const listDetailEvent = useMemo(() => events.find((e) => e.id === listDetailEventId) ?? null, [events, listDetailEventId]);
+
+  useEffect(() => {
+    if (eventView !== "list") setListDetailEventId(null);
+  }, [eventView]);
 
   const searchResults = useMemo(() => {
     const q = deferredSearchQuery.trim().toLowerCase();
@@ -362,8 +462,16 @@ export default function DashboardPage() {
     }
   };
 
+  const isHomePath = location.pathname === "/" || location.pathname.startsWith("/home");
+  const dashboardNavActive = isHomePath;
+  const isCommandNav = isHomePath && eventView !== "calendar";
+  const isCalendarTopNav = isHomePath && eventView === "calendar";
+  const isClientsNav = location.pathname.startsWith("/foh");
+  const isTasksNav = location.pathname.startsWith("/watchtower");
+  const isReportsNav = location.pathname.startsWith("/profit");
+
   return (
-    <div className="dp-container">
+    <div className="dp-container dp-container-command">
       <AcceptTransferModal
         open={!!pendingAcceptEvent}
         onClose={() => setPendingAcceptEvent(null)}
@@ -372,18 +480,204 @@ export default function DashboardPage() {
         isChangeConfirmation={!!pendingAcceptEvent && !!dashboardDept && (isProductionFrozen(pendingAcceptEvent) || needsChangeConfirmation(pendingAcceptEvent, dashboardDept))}
         isProductionFrozen={!!pendingAcceptEvent && isProductionFrozen(pendingAcceptEvent)}
       />
-      {/* ═══ SIDEBAR ═══ */}
-      <aside className="dp-sidebar">
-        <div className="dp-logo-section">
-          <div className="dp-logo-diamond">
-            <span className="dp-logo-letter">W</span>
+      {/* ═══ COMMAND TOP BARS (mockup) ═══ */}
+      <div className="dp-command-top">
+        <nav className="dp-command-nav-row dp-command-nav-primary" aria-label="Primary">
+          <button type="button" className="dp-mobile-hamburger dp-command-hamburger" onClick={() => setMobileNavOpen(true)} aria-label="Open menu">
+            <span /><span /><span />
+          </button>
+          <div className="dp-command-brand">
+            <span className="dp-command-werx">Werx</span>
+            <span className="dp-command-tagline">The engine behind the excellence!</span>
           </div>
-          <div>
-            <div className="dp-logo-title dp-logo-werx">Werx</div>
-            <div className="dp-logo-subtitle">The engine behind the excellence!!</div>
+          <div className="dp-command-nav-center">
+            <button
+              type="button"
+              className={`dp-command-nav-pill ${isCommandNav ? "active" : ""}`}
+              onClick={() => {
+                navigate("/?eventView=grid");
+                setEventViewSync("grid");
+              }}
+            >
+              Command View
+            </button>
+            <Link className={`dp-command-nav-text ${isClientsNav ? "active" : ""}`} to="/foh/leads">
+              Clients
+            </Link>
+            <button
+              type="button"
+              className={`dp-command-nav-text ${isCalendarTopNav ? "active" : ""}`}
+              onClick={() => {
+                navigate(DASHBOARD_CALENDAR_TO);
+                setEventViewSync("calendar");
+              }}
+            >
+              Calendar
+            </button>
+            <Link className={`dp-command-nav-text ${isTasksNav ? "active" : ""}`} to="/watchtower">
+              Tasks
+            </Link>
+            <Link className={`dp-command-nav-text ${isReportsNav ? "active" : ""}`} to="/profit/">
+              Reports
+            </Link>
+          </div>
+          <div className="dp-command-nav-utilities">
+            <button
+              type="button"
+              className="dp-command-icon-btn"
+              aria-label="Search"
+              onClick={() => commandSearchInputRef.current?.focus()}
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+                <circle cx="11" cy="11" r="7" />
+                <path d="M20 20l-3-3" strokeLinecap="round" />
+              </svg>
+            </button>
+            <button type="button" className="dp-command-icon-btn dp-command-bell-wrap" aria-label="Notifications">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+                <path d="M18 8a6 6 0 10-12 0c0 7-3 7-3 7h18s-3 0-3-7" strokeLinecap="round" strokeLinejoin="round" />
+                <path d="M13.73 21a2 2 0 01-3.46 0" strokeLinecap="round" />
+              </svg>
+              <span className="dp-command-bell-badge">3</span>
+            </button>
+            <Link className="dp-command-icon-btn" to="/admin" aria-label="Settings">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+                <circle cx="12" cy="12" r="3" />
+                <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" strokeLinecap="round" />
+              </svg>
+            </Link>
+            <div className="dp-command-avatar" aria-hidden title={user?.name ?? "User"}>
+              {userInitials(user?.name)}
+            </div>
+          </div>
+        </nav>
+        <div className="dp-command-nav-divider" aria-hidden="true" />
+        <div className="dp-command-nav-row dp-command-nav-filters">
+          <div className="dp-command-filters-left">
+            <div className="dp-search-wrap dp-command-search-wrap" ref={searchWrapRef}>
+              <span className="dp-command-search-icon" aria-hidden>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <circle cx="11" cy="11" r="7" />
+                  <path d="M20 20l-3-3" strokeLinecap="round" />
+                </svg>
+              </span>
+              <input
+                ref={commandSearchInputRef}
+                className="dp-search dp-command-search-input"
+                placeholder="Search events, clients, venues..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                autoComplete="off"
+              />
+              {searchQuery.trim().length > 0 && (
+                <div className="dp-search-dropdown">
+                  {searchResults.length === 0 ? (
+                    <div className="dp-search-item dp-search-empty">No events match</div>
+                  ) : (
+                    searchResults.slice(0, 8).map((evt) => (
+                      <button
+                        key={evt.id}
+                        type="button"
+                        className="dp-search-item"
+                        onMouseDown={(e) => {
+                          e.preventDefault();
+                          handleSelectEvent(evt);
+                        }}
+                      >
+                        <span className="dp-search-item-name">{listPrimaryLabel(evt.client)}</span>
+                        <span className="dp-search-item-meta">
+                          {evt.time} · {evt.guests} guests
+                        </span>
+                      </button>
+                    ))
+                  )}
+                </div>
+              )}
+            </div>
+            <div className="dp-command-select-wrap">
+              <span className="dp-command-select-icon" aria-hidden>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" />
+                  <circle cx="9" cy="7" r="4" />
+                  <path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75" strokeLinecap="round" />
+                </svg>
+              </span>
+              <select
+                className="dp-command-select"
+                aria-label="Filter by client"
+                value={barClientFilter}
+                onChange={(e) => setBarClientFilter(e.target.value)}
+              >
+                <option value="all">All Clients</option>
+                {clientOptions.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="dp-command-select-wrap">
+              <span className="dp-command-select-icon" aria-hidden>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <rect x="3" y="3" width="18" height="18" rx="2" />
+                  <path d="M9 3v18M3 9h18" />
+                </svg>
+              </span>
+              <select className="dp-command-select" aria-label="Filter by venue" value={barVenueFilter} onChange={(e) => setBarVenueFilter(e.target.value)}>
+                <option value="all">All Venues</option>
+                {venueOptions.map((v) => (
+                  <option key={v} value={v}>
+                    {v}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="dp-command-select-wrap dp-command-select-wrap--status">
+              <span className="dp-command-select-icon dp-command-select-icon--teal" aria-hidden>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <circle cx="12" cy="8" r="4" />
+                  <path d="M6 21v-1a6 6 0 0112 0v1" strokeLinecap="round" />
+                </svg>
+              </span>
+              <select className="dp-command-select" aria-label="Filter by status" value={barStatusFilter} onChange={(e) => setBarStatusFilter(e.target.value as typeof barStatusFilter)}>
+                <option value="all">All Status</option>
+                <option value="confirmed">Confirmed</option>
+                <option value="setup">Setup</option>
+              </select>
+            </div>
+          </div>
+          <div className="dp-command-filters-right">
+            <button type="button" className="dp-command-btn-secondary" onClick={() => navigate("/event/new")}>
+              + New Client
+            </button>
+            <div className="dp-command-split" ref={newTaskWrapRef}>
+              <button type="button" className="dp-command-split-main" onClick={() => navigate("/watchtower")}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+                  <path d="M9 11H5a2 2 0 00-2 2v7a2 2 0 002 2h4m0-11V9a2 2 0 012-2h2a2 2 0 012 2v2m-6 4h6m6 0v7a2 2 0 01-2 2h-4m4-9h-4" strokeLinecap="round" />
+                </svg>
+                New Task
+              </button>
+              <button type="button" className="dp-command-split-chevron" aria-expanded={newTaskMenuOpen} aria-label="Task actions" onClick={() => setNewTaskMenuOpen((o) => !o)}>
+                ▾
+              </button>
+              {newTaskMenuOpen && (
+                <div className="dp-command-split-menu" role="menu">
+                  <Link to="/watchtower" className="dp-command-split-menu-item" role="menuitem" onClick={() => setNewTaskMenuOpen(false)}>
+                    Open Watchtower
+                  </Link>
+                  <Link to="/feedback-issues" className="dp-command-split-menu-item" role="menuitem" onClick={() => setNewTaskMenuOpen(false)}>
+                    Feedback & issues
+                  </Link>
+                </div>
+              )}
+            </div>
           </div>
         </div>
+      </div>
 
+      <div className="dp-command-body-row">
+      {/* ═══ SIDEBAR ═══ */}
+      <aside className="dp-sidebar">
         <ul className="dp-nav">
           {visibleNav.map((item) => (
             <li key={item.label}>
@@ -416,7 +710,9 @@ export default function DashboardPage() {
               ) : (
                 <NavLink
                   to={item.href}
-                  className={({ isActive }) => `dp-nav-link ${isActive ? "active" : ""}`}
+                  className={({ isActive }) =>
+                    `dp-nav-link ${item.href === DASHBOARD_CALENDAR_TO ? (dashboardNavActive ? "active" : "") : isActive ? "active" : ""}`
+                  }
                 >
                   <span className="dp-nav-dot" />
                   {item.label}
@@ -435,6 +731,7 @@ export default function DashboardPage() {
             </button>
           </div>
         )}
+        <p className="dp-sidebar-footer-copy">System Designed & Engineered by © Tammy Daddazio — All Rights Reserved</p>
       </aside>
 
       {/* ═══ MOBILE NAV DRAWER (visible only on small screens) ═══ */}
@@ -474,7 +771,13 @@ export default function DashboardPage() {
                   )}
                 </>
               ) : (
-                <NavLink to={item.href} className={({ isActive }) => `dp-nav-link ${isActive ? "active" : ""}`} onClick={() => setMobileNavOpen(false)}>
+                <NavLink
+                  to={item.href}
+                  className={({ isActive }) =>
+                    `dp-nav-link ${item.href === DASHBOARD_CALENDAR_TO ? (dashboardNavActive ? "active" : "") : isActive ? "active" : ""}`
+                  }
+                  onClick={() => setMobileNavOpen(false)}
+                >
                   <span className="dp-nav-dot" />
                   {item.label}
                   {item.subtitle && <span className="dp-nav-subtitle">{item.subtitle}</span>}
@@ -493,53 +796,6 @@ export default function DashboardPage() {
 
       {/* ═══ MAIN AREA ═══ */}
       <main className="dp-main">
-        {/* ── Header ── */}
-        <header className="dp-header">
-          <div className="dp-header-top">
-            <span className="dp-header-copyright">System Designed & Engineered by © Tammy Daddazio — All Rights Reserved</span>
-          </div>
-          <div className="dp-header-main">
-          <div className="dp-header-left">
-          <button type="button" className="dp-mobile-hamburger" onClick={() => setMobileNavOpen(true)} aria-label="Open menu">
-            <span /><span /><span />
-          </button>
-          <div className="dp-search-wrap" ref={searchWrapRef}>
-            <input
-              className="dp-search"
-              placeholder="Search events..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              autoComplete="off"
-            />
-            {searchQuery.trim().length > 0 && (
-              <div className="dp-search-dropdown">
-                {searchResults.length === 0 ? (
-                  <div className="dp-search-item dp-search-empty">No events match</div>
-                ) : (
-                  searchResults.slice(0, 8).map((evt) => (
-                    <button
-                      key={evt.id}
-                      type="button"
-                      className="dp-search-item"
-                      onMouseDown={(e) => { e.preventDefault(); handleSelectEvent(evt); }}
-                    >
-                      <span className="dp-search-item-name">{evt.name}</span>
-                      <span className="dp-search-item-meta">{evt.time} · {evt.guests} guests</span>
-                    </button>
-                  ))
-                )}
-              </div>
-            )}
-          </div>
-          </div>
-          <div className="dp-header-title dp-werx-brand">
-            <span className="dp-werx-logo">Werx</span>
-            <span className={`dp-werx-tagline ${taglineSettled ? "dp-werx-tagline-settled" : ""}`}>The engine behind the excellence!!</span>
-          </div>
-          <div className="dp-header-spacer" aria-hidden="true" />
-          </div>
-        </header>
-
         {/* ── Filter + Sort (left) + View options (right) ── */}
         <div className="dp-tabs-toolbar">
           <div className="dp-tabs-left">
@@ -552,7 +808,7 @@ export default function DashboardPage() {
                 onChange={(e) => setActiveTab(e.target.value)}
               >
                 <option value="Today's Events">Today's Events</option>
-                <option value="10-Day Pipeline">10 Day View</option>
+                <option value="Weekly">Week View</option>
                 <option value="Upcoming Events">Upcoming Events</option>
                 <option value="Completed">Completed</option>
                 <option value="Archive">Archive</option>
@@ -588,7 +844,7 @@ export default function DashboardPage() {
               <button
                 type="button"
                 className={`dp-toolbar-view-btn ${eventView === "grid" ? "active" : ""}`}
-                onClick={() => setEventView("grid")}
+                onClick={() => setEventViewSync("grid")}
                 title="Grid view"
                 aria-pressed={eventView === "grid"}
               >
@@ -597,7 +853,7 @@ export default function DashboardPage() {
               <button
                 type="button"
                 className={`dp-toolbar-view-btn ${eventView === "list" ? "active" : ""}`}
-                onClick={() => setEventView("list")}
+                onClick={() => setEventViewSync("list")}
                 title="List view"
                 aria-pressed={eventView === "list"}
               >
@@ -606,7 +862,7 @@ export default function DashboardPage() {
               <button
                 type="button"
                 className={`dp-toolbar-view-btn ${eventView === "calendar" ? "active" : ""}`}
-                onClick={() => setEventView("calendar")}
+                onClick={() => setEventViewSync("calendar")}
                 title="Calendar view"
                 aria-pressed={eventView === "calendar"}
               >
@@ -640,8 +896,8 @@ export default function DashboardPage() {
                   <div className="dp-events-empty">
                     <p>No events in &quot;{activeTab}&quot;</p>
                     <p className="dp-events-empty-hint">
-                      {activeTab === "Today's Events" && "Try the 10-Day Pipeline or Upcoming Events, or add an event."}
-                      {(activeTab === "10-Day Pipeline" || activeTab === "Upcoming Events") && "Add an event via Quick Intake or Upload Invoice."}
+                      {activeTab === "Today's Events" && "Try Week View or Upcoming Events, or add an event."}
+                      {(activeTab === "Weekly" || activeTab === "Upcoming Events") && "Add an event via Quick Intake or Upload Invoice."}
                       {(activeTab === "Completed" || activeTab === "Archive") && "Past events will appear here."}
                     </p>
                   </div>
@@ -728,7 +984,8 @@ export default function DashboardPage() {
                                           onClick={() => canSelect && handleSelectEvent(evt)}
                                           onKeyDown={(e) => canSelect && (e.key === "Enter" || e.key === " ") && handleSelectEvent(evt)}
                                         >
-                                          {evt.name}
+                                          {listPrimaryLabel(evt.client)}
+                                          <StaffingAttentionBadge event={evt} />
                                           {evt.isDemo && <span className="dp-calendar-event-demo-badge">Demo</span>}
                                         </div>
                                       );
@@ -745,67 +1002,35 @@ export default function DashboardPage() {
                 );
               })()
             ) : (
-              <div className="dp-events-list">
-                {events.length === 0 ? (
-                  <div className="dp-events-empty">
-                    <p>No events in &quot;{activeTab}&quot;</p>
-                    <p className="dp-events-empty-hint">
-                      {activeTab === "Today's Events" && "Try the 10-Day Pipeline or Upcoming Events, or add an event."}
-                      {(activeTab === "10-Day Pipeline" || activeTab === "Upcoming Events") && "Add an event via Quick Intake or Upload Invoice."}
-                      {(activeTab === "Completed" || activeTab === "Archive") && "Past events will appear here."}
-                    </p>
-                  </div>
-                ) : (
-                  <>
-                    <div className="dp-list-header">
-                      <div className="dp-list-col dp-list-col-date">Date</div>
-                      <div className="dp-list-col dp-list-col-name">Event</div>
-                      <div className="dp-list-col dp-list-col-client">Client</div>
-                      <div className="dp-list-col dp-list-col-venue">Venue</div>
-                      <div className="dp-list-col dp-list-col-guests">Guests</div>
-                      <div className="dp-list-col dp-list-col-category">Category</div>
-                    </div>
-                        {events.map((evt) => {
-                      const prodColor = getProductionColor(evt);
-                      const colorHex = getProductionColorHex(evt);
-                      const canSelect = !evt.isDemo;
-                      return (
-                        <div
-                          key={evt.id}
-                          className={`dp-list-row ${canSelect && (dashboardDept ? shouldBlinkForDepartment(evt, dashboardDept) : shouldBlink(evt)) ? "dp-list-row-blink" : ""} ${canSelect && isProductionFrozen(evt) ? "dp-list-row-frozen" : ""} ${evt.isDemo ? "dp-list-row-demo" : ""}`}
-                          data-production={prodColor}
-                          role={canSelect ? "button" : undefined}
-                          tabIndex={canSelect ? 0 : undefined}
-                          onClick={() => canSelect && handleSelectEvent(evt)}
-                          onKeyDown={(e) => canSelect && (e.key === "Enter" || e.key === " ") && handleSelectEvent(evt)}
-                        >
-                          <div className="dp-list-col dp-list-col-date">{evt.time}</div>
-                          <div className="dp-list-col dp-list-col-name">{evt.name}</div>
-                          <div className="dp-list-col dp-list-col-client">{evt.client}</div>
-                          <div className="dp-list-col dp-list-col-venue">{evt.venue}</div>
-                          <div className="dp-list-col dp-list-col-guests">{evt.guests}</div>
-                          <div className="dp-list-col dp-list-col-category">
-                            <span
-                              className="dp-list-pill"
-                              style={{
-                                color: colorHex,
-                                backgroundColor: `${colorHex}18`,
-                                borderColor: `${colorHex}40`,
-                              }}
-                            >
-                              {evt.category}
-                            </span>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </>
+              <div className="dp-events-list-with-sidebar">
+                <div className="dp-events-area-inner-fill">
+                  <EventListByDay
+                    events={events}
+                    activeTab={activeTab}
+                    today={today}
+                    sortBy={sortBy}
+                    sortDir={sortDir}
+                    isFOH={isIntakeFOHRole}
+                    deptKey={dashboardDept}
+                    selectedEventId={listDetailEventId}
+                    onSelectDetail={(evt) => setListDetailEventId(evt.id)}
+                    onOpenEvent={handleSelectEvent}
+                  />
+                </div>
+                {listDetailEvent && (
+                  <EventListDetailSidebar
+                    event={listDetailEvent}
+                    isFOH={isIntakeFOHRole}
+                    onClose={() => setListDetailEventId(null)}
+                    onOpenEvent={() => handleSelectEvent(listDetailEvent)}
+                  />
                 )}
               </div>
             )
           )}
         </div>
       </main>
+      </div>
     </div>
   );
 }
@@ -820,7 +1045,7 @@ function PremiumCard({ event, viewMode, onSelect, departmentKey, viewingDepartme
   const frozen = !event.isDemo && isProductionFrozen(event);
 
   return (
-    <AskFOHPopover eventId={event.id} eventName={event.name} viewingDepartment={viewingDepartment ?? null} disabled={event.isDemo}>
+    <AskFOHPopover eventId={event.id} eventName={listPrimaryLabel(event.client)} viewingDepartment={viewingDepartment ?? null} disabled={event.isDemo}>
       <article
         className={`dp-card dp-card-production dp-card-${prodColor} ${blinking ? "dp-card-blink" : ""} ${needsChangeConfirm ? "dp-card-beo-updated" : ""} ${frozen ? "dp-card-frozen" : ""} ${onSelect ? "dp-card-clickable" : ""} ${event.isDemo ? "dp-card-demo" : ""}`}
         data-production={prodColor}
@@ -834,11 +1059,10 @@ function PremiumCard({ event, viewMode, onSelect, departmentKey, viewingDepartme
         {needsChangeConfirm && (
           <div className="dp-card-beo-updated-badge">BEO Updated — Acceptance Required</div>
         )}
+        <StaffingAttentionBadge event={event} className="dp-staffing-attention-badge dp-card-staffing-badge" />
 
-        {/* Client + Event name */}
         <div className="dp-card-header dp-card-header-tight">
-          <div className="dp-card-client">{event.client}</div>
-          <div className="dp-card-name">{event.name}</div>
+          <div className="dp-card-name dp-card-name--primary">{listPrimaryLabel(event.client)}</div>
         </div>
 
         {/* Health Lights */}

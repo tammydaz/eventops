@@ -29,6 +29,18 @@ export const asBoolean = (value: unknown): boolean => {
   return false;
 };
 
+/** Airtable checkbox: true when checked; false when unchecked, absent, or other falsy API shapes. */
+export const asAirtableCheckbox = (value: unknown): boolean => {
+  if (value === true) return true;
+  if (value === false || value === null || value === undefined) return false;
+  if (typeof value === "number") return value === 1;
+  if (typeof value === "string") {
+    const s = value.trim().toLowerCase();
+    return s === "true" || s === "1" || s === "yes" || s === "on";
+  }
+  return false;
+};
+
 export const asSingleSelectName = (value: unknown): string => {
   if (typeof value === "string") return value;
   if (value && typeof value === "object" && "name" in value) {

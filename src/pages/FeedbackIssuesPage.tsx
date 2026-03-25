@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { useAuthStore } from "../state/authStore";
+import { DASHBOARD_CALENDAR_TO } from "../lib/dashboardRoutes";
 import {
   listFeedback,
   resolveFeedback,
@@ -91,7 +92,7 @@ export default function FeedbackIssuesPage() {
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, marginBottom: 24, flexWrap: "wrap" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
           <Link
-            to="/"
+            to={DASHBOARD_CALENDAR_TO}
             style={{ color: "#94a3b8", textDecoration: "none", fontSize: 14 }}
           >
             ← Dashboard

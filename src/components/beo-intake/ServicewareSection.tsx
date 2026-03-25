@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { useEventStore } from "../../state/eventStore";
 import { FIELD_IDS } from "../../services/airtable/events";
 import { asString, asSingleSelectName, asLinkedRecordIds } from "../../services/airtable/selectors";
-import { FormSection, CollapsibleSubsection, Helper, inputStyle, labelStyle, textareaStyle } from "./FormSection";
+import { FormSection, BEO_SECTION_PILL_ACCENT, CollapsibleSubsection, Helper, inputStyle, labelStyle, textareaStyle } from "./FormSection";
 
 const SUPPLIER_OPTIONS = [
   "FoodWerx Standard",
@@ -810,7 +810,7 @@ export const ServicewareSection = ({ embedded = false }: ServicewareSectionProps
   );
 
   return embedded ? content : (
-    <FormSection title="Plates • Cutlery • Glassware" dotColor="#00bcd4">
+    <FormSection title="Plates • Cutlery • Glassware" dotColor={BEO_SECTION_PILL_ACCENT}>
       {content}
     </FormSection>
   );

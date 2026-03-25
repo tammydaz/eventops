@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { DASHBOARD_CALENDAR_TO } from "../lib/dashboardRoutes";
 
 const printStyles = `
 * {
@@ -358,7 +359,7 @@ export const PrintTest = () => {
         type="button"
         className="back-to-dashboard"
         onClick={() => {
-          window.location.href = "/";
+          window.location.href = DASHBOARD_CALENDAR_TO;
         }}
       >
         ← Back to Dashboard

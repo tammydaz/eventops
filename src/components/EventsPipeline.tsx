@@ -3,20 +3,18 @@
  * Used on all department landing pages. Shows View dropdown, Sort options,
  * Grid/List/Calendar toggles. Uses productionHelpers for blink & color logic.
  */
-import { useState, useEffect, useMemo } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { useState, useEffect, useMemo, useCallback } from "react";
+import { useNavigate, Link, useSearchParams } from "react-router-dom";
 import { useEventStore } from "../state/eventStore";
 import { useAuthStore } from "../state/authStore";
 import {
   getProductionColor,
-  getProductionColorHex,
   getProductionColorForFOH,
   getHealthBOH,
   shouldBlink,
   shouldBlinkForDepartment,
   needsChangeConfirmation,
   isProductionFrozen,
-  PRODUCTION_COLORS,
   type DepartmentKey,
 } from "../lib/productionHelpers";
 import { loadTodaysTasks, sortOutstandingTasks, updateTask, createTask, type Task } from "../services/airtable/tasks";
@@ -31,6 +29,12 @@ import { useQuestionStore } from "../state/questionStore";
 import type { QuestionTargetDepartment } from "../state/questionStore";
 import "../pages/DashboardPage.css";
 import "./EventsPipeline.css";
+import { StaffingAttentionBadge } from "./StaffingAttentionBadge";
+import { EventListByDay } from "./EventListByDay";
+import { addDaysToIso, weekRangeMondaySunday } from "../lib/weekRange";
+import { listPrimaryLabel } from "../lib/eventListRowMeta";
+import { useIntakeFOHCommandFilters } from "../context/IntakeFOHCommandContext";
+import { EventListDetailSidebar } from "./EventListDetailSidebar";
 
 /* ── Event data shape (matches Dashboard) ── */
 interface EventData {
@@ -64,6 +68,19 @@ interface EventData {
   isDemo?: boolean;
   healthFOH?: "green" | "yellow" | "red";
   healthBOH?: "green" | "yellow" | "red";
+  staffingConfirmedInNowsta?: boolean;
+  fwStaffSummaryPresent?: boolean;
+  phone?: string;
+  /** Seconds since midnight — for list row time range */
+  dispatchTimeSeconds?: number;
+  /** FOH: BEO fired to BOH (Airtable checkbox) */
+  beoFiredToBOH?: boolean;
+  /** FOH: Speck complete (Airtable checkbox) */
+  speckComplete?: boolean;
+  beoNotes?: string;
+  timelineRaw?: string;
+  paymentStatus?: string;
+  invoicePaid?: boolean;
 }
 
 function formatEventDate(d?: string): string {
@@ -84,6 +101,8 @@ function listItemToEventData(e: EventListItem): EventData {
   const client = parts[0]?.trim() || "—";
   const venue = parts[1]?.trim() || "—";
   const healthBOH = getHealthBOH(e);
+  const phone =
+    [e.primaryContactPhone, e.clientPhone].map((x) => (x ?? "").trim()).find((p) => p.length > 0) ?? "";
   return {
     id: e.id,
     eventDate: e.eventDate,
@@ -91,6 +110,7 @@ function listItemToEventData(e: EventListItem): EventData {
     time: formatEventDate(e.eventDate),
     client,
     venue,
+    phone,
     guests: e.guestCount ?? 0,
     category: e.eventType ?? e.eventOccasion ?? "—",
     eventType: e.eventType ?? "—",
@@ -115,6 +135,15 @@ function listItemToEventData(e: EventListItem): EventData {
     isDemo: false,
     healthFOH: "green",
     healthBOH,
+    staffingConfirmedInNowsta: e.staffingConfirmedInNowsta,
+    fwStaffSummaryPresent: e.fwStaffSummaryPresent,
+    dispatchTimeSeconds: e.dispatchTimeSeconds,
+    beoFiredToBOH: e.beoFiredToBOH,
+    speckComplete: e.speckComplete,
+    beoNotes: e.beoNotes,
+    timelineRaw: e.timelineRaw,
+    paymentStatus: e.paymentStatus,
+    invoicePaid: e.invoicePaid,
   };
 }
 
@@ -127,20 +156,10 @@ const DEMO_TEMPLATES: Array<Omit<EventData, "eventDate" | "time" | "id"> & { day
   { dayOffset: 3, name: "Rivera Quinceañera – La Fiesta Hall", client: "Rivera Family", venue: "La Fiesta Hall", guests: 200, category: "Celebration", eventType: "Full Service", serviceStyle: "Buffet", isDemo: true },
   { dayOffset: 4, name: "Office Luncheon – Downtown Tower", client: "Downtown Corp", venue: "Downtown Tower", guests: 55, category: "Corporate", eventType: "Delivery", serviceStyle: "Drop-off", isDemo: true, guestCountConfirmed: true, menuAcceptedByKitchen: true, productionAcceptedDelivery: false },
   { dayOffset: 5, name: "Apex Digital Awards – Hotel Grand", client: "Apex Digital", venue: "Hotel Grand", guests: 250, category: "Corporate", eventType: "Full Service", serviceStyle: "Plated", isDemo: true },
-  { dayOffset: 6, name: "Johnson Birthday – Private Residence", client: "Johnson Family", venue: "Private Residence", guests: 45, category: "Birthday", eventType: "Delivery", serviceStyle: "Drop-off", isDemo: true, guestCountConfirmed: true, menuAcceptedByKitchen: true, productionAcceptedDelivery: false },
+  { dayOffset: 6, name: "Johnson Birthday – Private Residence", client: "Johnson Family", venue: "Private Residence", guests: 45, category: "Birthday", eventType: "Pickup", serviceStyle: "Pick-up", isDemo: true, guestCountConfirmed: true, menuAcceptedByKitchen: true, productionAcceptedDelivery: false },
   { dayOffset: 7, name: "Spring Gala Fundraiser – Museum of Art", client: "Museum Foundation", venue: "Museum of Art", guests: 400, category: "Fundraiser", eventType: "Full Service", serviceStyle: "Stations", isDemo: true },
-  { dayOffset: 9, name: "Williams Rehearsal Dinner – Vineyard Estate", client: "Williams Family", venue: "Vineyard Estate", guests: 60, category: "Wedding", eventType: "Full Service", serviceStyle: "Plated", isDemo: true },
+  { dayOffset: 9, name: "Williams Rehearsal Dinner – Vineyard Estate", client: "Williams Family", venue: "Vineyard Estate", guests: 60, category: "Wedding", eventType: "Pick-up", serviceStyle: "Plated", isDemo: true },
 ];
-
-/* Demo mini cards for FOH dock — always grey, show "sent to BOH" layout */
-function getDemoDockItems(): EventData[] {
-  const d = new Date().toISOString().slice(0, 10);
-  return [
-    { id: "demo_dock_1", eventDate: d, name: "Smith Wedding – Riverside Manor", time: "—", client: "Smith Family", venue: "—", guests: 0, category: "—", eventType: "Full Service", serviceStyle: "—", isDemo: true, healthFOH: "green", healthBOH: "green" },
-    { id: "demo_dock_2", eventDate: d, name: "TechCorp Q1 Summit – Convention Center", time: "—", client: "TechCorp", venue: "—", guests: 0, category: "—", eventType: "Full Service", serviceStyle: "—", isDemo: true, healthFOH: "green", healthBOH: "green" },
-    { id: "demo_dock_3", eventDate: d, name: "Green Acres Box Lunch – Barn Venue", time: "—", client: "Green Acres Org", venue: "—", guests: 0, category: "—", eventType: "Delivery", serviceStyle: "—", isDemo: true, healthFOH: "green", healthBOH: "green" },
-  ];
-}
 
 function getDemoEventsForWindow(startDate: string, endDate: string, excludeIds: Set<string>): EventData[] {
   const start = new Date(startDate);
@@ -171,6 +190,9 @@ function getDemoEventsForWindow(startDate: string, endDate: string, excludeIds: 
         productionAcceptedFlair: t.productionAcceptedFlair,
         productionAcceptedDelivery: t.productionAcceptedDelivery,
         productionAcceptedOpsChief: t.productionAcceptedOpsChief,
+        beoSentToBOH: false,
+        phone: `(555) 201-${String(1000 + i).padStart(4, "0")}`,
+        dispatchTimeSeconds: t.dispatchTimeSeconds ?? (18 * 3600 + (i % 5) * 3600),
       } as EventData;
     })
     .filter((e): e is EventData => e !== null);
@@ -187,16 +209,84 @@ type EventsPipelineProps = {
   departmentContext?: "kitchen" | "flair" | "delivery" | "ops_chief" | "intake_foh";
 };
 
-export function EventsPipeline({ title = "10-Day Pipeline", compact = false, departmentContext }: EventsPipelineProps) {
+/** Opt-in preview: append `?calendarBusyDemo=1` to the URL to show 10 demo events on one day (calendar view). */
+function buildBusyDayDemoEvents(calendarYear: number, calendarMonth: number): EventData[] {
+  const lastDay = new Date(calendarYear, calendarMonth + 1, 0).getDate();
+  const dayNum = Math.min(15, lastDay);
+  const m = String(calendarMonth + 1).padStart(2, "0");
+  const d = String(dayNum).padStart(2, "0");
+  const dateStr = `${calendarYear}-${m}-${d}`;
+  const time = formatEventDate(dateStr);
+  const names = [
+    "Corporate Gala — City Hall",
+    "Wedding Reception — Riverside Manor",
+    "Birthday Celebration — Private Residence",
+    "Tech Summit — Convention Center",
+    "Fundraising Dinner — Museum of Art",
+    "Office Luncheon — Downtown Tower",
+    "Anniversary Party — Grand Ballroom",
+    "Box Lunch Drop-off — Barn Venue",
+    "Rehearsal Dinner — Vineyard Estate",
+    "Spring Brunch — Garden Terrace",
+  ];
+  return names.map((name, i) => ({
+    id: `__calendar_busy_demo_${i}`,
+    eventDate: dateStr,
+    name,
+    time,
+    client: `Demo Client ${i + 1}`,
+    venue: `Venue ${i + 1}`,
+    guests: 40 + i * 15,
+    category: "Preview",
+    eventType: "Full Service",
+    serviceStyle: "Plated",
+    isDemo: true,
+    healthFOH: "green",
+    healthBOH: "green",
+    beoSentToBOH: false,
+    phone: `(555) 555-${String(4300 + i).padStart(4, "0")}`,
+    dispatchTimeSeconds: 17 * 3600 + i * 450,
+  }));
+}
+
+export function EventsPipeline({ title = "Weekly Pipeline", compact = false, departmentContext }: EventsPipelineProps) {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const calendarBusyDemo = searchParams.get("calendarBusyDemo") === "1";
   const { user } = useAuthStore();
   const { events: rawEvents, loadEvents, selectEvent, setFields, eventsLoading, eventsError } = useEventStore();
   const [pendingAcceptEvent, setPendingAcceptEvent] = useState<EventData | null>(null);
 
-  const [activeTab, setActiveTab] = useState("10-Day Pipeline");
+  const [activeTab, setActiveTab] = useState("Weekly");
   const [sortBy, setSortBy] = useState<"date" | "client" | "venue" | "eventType" | "serviceStyle">("date");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
-  const [eventView, setEventView] = useState<"grid" | "list" | "calendar">("grid");
+  const [eventView, setEventViewState] = useState<"grid" | "list" | "calendar">(() => {
+    const p = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("eventView") : null;
+    if (p === "grid" || p === "list" || p === "calendar") return p;
+    return "calendar";
+  });
+
+  const setEventView = useCallback(
+    (v: "grid" | "list" | "calendar") => {
+      setEventViewState(v);
+      setSearchParams(
+        (prev) => {
+          const n = new URLSearchParams(prev);
+          n.set("eventView", v);
+          return n;
+        },
+        { replace: true }
+      );
+    },
+    [setSearchParams]
+  );
+
+  useEffect(() => {
+    const ev = searchParams.get("eventView");
+    if (ev === "grid" || ev === "list" || ev === "calendar") {
+      setEventViewState(ev);
+    }
+  }, [searchParams]);
   const [calendarMonth, setCalendarMonth] = useState(() => new Date().getMonth());
   const [calendarYear, setCalendarYear] = useState(() => new Date().getFullYear());
   const [todaysTasks, setTodaysTasks] = useState<Task[]>([]);
@@ -204,8 +294,10 @@ export function EventsPipeline({ title = "10-Day Pipeline", compact = false, dep
   const [todaysTasksLoading, setTodaysTasksLoading] = useState(false);
   const [followUpTask, setFollowUpTask] = useState<Task | null>(null);
   const [newClientHelpOpen, setNewClientHelpOpen] = useState(false);
+  const [listDetailEventId, setListDetailEventId] = useState<string | null>(null);
 
   const isFOH = departmentContext === "intake_foh";
+  const intakeCmd = useIntakeFOHCommandFilters();
 
   useEffect(() => {
     loadEvents();
@@ -227,34 +319,40 @@ export function EventsPipeline({ title = "10-Day Pipeline", compact = false, dep
 
   const eventDataList = useMemo(() => rawEvents.map(listItemToEventData), [rawEvents]);
   const today = useMemo(() => new Date().toISOString().slice(0, 10), []);
-  const endDate10 = useMemo(() => {
-    const d = new Date(today);
-    d.setDate(d.getDate() + 10);
-    return d.toISOString().slice(0, 10);
-  }, [today]);
+  const { monday: weekMonday, sunday: weekSunday } = useMemo(() => weekRangeMondaySunday(today), [today]);
 
   const filteredEvents = useMemo(() => {
     if (activeTab === "Today's Events") return eventDataList.filter((e) => e.eventDate === today);
-    if (activeTab === "10-Day Pipeline") {
+    if (activeTab === "Weekly") {
       const real = eventDataList.filter((e) => {
         const d = e.eventDate ?? "";
-        return d >= today && d <= endDate10;
+        return d >= weekMonday && d <= weekSunday;
       });
       const realIds = new Set(real.map((e) => e.id));
-      const demos = getDemoEventsForWindow(today, endDate10, realIds);
+      const demos = getDemoEventsForWindow(weekMonday, weekSunday, realIds);
       const combined = [...real, ...demos].sort((a, b) => (a.eventDate ?? "").localeCompare(b.eventDate ?? ""));
       if (combined.length >= MIN_EVENTS_TO_FILL) return combined;
       const usedIds = new Set(combined.map((e) => e.id));
-      const extra = getDemoEventsForWindow(today, endDate10, usedIds).slice(0, MIN_EVENTS_TO_FILL - combined.length);
+      const extra = getDemoEventsForWindow(weekMonday, weekSunday, usedIds).slice(0, MIN_EVENTS_TO_FILL - combined.length);
       return [...combined, ...extra].sort((a, b) => (a.eventDate ?? "").localeCompare(b.eventDate ?? ""));
     }
     if (activeTab === "Upcoming Events") return eventDataList.filter((e) => (e.eventDate ?? "") >= today);
     if (activeTab === "Completed" || activeTab === "Archive") return eventDataList.filter((e) => (e.eventDate ?? "") < today);
     return eventDataList;
-  }, [eventDataList, activeTab, today, endDate10]);
+  }, [eventDataList, activeTab, today, weekMonday, weekSunday]);
+
+  const afterIntakeCommandFilters = useMemo(() => {
+    let arr = filteredEvents;
+    if (!isFOH || !intakeCmd) return arr;
+    if (intakeCmd.barClientFilter !== "all") arr = arr.filter((e) => e.client === intakeCmd.barClientFilter);
+    if (intakeCmd.barVenueFilter !== "all") arr = arr.filter((e) => e.venue === intakeCmd.barVenueFilter);
+    if (intakeCmd.barStatusFilter === "confirmed") arr = arr.filter((e) => e.beoSentToBOH === true);
+    if (intakeCmd.barStatusFilter === "setup") arr = arr.filter((e) => e.beoSentToBOH !== true);
+    return arr;
+  }, [filteredEvents, isFOH, intakeCmd]);
 
   const events = useMemo(() => {
-    const arr = [...filteredEvents];
+    const arr = [...afterIntakeCommandFilters];
     const mult = sortDir === "asc" ? 1 : -1;
     arr.sort((a, b) => {
       let cmp = 0;
@@ -266,16 +364,15 @@ export function EventsPipeline({ title = "10-Day Pipeline", compact = false, dep
       return mult * cmp;
     });
     return arr;
-  }, [filteredEvents, sortBy, sortDir]);
+  }, [afterIntakeCommandFilters, sortBy, sortDir]);
 
-  const { mainEvents, dockEvents } = useMemo(() => {
-    if (!isFOH) return { mainEvents: events, dockEvents: [] as EventData[] };
-    const main = events.filter((e) => !e.beoSentToBOH || e.isDemo);
-    const dock = events
-      .filter((e) => !e.isDemo && e.beoSentToBOH === true && (e.eventDate ?? "") >= today)
-      .sort((a, b) => (a.eventDate ?? "").localeCompare(b.eventDate ?? ""));
-    return { mainEvents: main, dockEvents: dock };
-  }, [events, isFOH, today]);
+  const listDetailEvent = useMemo(() => events.find((e) => e.id === listDetailEventId) ?? null, [events, listDetailEventId]);
+
+  useEffect(() => {
+    /* Intake/FOH: keep the right panel when switching grid/list/calendar (first click = panel, second = overview). */
+    if (isFOH) return;
+    if (eventView !== "list") setListDetailEventId(null);
+  }, [eventView, isFOH]);
 
   const deptKey: DepartmentKey | null =
     departmentContext && departmentContext !== "intake_foh" ? departmentContext : null;
@@ -341,6 +438,20 @@ export function EventsPipeline({ title = "10-Day Pipeline", compact = false, dep
     navigate(getTargetRoute(evt.id));
   };
 
+  /** Intake/FOH: first click opens the right action panel; second click on the same event opens Event Overview. */
+  const handleFOHEventClick = useCallback(
+    (evt: EventData) => {
+      if (evt.isDemo) return;
+      if (listDetailEventId === evt.id) {
+        handleSelectEvent(evt);
+      } else {
+        selectEvent(evt.id);
+        setListDetailEventId(evt.id);
+      }
+    },
+    [listDetailEventId]
+  );
+
   const getAcceptFieldId = async () => {
     const ids = await getLockoutFieldIds();
     if (!ids) return null;
@@ -392,8 +503,19 @@ export function EventsPipeline({ title = "10-Day Pipeline", compact = false, dep
   const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
   const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
+  const pipelineIntakeFohClass =
+    departmentContext === "intake_foh"
+      ? `pipeline-view--intake-foh${eventView === "list" ? " pipeline-view--intake-foh-list-fit" : ""}`
+      : "";
+
   return (
-    <div className="pipeline-view" style={{ padding: compact ? 16 : 24, width: "100%" }}>
+    <div
+      className={`pipeline-view ${pipelineIntakeFohClass}`.trim()}
+      style={{
+        padding: compact ? 16 : departmentContext === "intake_foh" ? 0 : 24,
+        width: "100%",
+      }}
+    >
       <AcceptTransferModal
         open={!!pendingAcceptEvent}
         onClose={() => setPendingAcceptEvent(null)}
@@ -402,23 +524,25 @@ export function EventsPipeline({ title = "10-Day Pipeline", compact = false, dep
         isChangeConfirmation={!!pendingAcceptEvent && !!deptKey && (isProductionFrozen(pendingAcceptEvent) || needsChangeConfirmation(pendingAcceptEvent, deptKey))}
         isProductionFrozen={!!pendingAcceptEvent && isProductionFrozen(pendingAcceptEvent)}
       />
-      {title && (
+      {title && (!(departmentContext === "intake_foh") || eventView === "grid") && (
         <div style={{ marginBottom: 16 }}>
           <h2 style={{ fontSize: 18, fontWeight: 700, color: "#fff", margin: "0 0 4px 0" }}>{title}</h2>
           <p style={{ fontSize: 13, color: "rgba(255,255,255,0.6)", margin: 0 }}>
-            {today} – {endDate10} · {events.length} events
+            {activeTab === "Weekly"
+              ? `${weekMonday} – ${weekSunday}`
+              : `${today} – ${addDaysToIso(today, 6)}`} · {events.length} events
             {departmentContext === "intake_foh" && " · Click an event to open Event Overview (booking steps)"}
           </p>
           {departmentContext === "intake_foh" && (
             <p style={{ fontSize: 12, color: "rgba(255,255,255,0.45)", margin: "6px 0 0 0" }}>
-              <strong style={{ color: "rgba(255,255,255,0.7)" }}>New client?</strong> Use the <strong>Show steps</strong> button in the toolbar below, or click <strong>Add Event</strong> in the sidebar to start.
+              <strong style={{ color: "rgba(255,255,255,0.7)" }}>New client?</strong> Use the <strong>Show steps</strong> button in the toolbar below, or start from <strong>Add Event</strong> / Quick Intake.
             </p>
           )}
         </div>
       )}
 
       {/* ── Toolbar: View dropdown, Sort, Grid/List/Calendar (matches DashboardPage) ── */}
-      <div className="dp-tabs-toolbar">
+      <div className={`dp-tabs-toolbar ${isFOH ? "dp-tabs-toolbar--intake-foh-top" : ""}`.trim()}>
         <div className="dp-tabs-left">
           <div className="dp-toolbar-sort">
             <label htmlFor="ep-view-select" className="dp-toolbar-label">View</label>
@@ -429,7 +553,7 @@ export function EventsPipeline({ title = "10-Day Pipeline", compact = false, dep
               onChange={(e) => setActiveTab(e.target.value)}
             >
               <option value="Today's Events">Today's Events</option>
-              <option value="10-Day Pipeline">10 Day View</option>
+              <option value="Weekly">Week View</option>
               <option value="Upcoming Events">Upcoming Events</option>
               <option value="Completed">Completed</option>
               <option value="Archive">Archive</option>
@@ -517,8 +641,8 @@ export function EventsPipeline({ title = "10-Day Pipeline", compact = false, dep
             </button>
           </div>
           <div className="dp-tab-stats">
-            <span className="dp-stat-count">{(isFOH ? mainEvents : events).length} events</span>
-            <span className="dp-stat-guests">{(isFOH ? mainEvents : events).reduce((s, e) => s + e.guests, 0).toLocaleString()} guests</span>
+            <span className="dp-stat-count">{events.length} events</span>
+            <span className="dp-stat-guests">{events.reduce((s, e) => s + e.guests, 0).toLocaleString()} guests</span>
           </div>
         </div>
       </div>
@@ -527,7 +651,7 @@ export function EventsPipeline({ title = "10-Day Pipeline", compact = false, dep
       {isFOH && newClientHelpOpen && (
         <div className="dp-todays-tasks-panel dp-new-client-help-panel">
           <ol className="dp-new-client-help-steps">
-            <li>Click <strong>Add Event</strong> in the left sidebar.</li>
+            <li>Use <strong>Add Event</strong> from Quick Intake or your bookmarks.</li>
             <li>Enter <strong>first name</strong>, <strong>last name</strong>, <strong>phone</strong>, <strong>event type</strong>, and <strong>date</strong> (optional).</li>
             <li>Click <strong>Create Event →</strong>. You’ll be taken to <strong>BEO Intake</strong> for that event.</li>
             <li>From BEO Intake, click <strong>Event Overview</strong> in the header to track <strong>invoice</strong>, <strong>deposit</strong>, <strong>contract</strong>, <strong>questionnaire</strong>, and <strong>reminders</strong>.</li>
@@ -593,17 +717,17 @@ export function EventsPipeline({ title = "10-Day Pipeline", compact = false, dep
         {!eventsLoading && !eventsError && (
           eventView === "grid" ? (
             <div className="dp-events-grid">
-              {(isFOH ? mainEvents : events).length === 0 ? (
+              {events.length === 0 ? (
                 <div className="dp-events-empty">
                   <p>No events in &quot;{activeTab}&quot;</p>
                   <p className="dp-events-empty-hint">
-                    {activeTab === "Today's Events" && "Try the 10-Day Pipeline or Upcoming Events, or add an event."}
-                    {(activeTab === "10-Day Pipeline" || activeTab === "Upcoming Events") && "Add an event via Quick Intake or Upload Invoice."}
+                    {activeTab === "Today's Events" && "Try Week View or Upcoming Events, or add an event."}
+                    {(activeTab === "Weekly" || activeTab === "Upcoming Events") && "Add an event via Quick Intake or Upload Invoice."}
                     {(activeTab === "Completed" || activeTab === "Archive") && "Past events will appear here."}
                   </p>
                 </div>
               ) : (
-                (isFOH ? mainEvents : events).map((evt) => (
+                events.map((evt) => (
                   <PipelineCard
                     key={evt.id}
                     event={evt}
@@ -617,7 +741,8 @@ export function EventsPipeline({ title = "10-Day Pipeline", compact = false, dep
             </div>
           ) : eventView === "calendar" ? (
             <CalendarView
-              events={isFOH ? mainEvents : events}
+              events={events}
+              busyDayDemo={calendarBusyDemo}
               calendarMonth={calendarMonth}
               calendarYear={calendarYear}
               monthNames={monthNames}
@@ -629,103 +754,41 @@ export function EventsPipeline({ title = "10-Day Pipeline", compact = false, dep
               goNext={goNextMonth}
             />
           ) : (
-            <ListView
-              events={isFOH ? mainEvents : events}
-              activeTab={activeTab}
-              deptKey={deptKey}
-              isFOH={isFOH}
-              onSelectEvent={handleSelectEvent}
-            />
+            <div className="dp-events-list-with-sidebar">
+              <div className="dp-events-area-inner-fill">
+                <EventListByDay
+                  events={events}
+                  activeTab={activeTab}
+                  today={today}
+                  sortBy={sortBy}
+                  sortDir={sortDir}
+                  isFOH={isFOH}
+                  deptKey={deptKey}
+                  selectedEventId={listDetailEventId}
+                  onSelectDetail={(evt) => setListDetailEventId(evt.id)}
+                  onOpenEvent={handleSelectEvent}
+                />
+              </div>
+              {listDetailEvent && (
+                <EventListDetailSidebar
+                  event={listDetailEvent}
+                  isFOH={isFOH}
+                  compactLayout={isFOH}
+                  onClose={() => setListDetailEventId(null)}
+                  onOpenEvent={() => handleSelectEvent(listDetailEvent)}
+                />
+              )}
+            </div>
           )
         )}
       </div>
-
-      {/* FOH Bottom Dock — mini grey cards (sent to BOH) + demo cards */}
-      {isFOH && (
-        <FOHBottomDock
-          events={[...dockEvents, ...getDemoDockItems()]}
-          viewingDepartment={viewingDepartment}
-          onSelectEvent={handleSelectEvent}
-        />
-      )}
     </div>
-  );
-}
-
-function FOHBottomDock({
-  events,
-  viewingDepartment,
-  onSelectEvent,
-}: {
-  events: EventData[];
-  viewingDepartment: QuestionTargetDepartment | null;
-  onSelectEvent: (evt: EventData) => void;
-}) {
-  return (
-    <div className="foh-dock">
-      <div className="foh-dock-inner">
-        {events.map((evt) => (
-          <FOHMiniCard
-            key={evt.id}
-            event={evt}
-            viewingDepartment={viewingDepartment}
-            onSelect={() => onSelectEvent(evt)}
-          />
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function FOHMiniCard({
-  event,
-  viewingDepartment,
-  onSelect,
-}: {
-  event: EventData;
-  viewingDepartment: QuestionTargetDepartment | null;
-  onSelect: () => void;
-}) {
-  const kitchenBlink = event.kitchenBlink === true;
-  const deliveryBlink = event.deliveryBlink === true;
-  const flairBlink = event.flairBlink === true;
-  const opsBlink = event.opsChiefBlink === true;
-  const fohStatus = event.healthFOH ?? "green";
-
-  return (
-    <AskFOHPopover eventId={event.id} eventName={event.name} viewingDepartment={viewingDepartment} disabled={event.isDemo}>
-      <article
-        className="foh-mini-card"
-        role="button"
-        tabIndex={0}
-        onClick={onSelect}
-        onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && onSelect()}
-      >
-        <span className="foh-mini-client">{event.client}</span>
-        <div className="foh-mini-lights">
-          <MiniLight status={fohStatus} label="FOH" />
-          <MiniLight status={kitchenBlink ? "yellow" : "green"} label="K" />
-          <MiniLight status={deliveryBlink ? "yellow" : "green"} label="D" />
-          <MiniLight status={flairBlink ? "yellow" : "green"} label="F" />
-          <MiniLight status={opsBlink ? "yellow" : "green"} label="O" />
-        </div>
-      </article>
-    </AskFOHPopover>
-  );
-}
-
-function MiniLight({ status, label }: { status: "green" | "yellow" | "red"; label: string }) {
-  const colors: Record<string, string> = { green: "#22c55e", yellow: "#eab308", red: "#ef4444" };
-  const c = colors[status] ?? "#6b7280";
-  return (
-    <span className="foh-mini-light" title={label} style={{ backgroundColor: c }}>
-      {label}
-    </span>
   );
 }
 
 function CalendarView({
   events,
+  busyDayDemo,
   calendarMonth,
   calendarYear,
   monthNames,
@@ -737,6 +800,8 @@ function CalendarView({
   goNext,
 }: {
   events: EventData[];
+  /** When true, merges 10 demo events onto day 15 (or last day if shorter month) for layout preview. */
+  busyDayDemo?: boolean;
   calendarMonth: number;
   calendarYear: number;
   monthNames: string[];
@@ -747,6 +812,11 @@ function CalendarView({
   goPrev: () => void;
   goNext: () => void;
 }) {
+  const eventsForCalendar = useMemo(() => {
+    if (!busyDayDemo) return events;
+    return [...events, ...buildBusyDayDemoEvents(calendarYear, calendarMonth)];
+  }, [events, busyDayDemo, calendarYear, calendarMonth]);
+
   const firstDay = new Date(calendarYear, calendarMonth, 1);
   const lastDay = new Date(calendarYear, calendarMonth + 1, 0);
   const startOffset = firstDay.getDay();
@@ -761,7 +831,7 @@ function CalendarView({
   }
   while (cells.length < totalCells) cells.push({ day: null, dateStr: null });
 
-  const eventsInMonth = events.filter((e) => {
+  const eventsInMonth = eventsForCalendar.filter((e) => {
     const d = e.eventDate ?? "";
     return d.startsWith(`${calendarYear}-${String(calendarMonth + 1).padStart(2, "0")}`);
   });
@@ -781,6 +851,11 @@ function CalendarView({
         <h2 className="dp-calendar-title">{monthNames[calendarMonth]} {calendarYear}</h2>
         <button type="button" className="dp-calendar-nav" onClick={goNext} aria-label="Next month">›</button>
       </div>
+      {busyDayDemo && (
+        <p className="dp-calendar-busy-demo-hint">
+          Preview: 10 demo events on one day — clear <code>?calendarBusyDemo=1</code> from the URL when done
+        </p>
+      )}
       <div className="dp-calendar-month">
         <div className="dp-calendar-weekdays">
           {dayNames.map((d) => (
@@ -811,7 +886,8 @@ function CalendarView({
                             onClick={() => canSelect && onSelectEvent(evt)}
                             onKeyDown={(e) => canSelect && (e.key === "Enter" || e.key === " ") && onSelectEvent(evt)}
                           >
-                            {evt.name}
+                            {listPrimaryLabel(evt.client)}
+                            <StaffingAttentionBadge event={evt} />
                             {evt.isDemo && <span className="dp-calendar-event-demo-badge">Demo</span>}
                           </div>
                         );
@@ -828,85 +904,6 @@ function CalendarView({
   );
 }
 
-function ListView({
-  events,
-  activeTab,
-  deptKey,
-  isFOH,
-  onSelectEvent,
-}: {
-  events: EventData[];
-  activeTab: string;
-  deptKey: DepartmentKey | null;
-  isFOH?: boolean;
-  onSelectEvent: (evt: EventData) => void;
-}) {
-  const hasUnacknowledgedForDepartment = useQuestionStore((s) => s.hasUnacknowledgedForDepartment);
-  return (
-    <div className="dp-events-list">
-      {events.length === 0 ? (
-        <div className="dp-events-empty">
-          <p>No events in &quot;{activeTab}&quot;</p>
-          <p className="dp-events-empty-hint">
-            {activeTab === "Today's Events" && "Try the 10-Day Pipeline or Upcoming Events, or add an event."}
-            {(activeTab === "10-Day Pipeline" || activeTab === "Upcoming Events") && "Add an event via Quick Intake or Upload Invoice."}
-            {(activeTab === "Completed" || activeTab === "Archive") && "Past events will appear here."}
-          </p>
-        </div>
-      ) : (
-        <>
-          <div className="dp-list-header">
-            <div className="dp-list-col dp-list-col-date">Date</div>
-            <div className="dp-list-col dp-list-col-name">Event</div>
-            <div className="dp-list-col dp-list-col-client">Client</div>
-            <div className="dp-list-col dp-list-col-venue">Venue</div>
-            <div className="dp-list-col dp-list-col-guests">Guests</div>
-            <div className="dp-list-col dp-list-col-category">Category</div>
-          </div>
-          {events.map((evt) => {
-            const prodColor = isFOH ? getProductionColorForFOH(evt) : getProductionColor(evt);
-            const colorHex = isFOH ? (PRODUCTION_COLORS[prodColor]) : getProductionColorHex(evt);
-            const canSelect = !evt.isDemo;
-            const blink = canSelect && (
-              isFOH ? hasUnacknowledgedForDepartment(evt.id, "intake_foh") : (deptKey ? shouldBlinkForDepartment(evt, deptKey) : shouldBlink(evt))
-            );
-            const frozen = canSelect && isProductionFrozen(evt);
-            return (
-              <div
-                key={evt.id}
-                className={`dp-list-row ${blink ? "dp-list-row-blink" : ""} ${frozen ? "dp-list-row-frozen" : ""} ${evt.isDemo ? "dp-list-row-demo" : ""}`}
-                data-production={prodColor}
-                role={canSelect ? "button" : undefined}
-                tabIndex={canSelect ? 0 : undefined}
-                onClick={() => canSelect && onSelectEvent(evt)}
-                onKeyDown={(e) => canSelect && (e.key === "Enter" || e.key === " ") && onSelectEvent(evt)}
-              >
-                <div className="dp-list-col dp-list-col-date">{evt.time}</div>
-                <div className="dp-list-col dp-list-col-name">{evt.name}</div>
-                <div className="dp-list-col dp-list-col-client">{evt.client}</div>
-                <div className="dp-list-col dp-list-col-venue">{evt.venue}</div>
-                <div className="dp-list-col dp-list-col-guests">{evt.guests}</div>
-                <div className="dp-list-col dp-list-col-category">
-                  <span
-                    className="dp-list-pill"
-                    style={{
-                      color: colorHex,
-                      backgroundColor: `${colorHex}18`,
-                      borderColor: `${colorHex}40`,
-                    }}
-                  >
-                    {evt.category}
-                  </span>
-                </div>
-              </div>
-            );
-          })}
-        </>
-      )}
-    </div>
-  );
-}
-
 function PipelineCard({ event, departmentKey, viewingDepartment, isFOH, onSelect }: { event: EventData; departmentKey: DepartmentKey | null; viewingDepartment?: QuestionTargetDepartment | null; isFOH?: boolean; onSelect?: () => void }) {
   const hasUnacknowledgedForDepartment = useQuestionStore((s) => s.hasUnacknowledgedForDepartment);
   const prodColor = isFOH ? getProductionColorForFOH(event) : getProductionColor(event);
@@ -919,7 +916,7 @@ function PipelineCard({ event, departmentKey, viewingDepartment, isFOH, onSelect
   const frozen = !event.isDemo && isProductionFrozen(event);
 
   return (
-    <AskFOHPopover eventId={event.id} eventName={event.name} viewingDepartment={viewingDepartment ?? null} disabled={event.isDemo}>
+    <AskFOHPopover eventId={event.id} eventName={listPrimaryLabel(event.client)} viewingDepartment={viewingDepartment ?? null} disabled={event.isDemo}>
       <article
         className={`dp-card dp-card-production dp-card-${prodColor} ${blinking ? "dp-card-blink" : ""} ${needsChangeConfirm ? "dp-card-beo-updated" : ""} ${frozen ? "dp-card-frozen" : ""} ${onSelect ? "dp-card-clickable" : ""} ${event.isDemo ? "dp-card-demo" : ""}`}
         data-production={prodColor}
@@ -932,9 +929,9 @@ function PipelineCard({ event, departmentKey, viewingDepartment, isFOH, onSelect
         {needsChangeConfirm && (
           <div className="dp-card-beo-updated-badge">BEO Updated — Acceptance Required</div>
         )}
+        <StaffingAttentionBadge event={event} className="dp-staffing-attention-badge dp-card-staffing-badge" />
         <div className="dp-card-header dp-card-header-tight">
-          <div className="dp-card-client">{event.client}</div>
-          <div className="dp-card-name">{event.name}</div>
+          <div className="dp-card-name dp-card-name--primary">{listPrimaryLabel(event.client)}</div>
         </div>
         <div className="dp-card-health">
           <HealthLight status={event.healthFOH ?? "green"} label="FOH" />

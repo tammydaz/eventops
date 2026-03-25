@@ -23,6 +23,7 @@ import {
   asSingleSelectName,
   asString,
   asStringArray,
+  asAirtableCheckbox,
   isErrorResult,
   type AttachmentItem,
 } from "./selectors";
@@ -162,6 +163,10 @@ export const FIELD_IDS = {
   BARTENDERS: "fldHgVYksw8YsGX8f",
   DISPLAY_DESIGN: "fldJUrDnCSnw31wan",
   DINING_CREW: "fldaT7wcJglqPr8dA",
+  // Long text: free-form BEO staff line ("1 Lead, 2 Servers…"). Distinct from linked-record CAPTAIN.
+  FW_STAFF_SUMMARY: "fld7SuoE1E5XcfEyT",
+  // Checkbox: office confirms staffing / Nowsta finalized (calendar amber Staff badge until checked).
+  STAFFING_CONFIRMED_NOWSTA: "fldTXOxU0iNUD7pKK",
 
   // ── Dietary & Notes ──
   DIETARY_NOTES: "fldhGj51bQQWLJSX0",           // Allergies / Dietary
@@ -301,6 +306,25 @@ export type EventListItem = {
   eventChangeRequested?: boolean;
   changeConfirmedByBOH?: boolean;
   productionFrozen?: boolean;
+  /** Checkbox: Staffing confirmed (Nowsta) */
+  staffingConfirmedInNowsta?: boolean;
+  /** FOH: BEO fired to BOH (see FOH_BEO_FIRED_FIELD_ID) */
+  beoFiredToBOH?: boolean;
+  /** FOH: Speck / spec complete (see FOH_SPECK_COMPLETE_FIELD_ID) */
+  speckComplete?: boolean;
+  /** FW Staff Summary Long text present (any non-empty) */
+  fwStaffSummaryPresent?: boolean;
+  /** Primary contact or client phone (list views) */
+  clientPhone?: string;
+  primaryContactPhone?: string;
+  /** Long text — FOH detail panel */
+  beoNotes?: string;
+  /** Long text — event timeline (line-oriented) */
+  timelineRaw?: string;
+  /** Single select */
+  paymentStatus?: string;
+  /** Invoice paid checkbox */
+  invoicePaid?: boolean;
 };
 
 type AirtableFieldSchema = {
@@ -545,8 +569,37 @@ export async function getBOHProductionFieldIds(): Promise<BOHProductionFieldIds 
   return ids;
 }
 
+/** Resolved field ID for FW Staff Summary (Long text). Override with VITE_AIRTABLE_FW_STAFF_SUMMARY_FIELD if your base uses a different ID. */
+export const FW_STAFF_SUMMARY_FIELD_ID =
+  (import.meta.env.VITE_AIRTABLE_FW_STAFF_SUMMARY_FIELD as string | undefined)?.trim() || FIELD_IDS.FW_STAFF_SUMMARY;
+
+/** Checkbox: office confirms staffing / Nowsta is finalized. Override with VITE_AIRTABLE_STAFFING_CONFIRMED_FIELD if your base uses a different ID. */
+export const STAFFING_CONFIRMED_FIELD_ID =
+  (import.meta.env.VITE_AIRTABLE_STAFFING_CONFIRMED_FIELD as string | undefined)?.trim() || FIELD_IDS.STAFFING_CONFIRMED_NOWSTA;
+
+/** FOH Intake list sidebar: BEO fired to BOH (checkbox). Set `VITE_AIRTABLE_FOH_BEO_FIRED_FIELD` to the field id after creating the column in Airtable. */
+export const FOH_BEO_FIRED_FIELD_ID =
+  (import.meta.env.VITE_AIRTABLE_FOH_BEO_FIRED_FIELD as string | undefined)?.trim() || "";
+
+/** FOH Intake: Speck / spec checklist complete (checkbox). Set `VITE_AIRTABLE_FOH_SPECK_COMPLETE_FIELD`. */
+export const FOH_SPECK_COMPLETE_FIELD_ID =
+  (import.meta.env.VITE_AIRTABLE_FOH_SPECK_COMPLETE_FIELD as string | undefined)?.trim() || "";
+
 /** Field IDs resolved at runtime (e.g. Bar Service by name) — allowed in PATCH */
 const additionalAllowedFieldIds = new Set<string>([]);
+if (FW_STAFF_SUMMARY_FIELD_ID) additionalAllowedFieldIds.add(FW_STAFF_SUMMARY_FIELD_ID);
+if (STAFFING_CONFIRMED_FIELD_ID) additionalAllowedFieldIds.add(STAFFING_CONFIRMED_FIELD_ID);
+if (FOH_BEO_FIRED_FIELD_ID) additionalAllowedFieldIds.add(FOH_BEO_FIRED_FIELD_ID);
+if (FOH_SPECK_COMPLETE_FIELD_ID) additionalAllowedFieldIds.add(FOH_SPECK_COMPLETE_FIELD_ID);
+
+/** BEO / print: prefer Long text FW staff line when configured; else legacy CAPTAIN (may be linked IDs). */
+export function resolveFwStaffLineFromFields(fields: Record<string, unknown>): string {
+  {
+    const t = asString(fields[FW_STAFF_SUMMARY_FIELD_ID]);
+    if (t) return t;
+  }
+  return asString(fields[FIELD_IDS.CAPTAIN]);
+}
 
 export const loadEvent = async (recordId: string): Promise<EventRecordData | AirtableErrorResult> => {
   const table = getEventsTable();
@@ -583,6 +636,8 @@ export const loadEvents = async (): Promise<EventListItem[] | AirtableErrorResul
   params.append("fields[]", FIELD_IDS.EVENT_OCCASION);
   params.append("fields[]", FIELD_IDS.SERVICE_STYLE);
   params.append("fields[]", FIELD_IDS.GUEST_COUNT);
+  params.append("fields[]", FIELD_IDS.CLIENT_PHONE);
+  params.append("fields[]", FIELD_IDS.PRIMARY_CONTACT_PHONE);
   const lockoutIds = await getLockoutFieldIds();
   if (lockoutIds) {
     params.append("fields[]", lockoutIds.guestCountConfirmed);
@@ -599,6 +654,14 @@ export const loadEvents = async (): Promise<EventListItem[] | AirtableErrorResul
       .filter(Boolean)
       .forEach((id) => id && params.append("fields[]", id));
   }
+  params.append("fields[]", FIELD_IDS.FW_STAFF_SUMMARY);
+  params.append("fields[]", STAFFING_CONFIRMED_FIELD_ID);
+  if (FOH_BEO_FIRED_FIELD_ID) params.append("fields[]", FOH_BEO_FIRED_FIELD_ID);
+  if (FOH_SPECK_COMPLETE_FIELD_ID) params.append("fields[]", FOH_SPECK_COMPLETE_FIELD_ID);
+  params.append("fields[]", FIELD_IDS.BEO_NOTES);
+  params.append("fields[]", FIELD_IDS.BEO_TIMELINE);
+  params.append("fields[]", FIELD_IDS.PAYMENT_STATUS);
+  params.append("fields[]", FIELD_IDS.INVOICE_PAID);
   const createdTimeFieldId = await getCreatedTimeFieldId();
   if (createdTimeFieldId) {
     params.append("sort[0][field]", createdTimeFieldId);
@@ -635,6 +698,8 @@ export const loadEvents = async (): Promise<EventListItem[] | AirtableErrorResul
     }
     const item: EventListItem = {
       id: record.id,
+      clientPhone: asString(fields[FIELD_IDS.CLIENT_PHONE]) || undefined,
+      primaryContactPhone: asString(fields[FIELD_IDS.PRIMARY_CONTACT_PHONE]) || undefined,
       eventName: asString(fields[FIELD_IDS.EVENT_NAME]),
       eventDate:
         typeof fields[FIELD_IDS.EVENT_DATE] === "string"
@@ -645,7 +710,15 @@ export const loadEvents = async (): Promise<EventListItem[] | AirtableErrorResul
       serviceStyle: asSingleSelectName(fields[FIELD_IDS.SERVICE_STYLE]) || undefined,
       guestCount: typeof fields[FIELD_IDS.GUEST_COUNT] === "number" ? (fields[FIELD_IDS.GUEST_COUNT] as number) : undefined,
       dispatchTimeSeconds,
+      fwStaffSummaryPresent: asString(fields[FIELD_IDS.FW_STAFF_SUMMARY]).trim().length > 0,
     };
+    item.staffingConfirmedInNowsta = asAirtableCheckbox(fields[STAFFING_CONFIRMED_FIELD_ID]);
+    if (FOH_BEO_FIRED_FIELD_ID) item.beoFiredToBOH = fields[FOH_BEO_FIRED_FIELD_ID] === true;
+    if (FOH_SPECK_COMPLETE_FIELD_ID) item.speckComplete = fields[FOH_SPECK_COMPLETE_FIELD_ID] === true;
+    item.beoNotes = asString(fields[FIELD_IDS.BEO_NOTES]) || undefined;
+    item.timelineRaw = asString(fields[FIELD_IDS.BEO_TIMELINE]) || undefined;
+    item.paymentStatus = asSingleSelectName(fields[FIELD_IDS.PAYMENT_STATUS]) || undefined;
+    item.invoicePaid = fields[FIELD_IDS.INVOICE_PAID] === true;
     if (lockoutIds) {
       item.guestCountConfirmed = fields[lockoutIds.guestCountConfirmed] === true;
       item.menuAcceptedByKitchen = fields[lockoutIds.menuAcceptedByKitchen] === true;
@@ -1163,7 +1236,9 @@ const SAVE_WHITELIST = new Set([
   "fldKlKX0HEGX3NTcR",   // COFFEE_SERVICE_NEEDED
   "fldCoffeeMugTypeTODO",   // COFFEE_MUG_TYPE
   "fldWkHPhynjxyecq7",   // STAFF
-  "fldN2W8ITqFotKUF4",   // CAPTAIN (FW staff from invoice: "2 Server, 1 Bartender")
+  "fldN2W8ITqFotKUF4",   // CAPTAIN (linked Staff directory)
+  "fld7SuoE1E5XcfEyT",   // FW_STAFF_SUMMARY (Long text — free-form BEO staff line)
+  "fldTXOxU0iNUD7pKK",   // STAFFING_CONFIRMED_NOWSTA (checkbox)
   "fld4QUBWxoSu6o29l",   // SERVERS
   "fldox9emNqGoemhz0",   // UTILITY
   "flddTPAvICJSztxrj",   // STATION_CREW
@@ -1355,6 +1430,25 @@ export const updateEventMultiple = async (
       } else {
         filteredFields[key] = [];
       }
+    } else if (key === FIELD_IDS.VENUE_STATE || key === FIELD_IDS.CLIENT_STATE) {
+      // Single-select: "" makes Airtable try to add an empty option (422 / permissions).
+      if (value === null || value === "" || (typeof value === "string" && !value.trim())) {
+        filteredFields[key] = null;
+      } else if (typeof value === "string") {
+        filteredFields[key] = value.trim();
+      } else {
+        filteredFields[key] = value;
+      }
+    } else if (key === FIELD_IDS.CAPTAIN) {
+      // CAPTAIN is linked records; free-text staff line must go to FW_STAFF_SUMMARY_FIELD_ID or be skipped.
+      if (Array.isArray(value)) {
+        filteredFields[key] = value;
+      } else if (typeof value === "string") {
+        const trimmed = value.trim();
+        filteredFields[FW_STAFF_SUMMARY_FIELD_ID] = trimmed === "" ? null : trimmed;
+      } else {
+        filteredFields[key] = value;
+      }
     } else {
       filteredFields[key] = value;
     }
@@ -1420,6 +1514,11 @@ async function prepareFieldsForCreate(fields: Record<string, unknown>): Promise<
 
   const eventDate = asString(obj[FIELD_IDS.EVENT_DATE]) || "";
   const foodwerxArrivalFieldId = await getFoodwerxArrivalFieldId();
+  // Linked-record CAPTAIN rejects strings on create; map text to FW Staff Summary Long text field.
+  if (typeof obj[FIELD_IDS.CAPTAIN] === "string") {
+    obj[FW_STAFF_SUMMARY_FIELD_ID] = obj[FIELD_IDS.CAPTAIN];
+    delete obj[FIELD_IDS.CAPTAIN];
+  }
   const result: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(obj)) {
     if (value === undefined) continue;

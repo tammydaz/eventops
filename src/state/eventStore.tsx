@@ -7,10 +7,13 @@ import {
   filterToEditableOnly,
   getBarServiceFieldId,
   FIELD_IDS,
+  STAFFING_CONFIRMED_FIELD_ID,
+  FOH_BEO_FIRED_FIELD_ID,
+  FOH_SPECK_COMPLETE_FIELD_ID,
   type EventListItem,
 } from "../services/airtable/events";
 import { useAuthStore } from "./authStore";
-import { isErrorResult } from "../services/airtable/selectors";
+import { isErrorResult, asAirtableCheckbox } from "../services/airtable/selectors";
 
 type Fields = Record<string, unknown>;
 
@@ -18,7 +21,7 @@ export type EventStore = {
   events: EventListItem[];
   eventsLoading: boolean;
   eventsError: string | null;
-  loadEvents: () => Promise<EventListItem[] | null>;
+  loadEvents: (opts?: { background?: boolean }) => Promise<EventListItem[] | null>;
 
   selectedEventId: string | null;
   setSelectedEventId: (id: string | null) => void;
@@ -28,7 +31,7 @@ export type EventStore = {
   selectedEventData: Fields;
   eventDataLoading: boolean;
   /** Load event by id. Pass id explicitly when switching so we never rely on store timing. */
-  loadEventData: (eventId?: string) => Promise<void>;
+  loadEventData: (eventId?: string, opts?: { quiet?: boolean }) => Promise<void>;
 
   updateEvent: (eventId: string, patch: Fields) => Promise<boolean>;
   setField: (eventId: string, fieldId: string, value: unknown) => Promise<boolean>;
@@ -53,18 +56,26 @@ export type EventStore = {
 
 const emptyFields: Fields = {};
 
+/** Per-record generation: stale GET responses are discarded if a newer load started or completed after a save. */
+const eventDataFetchGen = new Map<string, number>();
+
 export const useEventStore = create<EventStore>((set, get) => ({
   events: [],
   eventsLoading: false,
   eventsError: null,
-  loadEvents: async () => {
-    set({ eventsLoading: true, eventsError: null });
+  loadEvents: async (opts) => {
+    const background = opts?.background === true;
+    if (!background) {
+      set({ eventsLoading: true, eventsError: null });
+    }
     const result = await fetchEventsList();
     if (isErrorResult(result)) {
-      set({
-        eventsLoading: false,
-        eventsError: result.message ?? "Failed to load events",
-      });
+      if (!background) {
+        set({
+          eventsLoading: false,
+          eventsError: result.message ?? "Failed to load events",
+        });
+      }
       return null;
     }
     set({ events: result, eventsLoading: false, eventsError: null });
@@ -82,16 +93,24 @@ export const useEventStore = create<EventStore>((set, get) => ({
   eventData: { ...emptyFields },
   selectedEventData: { ...emptyFields },
   eventDataLoading: false,
-  loadEventData: async (explicitEventId) => {
+  loadEventData: async (explicitEventId, opts) => {
+    const quiet = opts?.quiet === true;
     const eventId = explicitEventId ?? get().selectedEventId;
     if (!eventId) {
       set({ eventData: emptyFields, selectedEventData: emptyFields, eventDataLoading: false });
       return;
     }
-    set({ eventDataLoading: true });
+    const nextGen = (eventDataFetchGen.get(eventId) ?? 0) + 1;
+    eventDataFetchGen.set(eventId, nextGen);
+    const myGen = nextGen;
+    if (!quiet) set({ eventDataLoading: true });
     try {
       const result = await fetchEventById(eventId);
-      if (get().selectedEventId !== eventId) return;
+      if (get().selectedEventId !== eventId) {
+        set({ eventDataLoading: false });
+        return;
+      }
+      if (eventDataFetchGen.get(eventId) !== myGen) return;
       if (isErrorResult(result)) {
         console.warn("⚠️ loadEventData: Airtable error (soft fail):", result.message);
         set({ eventDataLoading: false });
@@ -127,8 +146,14 @@ export const useEventStore = create<EventStore>((set, get) => ({
       ? { ...patchFiltered, [FIELD_IDS.EVENT_DATE]: eventData[FIELD_IDS.EVENT_DATE] }
       : patchFiltered;
     const filtered = filterToEditableOnly(augmented);
-    // Optimistic update: merge into store immediately so "Update Event" and other consumers
-    // see the latest values even before the API call completes (fixes Bar Service not carrying over)
+    const staffKey = STAFFING_CONFIRMED_FIELD_ID;
+    if (staffKey && staffKey in patchFiltered && !(staffKey in filtered)) {
+      set({
+        saveError:
+          "Could not save staffing confirmation. The field may not be allowed for this role. Contact support if this persists.",
+      });
+      return false;
+    }
     if (selectedEventId === eventId && Object.keys(filtered).length > 0) {
       const next = { ...eventData, ...filtered };
       set({ eventData: next, selectedEventData: next });
@@ -139,6 +164,37 @@ export const useEventStore = create<EventStore>((set, get) => ({
       return false;
     }
     set({ saveError: null });
+    const listPatch: Partial<EventListItem> = {};
+    if (staffKey && staffKey in patchFiltered) {
+      listPatch.staffingConfirmedInNowsta = asAirtableCheckbox(patchFiltered[staffKey]);
+    }
+    if (FIELD_IDS.FW_STAFF_SUMMARY in patchFiltered) {
+      const v = patchFiltered[FIELD_IDS.FW_STAFF_SUMMARY];
+      listPatch.fwStaffSummaryPresent = typeof v === "string" && v.trim().length > 0;
+    }
+    if (FOH_BEO_FIRED_FIELD_ID && FOH_BEO_FIRED_FIELD_ID in patchFiltered) {
+      listPatch.beoFiredToBOH = patchFiltered[FOH_BEO_FIRED_FIELD_ID] === true;
+    }
+    if (FOH_SPECK_COMPLETE_FIELD_ID && FOH_SPECK_COMPLETE_FIELD_ID in patchFiltered) {
+      listPatch.speckComplete = patchFiltered[FOH_SPECK_COMPLETE_FIELD_ID] === true;
+    }
+    if (Object.keys(listPatch).length > 0) {
+      set((s) => ({
+        events: s.events.map((ev) => (ev.id === eventId ? { ...ev, ...listPatch } : ev)),
+      }));
+    }
+    const fohRefresh =
+      (FOH_BEO_FIRED_FIELD_ID && FOH_BEO_FIRED_FIELD_ID in patchFiltered) ||
+      (FOH_SPECK_COMPLETE_FIELD_ID && FOH_SPECK_COMPLETE_FIELD_ID in patchFiltered);
+    if (fohRefresh) {
+      void get().loadEvents({ background: true });
+    }
+    if (staffKey && staffKey in patchFiltered) {
+      void get().loadEvents({ background: true });
+      if (get().selectedEventId === eventId) {
+        await get().loadEventData(eventId, { quiet: true });
+      }
+    }
     return true;
   },
 

@@ -2,11 +2,26 @@ import { useState, useRef, useEffect, type ReactNode } from "react";
 import { useEventStore } from "../../state/eventStore";
 import { useBeoIntakeView } from "./BeoIntakeViewContext";
 
+/** Hex #RRGGBB → rgba for section accents (matches menu “+ Section” buttons). */
+export function hexToRgba(hex: string, alpha: number): string {
+  const h = hex.replace("#", "").trim();
+  if (h.length !== 6 || Number.isNaN(parseInt(h, 16))) return `rgba(0, 188, 212, ${alpha})`;
+  const n = parseInt(h, 16);
+  const r = (n >> 16) & 255;
+  const g = (n >> 8) & 255;
+  const b = n & 255;
+  return `rgba(${r},${g},${b},${alpha})`;
+}
+
 /** BEO intake type scale: section title > field label > input > helper. One muted color for secondary. */
 export const INPUT_FONT_SIZE = 14;
 export const LABEL_FONT_SIZE = 13;
 export const HELPER_FONT_SIZE = 11;
 export const SECTION_TITLE_SIZE = 16;
+/** BEO intake collapsible pills: max width so they don’t span the full page */
+export const BEO_FORM_SECTION_MAX_WIDTH_PX = 560;
+/** Cyan outline for all BEO full-intake section pills (black fill, white text, subtle rounded corners — same as Beverage Services strip) */
+export const BEO_SECTION_PILL_ACCENT = "#22d3ee";
 export const MUTED_COLOR = "rgba(255,255,255,0.5)";
 export const LABEL_COLOR = "rgba(255,255,255,0.9)";
 export const ACCENT_LINK = "#00bcd4";
@@ -92,6 +107,8 @@ export const CollapsibleSubsection = ({
     <div style={{ gridColumn: "1 / -1" }}>
       <button
         type="button"
+        tabIndex={-1}
+        aria-expanded={isOpen}
         onClick={() => setIsOpen((prev) => !prev)}
         style={{
           width: "100%",
@@ -156,7 +173,7 @@ type FormSectionProps = {
   icon?: string;
   /** Hint shown on the pill (e.g. "If different from client address") */
   subtitle?: string;
-  /** Dot color for section header (e.g. #22c55e green, #a855f7 purple, #eab308 yellow, #3b82f6 blue) */
+  /** Accent color for border, title, and gradient fill (same palette as menu + buttons, e.g. #FBC02D, #4DD0E1). */
   dotColor?: string;
   /** When true, use green delivery theme (border, glow) */
   isDelivery?: boolean;
@@ -175,7 +192,7 @@ export const FormSection = ({
   dotColor,
   isDelivery = false,
   sectionId,
-  titleAlign = "left",
+  titleAlign = "center",
 }: FormSectionProps) => {
   const [isOpen, setIsOpen] = useState(defaultOpen);
   const [isSaving, setIsSaving] = useState(false);
@@ -190,8 +207,28 @@ export const FormSection = ({
       setIsOpen(defaultOpen);
     }
   }, [defaultOpen]);
-  const borderColor = isDelivery ? "#eab308" : "#00bcd4";
-  const glowColor = isDelivery ? "rgba(234,179,8,0.15)" : "rgba(0,188,212,0.2)";
+  const accent = dotColor?.trim() || null;
+  const isBeoPillChrome = accent?.toUpperCase() === BEO_SECTION_PILL_ACCENT.toUpperCase();
+  const borderColor = isBeoPillChrome
+    ? BEO_SECTION_PILL_ACCENT
+    : accent
+      ? hexToRgba(accent, 0.55)
+      : isDelivery
+        ? "#eab308"
+        : "#00bcd4";
+  const glowColor = isBeoPillChrome
+    ? "rgba(59, 130, 246, 0.2)"
+    : accent
+      ? hexToRgba(accent, 0.28)
+      : isDelivery
+        ? "rgba(234,179,8,0.15)"
+        : "rgba(0,188,212,0.2)";
+  const titleAccent = isBeoPillChrome ? "#ffffff" : accent ?? "#fff";
+  const cardBackground = isBeoPillChrome
+    ? "#000000"
+    : accent
+      ? `linear-gradient(145deg, ${hexToRgba(accent, 0.16)}, ${hexToRgba(accent, 0.04)})`
+      : "rgba(30,15,15,0.6)";
 
   const handleSave = async () => {
     if (!selectedEventId) return;
@@ -273,17 +310,27 @@ export const FormSection = ({
       title={isOpen ? "Double-click to collapse" : "Double-click to expand"}
       style={{
         gridColumn: isOpen ? "1 / -1" : undefined,
-        backgroundColor: "rgba(30,15,15,0.6)",
-        borderRadius: "10px",
-        padding: isOpen ? "16px 22px" : "14px 18px",
+        width: "100%",
+        /* BEO pills: use full main column width so long titles stay visible */
+        maxWidth: isBeoPillChrome ? "100%" : `min(100%, ${BEO_FORM_SECTION_MAX_WIDTH_PX}px)`,
+        marginLeft: "auto",
+        marginRight: "auto",
+        background: cardBackground,
+        borderRadius: isBeoPillChrome ? 12 : 10,
+        padding: isBeoPillChrome ? (isOpen ? "14px 16px" : "8px 20px") : isOpen ? "12px 14px" : "10px 12px",
         border: `1px solid ${borderColor}`,
-        boxShadow: `0 2px 12px rgba(0,0,0,0.25), 0 0 1px ${glowColor}`,
+        boxShadow: isBeoPillChrome
+          ? `0 2px 16px rgba(0,0,0,0.35), 0 0 20px ${glowColor}`
+          : `0 2px 12px rgba(0,0,0,0.25), 0 0 12px ${glowColor}`,
         transition: "all 0.25s ease",
+        boxSizing: "border-box",
       }}
     >
-      {/* Section Header - Collapsible */}
+      {/* Section Header — tabIndex -1 so Tab goes to fields inside; Space/Enter insert text in inputs, not toggle header */}
       <button
         type="button"
+        tabIndex={-1}
+        aria-expanded={isOpen}
         onClick={() => setIsOpen((prev) => !prev)}
         style={{
           width: "100%",
@@ -291,22 +338,32 @@ export const FormSection = ({
           flexDirection: "column",
           alignItems: titleAlign === "center" ? "center" : "flex-start",
           gap: "2px",
-          marginBottom: isOpen ? "16px" : "0",
+          marginBottom: isOpen ? "12px" : "0",
           background: "none",
           border: "none",
           cursor: "pointer",
           padding: 0,
         }}
       >
-        <div style={{ display: "flex", alignItems: "center", justifyContent: titleAlign === "center" ? "center" : "flex-start", gap: "8px", width: "100%" }}>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: titleAlign === "center" ? "center" : "flex-start",
+            gap: "8px",
+            width: "100%",
+            flexWrap: "wrap",
+          }}
+        >
           <h2
             style={{
               fontSize: `${SECTION_TITLE_SIZE}px`,
-              fontWeight: "600",
-              color: "#fff",
+              fontWeight: isBeoPillChrome ? "700" : "600",
+              color: titleAccent,
               textTransform: "none",
               letterSpacing: "0.2px",
-              flex: titleAlign === "center" ? undefined : 1,
+              flex: "0 1 auto",
+              maxWidth: "100%",
               textAlign: titleAlign === "center" ? "center" : "left",
               margin: 0,
             }}
@@ -315,17 +372,28 @@ export const FormSection = ({
           </h2>
           <span
             style={{
-              color: MUTED_COLOR,
+              color: isBeoPillChrome ? MUTED_COLOR : accent ? hexToRgba(accent, 0.95) : MUTED_COLOR,
               fontSize: `${HELPER_FONT_SIZE}px`,
               transform: isOpen ? "rotate(90deg)" : "rotate(0deg)",
               transition: "transform 0.3s ease",
+              flexShrink: 0,
             }}
           >
             ▶
           </span>
         </div>
         {!isOpen && subtitle && (
-          <span style={{ fontSize: `${LABEL_FONT_SIZE}px`, color: MUTED_COLOR, fontWeight: 400, marginTop: 2, textAlign: titleAlign === "center" ? "center" : "left", display: "block", width: "100%" }}>
+          <span
+            style={{
+              fontSize: `${LABEL_FONT_SIZE}px`,
+              color: isBeoPillChrome ? "rgba(255,255,255,0.88)" : MUTED_COLOR,
+              fontWeight: 400,
+              marginTop: 2,
+              textAlign: titleAlign === "center" ? "center" : "left",
+              display: "block",
+              width: "100%",
+            }}
+          >
             {subtitle}
           </span>
         )}
@@ -356,9 +424,25 @@ export const FormSection = ({
                   textTransform: "none",
                   letterSpacing: "0.2px",
                   borderRadius: "6px",
-                  border: `1px solid ${isDelivery ? "rgba(234,179,8,0.5)" : "rgba(255,107,107,0.5)"}`,
-                  background: isSaving ? "rgba(255,255,255,0.04)" : (isDelivery ? "rgba(234,179,8,0.15)" : "rgba(255,107,107,0.15)"),
-                  color: isDelivery ? "#eab308" : "#ff6b6b",
+                  border: `1px solid ${
+                    isBeoPillChrome
+                      ? hexToRgba(BEO_SECTION_PILL_ACCENT, 0.55)
+                      : accent
+                        ? hexToRgba(accent, 0.45)
+                        : isDelivery
+                          ? "rgba(234,179,8,0.5)"
+                          : "rgba(255,107,107,0.5)"
+                  }`,
+                  background: isSaving
+                    ? "rgba(255,255,255,0.04)"
+                    : isBeoPillChrome
+                      ? hexToRgba(BEO_SECTION_PILL_ACCENT, 0.1)
+                      : accent
+                        ? hexToRgba(accent, 0.12)
+                        : isDelivery
+                          ? "rgba(234,179,8,0.15)"
+                          : "rgba(255,107,107,0.15)",
+                  color: isBeoPillChrome ? "#fff" : accent ? titleAccent : isDelivery ? "#eab308" : "#ff6b6b",
                   cursor: isSaving ? "not-allowed" : "pointer",
                   opacity: isSaving ? 0.7 : 1,
                 }}

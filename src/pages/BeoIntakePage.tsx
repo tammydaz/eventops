@@ -1,6 +1,7 @@
 import React, { useEffect, useLayoutEffect, useState, useCallback, useRef, type ReactNode } from "react";
 import { Link, useNavigate, useSearchParams, useLocation } from "react-router-dom";
 import { useEventStore } from "../state/eventStore";
+import { DASHBOARD_CALENDAR_TO } from "../lib/dashboardRoutes";
 import { EventSelectorSimple } from "../components/EventSelectorSimple";
 import {
   HeaderSection,
@@ -10,6 +11,7 @@ import {
   SiteVisitLogisticsSection,
   FormSection,
 } from "../components/beo-intake";
+import { BEO_SECTION_PILL_ACCENT } from "../components/beo-intake/FormSection";
 import { BeverageServicesSection } from "../components/beo-intake/BeverageServicesSection";
 import { ApprovalsLockoutSection } from "../components/beo-intake/ApprovalsLockoutSection";
 import { BeoIntakeActionBar } from "../components/beo-intake/BeoIntakeActionBar";
@@ -41,6 +43,7 @@ import {
   type ChildOverridesData,
 } from "../services/airtable/eventMenu";
 import { fetchMenuItemChildren } from "../services/airtable/menuItems";
+import { CreationStationContent } from "../components/beo-intake/MenuSection";
 import { BeoLivePreview } from "../components/BeoLivePreview";
 import { calculateAutoSpec, type FoodCategory } from "../utils/beoAutoSpec";
 import { getBeoSpecStorageKey, getSpecOverrideKey, getShadowMenuStorageKey } from "../utils/beoSpecStorage";
@@ -126,6 +129,8 @@ export const BeoIntakePage = () => {
   const [editAddNewItem, setEditAddNewItem] = useState("");
   const [menuSpecOverrides, setMenuSpecOverrides] = useState<Record<string, string>>({});
   const [childSpecOverrides, setChildSpecOverrides] = useState<Record<string, string>>({});
+  /** Shadow menu sections default expanded; `section === false` means user collapsed that header. */
+  const [shadowMenuSectionExpanded, setShadowMenuSectionExpanded] = useState<Record<string, boolean>>({});
   const [showChangeRequestModal, setShowChangeRequestModal] = useState(false);
   const [pendingEventId, setPendingEventId] = useState<string | null>(null);
   const { user } = useAuthStore();
@@ -306,11 +311,13 @@ export const BeoIntakePage = () => {
       shadowMenuStorageSkipRef.current = true;
       setShadowMenuRows([]);
       setEditingShadowRow(null);
+      setShadowMenuSectionExpanded({});
       return;
     }
     shadowMenuStorageSkipRef.current = true;
     setShadowMenuRows([]);
     setEditingShadowRow(null);
+    setShadowMenuSectionExpanded({});
   }, [selectedEventId]);
 
   useEffect(() => {
@@ -599,6 +606,61 @@ export const BeoIntakePage = () => {
 
   const btnStyle = { padding: "2px 8px", fontSize: 11, borderRadius: 4, border: "1px solid rgba(255,255,255,0.2)", background: "rgba(255,255,255,0.06)", color: "#e0e0e0", cursor: isLocked ? "default" as const : "pointer" as const };
 
+  const [creationStationMenuNames, setCreationStationMenuNames] = useState<Record<string, string>>({});
+  const fetchCreationStationItemNames = useCallback(
+    async (eventId: string | null, recordIds: string[], options?: { clearWhenEmpty?: boolean }) => {
+      if (!recordIds?.length) {
+        if (options?.clearWhenEmpty) setCreationStationMenuNames({});
+        return;
+      }
+      const unique = [...new Set(recordIds.filter((id) => typeof id === "string" && id.startsWith("rec")))];
+      if (unique.length === 0) {
+        if (options?.clearWhenEmpty) setCreationStationMenuNames({});
+        return;
+      }
+      const names = await fetchMenuItemNamesByIds(unique);
+      if (eventId && useEventStore.getState().selectedEventId !== eventId) return;
+      if (options?.clearWhenEmpty) setCreationStationMenuNames(names);
+      else setCreationStationMenuNames((prev) => ({ ...prev, ...names }));
+    },
+    []
+  );
+  const getCreationStationItemName = useCallback(
+    (id: string) => creationStationMenuNames[id] ?? id,
+    [creationStationMenuNames]
+  );
+  const creationStationLabelStyle: React.CSSProperties = { fontSize: 12, fontWeight: 600, color: "rgba(255,255,255,0.85)", marginBottom: 4, display: "block" };
+  const creationStationInputStyle: React.CSSProperties = { width: "100%", padding: "8px 12px", borderRadius: 6, border: "1px solid rgba(255,255,255,0.15)", background: "rgba(0,0,0,0.35)", color: "#fff", fontSize: 14 };
+  const creationStationButtonStyle: React.CSSProperties = {
+    padding: "8px 16px",
+    fontSize: 12,
+    fontWeight: 600,
+    borderRadius: 6,
+    border: "1px solid rgba(139,92,246,0.45)",
+    background: "rgba(139,92,246,0.12)",
+    color: "#c4b5fd",
+    cursor: isLocked ? "default" : "pointer",
+  };
+  const creationStationSmallAddStyle: React.CSSProperties = { ...creationStationButtonStyle, padding: "6px 12px", fontSize: 12 };
+  const emptyMenuItemsForStations: LinkedRecordItem[] = [];
+
+  /** Violet pill — scrolls to BEO stations block inside Menu (distinct from Presented gold, Passed red, etc.). */
+  const STATIONS_MENU_PILL = "#9333ea";
+  const scrollToBeoStations = useCallback(() => {
+    jumpToBeoSection("beo-section-menu");
+    setTimeout(() => {
+      const el = document.getElementById("beo-creation-stations");
+      if (!el) return;
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
+      el.style.outline = `2px solid ${STATIONS_MENU_PILL}`;
+      el.style.outlineOffset = "3px";
+      setTimeout(() => {
+        el.style.outline = "";
+        el.style.outlineOffset = "";
+      }, 1400);
+    }, 280);
+  }, []);
+
   return (
     <div className="beo-intake-page" style={{ minHeight: "100vh", background: "linear-gradient(135deg, #0a0a0a 0%, #1a0a0a 50%, #0f0a15 100%)", color: "#e0e0e0", position: "relative", fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif" }}>
       <div style={{ position: "relative", zIndex: 10 }}>
@@ -606,7 +668,7 @@ export const BeoIntakePage = () => {
           <div className="beo-header-selector" style={{ minWidth: "220px", maxWidth: "320px" }}>
             <EventSelectorSimple onBeforeSelectEvent={handleBeforeSelectEvent} />
           </div>
-          <Link to="/" style={{ display: "flex", alignItems: "center", gap: 10, textDecoration: "none" }}>
+          <Link to={DASHBOARD_CALENDAR_TO} style={{ display: "flex", alignItems: "center", gap: 10, textDecoration: "none" }}>
             <div style={{ width: 40, height: 40, background: "linear-gradient(135deg, #cc0000, #ff3333)", transform: "rotate(45deg)", display: "flex", alignItems: "center", justifyContent: "center", borderRadius: 4, boxShadow: "0 0 20px rgba(204,0,0,0.4)" }}>
               <span style={{ transform: "rotate(-45deg)", fontFamily: "'Great Vibes', cursive", fontSize: 24, color: "#fff", textShadow: "0 0 12px rgba(255,255,255,0.9)" }}>W</span>
             </div>
@@ -663,20 +725,25 @@ export const BeoIntakePage = () => {
                   <BeoLivePreview shadowMenuRows={shadowMenuRows} />
                 </div>
                 <div className="beo-main-content" style={{ flex: 1, minWidth: 0 }}>
-                  <div className="beo-sections-grid" style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "12px", alignItems: "start" }}>
-                    <div className="beo-header-form-grid" style={{ position: "relative", gridColumn: "1 / -1", display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "12px", alignItems: "start" }}>
+                  <div className="beo-sections-grid" style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: "16px", alignItems: "stretch", width: "100%" }}>
+                    <div className="beo-header-form-grid" style={{ position: "relative", display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: "16px", alignItems: "stretch", width: "100%" }}>
                       {isLocked && (
-                        <div className={`beo-locked-overlay ${canSubmitChangeRequest ? "beo-locked-foh" : "beo-locked-boh"}`} onClick={handleFormInteraction} role="button" tabIndex={0} onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && handleFormInteraction()} aria-label={canSubmitChangeRequest ? "Event is locked. Click to submit a change request." : "Event is locked. Only FOH can submit a change request to unlock."} />
+                        <div
+                          className={`beo-locked-overlay ${canSubmitChangeRequest ? "beo-locked-foh" : "beo-locked-boh"}`}
+                          onClick={handleFormInteraction}
+                          aria-label={canSubmitChangeRequest ? "Event is locked. Click to submit a change request." : "Event is locked. Only FOH can submit a change request to unlock."}
+                        />
                       )}
                       <HeaderSection jobNumberDisplay={jobNumberDisplay} dispatchTimeDisplay={dispatchTimeDisplay} canEditDispatch={canEditDispatch} eventDate={eventDateNorm} />
                       <div style={{ gridColumn: "1 / -1" }}>
-                        <FormSection title="Menu" defaultOpen={true} sectionId="beo-section-menu" titleAlign="center">
-                          <div className="beo-menu-inner" style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 0, gridColumn: "1 / -1", width: "100%", maxWidth: 720, margin: "0 auto" }}>
+                        <FormSection title="Menu" defaultOpen={true} sectionId="beo-section-menu" titleAlign="center" dotColor={BEO_SECTION_PILL_ACCENT}>
+                          <div className="beo-menu-inner" style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 0, gridColumn: "1 / -1", width: "100%", maxWidth: "100%", margin: "0 auto" }}>
                             <div className="beo-menu-add-buttons" style={{ display: "flex", justifyContent: "center", flexWrap: "nowrap", gap: "8px", marginBottom: "20px", overflowX: "auto", paddingBottom: "4px" }}>
                               {(() => {
                                 const buttons = [
                                   ["+ Passed", "#D32F2F", () => openPicker("passed", "passedApps", "Passed Appetizers")],
                                   ["+ Presented", "#FBC02D", () => openPicker("presented", "presentedApps", "Presented Appetizers")],
+                                  ["+ Station", STATIONS_MENU_PILL, scrollToBeoStations],
                                   ["+ Buffet Metal", "#4DD0E1", () => openPicker("buffet_metal", "buffetMetal", "Buffet – Metal")],
                                   ["+ Buffet China", "#FF8A65", () => openPicker("buffet_china", "buffetChina", "Buffet – China")],
                                   ["+ Deli", "#4CAF50", () => openPicker("deli", isDelivery ? "deliveryDeli" : "fullServiceDeli", "Deli")],
@@ -706,19 +773,54 @@ export const BeoIntakePage = () => {
                                 const dotColor = SECTION_COLORS[section] || "#888";
                                 const tableBorder = "1px solid rgba(255,255,255,0.15)";
                                 const sectionColor = dotColor;
+                                const sectionExpanded = shadowMenuSectionExpanded[section] !== false;
                                 return (
                                   <div key={section} style={{ width: "100%", marginBottom: 12, border: tableBorder, borderRadius: 8, backgroundColor: "rgba(0,0,0,0.2)", overflow: "hidden" }}>
-                                    <div style={{ padding: "8px 12px", background: "rgba(0,0,0,0.15)", borderBottom: tableBorder }}>
+                                    <div
+                                      role="button"
+                                      tabIndex={0}
+                                      aria-expanded={sectionExpanded}
+                                      onClick={() =>
+                                        setShadowMenuSectionExpanded((p) =>
+                                          p[section] === false
+                                            ? (() => {
+                                                const { [section]: _removed, ...rest } = p;
+                                                return rest;
+                                              })()
+                                            : { ...p, [section]: false }
+                                        )
+                                      }
+                                      onKeyDown={(e) => {
+                                        if (e.key === "Enter" || e.key === " ") {
+                                          e.preventDefault();
+                                          setShadowMenuSectionExpanded((p) =>
+                                            p[section] === false
+                                              ? (() => {
+                                                  const { [section]: _removed, ...rest } = p;
+                                                  return rest;
+                                                })()
+                                              : { ...p, [section]: false }
+                                          );
+                                        }
+                                      }}
+                                      style={{ padding: "8px 12px", background: "rgba(0,0,0,0.15)", borderBottom: sectionExpanded ? tableBorder : "none", cursor: "pointer" }}
+                                    >
                                       <table style={{ width: "100%", borderCollapse: "collapse" }}>
                                         <tbody>
                                           <tr>
                                             <td style={{ width: 100, minWidth: 100, padding: 0 }} />
-                                            <td style={{ padding: 0, textAlign: "center" }}><span style={{ fontSize: 13, fontWeight: 700, letterSpacing: "0.05em", color: sectionColor }}>{section.toUpperCase()}</span></td>
+                                            <td style={{ padding: 0, textAlign: "center" }}>
+                                              <span style={{ fontSize: 11, color: "rgba(255,255,255,0.45)", marginRight: 6, userSelect: "none" }} aria-hidden>
+                                                {sectionExpanded ? "▼" : "▶"}
+                                              </span>
+                                              <span style={{ fontSize: 13, fontWeight: 700, letterSpacing: "0.05em", color: sectionColor }}>{section.toUpperCase()}</span>
+                                            </td>
                                             <td style={{ width: 140, minWidth: 140, padding: 0 }} />
                                           </tr>
                                         </tbody>
                                       </table>
                                     </div>
+                                    {sectionExpanded && (
                                     <div style={{ padding: "8px 12px" }}>
                                       {(bySection[section] || []).map((row, rowIdx) => {
                                         const fullName = row.customText?.trim() ? row.customText : row.catalogItemName;
@@ -773,17 +875,34 @@ export const BeoIntakePage = () => {
                                         );
                                       })}
                                     </div>
+                                    )}
                                   </div>
                                 );
                                   });
                                 })()}
                               </>
                             )}
+                            {selectedEventId && (
+                              <div id="beo-creation-stations" style={{ width: "100%", marginTop: 20 }}>
+                                <CreationStationContent
+                                  selectedEventId={selectedEventId}
+                                  canEdit={!isLocked}
+                                  menuItems={emptyMenuItemsForStations}
+                                  menuItemNames={creationStationMenuNames}
+                                  getItemName={getCreationStationItemName}
+                                  fetchItemNames={fetchCreationStationItemNames}
+                                  inputStyle={creationStationInputStyle}
+                                  labelStyle={creationStationLabelStyle}
+                                  buttonStyle={creationStationButtonStyle}
+                                  addButtonStyle={creationStationSmallAddStyle}
+                                />
+                              </div>
+                            )}
                           </div>
                         </FormSection>
                       </div>
                       <div style={{ gridColumn: "1 / -1" }}>
-                        <FormSection title="Beverage Services" defaultOpen={false} sectionId="beo-section-bar" titleAlign="center">
+                        <FormSection title="Beverage Services" defaultOpen={false} sectionId="beo-section-bar" titleAlign="center" dotColor={BEO_SECTION_PILL_ACCENT}>
                           <BeverageServicesSection embedded />
                         </FormSection>
                       </div>

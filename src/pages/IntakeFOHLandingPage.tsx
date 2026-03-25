@@ -25,11 +25,12 @@ export default function IntakeFOHLandingPage({ defaultView = "events" }: IntakeF
       title="Intake / FOH"
       navItems={INTAKE_FOH_NAV}
       departmentContext="intake_foh"
+      hideSidebar
     >
       {isLeadsRoute ? (
         <LeadsLandingPage />
       ) : (
-        <EventsPipeline title="Intake/FOH — 10-Day Pipeline" departmentContext="intake_foh" />
+        <EventsPipeline title="Intake/FOH — Weekly Pipeline" departmentContext="intake_foh" />
       )}
     </DepartmentLayout>
   );

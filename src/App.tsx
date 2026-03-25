@@ -4,6 +4,7 @@ import { EventSelector } from "./components/intake/EventSelector";
 import { Router } from "./router";
 import { useEventStore } from "./state/eventStore";
 import { AuthGuard } from "./components/AuthGuard";
+import { DASHBOARD_CALENDAR_TO } from "./lib/dashboardRoutes";
 
 function App() {
   const { selectedEventId, loadEvents, saveError, selectEvent } = useEventStore();
@@ -65,7 +66,7 @@ function App() {
         ) : null}
         {!isBeoIntake && (
           <header className="fwx-header rounded-lg p-8 mb-8 flex flex-wrap items-center justify-between gap-4">
-            <a href="/" className="inline-flex items-center gap-2 px-4 py-2 rounded-md border border-gray-600 bg-gray-800/60 text-gray-200 hover:bg-gray-700/60 transition text-sm font-medium">
+            <a href={DASHBOARD_CALENDAR_TO} className="inline-flex items-center gap-2 px-4 py-2 rounded-md border border-gray-600 bg-gray-800/60 text-gray-200 hover:bg-gray-700/60 transition text-sm font-medium">
               ← Back to Dashboard
             </a>
             <div className="flex items-center gap-2">

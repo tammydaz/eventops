@@ -10,7 +10,7 @@ const FLAIR_NAV = [
 export default function FlairLandingPage() {
   return (
     <DepartmentLayout title="Flair / Equipment" navItems={FLAIR_NAV} departmentContext="flair">
-      <EventsPipeline title="Flair / Equipment — 10-Day Pipeline" departmentContext="flair" />
+      <EventsPipeline title="Flair / Equipment — Weekly Pipeline" departmentContext="flair" />
     </DepartmentLayout>
   );
 }

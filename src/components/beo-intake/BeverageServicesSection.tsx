@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { useEventStore } from "../../state/eventStore";
 import { FIELD_IDS, getBarServiceFieldId, loadSingleSelectOptions, type SingleSelectOption } from "../../services/airtable/events";
 import { asBarServicePrimary, asMultiSelectNames, asSingleSelectName, asString, asStringArray } from "../../services/airtable/selectors";
-import { FormSection, CollapsibleSubsection, Helper, inputStyle, labelStyle } from "./FormSection";
+import { FormSection, BEO_SECTION_PILL_ACCENT, CollapsibleSubsection, Helper, inputStyle, labelStyle } from "./FormSection";
 import { HydrationStationModal } from "./HydrationStationModal";
 import {
   FULL_BAR_PACKAGE_SPECK_ROWS,
@@ -685,7 +685,7 @@ export const BeverageServicesSection = ({ embedded = false }: BeverageServicesSe
   );
 
   return embedded ? content : (
-    <FormSection title="Beverage Services" dotColor="#00bcd4" titleAlign="center">
+    <FormSection title="Beverage Services" dotColor={BEO_SECTION_PILL_ACCENT} titleAlign="center">
       {content}
     </FormSection>
   );

@@ -34,7 +34,7 @@ export default function FOHLandingPage() {
       departmentContext="intake_foh"
       headerActions={headerActions}
     >
-      <EventsPipeline title="FOH — 10-Day Pipeline" departmentContext="intake_foh" />
+      <EventsPipeline title="FOH — Weekly Pipeline" departmentContext="intake_foh" />
     </DepartmentLayout>
   );
 }
