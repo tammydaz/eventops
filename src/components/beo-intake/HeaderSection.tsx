@@ -80,7 +80,7 @@ function formatDateForBeo(raw: string): string {
 type HeaderSectionProps = {
   jobNumberDisplay?: string;
   dispatchTimeDisplay?: string;
-  /** Only Ops Chief and Watchtower can edit dispatch time; others see read-only */
+  /** Only Ops Chief and ops_admin can edit dispatch time; others see read-only */
   canEditDispatch?: boolean;
   /** Event date YYYY-MM-DD for saving dispatch time */
   eventDate?: string;
@@ -507,7 +507,10 @@ export const HeaderSection = ({ jobNumberDisplay = "—", dispatchTimeDisplay = 
       dotColor={BEO_SECTION_PILL_ACCENT}
     >
       <p style={{ gridColumn: "1 / -1", ...helperStyle, marginBottom: 14, marginTop: 0 }}>
-        Click any cell to edit. Same layout as the printed BEO header.</p>
+        {isDelivery
+          ? "Delivery / pickup — times in the banner use Dispatch (same field the job list sorts by). Event start, end, and on-site arrival are not used."
+          : "Click any cell to edit. Same layout as the printed BEO header."}
+      </p>
       <div style={{ gridColumn: "1 / -1", overflow: "auto" }}>
         <table style={{ width: "100%", borderCollapse: "collapse", border: "2px solid #444", fontSize: 13 }}>
           <colgroup><col style={{ width: "12%" }} /><col style={{ width: "38%" }} /><col style={{ width: "12%" }} /><col style={{ width: "38%" }} /></colgroup>
@@ -515,9 +518,50 @@ export const HeaderSection = ({ jobNumberDisplay = "—", dispatchTimeDisplay = 
             <tr>
               <td colSpan={4} style={{ padding: "8px", border: "1px solid #444", background: "rgba(0,0,0,0.2)", verticalAlign: "middle" }}>
                 <div style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "nowrap", alignItems: "center" }}>
-                  <div style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", padding: "8px 14px", color: "#4DD0E1", fontSize: 12, fontWeight: 700, textTransform: "uppercase" as const, whiteSpace: "nowrap", border: "1px solid rgba(77, 208, 225, 0.5)", background: "linear-gradient(135deg, rgba(77, 208, 225, 0.2), rgba(77, 208, 225, 0.06))", width: 320, height: 36, boxSizing: "border-box", borderRadius: 6 }}>JOB #: {jobNumberDisplay}</div>
+                  <div
+                    style={
+                      isDelivery
+                        ? {
+                            display: "inline-flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            padding: "8px 14px",
+                            color: "#fef08a",
+                            fontSize: 12,
+                            fontWeight: 700,
+                            textTransform: "uppercase" as const,
+                            whiteSpace: "nowrap",
+                            border: "1px solid rgba(234, 179, 8, 0.55)",
+                            background: "linear-gradient(135deg, rgba(234, 179, 8, 0.22), rgba(234, 179, 8, 0.06))",
+                            width: 320,
+                            height: 36,
+                            boxSizing: "border-box",
+                            borderRadius: 6,
+                          }
+                        : {
+                            display: "inline-flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            padding: "8px 14px",
+                            color: "#4DD0E1",
+                            fontSize: 12,
+                            fontWeight: 700,
+                            textTransform: "uppercase" as const,
+                            whiteSpace: "nowrap",
+                            border: "1px solid rgba(77, 208, 225, 0.5)",
+                            background: "linear-gradient(135deg, rgba(77, 208, 225, 0.2), rgba(77, 208, 225, 0.06))",
+                            width: 320,
+                            height: 36,
+                            boxSizing: "border-box",
+                            borderRadius: 6,
+                          }
+                    }
+                  >
+                    {isDelivery ? "HOUSE ORDER #:" : "JOB #:"} {jobNumberDisplay}
+                  </div>
                   <div style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "8px 14px", color: "#FBC02D", fontSize: 12, fontWeight: 700, textTransform: "uppercase" as const, whiteSpace: "nowrap", border: "1px solid rgba(251, 192, 45, 0.5)", background: "linear-gradient(135deg, rgba(251, 192, 45, 0.2), rgba(251, 192, 45, 0.06))", width: 320, height: 36, boxSizing: "border-box", borderRadius: 6 }}>
-                    DISPATCH TIME: {canEditDispatch ? dispatchTimePicker : <><span style={{ color: "#FBC02D" }}>{dispatchTimeDisplay}</span></>}
+                    {isDelivery ? "DELIVERY TIME:" : "DISPATCH TIME:"}{" "}
+                    {canEditDispatch ? dispatchTimePicker : <><span style={{ color: "#FBC02D" }}>{dispatchTimeDisplay}</span></>}
                     {!canEditDispatch && <span style={{ fontSize: 11, color: MUTED_COLOR, marginLeft: 4 }}>(read-only)</span>}
                   </div>
                 </div>
@@ -526,7 +570,7 @@ export const HeaderSection = ({ jobNumberDisplay = "—", dispatchTimeDisplay = 
             <tr>
               <td style={tableCellLabel}>CLIENT</td>
               <td style={tableCellValue}><input value={clientName} disabled={!canEdit} onChange={(e) => { setClientName(e.target.value); setIntakeDirty(true); }} onBlur={handleClientNameBlur} style={tableInput} placeholder="—" /></td>
-              <td style={tableCellLabel}>ORDER #</td>
+              <td style={tableCellLabel}>{isDelivery ? "HOUSE ORDER #" : "ORDER #"}</td>
               <td style={{ ...tableCellValue, color: MUTED_COLOR, padding: "6px 8px" }}>—</td>
             </tr>
             <tr>
@@ -570,68 +614,148 @@ export const HeaderSection = ({ jobNumberDisplay = "—", dispatchTimeDisplay = 
               <td style={tableCellLabel}>GUESTS</td>
               <td style={tableCellValue}><input type="number" value={guestCount ?? ""} disabled={!canEdit} onChange={(e) => setGuestCount(e.target.value === "" ? null : Number(e.target.value))} onBlur={async (e) => { const v = e.target.value === "" ? null : Number(e.target.value); if (selectedEventId) await saveField(FIELD_IDS.GUEST_COUNT, v); }} style={tableInput} placeholder="—" min={0} /></td>
             </tr>
-            <tr>
-              <td style={tableCellLabel}>ADDRESS</td>
-              <td style={tableCellValue}><input value={addressCell} disabled={!canEdit} onChange={(e) => { if (venueMode === "same_as_client") setStreet(e.target.value); else setVenueAddress(e.target.value); setIntakeDirty(true); }} onBlur={async (e) => { const v = e.target.value; if (venueMode === "same_as_client") await save(FIELD_IDS.CLIENT_STREET, v); else await saveField(FIELD_IDS.VENUE_ADDRESS, v); }} style={tableInput} placeholder="—" /></td>
-              <td style={tableCellLabel}>EVENT START</td>
-              <td style={tableCellValue}>{!isDelivery && timeSelectInCell(FIELD_IDS.EVENT_START_TIME, "eventStartTime")}</td>
-            </tr>
-            <tr>
-              <td style={tableCellLabel}>CITY, ST</td>
-              <td style={tableCellValue}>
-                <input
-                  value={cityStateInputValue}
-                  disabled={!canEdit}
-                  onFocus={() => setCityStateLineDraft(cityStateCell)}
-                  onChange={(e) => {
-                    const v = e.target.value;
-                    setCityStateLineDraft(v);
-                    const parts = v.split(",").map((s) => s.trim());
-                    if (venueMode === "same_as_client") {
-                      setCity(parts[0] ?? "");
-                      setStateVal(parts[1] ?? "");
-                      setZip(parts[2] ?? "");
-                    } else {
-                      setVenueCity(parts[0] ?? "");
-                      setVenueState(parts[1] ?? "");
-                    }
-                    setIntakeDirty(true);
-                  }}
-                  onBlur={async () => {
-                    setCityStateLineDraft(null);
-                    if (venueMode === "same_as_client" && selectedEventId) {
-                      await save(FIELD_IDS.CLIENT_CITY, city);
-                      await save(FIELD_IDS.CLIENT_STATE, stateVal);
-                      await save(FIELD_IDS.CLIENT_ZIP, zip);
-                    } else if (selectedEventId) {
-                      await saveField(FIELD_IDS.VENUE_CITY, venueCity);
-                      await saveField(FIELD_IDS.VENUE_STATE, venueState);
-                    }
-                  }}
-                  style={tableInput}
-                  placeholder="—"
-                />
-              </td>
-              <td style={tableCellLabel}>EVENT END</td>
-              <td style={tableCellValue}>{!isDelivery && timeSelectInCell(FIELD_IDS.EVENT_END_TIME, "eventEndTime")}</td>
-            </tr>
-            <tr>
-              <td style={tableCellLabel}>VENUE</td>
-              <td style={tableCellValue}>
-                {venueMode === "same_as_client" ? (
-                  <button type="button" style={{ ...pillInactive, margin: "4px 8px" }} onClick={canEdit ? openVenueModal : undefined} disabled={!canEdit}>
-                    If different than client address
-                  </button>
-                ) : (
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", padding: "4px 8px" }}>
-                    <input value={venue} disabled={!canEdit} onChange={(e) => setVenue(e.target.value)} onBlur={(e) => saveField(FIELD_IDS.VENUE, e.target.value)} style={{ ...tableInput, flex: "1 1 120px" }} placeholder="e.g. Residence or venue name" />
-                    <button type="button" onClick={switchToClientAddress} style={{ fontSize: 11, color: ACCENT_LINK, background: "none", border: "none", cursor: "pointer", textDecoration: "underline" }}>Same as client</button>
-                  </div>
-                )}
-              </td>
-              <td style={tableCellLabel}>EVENT ARRIVAL</td>
-              <td style={tableCellValue}>{!isDelivery && timeSelectInCell(arrivalFieldIdResolved, "eventArrivalTime")}</td>
-            </tr>
+            {isDelivery ? (
+              <>
+                <tr>
+                  <td style={tableCellLabel}>ADDRESS</td>
+                  <td colSpan={3} style={tableCellValue}>
+                    <input
+                      value={addressCell}
+                      disabled={!canEdit}
+                      onChange={(e) => {
+                        if (venueMode === "same_as_client") setStreet(e.target.value);
+                        else setVenueAddress(e.target.value);
+                        setIntakeDirty(true);
+                      }}
+                      onBlur={async (e) => {
+                        const v = e.target.value;
+                        if (venueMode === "same_as_client") await save(FIELD_IDS.CLIENT_STREET, v);
+                        else await saveField(FIELD_IDS.VENUE_ADDRESS, v);
+                      }}
+                      style={tableInput}
+                      placeholder="Delivery address / drop-off"
+                    />
+                  </td>
+                </tr>
+                <tr>
+                  <td style={tableCellLabel}>CITY, ST, ZIP</td>
+                  <td colSpan={3} style={tableCellValue}>
+                    <input
+                      value={cityStateInputValue}
+                      disabled={!canEdit}
+                      onFocus={() => setCityStateLineDraft(cityStateCell)}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        setCityStateLineDraft(v);
+                        const parts = v.split(",").map((s) => s.trim());
+                        if (venueMode === "same_as_client") {
+                          setCity(parts[0] ?? "");
+                          setStateVal(parts[1] ?? "");
+                          setZip(parts[2] ?? "");
+                        } else {
+                          setVenueCity(parts[0] ?? "");
+                          setVenueState(parts[1] ?? "");
+                        }
+                        setIntakeDirty(true);
+                      }}
+                      onBlur={async () => {
+                        setCityStateLineDraft(null);
+                        if (venueMode === "same_as_client" && selectedEventId) {
+                          await save(FIELD_IDS.CLIENT_CITY, city);
+                          await save(FIELD_IDS.CLIENT_STATE, stateVal);
+                          await save(FIELD_IDS.CLIENT_ZIP, zip);
+                        } else if (selectedEventId) {
+                          await saveField(FIELD_IDS.VENUE_CITY, venueCity);
+                          await saveField(FIELD_IDS.VENUE_STATE, venueState);
+                        }
+                      }}
+                      style={tableInput}
+                      placeholder="City, ST, ZIP"
+                    />
+                  </td>
+                </tr>
+                <tr>
+                  <td style={tableCellLabel}>LOCATION NAME</td>
+                  <td colSpan={3} style={tableCellValue}>
+                    {venueMode === "same_as_client" ? (
+                      <button type="button" style={{ ...pillInactive, margin: "4px 8px" }} onClick={canEdit ? openVenueModal : undefined} disabled={!canEdit}>
+                        If different than client address
+                      </button>
+                    ) : (
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", padding: "4px 8px" }}>
+                        <input value={venue} disabled={!canEdit} onChange={(e) => setVenue(e.target.value)} onBlur={(e) => saveField(FIELD_IDS.VENUE, e.target.value)} style={{ ...tableInput, flex: "1 1 120px" }} placeholder="Business or building name" />
+                        <button type="button" onClick={switchToClientAddress} style={{ fontSize: 11, color: ACCENT_LINK, background: "none", border: "none", cursor: "pointer", textDecoration: "underline" }}>Same as client</button>
+                      </div>
+                    )}
+                  </td>
+                </tr>
+              </>
+            ) : (
+              <>
+                <tr>
+                  <td style={tableCellLabel}>ADDRESS</td>
+                  <td style={tableCellValue}><input value={addressCell} disabled={!canEdit} onChange={(e) => { if (venueMode === "same_as_client") setStreet(e.target.value); else setVenueAddress(e.target.value); setIntakeDirty(true); }} onBlur={async (e) => { const v = e.target.value; if (venueMode === "same_as_client") await save(FIELD_IDS.CLIENT_STREET, v); else await saveField(FIELD_IDS.VENUE_ADDRESS, v); }} style={tableInput} placeholder="—" /></td>
+                  <td style={tableCellLabel}>EVENT START</td>
+                  <td style={tableCellValue}>{timeSelectInCell(FIELD_IDS.EVENT_START_TIME, "eventStartTime")}</td>
+                </tr>
+                <tr>
+                  <td style={tableCellLabel}>CITY, ST</td>
+                  <td style={tableCellValue}>
+                    <input
+                      value={cityStateInputValue}
+                      disabled={!canEdit}
+                      onFocus={() => setCityStateLineDraft(cityStateCell)}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        setCityStateLineDraft(v);
+                        const parts = v.split(",").map((s) => s.trim());
+                        if (venueMode === "same_as_client") {
+                          setCity(parts[0] ?? "");
+                          setStateVal(parts[1] ?? "");
+                          setZip(parts[2] ?? "");
+                        } else {
+                          setVenueCity(parts[0] ?? "");
+                          setVenueState(parts[1] ?? "");
+                        }
+                        setIntakeDirty(true);
+                      }}
+                      onBlur={async () => {
+                        setCityStateLineDraft(null);
+                        if (venueMode === "same_as_client" && selectedEventId) {
+                          await save(FIELD_IDS.CLIENT_CITY, city);
+                          await save(FIELD_IDS.CLIENT_STATE, stateVal);
+                          await save(FIELD_IDS.CLIENT_ZIP, zip);
+                        } else if (selectedEventId) {
+                          await saveField(FIELD_IDS.VENUE_CITY, venueCity);
+                          await saveField(FIELD_IDS.VENUE_STATE, venueState);
+                        }
+                      }}
+                      style={tableInput}
+                      placeholder="—"
+                    />
+                  </td>
+                  <td style={tableCellLabel}>EVENT END</td>
+                  <td style={tableCellValue}>{timeSelectInCell(FIELD_IDS.EVENT_END_TIME, "eventEndTime")}</td>
+                </tr>
+                <tr>
+                  <td style={tableCellLabel}>VENUE</td>
+                  <td style={tableCellValue}>
+                    {venueMode === "same_as_client" ? (
+                      <button type="button" style={{ ...pillInactive, margin: "4px 8px" }} onClick={canEdit ? openVenueModal : undefined} disabled={!canEdit}>
+                        If different than client address
+                      </button>
+                    ) : (
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", padding: "4px 8px" }}>
+                        <input value={venue} disabled={!canEdit} onChange={(e) => setVenue(e.target.value)} onBlur={(e) => saveField(FIELD_IDS.VENUE, e.target.value)} style={{ ...tableInput, flex: "1 1 120px" }} placeholder="e.g. Residence or venue name" />
+                        <button type="button" onClick={switchToClientAddress} style={{ fontSize: 11, color: ACCENT_LINK, background: "none", border: "none", cursor: "pointer", textDecoration: "underline" }}>Same as client</button>
+                      </div>
+                    )}
+                  </td>
+                  <td style={tableCellLabel}>EVENT ARRIVAL</td>
+                  <td style={tableCellValue}>{timeSelectInCell(arrivalFieldIdResolved, "eventArrivalTime")}</td>
+                </tr>
+              </>
+            )}
             <tr>
               <td style={tableCellLabel} />
               <td style={tableCellValue} />

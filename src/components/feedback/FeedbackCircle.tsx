@@ -16,7 +16,7 @@ const SCREEN_NAMES: Record<string, string> = {
   "/home": "Dashboard",
   "/beo-intake": "BEO Intake",
   "/foh": "FOH Landing",
-  "/watchtower": "Watchtower",
+  "/watchtower": "Today's tasks",
   "/invoice-intake": "Invoice Intake",
   "/kitchen-prep": "Kitchen Prep",
   "/delivery-command": "Delivery Command",

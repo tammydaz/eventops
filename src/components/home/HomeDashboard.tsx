@@ -3,7 +3,6 @@ import "../../pages/HomeDashboard.css";
 import { HomeHeader } from "./HomeHeader";
 import { EventGrid } from "./EventGrid";
 import type { EventCardData } from "./EventCard";
-import { Link } from "react-router-dom";
 import { DASHBOARD_CALENDAR_TO } from "../../lib/dashboardRoutes";
 import { DepartmentCircles } from "./DepartmentCircles";
 
@@ -93,18 +92,6 @@ export const HomeDashboard = () => {
             </a>
           </li>
           <li>
-            <Link to="/watchtower">
-              <span className="sidebar-icon"></span>
-              Papa Chulo Watchtower
-            </Link>
-          </li>
-          <li>
-            <Link to="/papa-chulo">
-              <span className="sidebar-icon"></span>
-              Papa Chulo
-            </Link>
-          </li>
-          <li>
             <a href="#departments">
               <span className="sidebar-icon"></span>
               Departments
@@ -114,12 +101,6 @@ export const HomeDashboard = () => {
             <a href="/print-test">
               <span className="sidebar-icon"></span>
               Print Engine
-            </a>
-          </li>
-          <li>
-            <a href="/watchtower">
-              <span className="sidebar-icon"></span>
-              Papa Chulo Watchtower
             </a>
           </li>
         </ul>

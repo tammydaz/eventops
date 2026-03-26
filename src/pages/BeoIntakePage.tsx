@@ -23,6 +23,15 @@ import { UnsavedChangesModal } from "../components/UnsavedChangesModal";
 import { useAuthStore } from "../state/authStore";
 import { canEditDispatchAndJobNumber } from "../lib/auth";
 import { isDeliveryOrPickup } from "../lib/deliveryHelpers";
+import {
+  DELIVERY_HOT_APPETIZERS_BLOCK_KEY,
+  DELIVERY_HOT_APPETIZER_INTERNAL,
+  deliveryFoodListSectionKeys,
+  deliveryHotAppetizerRows,
+  shadowSectionHeading,
+} from "../lib/deliveryShadowSectionLabels";
+import { SandwichPlatterConfigModal } from "../components/beo-intake/SandwichPlatterConfigModal";
+import { getPlatterOrdersByEventId, setPlatterOrdersForEvent } from "../state/platterOrdersStore";
 import { isChangeRequested, allBOHConfirmedChange } from "../lib/productionHelpers";
 import { asSingleSelectName, asString, isErrorResult } from "../services/airtable/selectors";
 import { FIELD_IDS, getLockoutFieldIds, getBOHProductionFieldIds } from "../services/airtable/events";
@@ -44,6 +53,8 @@ import {
 } from "../services/airtable/eventMenu";
 import { fetchMenuItemChildren } from "../services/airtable/menuItems";
 import { CreationStationContent } from "../components/beo-intake/MenuSection";
+import { BoxedLunchSection } from "../components/beo-intake/BoxedLunchSection";
+import { DeliveryPaperProductsSection } from "../components/beo-intake/DeliveryPaperProductsSection";
 import { BeoLivePreview } from "../components/BeoLivePreview";
 import { calculateAutoSpec, type FoodCategory } from "../utils/beoAutoSpec";
 import { getBeoSpecStorageKey, getSpecOverrideKey, getShadowMenuStorageKey } from "../utils/beoSpecStorage";
@@ -131,6 +142,7 @@ export const BeoIntakePage = () => {
   const [childSpecOverrides, setChildSpecOverrides] = useState<Record<string, string>>({});
   /** Shadow menu sections default expanded; `section === false` means user collapsed that header. */
   const [shadowMenuSectionExpanded, setShadowMenuSectionExpanded] = useState<Record<string, boolean>>({});
+  const [sandwichPlatterModalOpen, setSandwichPlatterModalOpen] = useState(false);
   const [showChangeRequestModal, setShowChangeRequestModal] = useState(false);
   const [pendingEventId, setPendingEventId] = useState<string | null>(null);
   const { user } = useAuthStore();
@@ -177,11 +189,14 @@ export const BeoIntakePage = () => {
 
   useEffect(() => {
     const param = searchParams.get("section");
-    const sectionId = param ? SECTION_PARAM_TO_ID[param] : null;
+    let sectionId = param ? SECTION_PARAM_TO_ID[param] : null;
+    if (sectionId === "beo-section-serviceware" && isDelivery) {
+      sectionId = "beo-section-delivery-paper";
+    }
     if (!sectionId || !selectedEventId || eventDataLoading) return;
     const t = setTimeout(() => jumpToBeoSection(sectionId), 500);
     return () => clearTimeout(t);
-  }, [selectedEventId, eventDataLoading, searchParams]);
+  }, [selectedEventId, eventDataLoading, searchParams, isDelivery]);
 
   const setSelectedEventIdRef = useRef(setSelectedEventId);
   setSelectedEventIdRef.current = setSelectedEventId;
@@ -312,12 +327,14 @@ export const BeoIntakePage = () => {
       setShadowMenuRows([]);
       setEditingShadowRow(null);
       setShadowMenuSectionExpanded({});
+      setSandwichPlatterModalOpen(false);
       return;
     }
     shadowMenuStorageSkipRef.current = true;
     setShadowMenuRows([]);
     setEditingShadowRow(null);
     setShadowMenuSectionExpanded({});
+    setSandwichPlatterModalOpen(false);
   }, [selectedEventId]);
 
   useEffect(() => {
@@ -644,7 +661,7 @@ export const BeoIntakePage = () => {
   const creationStationSmallAddStyle: React.CSSProperties = { ...creationStationButtonStyle, padding: "6px 12px", fontSize: 12 };
   const emptyMenuItemsForStations: LinkedRecordItem[] = [];
 
-  /** Violet pill — scrolls to BEO stations block inside Menu (distinct from Presented gold, Passed red, etc.). */
+  /** Violet pill — scrolls to BEO stations block inside Menu (distinct from other menu pill colors). */
   const STATIONS_MENU_PILL = "#9333ea";
   const scrollToBeoStations = useCallback(() => {
     jumpToBeoSection("beo-section-menu");
@@ -661,10 +678,65 @@ export const BeoIntakePage = () => {
     }, 280);
   }, []);
 
+  const scrollToDeliveryBoxedLunch = useCallback(() => {
+    jumpToBeoSection("beo-delivery-boxed-lunch");
+  }, []);
+
+  const goToSandwichPlatters = useCallback(() => {
+    if (isLocked) return;
+    setSandwichPlatterModalOpen(true);
+    jumpToBeoSection("beo-delivery-platters");
+  }, [isLocked]);
+
+  const deliveryMenuBtn = (color: string): React.CSSProperties => ({
+    minWidth: 140,
+    maxWidth: 220,
+    width: "100%",
+    padding: "10px 14px",
+    fontSize: 13,
+    fontWeight: 600,
+    borderRadius: 8,
+    border: `1px solid ${color}80`,
+    background: `linear-gradient(135deg, ${color}38, ${color}12)`,
+    color,
+    cursor: isLocked ? "default" : "pointer",
+  });
+
+  const deliveryPairCol: React.CSSProperties = {
+    display: "flex",
+    flexDirection: "column",
+    gap: 8,
+    alignItems: "stretch",
+    flex: "0 1 auto",
+  };
+
   return (
-    <div className="beo-intake-page" style={{ minHeight: "100vh", background: "linear-gradient(135deg, #0a0a0a 0%, #1a0a0a 50%, #0f0a15 100%)", color: "#e0e0e0", position: "relative", fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif" }}>
+    <div
+      className={`beo-intake-page${isDelivery ? " beo-intake-page--delivery" : ""}`}
+      style={{
+        minHeight: "100vh",
+        background: isDelivery
+          ? "linear-gradient(145deg, #0f0c04 0%, #1a1408 42%, #0a0906 100%)"
+          : "linear-gradient(135deg, #0a0a0a 0%, #1a0a0a 50%, #0f0a15 100%)",
+        color: "#e0e0e0",
+        position: "relative",
+        fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif",
+      }}
+    >
       <div style={{ position: "relative", zIndex: 10 }}>
-        <div className="beo-header" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 24px", borderBottom: "1px solid rgba(204,0,0,0.25)", backdropFilter: "blur(10px)", gap: 16, flexWrap: "wrap" }}>
+        <div
+          className="beo-header"
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            padding: "14px 24px",
+            borderBottom: isDelivery ? "1px solid rgba(234,179,8,0.35)" : "1px solid rgba(204,0,0,0.25)",
+            backdropFilter: "blur(10px)",
+            gap: 16,
+            flexWrap: "wrap",
+          }}
+        >
           <div className="beo-header-selector" style={{ minWidth: "220px", maxWidth: "320px" }}>
             <EventSelectorSimple onBeforeSelectEvent={handleBeforeSelectEvent} />
           </div>
@@ -692,7 +764,6 @@ export const BeoIntakePage = () => {
             <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
               <span style={{ fontSize: "24px" }}>🚚</span>
               <span style={{ fontSize: "14px", fontWeight: "700", color: "#eab308", textTransform: "uppercase", letterSpacing: "1px" }}>Delivery Order</span>
-              <span style={{ fontSize: "12px", color: "#fde68a" }}>No metal/china/serviceware — all disposable</span>
             </div>
             <button type="button" onClick={() => setFields(selectedEventId, { [FIELD_IDS.EVENT_TYPE]: "Full Service" })} style={{ padding: "8px 16px", borderRadius: "6px", border: "1px solid rgba(0,188,212,0.5)", background: "rgba(0,188,212,0.08)", color: "#00bcd4", fontSize: "12px", fontWeight: 600, cursor: "pointer" }}>
               Switch to Full Service
@@ -736,71 +807,155 @@ export const BeoIntakePage = () => {
                       )}
                       <HeaderSection jobNumberDisplay={jobNumberDisplay} dispatchTimeDisplay={dispatchTimeDisplay} canEditDispatch={canEditDispatch} eventDate={eventDateNorm} />
                       <div style={{ gridColumn: "1 / -1" }}>
-                        <FormSection title="Menu" defaultOpen={true} sectionId="beo-section-menu" titleAlign="center" dotColor={BEO_SECTION_PILL_ACCENT}>
+                        <FormSection
+                          title="Menu"
+                          defaultOpen={true}
+                          sectionId="beo-section-menu"
+                          titleAlign="center"
+                          dotColor={BEO_SECTION_PILL_ACCENT}
+                          isDelivery={isDelivery}
+                        >
                           <div className="beo-menu-inner" style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 0, gridColumn: "1 / -1", width: "100%", maxWidth: "100%", margin: "0 auto" }}>
-                            <div className="beo-menu-add-buttons" style={{ display: "flex", justifyContent: "center", flexWrap: "nowrap", gap: "8px", marginBottom: "20px", overflowX: "auto", paddingBottom: "4px" }}>
-                              {(() => {
-                                const buttons = [
-                                  ["+ Passed", "#D32F2F", () => openPicker("passed", "passedApps", "Passed Appetizers")],
-                                  ["+ Presented", "#FBC02D", () => openPicker("presented", "presentedApps", "Presented Appetizers")],
-                                  ["+ Station", STATIONS_MENU_PILL, scrollToBeoStations],
-                                  ["+ Buffet Metal", "#4DD0E1", () => openPicker("buffet_metal", "buffetMetal", "Buffet – Metal")],
-                                  ["+ Buffet China", "#FF8A65", () => openPicker("buffet_china", "buffetChina", "Buffet – China")],
-                                  ["+ Deli", "#4CAF50", () => openPicker("deli", isDelivery ? "deliveryDeli" : "fullServiceDeli", "Deli")],
-                                  ["+ Desserts", "#7B1FA2", () => openPicker("desserts", "desserts", "Desserts")],
-                                  ...(isDelivery ? [["+ Room Temp", "#757575", () => openPicker("room_temp", "roomTempDisplay", "Room Temp / Display")] as const] : []),
-                                ];
-                                return buttons.map(([label, color, onClick]) => (
+                            <div className="beo-menu-add-buttons" style={{ display: "flex", justifyContent: "center", flexWrap: "wrap", gap: "8px", marginBottom: "20px", overflowX: "auto", paddingBottom: "4px", alignItems: "flex-start" }}>
+                              {isDelivery ? (
+                                <div
+                                  style={{
+                                    display: "flex",
+                                    flexDirection: "row",
+                                    flexWrap: "wrap",
+                                    justifyContent: "center",
+                                    alignItems: "flex-start",
+                                    gap: 14,
+                                    width: "100%",
+                                    maxWidth: "100%",
+                                  }}
+                                >
+                                  <div style={deliveryPairCol}>
+                                    <button type="button" disabled={isLocked} onClick={() => openPicker("passed", "passedApps", "Appetizer hot")} style={deliveryMenuBtn("#D32F2F")}>
+                                      Appetizer hot
+                                    </button>
+                                    <button type="button" disabled={isLocked} onClick={() => openPicker("presented", "presentedApps", "Appetizer disposable")} style={deliveryMenuBtn("#FBC02D")}>
+                                      Appetizer disposable
+                                    </button>
+                                  </div>
+                                  <div style={deliveryPairCol}>
+                                    <button type="button" disabled={isLocked} onClick={() => openPicker("buffet_metal", "buffetMetal", "Buffet hot")} style={deliveryMenuBtn("#4DD0E1")}>
+                                      Buffet hot
+                                    </button>
+                                    <button type="button" disabled={isLocked} onClick={() => openPicker("buffet_china", "buffetChina", "Buffet disposable")} style={deliveryMenuBtn("#FF8A65")}>
+                                      Buffet disposable
+                                    </button>
+                                  </div>
+                                  <div style={deliveryPairCol}>
+                                    <button type="button" disabled={isLocked} onClick={scrollToDeliveryBoxedLunch} style={deliveryMenuBtn("#22c55e")}>
+                                      Boxed lunch
+                                    </button>
+                                    <button type="button" disabled={isLocked} onClick={goToSandwichPlatters} style={deliveryMenuBtn("#f97316")}>
+                                      Sandwich platters
+                                    </button>
+                                  </div>
+                                  <div style={deliveryPairCol}>
+                                    <button type="button" disabled={isLocked} onClick={() => openPicker("deli", "deliveryDeli", "Deli")} style={deliveryMenuBtn("#4CAF50")}>
+                                      Deli
+                                    </button>
+                                    <button type="button" disabled={isLocked} onClick={() => openPicker("room_temp", "roomTempDisplay", "Salad")} style={deliveryMenuBtn("#757575")}>
+                                      Salad
+                                    </button>
+                                  </div>
+                                  <div style={deliveryPairCol}>
+                                    <button type="button" disabled={isLocked} onClick={() => openPicker("desserts", "desserts", "Dessert disposable")} style={deliveryMenuBtn("#7B1FA2")}>
+                                      Dessert disposable
+                                    </button>
+                                    <button type="button" disabled={isLocked} onClick={scrollToBeoStations} style={deliveryMenuBtn(STATIONS_MENU_PILL)}>
+                                      Station
+                                    </button>
+                                  </div>
+                                </div>
+                              ) : (
+                                ((
+                                  [
+                                    ["+ Passed", "#D32F2F", () => openPicker("passed", "passedApps", "Passed Appetizers")],
+                                    ["+ Presented", "#FBC02D", () => openPicker("presented", "presentedApps", "Presented Appetizers")],
+                                    ["+ Station", STATIONS_MENU_PILL, scrollToBeoStations],
+                                    ["+ Buffet Metal", "#4DD0E1", () => openPicker("buffet_metal", "buffetMetal", "Buffet – Metal")],
+                                    ["+ Buffet China", "#FF8A65", () => openPicker("buffet_china", "buffetChina", "Buffet – China")],
+                                    ["+ Deli", "#4CAF50", () => openPicker("deli", "fullServiceDeli", "Deli")],
+                                    ["+ Desserts", "#7B1FA2", () => openPicker("desserts", "desserts", "Desserts")],
+                                  ] as const
+                                ).map(([label, color, onClick]) => (
                                   <button key={label} type="button" disabled={isLocked} onClick={onClick} style={{ padding: "8px 16px", fontSize: 12, fontWeight: 600, borderRadius: 6, border: `1px solid ${color}80`, background: `linear-gradient(135deg, ${color}40, ${color}15)`, color, cursor: isLocked ? "default" : "pointer", flexShrink: 0 }}>
                                     {label}
                                   </button>
-                                ));
-                              })()}
+                                )))
+                              )}
                             </div>
-                                            {shadowMenuRows.length === 0 ? (
-                              <div style={{ fontSize: "13px", color: "rgba(255,255,255,0.5)", padding: "8px 0", textAlign: "center" }}>No items yet. Use the buttons above to add items.</div>
+                            {shadowMenuRows.length === 0 ? (
+                              <div
+                                style={{
+                                  fontSize: "13px",
+                                  color: "rgba(255,255,255,0.5)",
+                                  padding: "8px 0",
+                                  textAlign: "center",
+                                  maxWidth: 560,
+                                  margin: "0 auto",
+                                  lineHeight: 1.5,
+                                }}
+                              >
+                                <div>No items yet. Use the buttons above to add items.</div>
+                              </div>
                             ) : (
                               <>
-                                <div style={{ fontSize: 10, color: "rgba(255,255,255,0.4)", marginBottom: 8, textAlign: "center" }}>EVENT MENU (FROM SHADOW TABLE)</div>
+                                <div style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.55)", marginBottom: 10, textAlign: "center", letterSpacing: "0.04em" }}>
+                                  YOUR FOOD LIST
+                                </div>
                                 {(() => {
-                                  const sectionsWithItems = SECTION_ORDER.filter((s) => (bySection[s]?.length ?? 0) > 0);
-                                  const extraSections = Object.keys(bySection).filter((s) => !SECTION_ORDER.includes(s) && (bySection[s]?.length ?? 0) > 0);
-                                  const sectionsToRender = [...sectionsWithItems, ...extraSections];
+                                  const sectionsToRender = deliveryFoodListSectionKeys(isDelivery, bySection, SECTION_ORDER);
+                                  const toggleSectionHeader = (sec: string) => {
+                                    if (isDelivery && sec === DELIVERY_HOT_APPETIZERS_BLOCK_KEY) {
+                                      setShadowMenuSectionExpanded((p) => {
+                                        const allOpen = DELIVERY_HOT_APPETIZER_INTERNAL.every((s) => p[s] !== false);
+                                        const next = { ...p };
+                                        if (allOpen) {
+                                          for (const s of DELIVERY_HOT_APPETIZER_INTERNAL) next[s] = false;
+                                        } else {
+                                          for (const s of DELIVERY_HOT_APPETIZER_INTERNAL) delete next[s];
+                                        }
+                                        return next;
+                                      });
+                                      return;
+                                    }
+                                    setShadowMenuSectionExpanded((p) =>
+                                      p[sec] === false
+                                        ? (() => {
+                                            const { [sec]: _removed, ...rest } = p;
+                                            return rest;
+                                          })()
+                                        : { ...p, [sec]: false }
+                                    );
+                                  };
                                   return sectionsToRender.map((section) => {
-                                const fieldId = getFieldIdForSection(section, isDelivery);
-                                const category = SECTION_TO_CATEGORY[section] ?? "buffet";
+                                const isDeliveryHotAppBlock = isDelivery && section === DELIVERY_HOT_APPETIZERS_BLOCK_KEY;
+                                const rowsForSection = isDeliveryHotAppBlock ? deliveryHotAppetizerRows(bySection) : (bySection[section] || []);
                                 const guestCount = selectedEventData?.[FIELD_IDS.GUEST_COUNT] != null ? Number(selectedEventData[FIELD_IDS.GUEST_COUNT]) : 0;
-                                const dotColor = SECTION_COLORS[section] || "#888";
                                 const tableBorder = "1px solid rgba(255,255,255,0.15)";
-                                const sectionColor = dotColor;
-                                const sectionExpanded = shadowMenuSectionExpanded[section] !== false;
+                                const sectionColor = isDeliveryHotAppBlock ? "#fb923c" : SECTION_COLORS[section] || "#888";
+                                const sectionExpanded = isDeliveryHotAppBlock
+                                  ? DELIVERY_HOT_APPETIZER_INTERNAL.every((s) => shadowMenuSectionExpanded[s] !== false)
+                                  : shadowMenuSectionExpanded[section] !== false;
+                                const headerLabel = isDeliveryHotAppBlock
+                                  ? shadowSectionHeading(isDelivery, "Passed Appetizers").toUpperCase()
+                                  : shadowSectionHeading(isDelivery, section).toUpperCase();
                                 return (
                                   <div key={section} style={{ width: "100%", marginBottom: 12, border: tableBorder, borderRadius: 8, backgroundColor: "rgba(0,0,0,0.2)", overflow: "hidden" }}>
                                     <div
                                       role="button"
                                       tabIndex={0}
                                       aria-expanded={sectionExpanded}
-                                      onClick={() =>
-                                        setShadowMenuSectionExpanded((p) =>
-                                          p[section] === false
-                                            ? (() => {
-                                                const { [section]: _removed, ...rest } = p;
-                                                return rest;
-                                              })()
-                                            : { ...p, [section]: false }
-                                        )
-                                      }
+                                      onClick={() => toggleSectionHeader(section)}
                                       onKeyDown={(e) => {
                                         if (e.key === "Enter" || e.key === " ") {
                                           e.preventDefault();
-                                          setShadowMenuSectionExpanded((p) =>
-                                            p[section] === false
-                                              ? (() => {
-                                                  const { [section]: _removed, ...rest } = p;
-                                                  return rest;
-                                                })()
-                                              : { ...p, [section]: false }
-                                          );
+                                          toggleSectionHeader(section);
                                         }
                                       }}
                                       style={{ padding: "8px 12px", background: "rgba(0,0,0,0.15)", borderBottom: sectionExpanded ? tableBorder : "none", cursor: "pointer" }}
@@ -813,7 +968,7 @@ export const BeoIntakePage = () => {
                                               <span style={{ fontSize: 11, color: "rgba(255,255,255,0.45)", marginRight: 6, userSelect: "none" }} aria-hidden>
                                                 {sectionExpanded ? "▼" : "▶"}
                                               </span>
-                                              <span style={{ fontSize: 13, fontWeight: 700, letterSpacing: "0.05em", color: sectionColor }}>{section.toUpperCase()}</span>
+                                              <span style={{ fontSize: 13, fontWeight: 700, letterSpacing: "0.05em", color: sectionColor }}>{headerLabel}</span>
                                             </td>
                                             <td style={{ width: 140, minWidth: 140, padding: 0 }} />
                                           </tr>
@@ -822,7 +977,13 @@ export const BeoIntakePage = () => {
                                     </div>
                                     {sectionExpanded && (
                                     <div style={{ padding: "8px 12px" }}>
-                                      {(bySection[section] || []).map((row, rowIdx) => {
+                                      {rowsForSection.map((row, rowIdx) => {
+                                        const rowSection =
+                                          row.section?.trim() ||
+                                          (section === DELIVERY_HOT_APPETIZERS_BLOCK_KEY ? undefined : section);
+                                        if (!rowSection) return null;
+                                        const fieldId = getFieldIdForSection(rowSection, isDelivery);
+                                        const category = SECTION_TO_CATEGORY[rowSection] ?? "buffet";
                                         const fullName = row.customText?.trim() ? row.customText : row.catalogItemName;
                                         const hasNameSuffix = fullName.includes(" – ");
                                         const parentName = hasNameSuffix ? (fullName.split(" – ")[0]?.trim() || fullName) : fullName;
@@ -832,7 +993,7 @@ export const BeoIntakePage = () => {
                                         const parentSpecKey = getSpecOverrideKey(fieldId, itemId, 0);
                                         const autoSpec = calculateAutoSpec(parentName, category, guestCount);
                                         const displaySpec = (menuSpecOverrides[parentSpecKey] ?? "").trim() !== "" ? menuSpecOverrides[parentSpecKey] : autoSpec.quantity;
-                                        const showSauceRow = (section === "Passed Appetizers" || section === "Presented Appetizers") && (components.length > 0 || row.sauceOverride);
+                                        const showSauceRow = (rowSection === "Passed Appetizers" || rowSection === "Presented Appetizers") && (components.length > 0 || row.sauceOverride);
                                         const sauceSpecKey = getSpecOverrideKey(fieldId, itemId, 1);
                                         const sauceVal = row.sauceOverride?.trim();
                                         const sauceDisplay = !sauceVal || sauceVal === "None" ? null : sauceVal === "Default" ? "Default" : sauceVal;
@@ -882,6 +1043,32 @@ export const BeoIntakePage = () => {
                                 })()}
                               </>
                             )}
+                            {isDelivery && selectedEventId && (
+                              <div style={{ width: "100%", maxWidth: 640, marginTop: 24, display: "flex", flexDirection: "column", gap: 20 }}>
+                                <div id="beo-delivery-boxed-lunch" style={{ paddingTop: 16, borderTop: "1px solid rgba(34,197,94,0.35)" }}>
+                                  <div style={{ fontSize: 13, fontWeight: 700, color: "rgba(134,239,172,0.95)", textAlign: "center", marginBottom: 10, letterSpacing: "0.04em" }}>Boxed lunches</div>
+                                  <BoxedLunchSection eventId={selectedEventId} canEdit={!isLocked} />
+                                </div>
+                                <div id="beo-delivery-platters" style={{ paddingTop: 16, borderTop: "1px solid rgba(249,115,22,0.4)" }}>
+                                  <div style={{ fontSize: 13, fontWeight: 700, color: "rgba(253,186,116,0.95)", textAlign: "center", marginBottom: 10, letterSpacing: "0.04em" }}>Sandwich platters</div>
+                                  {!sandwichPlatterModalOpen && (
+                                    <p style={{ fontSize: 12, color: "rgba(255,255,255,0.45)", textAlign: "center", margin: "0 0 10px" }}>Use the Sandwich platters button above to configure platter groups.</p>
+                                  )}
+                                  {sandwichPlatterModalOpen && (
+                                    <SandwichPlatterConfigModal
+                                      open
+                                      inline
+                                      onClose={() => setSandwichPlatterModalOpen(false)}
+                                      onConfirm={(rows) => {
+                                        setPlatterOrdersForEvent(selectedEventId, rows);
+                                        setSandwichPlatterModalOpen(false);
+                                      }}
+                                      initialRows={getPlatterOrdersByEventId(selectedEventId)}
+                                    />
+                                  )}
+                                </div>
+                              </div>
+                            )}
                             {selectedEventId && (
                               <div id="beo-creation-stations" style={{ width: "100%", marginTop: 20 }}>
                                 <CreationStationContent
@@ -902,10 +1089,15 @@ export const BeoIntakePage = () => {
                         </FormSection>
                       </div>
                       <div style={{ gridColumn: "1 / -1" }}>
-                        <FormSection title="Beverage Services" defaultOpen={false} sectionId="beo-section-bar" titleAlign="center" dotColor={BEO_SECTION_PILL_ACCENT}>
+                        <FormSection title="Beverage Services" defaultOpen={false} sectionId="beo-section-bar" titleAlign="center" dotColor={BEO_SECTION_PILL_ACCENT} isDelivery={isDelivery}>
                           <BeverageServicesSection embedded />
                         </FormSection>
                       </div>
+                      {isDelivery && selectedEventId && (
+                        <div style={{ gridColumn: "1 / -1" }}>
+                          <DeliveryPaperProductsSection />
+                        </div>
+                      )}
                       {!isDelivery && <KitchenAndServicewareSection />}
                       {!isDelivery && <TimelineSection />}
                       {!isDelivery && <SiteVisitLogisticsSection />}
@@ -925,7 +1117,7 @@ export const BeoIntakePage = () => {
               </div>
             </div>
           )}
-          {selectedEventId && <BeoJumpToNav />}
+          {selectedEventId && <BeoJumpToNav isDelivery={isDelivery} />}
           <SubmitChangeRequestModal open={showChangeRequestModal} onClose={() => setShowChangeRequestModal(false)} eventName={eventName} onConfirm={handleSubmitChangeRequest} />
           <ConfirmSendToBOHModal open={showSendToBOHModal} onClose={() => setShowSendToBOHModal(false)} eventName={eventName} onConfirm={handleSendToBOH} />
           <MissingFieldsModal open={showMissingFieldsModal} onClose={() => setShowMissingFieldsModal(false)} missingFields={getMissingRequiredFields(selectedEventData)} onConfirm={handleMissingFieldsConfirm} />

@@ -8,6 +8,7 @@ import { airtableFetch } from "../services/airtable/client";
 import { loadStationsByEventId } from "../services/airtable/linkedRecords";
 import { loadStationComponentNamesByIds } from "../services/airtable/stationComponents";
 import { loadBoxedLunchOrdersByEventId, type BoxedLunchOrder } from "../services/airtable/boxedLunchOrders";
+import { buildBoxedLunchBeoSectionsFromOrders } from "../utils/boxedLunchPrint";
 import { getPlatterOrdersByEventId } from "../state/platterOrdersStore";
 import { asBarServicePrimary, asLinkedRecordIds, asMultiSelectNames, asSingleSelectName, asString, asStringArray, isErrorResult } from "../services/airtable/selectors";
 import { secondsToTimeString, secondsTo12HourString } from "../utils/timeHelpers";
@@ -44,6 +45,8 @@ type TopTab = "kitchenBEO" | "meetingBeoNotes" | "fullBeoPacket" | "buffetMenuSi
 // ── Section color by type ──
 const getSectionColor = (sectionTitle: string): string => {
   // Delivery sections: all green
+  if (sectionTitle.includes("BOXED LUNCHES")) return "#22c55e";
+  if (sectionTitle.includes("WAX BAG")) return "#ca8a04";
   if (sectionTitle.includes("DISPOSABLE")) return "#22c55e";
   if (sectionTitle.includes("PASSED")) return "#22c55e";
   if (sectionTitle.includes("PRESENTED")) return "#f97316";
@@ -1179,6 +1182,7 @@ function BeveragePill({
 }
 
 // ── S2-BEO header (reusable: CLIENT, CONTACT, PHONE, ADDRESS, etc.) ──
+/** Delivery layout matches sample Excel BEOs in repo (HOUSE ORDER NUMBER, DELIVERY TIME, DELIVERY NOTES, …). */
 function S2Header(props: {
   eventDate: string;
   clientName: string;
@@ -1194,22 +1198,57 @@ function S2Header(props: {
   eventEnd: string;
   fwStaff: string;
   phoneStr: string;
+  isDelivery?: boolean;
+  /** Right column of DELIVERY NOTES row — typically Special Notes from intake */
+  deliveryNotes?: string;
 }) {
+  const isDelivery = props.isDelivery === true;
+  const deliveryNotes = (props.deliveryNotes ?? "").trim();
   return (
     <>
-      <div style={{ fontSize: 12, fontWeight: 600, color: "#111", marginBottom: 4 }}>{props.eventDate || "—"}</div>
-      <div className="beo-letterhead-bar" style={{
-        background: "#6b7280", color: "#fff", padding: "8px 14px",
-        display: "flex", alignItems: "center", justifyContent: "space-between",
-        fontSize: 13, fontWeight: 700, border: "2px solid #374151",
-      }}>
+      {!isDelivery && (
+        <div style={{ fontSize: 12, fontWeight: 600, color: "#111", marginBottom: 4 }}>{props.eventDate || "—"}</div>
+      )}
+      <div
+        className="beo-letterhead-bar"
+        style={{
+          background: isDelivery ? "#facc15" : "#6b7280",
+          color: isDelivery ? "#000" : "#fff",
+          padding: "8px 14px",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          fontSize: 13,
+          fontWeight: 700,
+          border: isDelivery ? "2px solid #000" : "2px solid #374151",
+        }}
+      >
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <div style={{ width: 22, height: 22, background: "#dc2626", display: "flex", alignItems: "center", justifyContent: "center", transform: "rotate(45deg)", flexShrink: 0 }}>
+          <div
+            style={{
+              width: 22,
+              height: 22,
+              background: "#dc2626",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              transform: "rotate(45deg)",
+              flexShrink: 0,
+            }}
+          >
             <span style={{ transform: "rotate(-45deg)", fontSize: 11, fontWeight: 800, color: "#fff" }}>f</span>
           </div>
-          <span>BEO</span>
+          <span>{isDelivery ? "DELIVERY" : "BEO"}</span>
         </div>
-        <span>JOB#: {props.jobNumberDisplay} — DISPATCH TIME {props.dispatchTime}</span>
+        <span style={{ textAlign: "right" as const }}>
+          {isDelivery ? (
+            <>
+              HOUSE ORDER NUMBER: {props.jobNumberDisplay || "—"} — DISPATCH TIME: {props.dispatchTime || "—"}
+            </>
+          ) : (
+            <>JOB#: {props.jobNumberDisplay} — DISPATCH TIME {props.dispatchTime}</>
+          )}
+        </span>
       </div>
       <div className="beo-event-details-table" style={{ marginTop: 6, overflow: "hidden" }}>
         <table style={KITCHEN_HEADER_TABLE}>
@@ -1220,48 +1259,91 @@ function S2Header(props: {
             <col style={{ width: "35%" }} />
           </colgroup>
           <tbody>
-            <tr>
-              <td style={{ ...KITCHEN_HEADER_CELL, fontWeight: 700 }}>CLIENT</td>
-              <td style={KITCHEN_HEADER_CELL}>{props.clientName || "—"}</td>
-              <td style={{ ...KITCHEN_HEADER_CELL, fontWeight: 700 }}>ORDER #</td>
-              <td style={{ ...KITCHEN_HEADER_CELL, color: "#c00", fontWeight: 700 }}>{props.jobNumberDisplay || "—"}</td>
-            </tr>
-            <tr>
-              <td style={{ ...KITCHEN_HEADER_CELL, fontWeight: 700 }}>CONTACT</td>
-              <td style={KITCHEN_HEADER_CELL}>{props.contactName || "—"}</td>
-              <td style={{ ...KITCHEN_HEADER_CELL, fontWeight: 700 }}>EVENT DATE</td>
-              <td style={KITCHEN_HEADER_CELL}>{props.eventDate || "—"}</td>
-            </tr>
-            <tr>
-              <td style={{ ...KITCHEN_HEADER_CELL, fontWeight: 700 }}>PHONE</td>
-              <td style={KITCHEN_HEADER_CELL}>{props.phoneStr || "—"}</td>
-              <td style={{ ...KITCHEN_HEADER_CELL, fontWeight: 700 }}>GUESTS</td>
-              <td style={{ ...KITCHEN_HEADER_CELL, color: "#c00", fontWeight: 700 }}>{props.guestCount || "—"}</td>
-            </tr>
-            <tr>
-              <td style={{ ...KITCHEN_HEADER_CELL, fontWeight: 700 }}>ADDRESS</td>
-              <td style={KITCHEN_HEADER_CELL}>{props.venueAddress || "—"}</td>
-              <td style={{ ...KITCHEN_HEADER_CELL, fontWeight: 700 }}>EVENT START</td>
-              <td style={{ ...KITCHEN_HEADER_CELL, color: "#c00", fontWeight: 700 }}>{props.eventStart || "—"}</td>
-            </tr>
-            <tr>
-              <td style={{ ...KITCHEN_HEADER_CELL, fontWeight: 700 }}>CITY, ST</td>
-              <td style={KITCHEN_HEADER_CELL}>{props.cityState || "—"}</td>
-              <td style={{ ...KITCHEN_HEADER_CELL, fontWeight: 700 }}>EVENT END</td>
-              <td style={{ ...KITCHEN_HEADER_CELL, color: "#c00", fontWeight: 700 }}>{props.eventEnd || "—"}</td>
-            </tr>
-            <tr>
-              <td style={{ ...KITCHEN_HEADER_CELL, fontWeight: 700 }}>VENUE</td>
-              <td style={KITCHEN_HEADER_CELL}>{props.eventLocation || "—"}</td>
-              <td style={{ ...KITCHEN_HEADER_CELL, fontWeight: 700 }}>EVENT ARRIVAL</td>
-              <td style={{ ...KITCHEN_HEADER_CELL, color: "#c00", fontWeight: 700 }}>{props.eventArrival || "—"}</td>
-            </tr>
-            <tr>
-              <td style={KITCHEN_HEADER_CELL} />
-              <td style={KITCHEN_HEADER_CELL} />
-              <td style={{ ...KITCHEN_HEADER_CELL, fontWeight: 700 }}>FW STAFF</td>
-              <td style={KITCHEN_HEADER_CELL}>{props.fwStaff || "—"}</td>
-            </tr>
+            {isDelivery ? (
+              <>
+                <tr>
+                  <td style={{ ...KITCHEN_HEADER_CELL, fontWeight: 700 }}>CLIENT</td>
+                  <td style={KITCHEN_HEADER_CELL}>{props.clientName || "—"}</td>
+                  <td style={{ ...KITCHEN_HEADER_CELL, fontWeight: 700 }}>EVENT DATE</td>
+                  <td style={KITCHEN_HEADER_CELL}>{props.eventDate || "—"}</td>
+                </tr>
+                <tr>
+                  <td style={{ ...KITCHEN_HEADER_CELL, fontWeight: 700 }}>CONTACT</td>
+                  <td style={KITCHEN_HEADER_CELL}>{props.contactName || "—"}</td>
+                  <td style={{ ...KITCHEN_HEADER_CELL, fontWeight: 700 }}>GUESTS</td>
+                  <td style={{ ...KITCHEN_HEADER_CELL, color: "#c00", fontWeight: 700 }}>{props.guestCount || "—"}</td>
+                </tr>
+                <tr>
+                  <td style={{ ...KITCHEN_HEADER_CELL, fontWeight: 700 }}>PHONE</td>
+                  <td style={KITCHEN_HEADER_CELL}>{props.phoneStr || "—"}</td>
+                  <td style={{ ...KITCHEN_HEADER_CELL, fontWeight: 700 }}>DELIVERY TIME</td>
+                  <td style={{ ...KITCHEN_HEADER_CELL, color: "#c00", fontWeight: 700 }}>{props.dispatchTime || "—"}</td>
+                </tr>
+                <tr>
+                  <td style={{ ...KITCHEN_HEADER_CELL, fontWeight: 700 }}>ADDRESS</td>
+                  <td style={KITCHEN_HEADER_CELL}>{props.venueAddress || "—"}</td>
+                  <td style={{ ...KITCHEN_HEADER_CELL, fontWeight: 700 }}>DELIVERY NOTES</td>
+                  <td style={KITCHEN_HEADER_CELL}>{deliveryNotes || "—"}</td>
+                </tr>
+                <tr>
+                  <td style={{ ...KITCHEN_HEADER_CELL, fontWeight: 700 }}>CITY, ST</td>
+                  <td style={KITCHEN_HEADER_CELL}>{props.cityState || "—"}</td>
+                  <td style={KITCHEN_HEADER_CELL} />
+                  <td style={KITCHEN_HEADER_CELL} />
+                </tr>
+                <tr>
+                  <td style={KITCHEN_HEADER_CELL} />
+                  <td style={KITCHEN_HEADER_CELL} />
+                  <td style={{ ...KITCHEN_HEADER_CELL, fontWeight: 700 }}>FW STAFF</td>
+                  <td style={KITCHEN_HEADER_CELL}>{props.fwStaff || "—"}</td>
+                </tr>
+              </>
+            ) : (
+              <>
+                <tr>
+                  <td style={{ ...KITCHEN_HEADER_CELL, fontWeight: 700 }}>CLIENT</td>
+                  <td style={KITCHEN_HEADER_CELL}>{props.clientName || "—"}</td>
+                  <td style={{ ...KITCHEN_HEADER_CELL, fontWeight: 700 }}>ORDER #</td>
+                  <td style={{ ...KITCHEN_HEADER_CELL, color: "#c00", fontWeight: 700 }}>{props.jobNumberDisplay || "—"}</td>
+                </tr>
+                <tr>
+                  <td style={{ ...KITCHEN_HEADER_CELL, fontWeight: 700 }}>CONTACT</td>
+                  <td style={KITCHEN_HEADER_CELL}>{props.contactName || "—"}</td>
+                  <td style={{ ...KITCHEN_HEADER_CELL, fontWeight: 700 }}>EVENT DATE</td>
+                  <td style={KITCHEN_HEADER_CELL}>{props.eventDate || "—"}</td>
+                </tr>
+                <tr>
+                  <td style={{ ...KITCHEN_HEADER_CELL, fontWeight: 700 }}>PHONE</td>
+                  <td style={KITCHEN_HEADER_CELL}>{props.phoneStr || "—"}</td>
+                  <td style={{ ...KITCHEN_HEADER_CELL, fontWeight: 700 }}>GUESTS</td>
+                  <td style={{ ...KITCHEN_HEADER_CELL, color: "#c00", fontWeight: 700 }}>{props.guestCount || "—"}</td>
+                </tr>
+                <tr>
+                  <td style={{ ...KITCHEN_HEADER_CELL, fontWeight: 700 }}>ADDRESS</td>
+                  <td style={KITCHEN_HEADER_CELL}>{props.venueAddress || "—"}</td>
+                  <td style={{ ...KITCHEN_HEADER_CELL, fontWeight: 700 }}>EVENT START</td>
+                  <td style={{ ...KITCHEN_HEADER_CELL, color: "#c00", fontWeight: 700 }}>{props.eventStart || "—"}</td>
+                </tr>
+                <tr>
+                  <td style={{ ...KITCHEN_HEADER_CELL, fontWeight: 700 }}>CITY, ST</td>
+                  <td style={KITCHEN_HEADER_CELL}>{props.cityState || "—"}</td>
+                  <td style={{ ...KITCHEN_HEADER_CELL, fontWeight: 700 }}>EVENT END</td>
+                  <td style={{ ...KITCHEN_HEADER_CELL, color: "#c00", fontWeight: 700 }}>{props.eventEnd || "—"}</td>
+                </tr>
+                <tr>
+                  <td style={{ ...KITCHEN_HEADER_CELL, fontWeight: 700 }}>VENUE</td>
+                  <td style={KITCHEN_HEADER_CELL}>{props.eventLocation || "—"}</td>
+                  <td style={{ ...KITCHEN_HEADER_CELL, fontWeight: 700 }}>EVENT ARRIVAL</td>
+                  <td style={{ ...KITCHEN_HEADER_CELL, color: "#c00", fontWeight: 700 }}>{props.eventArrival || "—"}</td>
+                </tr>
+                <tr>
+                  <td style={KITCHEN_HEADER_CELL} />
+                  <td style={KITCHEN_HEADER_CELL} />
+                  <td style={{ ...KITCHEN_HEADER_CELL, fontWeight: 700 }}>FW STAFF</td>
+                  <td style={KITCHEN_HEADER_CELL}>{props.fwStaff || "—"}</td>
+                </tr>
+              </>
+            )}
           </tbody>
         </table>
       </div>
@@ -1324,6 +1406,8 @@ function SBeoContent(props: {
               eventEnd={props.eventEnd}
               fwStaff={props.fwStaff}
               phoneStr={phoneStr}
+              isDelivery={isDelivery}
+              deliveryNotes={deliveryNotes}
             />
           </div>
           <div style={{ padding: 32, textAlign: "center", color: "#999", fontSize: 16 }}>
@@ -1357,6 +1441,8 @@ function SBeoContent(props: {
                 eventEnd={props.eventEnd}
                 fwStaff={props.fwStaff}
                 phoneStr={phoneStr}
+                isDelivery={isDelivery}
+                deliveryNotes={deliveryNotes}
               />
             </div>
             {page.pageNum > 1 && !isDelivery && (
@@ -2292,7 +2378,9 @@ const BeoPrintPage: React.FC = () => {
   const [lockoutIds, setLockoutIds] = useState<Awaited<ReturnType<typeof getLockoutFieldIds>>>(null);
   const [bohIds, setBohIds] = useState<Awaited<ReturnType<typeof getBOHProductionFieldIds>>>(null);
   const [showSendToBOHModal, setShowSendToBOHModal] = useState(false);
-  const eventId = selectedEventId ?? getEventIdFromUrl();
+  /** URL wins so boxed-lunch fetch matches the event in /beo-print/:id before store syncs. */
+  const urlEventId = getEventIdFromUrl();
+  const eventId = urlEventId ?? selectedEventId ?? null;
 
   useEffect(() => {
     getBarServiceFieldId().then(setBarServiceFieldId);
@@ -2721,6 +2809,7 @@ const BeoPrintPage: React.FC = () => {
   const religiousRestrictions = f(FIELD_IDS.RELIGIOUS_RESTRICTIONS);
   const dietarySummary = f(FIELD_IDS.DIETARY_SUMMARY);
   const beoNotes = f(FIELD_IDS.BEO_NOTES);
+  const specialNotes = f(FIELD_IDS.SPECIAL_NOTES);
   const serviceStyle = asSingleSelectName(eventData[FIELD_IDS.SERVICE_STYLE]).trim();
   const notBuffetBanner = serviceStyle && !serviceStyle.toLowerCase().includes("buffet")
     ? `NOT BUFFET – ${serviceStyle.toUpperCase()}`
@@ -2804,7 +2893,7 @@ const BeoPrintPage: React.FC = () => {
     { title: "DESSERTS - DISPOSABLE", fieldIds: [FIELD_IDS.DESSERTS], customFieldIds: [FIELD_IDS.CUSTOM_DESSERTS] },
   ];
 
-  const menuSections: SectionData[] = isDelivery
+  let menuSections: SectionData[] = isDelivery
     ? DELIVERY_SECTION_CONFIG.map((config) => {
         const allLinked: MenuLineItem[] = [];
         const seenIds = new Set<string>();
@@ -2825,24 +2914,6 @@ const BeoPrintPage: React.FC = () => {
               allLinked.push(c);
             }
           });
-        }
-        // Merge boxed lunch orders into DELI section (delivery only)
-        if (config.title.includes("DELI") && boxedLunchOrders.length > 0) {
-          for (const order of boxedLunchOrders) {
-            for (const item of order.items) {
-              if (!(item.quantity > 0)) continue;
-              const name = item.boxedLunchTypeName || "Boxed Lunch";
-              const spec = item.customizations?.[0]?.specialRequests?.trim();
-              const specQty = spec
-                ? `${spec} × ${item.quantity}`
-                : String(item.quantity);
-              const uniqueId = `boxed-${item.id}`;
-              if (!seenIds.has(uniqueId)) {
-                seenIds.add(uniqueId);
-                allLinked.push({ id: uniqueId, name, specQty });
-              }
-            }
-          }
         }
         // Merge platter orders (from localStorage) into DELI section
         if (config.title.includes("DELI") && eventId) {
@@ -2956,6 +3027,18 @@ const BeoPrintPage: React.FC = () => {
         }
         return { title: def.title, fieldId: def.fieldId, items };
       });
+
+  if (isDelivery) {
+    const boxedSlice = buildBoxedLunchBeoSectionsFromOrders(boxedLunchOrders);
+    if (boxedSlice.length > 0) {
+      const deliIdx = menuSections.findIndex((s) => s.title === "DELI - DISPOSABLE");
+      if (deliIdx >= 0) {
+        menuSections = [...menuSections.slice(0, deliIdx + 1), ...boxedSlice, ...menuSections.slice(deliIdx + 1)];
+      } else {
+        menuSections = [...boxedSlice, ...menuSections];
+      }
+    }
+  }
 
   const barFid = barServiceFieldId ?? FIELD_IDS.BAR_SERVICE;
   const barServiceSelectedKitchen = asMultiSelectNames(eventData[barFid]);
@@ -3553,49 +3636,94 @@ const BeoPrintPage: React.FC = () => {
           >
             {/* Page marker (PAGE 2, 3, …) is rendered via @page @top-center in print CSS — not in DOM */}
 
-            {/* Grey bar + client/order details — header only on page 1 */}
+            {/* Grey / delivery yellow bar + header table — page 1 only (delivery matches sample Excel BEOs) */}
             {page.pageNum === 1 && (
-              <>
-            <div className="beo-letterhead-bar kitchen-beo-page-header" style={{
-              background: "#6b7280", color: "#fff", padding: "6px 12px",
-              display: "flex", alignItems: "center", justifyContent: "space-between",
-              fontSize: 12, fontWeight: 700, border: "2px solid #374151",
-              marginBottom: 6,
-            }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <div style={{ width: 20, height: 20, background: "#dc2626", display: "flex", alignItems: "center", justifyContent: "center", transform: "rotate(45deg)", flexShrink: 0 }}>
-                  <span style={{ transform: "rotate(-45deg)", fontSize: 11, fontWeight: 800, color: "#fff" }}>f</span>
-                </div>
-                <span>BEO</span>
-              </div>
-              <span>ORDER #: {jobNumberDisplay} — DISPATCH TIME: {dispatchTime || "—"}</span>
-            </div>
+              <div className="beo-event-header-block kitchen-beo-page-header" style={{ marginBottom: 6 }}>
+                {isDelivery ? (
+                  <S2Header
+                    eventDate={eventDate}
+                    clientName={clientName}
+                    contactName={contactName}
+                    cityState={cityState}
+                    jobNumberDisplay={jobNumberDisplay}
+                    dispatchTime={dispatchTime}
+                    eventArrival={eventArrival}
+                    guestCount={guestCount}
+                    eventLocation={eventLocation}
+                    venueAddress={venueAddress}
+                    eventStart={eventStart}
+                    eventEnd={eventEnd}
+                    fwStaff={fwStaff}
+                    phoneStr={phone}
+                    isDelivery
+                    deliveryNotes={specialNotes}
+                  />
+                ) : (
+                  <>
+                    <div
+                      className="beo-letterhead-bar kitchen-beo-page-header"
+                      style={{
+                        background: "#6b7280",
+                        color: "#fff",
+                        padding: "6px 12px",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        fontSize: 12,
+                        fontWeight: 700,
+                        border: "2px solid #374151",
+                        marginBottom: 6,
+                      }}
+                    >
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <div
+                          style={{
+                            width: 20,
+                            height: 20,
+                            background: "#dc2626",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            transform: "rotate(45deg)",
+                            flexShrink: 0,
+                          }}
+                        >
+                          <span style={{ transform: "rotate(-45deg)", fontSize: 11, fontWeight: 800, color: "#fff" }}>f</span>
+                        </div>
+                        <span>BEO</span>
+                      </div>
+                      <span>
+                        ORDER #: {jobNumberDisplay} — DISPATCH TIME: {dispatchTime || "—"}
+                      </span>
+                    </div>
 
-            <div className="beo-event-details-table" style={{ marginTop: 4, marginBottom: 6, overflow: "hidden" }}>
-              <table style={KITCHEN_HEADER_TABLE}>
-                <colgroup>
-                  <col style={{ width: "15%" }} />
-                  <col style={{ width: "35%" }} />
-                  <col style={{ width: "15%" }} />
-                  <col style={{ width: "35%" }} />
-                </colgroup>
-                <tbody>
-                  <tr>
-                    <td style={LABEL_CELL}>CLIENT</td>
-                    <td style={DATA_CELL}>{clientName || "—"}</td>
-                    <td style={LABEL_CELL}>ORDER #</td>
-                    <td style={{ ...DATA_CELL, color: "#c00", fontWeight: 700 }}>{jobNumberDisplay || "—"}</td>
-                  </tr>
-                  <tr>
-                    <td style={LABEL_CELL}>CONTACT</td>
-                    <td style={DATA_CELL}>{contactName || "—"}</td>
-                    <td style={LABEL_CELL}>EVENT DATE</td>
-                    <td style={DATA_CELL}>{eventDate || "—"}</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-              </>
+                    <div className="beo-event-details-table" style={{ marginTop: 4, marginBottom: 6, overflow: "hidden" }}>
+                      <table style={KITCHEN_HEADER_TABLE}>
+                        <colgroup>
+                          <col style={{ width: "15%" }} />
+                          <col style={{ width: "35%" }} />
+                          <col style={{ width: "15%" }} />
+                          <col style={{ width: "35%" }} />
+                        </colgroup>
+                        <tbody>
+                          <tr>
+                            <td style={LABEL_CELL}>CLIENT</td>
+                            <td style={DATA_CELL}>{clientName || "—"}</td>
+                            <td style={LABEL_CELL}>ORDER #</td>
+                            <td style={{ ...DATA_CELL, color: "#c00", fontWeight: 700 }}>{jobNumberDisplay || "—"}</td>
+                          </tr>
+                          <tr>
+                            <td style={LABEL_CELL}>CONTACT</td>
+                            <td style={DATA_CELL}>{contactName || "—"}</td>
+                            <td style={LABEL_CELL}>EVENT DATE</td>
+                            <td style={DATA_CELL}>{eventDate || "—"}</td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  </>
+                )}
+              </div>
             )}
 
             {page.pageNum === 1 && (beoNotes.trim() || notBuffetBanner || allergies || religiousRestrictions.trim() || dietarySummary.trim()) && (

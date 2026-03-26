@@ -32,7 +32,7 @@ import "./EventsPipeline.css";
 import { StaffingAttentionBadge } from "./StaffingAttentionBadge";
 import { EventListByDay } from "./EventListByDay";
 import { addDaysToIso, weekRangeMondaySunday } from "../lib/weekRange";
-import { listPrimaryLabel } from "../lib/eventListRowMeta";
+import { displayAddressForListItem, listPrimaryLabel, venueDisplayFromListItem } from "../lib/eventListRowMeta";
 import { useIntakeFOHCommandFilters } from "../context/IntakeFOHCommandContext";
 import { EventListDetailSidebar } from "./EventListDetailSidebar";
 
@@ -81,6 +81,8 @@ interface EventData {
   timelineRaw?: string;
   paymentStatus?: string;
   invoicePaid?: boolean;
+  /** Formatted street + city/state from Airtable (header / client or venue) */
+  addressDisplay?: string;
 }
 
 function formatEventDate(d?: string): string {
@@ -99,7 +101,8 @@ function formatEventDate(d?: string): string {
 function listItemToEventData(e: EventListItem): EventData {
   const parts = (e.eventName ?? "").split(/\s*[–—-]\s*/);
   const client = parts[0]?.trim() || "—";
-  const venue = parts[1]?.trim() || "—";
+  const venue = venueDisplayFromListItem(e);
+  const addressDisplay = displayAddressForListItem(e);
   const healthBOH = getHealthBOH(e);
   const phone =
     [e.primaryContactPhone, e.clientPhone].map((x) => (x ?? "").trim()).find((p) => p.length > 0) ?? "";
@@ -110,6 +113,7 @@ function listItemToEventData(e: EventListItem): EventData {
     time: formatEventDate(e.eventDate),
     client,
     venue,
+    addressDisplay,
     phone,
     guests: e.guestCount ?? 0,
     category: e.eventType ?? e.eventOccasion ?? "—",
@@ -193,6 +197,7 @@ function getDemoEventsForWindow(startDate: string, endDate: string, excludeIds: 
         beoSentToBOH: false,
         phone: `(555) 201-${String(1000 + i).padStart(4, "0")}`,
         dispatchTimeSeconds: t.dispatchTimeSeconds ?? (18 * 3600 + (i % 5) * 3600),
+        addressDisplay: "—",
       } as EventData;
     })
     .filter((e): e is EventData => e !== null);
@@ -246,10 +251,12 @@ function buildBusyDayDemoEvents(calendarYear: number, calendarMonth: number): Ev
     beoSentToBOH: false,
     phone: `(555) 555-${String(4300 + i).padStart(4, "0")}`,
     dispatchTimeSeconds: 17 * 3600 + i * 450,
+    addressDisplay: "—",
   }));
 }
 
 export function EventsPipeline({ title = "Weekly Pipeline", compact = false, departmentContext }: EventsPipelineProps) {
+  const isFOH = departmentContext === "intake_foh";
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const calendarBusyDemo = searchParams.get("calendarBusyDemo") === "1";
@@ -296,7 +303,6 @@ export function EventsPipeline({ title = "Weekly Pipeline", compact = false, dep
   const [newClientHelpOpen, setNewClientHelpOpen] = useState(false);
   const [listDetailEventId, setListDetailEventId] = useState<string | null>(null);
 
-  const isFOH = departmentContext === "intake_foh";
   const intakeCmd = useIntakeFOHCommandFilters();
 
   useEffect(() => {
@@ -318,6 +324,15 @@ export function EventsPipeline({ title = "Weekly Pipeline", compact = false, dep
   }, [isFOH, rawEvents]);
 
   const eventDataList = useMemo(() => rawEvents.map(listItemToEventData), [rawEvents]);
+  /** Events table BEO notes — Today's Tasks rows only had task-record fields before. */
+  const beoNotesByEventId = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const e of rawEvents) {
+      const n = e.beoNotes?.trim();
+      if (n) m.set(e.id, n);
+    }
+    return m;
+  }, [rawEvents]);
   const today = useMemo(() => new Date().toISOString().slice(0, 10), []);
   const { monday: weekMonday, sunday: weekSunday } = useMemo(() => weekRangeMondaySunday(today), [today]);
 
@@ -524,20 +539,14 @@ export function EventsPipeline({ title = "Weekly Pipeline", compact = false, dep
         isChangeConfirmation={!!pendingAcceptEvent && !!deptKey && (isProductionFrozen(pendingAcceptEvent) || needsChangeConfirmation(pendingAcceptEvent, deptKey))}
         isProductionFrozen={!!pendingAcceptEvent && isProductionFrozen(pendingAcceptEvent)}
       />
-      {title && (!(departmentContext === "intake_foh") || eventView === "grid") && (
+      {title && departmentContext !== "intake_foh" && (
         <div style={{ marginBottom: 16 }}>
           <h2 style={{ fontSize: 18, fontWeight: 700, color: "#fff", margin: "0 0 4px 0" }}>{title}</h2>
           <p style={{ fontSize: 13, color: "rgba(255,255,255,0.6)", margin: 0 }}>
             {activeTab === "Weekly"
               ? `${weekMonday} – ${weekSunday}`
               : `${today} – ${addDaysToIso(today, 6)}`} · {events.length} events
-            {departmentContext === "intake_foh" && " · Click an event to open Event Overview (booking steps)"}
           </p>
-          {departmentContext === "intake_foh" && (
-            <p style={{ fontSize: 12, color: "rgba(255,255,255,0.45)", margin: "6px 0 0 0" }}>
-              <strong style={{ color: "rgba(255,255,255,0.7)" }}>New client?</strong> Use the <strong>Show steps</strong> button in the toolbar below, or start from <strong>Add Event</strong> / Quick Intake.
-            </p>
-          )}
         </div>
       )}
 
@@ -669,26 +678,37 @@ export function EventsPipeline({ title = "Weekly Pipeline", compact = false, dep
             <div className="dp-todays-tasks-empty">No tasks due today.</div>
           ) : (
             <div className="dp-todays-tasks-list">
-              {todaysTasks.map((t) => (
-                <div key={t.taskId} className="dp-todays-tasks-row">
-                  <Link
-                    to={`/event/${t.eventId}`}
-                    className="dp-todays-tasks-event"
-                    onClick={() => selectEvent(t.eventId)}
-                  >
-                    {t.eventName || "Event"}
-                  </Link>
-                  <span className="dp-todays-tasks-name">{t.taskName}</span>
-                  <span className="dp-todays-tasks-due">{t.dueDate}</span>
-                  <button
-                    type="button"
-                    className="dp-todays-tasks-followup"
-                    onClick={() => setFollowUpTask(t)}
-                  >
-                    Follow Up
-                  </button>
-                </div>
-              ))}
+              {todaysTasks.map((t) => {
+                const beoNote = beoNotesByEventId.get(t.eventId);
+                return (
+                  <div key={t.taskId} className="dp-todays-tasks-row">
+                    <div className="dp-todays-tasks-row-head">
+                      <Link
+                        to={`/event/${t.eventId}`}
+                        className="dp-todays-tasks-event"
+                        onClick={() => selectEvent(t.eventId)}
+                      >
+                        {t.eventName || "Event"}
+                      </Link>
+                      <span className="dp-todays-tasks-name">{t.taskName}</span>
+                      <span className="dp-todays-tasks-due">{t.dueDate}</span>
+                      <button
+                        type="button"
+                        className="dp-todays-tasks-followup"
+                        onClick={() => setFollowUpTask(t)}
+                      >
+                        Follow Up
+                      </button>
+                    </div>
+                    {beoNote ? (
+                      <div className="dp-todays-tasks-row-beo">
+                        <span className="dp-todays-tasks-beo-label">BEO notes</span>
+                        <div className="dp-todays-tasks-beo-text">{beoNote}</div>
+                      </div>
+                    ) : null}
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>

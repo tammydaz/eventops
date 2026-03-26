@@ -98,12 +98,38 @@
 }
 .dp-todays-tasks-row {
   display: flex;
-  align-items: center;
-  gap: 16px;
+  flex-direction: column;
+  gap: 8px;
   padding: 12px 14px;
   background: rgba(20, 20, 25, 0.6);
   border-radius: 8px;
   border: 1px solid rgba(0, 212, 255, 0.15);
+}
+.dp-todays-tasks-row-head {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.dp-todays-tasks-row-beo {
+  padding-top: 8px;
+  margin-top: 2px;
+  border-top: 1px solid rgba(0, 212, 255, 0.12);
+}
+.dp-todays-tasks-beo-label {
+  display: block;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgba(0, 212, 255, 0.75);
+  margin-bottom: 4px;
+}
+.dp-todays-tasks-beo-text {
+  font-size: 13px;
+  line-height: 1.45;
+  color: rgba(255, 255, 255, 0.85);
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 .dp-todays-tasks-event {
   font-weight: 600;

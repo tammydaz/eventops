@@ -317,6 +317,18 @@ export type EventListItem = {
   /** Primary contact or client phone (list views) */
   clientPhone?: string;
   primaryContactPhone?: string;
+  /** Main venue name (Airtable VENUE) — do not infer from event title alone */
+  venue?: string;
+  /** Client address (when event uses client location in header) */
+  clientStreet?: string;
+  clientCity?: string;
+  clientState?: string;
+  clientZip?: string;
+  /** Venue street / city / state / zip (when different from client) */
+  venueStreet?: string;
+  venueCity?: string;
+  venueState?: string;
+  venueZip?: string;
   /** Long text — FOH detail panel */
   beoNotes?: string;
   /** Long text — event timeline (line-oriented) */
@@ -638,6 +650,15 @@ export const loadEvents = async (): Promise<EventListItem[] | AirtableErrorResul
   params.append("fields[]", FIELD_IDS.GUEST_COUNT);
   params.append("fields[]", FIELD_IDS.CLIENT_PHONE);
   params.append("fields[]", FIELD_IDS.PRIMARY_CONTACT_PHONE);
+  params.append("fields[]", FIELD_IDS.VENUE);
+  params.append("fields[]", FIELD_IDS.CLIENT_STREET);
+  params.append("fields[]", FIELD_IDS.CLIENT_CITY);
+  params.append("fields[]", FIELD_IDS.CLIENT_STATE);
+  params.append("fields[]", FIELD_IDS.CLIENT_ZIP);
+  params.append("fields[]", FIELD_IDS.VENUE_ADDRESS);
+  params.append("fields[]", FIELD_IDS.VENUE_CITY);
+  params.append("fields[]", FIELD_IDS.VENUE_STATE);
+  params.append("fields[]", FIELD_IDS.VENUE_ZIP);
   const lockoutIds = await getLockoutFieldIds();
   if (lockoutIds) {
     params.append("fields[]", lockoutIds.guestCountConfirmed);
@@ -712,6 +733,15 @@ export const loadEvents = async (): Promise<EventListItem[] | AirtableErrorResul
       dispatchTimeSeconds,
       fwStaffSummaryPresent: asString(fields[FIELD_IDS.FW_STAFF_SUMMARY]).trim().length > 0,
     };
+    item.venue = asString(fields[FIELD_IDS.VENUE]) || undefined;
+    item.clientStreet = asString(fields[FIELD_IDS.CLIENT_STREET]) || undefined;
+    item.clientCity = asString(fields[FIELD_IDS.CLIENT_CITY]) || undefined;
+    item.clientState = asSingleSelectName(fields[FIELD_IDS.CLIENT_STATE]) || undefined;
+    item.clientZip = asString(fields[FIELD_IDS.CLIENT_ZIP]) || undefined;
+    item.venueStreet = asString(fields[FIELD_IDS.VENUE_ADDRESS]) || undefined;
+    item.venueCity = asString(fields[FIELD_IDS.VENUE_CITY]) || undefined;
+    item.venueState = asSingleSelectName(fields[FIELD_IDS.VENUE_STATE]) || undefined;
+    item.venueZip = asString(fields[FIELD_IDS.VENUE_ZIP]) || undefined;
     item.staffingConfirmedInNowsta = asAirtableCheckbox(fields[STAFFING_CONFIRMED_FIELD_ID]);
     if (FOH_BEO_FIRED_FIELD_ID) item.beoFiredToBOH = fields[FOH_BEO_FIRED_FIELD_ID] === true;
     if (FOH_SPECK_COMPLETE_FIELD_ID) item.speckComplete = fields[FOH_SPECK_COMPLETE_FIELD_ID] === true;

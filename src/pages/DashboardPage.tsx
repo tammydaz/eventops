@@ -14,7 +14,7 @@ import { AskFOHPopover } from "../components/AskFOHPopover";
 import { StaffingAttentionBadge } from "../components/StaffingAttentionBadge";
 import { EventListByDay } from "../components/EventListByDay";
 import { EventListDetailSidebar } from "../components/EventListDetailSidebar";
-import { listPrimaryLabel } from "../lib/eventListRowMeta";
+import { displayAddressForListItem, listPrimaryLabel, venueDisplayFromListItem } from "../lib/eventListRowMeta";
 import { weekRangeMondaySunday } from "../lib/weekRange";
 
 /* ═══════════════════════════════════════════
@@ -95,7 +95,8 @@ function formatEventDate(d?: string): string {
 function listItemToEventData(e: EventListItem): EventData {
   const parts = (e.eventName ?? "").split(/\s*[–—-]\s*/);
   const client = parts[0]?.trim() || "—";
-  const venue = parts[1]?.trim() || "—";
+  const venue = venueDisplayFromListItem(e);
+  const addressDisplay = displayAddressForListItem(e);
   const healthBOH = getHealthBOH(e);
   const phone =
     [e.primaryContactPhone, e.clientPhone].map((x) => (x ?? "").trim()).find((p) => p.length > 0) ?? "";
@@ -106,6 +107,7 @@ function listItemToEventData(e: EventListItem): EventData {
     time: formatEventDate(e.eventDate),
     client,
     venue,
+    addressDisplay,
     phone,
     guests: e.guestCount ?? 0,
     category: e.eventType ?? e.eventOccasion ?? "—",
@@ -172,6 +174,7 @@ function getDemoEventsForPipeline(today: string, endDate: string, excludeIds: Se
         productionAcceptedDelivery: t.productionAcceptedDelivery,
         productionAcceptedOpsChief: t.productionAcceptedOpsChief,
         dispatchTimeSeconds: 18 * 3600 + i * 1800,
+        addressDisplay: "—",
       } as EventData;
     })
     .filter((e): e is EventData => e !== null);
@@ -197,7 +200,7 @@ const NAV: NavItem[] = [
   { label: "Add Event", href: "/event/new" },
   { label: "Open Event", href: "/beo-intake" },
   { label: "Departments", href: "#departments", expandable: true },
-  { label: "Watchtower", href: "/watchtower", subtitle: "Papa Chulo Watchtower" },
+  { label: "Today's tasks", href: "/watchtower", subtitle: "Task list" },
   { label: "Ops Chief", href: "/ops-chief" },
   { label: "Admin", href: "/admin" },
   { label: "Development Hub", href: "/feedback-issues" },
@@ -235,7 +238,14 @@ export default function DashboardPage() {
   const isIntakeFOHRole = role === "intake" || role === "foh";
   const allowedDepts = ROLE_DEPARTMENTS[role] ?? [];
   const visibleDeptItems = DEPT_ITEMS.filter((d) => role === "ops_admin" || allowedDepts.includes(d.id) || d.id === "feedback");
-  const visibleNav = NAV.filter((item) => item.href.startsWith("#") || canAccessRoute(role, item.href));
+  /** FOH: keep main dashboard nav minimal (no Departments switcher, Ops/Admin/Feedback). */
+  const visibleNav = NAV.filter((item) => {
+    if (role === "foh") {
+      if (item.expandable && item.href === "#departments") return false;
+      if (item.href === "/ops-chief" || item.href === "/admin" || item.href === "/feedback-issues") return false;
+    }
+    return item.href.startsWith("#") || canAccessRoute(role, item.href);
+  });
   const [departmentsOpen, setDepartmentsOpen] = useState(false);
   const [activeTab, setActiveTab] = useState("Weekly");
   const viewMode: ViewMode = "owner";
@@ -462,9 +472,7 @@ export default function DashboardPage() {
   const dashboardNavActive = isHomePath;
   const isCommandNav = isHomePath && eventView !== "calendar";
   const isCalendarTopNav = isHomePath && eventView === "calendar";
-  const isClientsNav = location.pathname.startsWith("/foh");
   const isTasksNav = location.pathname.startsWith("/watchtower");
-  const isReportsNav = location.pathname.startsWith("/profit");
 
   return (
     <div className="dp-container dp-container-command">
@@ -497,9 +505,6 @@ export default function DashboardPage() {
             >
               Command View
             </button>
-            <Link className={`dp-command-nav-text ${isClientsNav ? "active" : ""}`} to="/foh/leads">
-              Clients
-            </Link>
             <button
               type="button"
               className={`dp-command-nav-text ${isCalendarTopNav ? "active" : ""}`}
@@ -511,10 +516,7 @@ export default function DashboardPage() {
               Calendar
             </button>
             <Link className={`dp-command-nav-text ${isTasksNav ? "active" : ""}`} to="/watchtower">
-              Tasks
-            </Link>
-            <Link className={`dp-command-nav-text ${isReportsNav ? "active" : ""}`} to="/profit/">
-              Reports
+              Today&apos;s tasks
             </Link>
           </div>
           <div className="dp-command-nav-utilities">
@@ -651,15 +653,15 @@ export default function DashboardPage() {
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
                   <path d="M9 11H5a2 2 0 00-2 2v7a2 2 0 002 2h4m0-11V9a2 2 0 012-2h2a2 2 0 012 2v2m-6 4h6m6 0v7a2 2 0 01-2 2h-4m4-9h-4" strokeLinecap="round" />
                 </svg>
-                New Task
+                Today&apos;s tasks
               </button>
-              <button type="button" className="dp-command-split-chevron" aria-expanded={newTaskMenuOpen} aria-label="Task actions" onClick={() => setNewTaskMenuOpen((o) => !o)}>
+              <button type="button" className="dp-command-split-chevron" aria-expanded={newTaskMenuOpen} aria-label="Task list menu" onClick={() => setNewTaskMenuOpen((o) => !o)}>
                 ▾
               </button>
               {newTaskMenuOpen && (
                 <div className="dp-command-split-menu" role="menu">
                   <Link to="/watchtower" className="dp-command-split-menu-item" role="menuitem" onClick={() => setNewTaskMenuOpen(false)}>
-                    Open Watchtower
+                    Today&apos;s tasks
                   </Link>
                   <Link to="/feedback-issues" className="dp-command-split-menu-item" role="menuitem" onClick={() => setNewTaskMenuOpen(false)}>
                     Feedback & issues

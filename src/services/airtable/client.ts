@@ -105,7 +105,16 @@ export const airtableFetch = async <T>(
       body: JSON.stringify({ path, method, body }),
     });
 
-    const data = (await response.json()) as T & AirtableApiError;
+    const rawText = await response.text();
+    let data: T & AirtableApiError;
+    try {
+      data = (rawText ? JSON.parse(rawText) : {}) as T & AirtableApiError;
+    } catch {
+      return {
+        error: true,
+        message: `API returned non-JSON (${response.status}). ${rawText.slice(0, 120)}`,
+      };
+    }
 
     if (!response.ok || data?.error) {
       const errMsg = (data as { error?: { message?: string; type?: string } })?.error?.message;
@@ -120,9 +129,14 @@ export const airtableFetch = async <T>(
 
     return data as T;
   } catch (error) {
+    const msg = error instanceof Error ? error.message : "Unknown error";
+    const hint =
+      msg === "Failed to fetch"
+        ? " Could not reach /api (check VPN/network). Use npm run dev or npm run preview with vite proxy, npm run dev:full for local API, or use the deployed Vercel app."
+        : "";
     return {
       error: true,
-      message: error instanceof Error ? error.message : "Unknown error",
+      message: msg + hint,
     };
   }
 };
@@ -151,7 +165,16 @@ export const airtableMetaFetch = async <T>(
       },
     });
 
-    const data = (await response.json()) as T & AirtableApiError;
+    const rawText = await response.text();
+    let data: T & AirtableApiError;
+    try {
+      data = (rawText ? JSON.parse(rawText) : {}) as T & AirtableApiError;
+    } catch {
+      return {
+        error: true,
+        message: `Meta API returned non-JSON (${response.status}). ${rawText.slice(0, 120)}`,
+      };
+    }
 
     if (!response.ok || data?.error) {
       return {
@@ -162,9 +185,14 @@ export const airtableMetaFetch = async <T>(
 
     return data as T;
   } catch (error) {
+    const msg = error instanceof Error ? error.message : "Unknown error";
+    const hint =
+      msg === "Failed to fetch"
+        ? " Could not reach /api/airtable/meta. Check network or Vite /api proxy (see vite.config.js)."
+        : "";
     return {
       error: true,
-      message: error instanceof Error ? error.message : "Unknown error",
+      message: msg + hint,
     };
   }
 };

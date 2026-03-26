@@ -16,20 +16,12 @@ export interface MenuItemRecord {
   childItems?: string[];
 }
 
-/** Fetch menu items filtered by category key. Uses CATEGORY_MAP to build OR formula for Airtable Category field. */
-export async function fetchMenuItemsByCategory(categoryKey: string): Promise<MenuItemRecord[]> {
+/** Boxed-lunch *box templates* in Menu Items: Deli category + "Boxed Lunch" in Item Name (see Airtable base). */
+const BOXED_LUNCH_BOX_FILTER_FORMULA =
+  'AND(FIND("Deli/Sandwhiches", {Category}&""), FIND("Boxed Lunch", {Item Name}&""))';
+
+async function fetchMenuItemsByFilterFormula(filterByFormula: string): Promise<MenuItemRecord[]> {
   const tableId = getMenuItemsTable() || MENU_ITEMS_TABLE_ID_DEFAULT;
-
-  const allowedCategories = CATEGORY_MAP[categoryKey as keyof typeof CATEGORY_MAP];
-  if (!allowedCategories?.length) {
-    return [];
-  }
-
-  const orParts = allowedCategories.map((cat) => {
-    const escaped = String(cat).replace(/"/g, '\\"');
-    return `FIND("${escaped}", {Category})`;
-  });
-  const filterByFormula = `OR(${orParts.join(",")})`;
 
   const allRecords: Array<{ id: string; fields: Record<string, unknown> }> = [];
   let offset: string | undefined;
@@ -122,6 +114,26 @@ export async function fetchMenuItemsByCategory(categoryKey: string): Promise<Men
       childItems: childItems.length > 0 ? childItems : undefined,
     };
   });
+}
+
+/** Fetch boxed-lunch box types from Menu Items (Airtable templates linked from legacy order items). */
+export async function fetchBoxedLunchBoxMenuItems(): Promise<MenuItemRecord[]> {
+  return fetchMenuItemsByFilterFormula(BOXED_LUNCH_BOX_FILTER_FORMULA);
+}
+
+/** Fetch menu items filtered by category key. Uses CATEGORY_MAP to build OR formula for Airtable Category field. */
+export async function fetchMenuItemsByCategory(categoryKey: string): Promise<MenuItemRecord[]> {
+  const allowedCategories = CATEGORY_MAP[categoryKey as keyof typeof CATEGORY_MAP];
+  if (!allowedCategories?.length) {
+    return [];
+  }
+
+  const orParts = allowedCategories.map((cat) => {
+    const escaped = String(cat).replace(/"/g, '\\"');
+    return `FIND("${escaped}", {Category})`;
+  });
+  const filterByFormula = `OR(${orParts.join(",")})`;
+  return fetchMenuItemsByFilterFormula(filterByFormula);
 }
 
 /** Fetch menu item display names by record IDs. Returns id -> name. */

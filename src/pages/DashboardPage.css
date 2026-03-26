@@ -2104,6 +2104,87 @@ a.dp-staffing-nowsta-link:hover {
   gap: 10px;
 }
 
+/* FOH detail sidebar — flat list (no card boxes) for client / venue / package / payment.
+   No second border under the action pills: .dp-foh-mock-actions-bar already has a top rule. */
+.dp-foh-mock-info-rows {
+  margin-top: 0;
+  padding-top: 16px;
+  border-top: none;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.dp-foh-mock-info-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px 18px;
+  align-items: start;
+}
+
+.dp-foh-mock-info-item {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  min-width: 0;
+}
+
+.dp-foh-mock-info-item--full {
+  grid-column: 1 / -1;
+}
+
+.dp-foh-mock-info-icon {
+  flex-shrink: 0;
+  margin-top: 2px;
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.dp-foh-mock-info-text {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.dp-foh-mock-info-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.42);
+}
+
+.dp-foh-mock-info-value {
+  font-size: 13px;
+  font-weight: 600;
+  color: #f3f4f6;
+  line-height: 1.35;
+}
+
+.dp-foh-mock-info-value--address {
+  white-space: pre-wrap;
+  font-weight: 500;
+}
+
+.dp-foh-mock-info-sub {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.45);
+  line-height: 1.35;
+}
+
+.dp-foh-mock-section {
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+/* Notes: one bordered box only; spacing from timeline without a second full-width rule */
+.dp-foh-mock-section--notes {
+  border-top: none;
+  margin-top: 0;
+  padding-top: 20px;
+}
+
 /* Match .dp-foh-mock-status typography exactly (system UI, not browser button defaults) */
 .dp-foh-action-pill {
   display: inline-flex;
@@ -2982,7 +3063,7 @@ a.dp-staffing-nowsta-link:hover {
   z-index: 1;
 }
 
-/* Blue glow circles (Ops Chief / Papa Chulo) — bigger than dept bubbles */
+/* Blue glow circles (Ops Chief) — bigger than dept bubbles */
 .dp-diamond-circle {
   position: absolute;
   top: 20px;

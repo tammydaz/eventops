@@ -6,7 +6,7 @@
 import { DASHBOARD_CALENDAR_TO } from "./dashboardRoutes";
 
 export type Role =
-  | "ops_admin"   // Full access, Watchtower, can edit dispatch/job#
+  | "ops_admin"   // Full access, /watchtower (today's tasks), can edit dispatch/job#
   | "ops_chief"   // Ops Chief / Expediter, can edit dispatch/job#
   | "kitchen"     // Kitchen + Open Event
   | "logistics"   // Delivery/Fleet + Open Event
@@ -26,7 +26,7 @@ export const ROLE_LABELS: Record<Role, string> = {
 
 /** Routes each role can access. ops_admin can access all. */
 export const ROLE_ROUTES: Record<Role, string[]> = {
-  ops_admin: ["*"], // all (includes /ops-chief, /watchtower)
+  ops_admin: ["*"], // all (includes /ops-chief, today's tasks)
   ops_chief: ["/", "/home", "/beo-intake", "/quick-intake", "/invoice-intake", "/ops-chief", "/ops-chief/alerts", "/beo-print", "/kitchen-beo-print", "/event", "/feedback-issues"],
   kitchen: ["/", "/home", "/beo-intake", "/quick-intake", "/invoice-intake", "/kitchen-prep", "/kitchen-beo-print", "/kitchen", "/print-test", "/feedback-issues"],
   logistics: ["/", "/home", "/beo-intake", "/quick-intake", "/invoice-intake", "/delivery-command", "/kitchen-beo-print", "/returned-equipment", "/feedback-issues"],
@@ -43,7 +43,7 @@ export const ROLE_LANDING: Record<Role, string> = {
   logistics: "/delivery-command",
   intake: DASHBOARD_CALENDAR_TO,
   flair: "/flair",
-  foh: "/intake-foh",
+  foh: "/intake-foh?eventView=calendar",
 };
 
 export function canAccessRoute(role: Role, pathnameOrHref: string): boolean {
@@ -60,7 +60,7 @@ export function getLandingForRole(role: Role): string {
   return ROLE_LANDING[role];
 }
 
-/** Only Ops Chief and Watchtower (ops_admin) can set dispatch time and job #; everyone else sees read-only. */
+/** Only Ops Chief and ops_admin can set dispatch time and job #; everyone else sees read-only. */
 export function canEditDispatchAndJobNumber(role: Role | undefined): boolean {
   return role === "ops_admin" || role === "ops_chief";
 }

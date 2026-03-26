@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { createPortal } from "react-dom";
 
 type JumpSection = {
@@ -17,6 +17,21 @@ const SECTIONS: JumpSection[] = [
   { id: "beo-section-timeline",    label: "Timeline",                  icon: "⏱️" },
   { id: "beo-section-notes",       label: "Notes / Logistics",         icon: "📝", hint: "Kitchen, allergies, ops exceptions" },
 ];
+
+const DELIVERY_PAPER_JUMP: JumpSection = {
+  id: "beo-section-delivery-paper",
+  label: "Paper / disposables",
+  icon: "📦",
+  hint: "Printed BEO: PAPER PRODUCTS & BEVERAGES (replaces Plates/Serviceware)",
+};
+
+/** Delivery/pickup: same nav order as full service, but paper block instead of serviceware; no timeline/onsite notes pills. */
+function jumpSectionsForMode(isDelivery: boolean): JumpSection[] {
+  if (!isDelivery) return SECTIONS;
+  return SECTIONS.filter((s) => s.id !== "beo-section-timeline" && s.id !== "beo-section-notes").map((s) =>
+    s.id === "beo-section-serviceware" ? DELIVERY_PAPER_JUMP : s
+  );
+}
 
 /** Shared jump logic: expand section, scroll, flash. Used by nav and by ?section= on BEO Intake. */
 export function jumpToBeoSection(sectionId: string) {
@@ -41,7 +56,8 @@ function jumpTo(sectionId: string) {
   jumpToBeoSection(sectionId);
 }
 
-export const BeoJumpToNav = () => {
+export const BeoJumpToNav = ({ isDelivery = false }: { isDelivery?: boolean }) => {
+  const sections = useMemo(() => jumpSectionsForMode(isDelivery), [isDelivery]);
   const [open, setOpen] = useState(false);
   const [activeId, setActiveId] = useState<string | null>(null);
   const ref = useRef<HTMLDivElement>(null);
@@ -59,13 +75,13 @@ export const BeoJumpToNav = () => {
       { threshold: 0.15, rootMargin: "-60px 0px -40% 0px" }
     );
 
-    SECTIONS.forEach((s) => {
+    sections.forEach((s) => {
       const el = document.getElementById(s.id);
       if (el) observer.observe(el);
     });
 
     return () => observer.disconnect();
-  }, []);
+  }, [sections]);
 
   // Close on outside click
   useEffect(() => {
@@ -90,7 +106,7 @@ export const BeoJumpToNav = () => {
     return () => window.removeEventListener("keydown", handler);
   }, []);
 
-  const activeSection = SECTIONS.find((s) => s.id === activeId);
+  const activeSection = sections.find((s) => s.id === activeId);
 
   const navContent = (
     <div
@@ -134,7 +150,7 @@ export const BeoJumpToNav = () => {
             Jump To Section
           </div>
 
-          {SECTIONS.map((s) => {
+          {sections.map((s) => {
             const isActive = s.id === activeId;
             return (
               <button

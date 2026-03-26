@@ -1,14 +1,16 @@
 import React, { useState, useEffect } from "react";
 import { useEventStore } from "../state/eventStore";
 import { FIELD_IDS, getFoodwerxArrivalFieldId, resolveFwStaffLineFromFields } from "../services/airtable/events";
-import { asString, asBarServicePrimary, asMultiSelectNames, asBoolean, asStringArray, asLinkedRecordIds, isErrorResult } from "../services/airtable/selectors";
+import { asString, asBarServicePrimary, asMultiSelectNames, asBoolean, asStringArray, asLinkedRecordIds, asSingleSelectName, isErrorResult } from "../services/airtable/selectors";
 import { loadStationsByEventId } from "../services/airtable/linkedRecords";
 import { loadBoxedLunchOrdersByEventId, type BoxedLunchOrder } from "../services/airtable/boxedLunchOrders";
+import { buildBoxedLunchKitchenSectionsFromOrders } from "../utils/boxedLunchPrint";
 import { getPlatterOrdersByEventId } from "../state/platterOrdersStore";
 import { airtableFetch } from "../services/airtable/client";
 import { EventSelector } from "../components/EventSelector";
 import { secondsTo12HourString } from "../utils/timeHelpers";
 import { MIMOSA_BAR_FRUIT_GARNISH_ITEMS } from "../constants/fullBarPackage";
+import { isDeliveryOrPickup, isPickup } from "../lib/deliveryHelpers";
 
 // ── Types ──
 type SubItem = {
@@ -115,6 +117,8 @@ const getVesselForSection = (title: string, isDelivery = false): string => {
   if (title.includes("DESSERT")) return "DESSERT";
   if (title.includes("STATION")) return "STATION";
   if (title.includes("ROOM TEMP")) return "DISPOSABLE";
+  if (title.includes("BOXED LUNCHES")) return "BOXED";
+  if (title.includes("WAX BAG")) return "WAX BAG";
   return "METAL/CHINA";
 };
 
@@ -271,6 +275,7 @@ const DELIVERY_SAMPLE: BEOData = {
   orderNumber: "012326-4",
   eventDate: "Friday, January 23, 2026",
   guestCount: "15",
+  foodMustBeReady: "9:45 AM",
   deliveryTime: "9:45-10AM DELIVERY",
   deliveryNotes: "CALL MARLENE UPON ARRIVAL\nSEND WITH ORDER #1",
   employee: "NM",
@@ -657,51 +662,103 @@ const renderHeader = (beo: BEOData) => {
     );
   }
 
+  const dispatchDisplay = beo.foodMustBeReady || beo.deliveryTime?.replace(/\s*DELIVERY\s*$/i, "").trim() || "—";
   return (
     <>
-      <div style={{ background: "#16a34a", color: "#fff", textAlign: "center", fontWeight: 700, fontSize: 18, padding: "8px 0", marginBottom: 0, borderBottom: "3px solid #15803d" }}>
-        🚚 DELIVERY — ALL DISPOSABLE
+      {/* Matches sample delivery .xlsx in repo: row 0 = HOUSE ORDER NUMBER + dispatch; table = CLIENT/EVENT DATE, … */}
+      <div
+        style={{
+          background: "#facc15",
+          color: "#000",
+          padding: "8px 14px",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          fontSize: 13,
+          fontWeight: 700,
+          border: "2px solid #000",
+          marginBottom: 6,
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <div
+            style={{
+              width: 22,
+              height: 22,
+              background: "#dc2626",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              transform: "rotate(45deg)",
+              flexShrink: 0,
+            }}
+          >
+            <span style={{ transform: "rotate(-45deg)", fontSize: 11, fontWeight: 800, color: "#fff" }}>f</span>
+          </div>
+          <span>DELIVERY</span>
+        </div>
+        <span style={{ textAlign: "right" as const }}>
+          HOUSE ORDER NUMBER: {beo.orderNumber || "—"} — DISPATCH TIME: {dispatchDisplay}
+        </span>
       </div>
       <table style={print.headerTable}>
-      <tbody>
-        <tr>
-          <td style={{ ...print.headerCell, width: "15%" }}><span style={print.headerLabel}>CLIENT</span></td>
-          <td style={{ ...print.headerCell, width: "35%" }}>{beo.client}</td>
-          <td style={{ ...print.headerCell, width: "18%" }}><span style={print.headerLabel}>HOUSE ORDER NUMBER</span></td>
-          <td style={{ ...print.headerCell, width: "32%", color: "#16a34a", fontWeight: 700 }}>{beo.orderNumber}</td>
-        </tr>
-        <tr>
-          <td style={print.headerCell}><span style={print.headerLabel}>CONTACT</span></td>
-          <td style={print.headerCell}>{beo.contact}</td>
-          <td style={print.headerCell}><span style={print.headerLabel}>EVENT DATE</span></td>
-          <td style={print.headerCell}>{beo.eventDate}</td>
-        </tr>
-        <tr>
-          <td style={print.headerCell}><span style={print.headerLabel}>PHONE</span></td>
-          <td style={print.headerCell}>{beo.phone}</td>
-          <td style={print.headerCell}><span style={print.headerLabel}>GUESTS</span></td>
-          <td style={{ ...print.headerCell, color: "#16a34a", fontWeight: 700 }}>{beo.guestCount}</td>
-        </tr>
-        <tr>
-          <td style={print.headerCell}><span style={print.headerLabel}>ADDRESS</span></td>
-          <td style={print.headerCell}>{beo.address}</td>
-          <td style={print.headerCell}><span style={print.headerLabel}>DELIVERY TIME</span></td>
-          <td style={{ ...print.headerCell, color: "#16a34a", fontWeight: 700 }}>{beo.deliveryTime}</td>
-        </tr>
-        <tr>
-          <td style={print.headerCell}><span style={print.headerLabel}>CITY, ST</span></td>
-          <td style={print.headerCell}>{beo.cityState}</td>
-          <td style={print.headerCell}><span style={print.headerLabel}>DELIVERY NOTES</span></td>
-          <td style={{ ...print.headerCell, color: "#16a34a", fontWeight: 700, whiteSpace: "pre-line" }}>{beo.deliveryNotes}</td>
-        </tr>
-        <tr>
-          <td style={{ ...print.headerCell, background: "#16a34a" }}></td>
-          <td style={{ ...print.headerCell, background: "#16a34a" }}></td>
-          <td style={{ ...print.headerCell, background: "#16a34a", color: "#fff", fontWeight: 700 }}>EMPLOYEE</td>
-          <td style={print.headerCell}>{beo.employee}</td>
-        </tr>
-      </tbody>
-    </table>
+        <tbody>
+          <tr>
+            <td style={{ ...print.headerCell, width: "15%" }}>
+              <span style={print.headerLabel}>CLIENT</span>
+            </td>
+            <td style={{ ...print.headerCell, width: "35%" }}>{beo.client}</td>
+            <td style={{ ...print.headerCell, width: "15%" }}>
+              <span style={print.headerLabel}>EVENT DATE</span>
+            </td>
+            <td style={{ ...print.headerCell, width: "35%" }}>{beo.eventDate}</td>
+          </tr>
+          <tr>
+            <td style={print.headerCell}>
+              <span style={print.headerLabel}>CONTACT</span>
+            </td>
+            <td style={print.headerCell}>{beo.contact}</td>
+            <td style={print.headerCell}>
+              <span style={print.headerLabel}>GUESTS</span>
+            </td>
+            <td style={{ ...print.headerCell, color: "#c00", fontWeight: 700 }}>{beo.guestCount}</td>
+          </tr>
+          <tr>
+            <td style={print.headerCell}>
+              <span style={print.headerLabel}>PHONE</span>
+            </td>
+            <td style={print.headerCell}>{beo.phone}</td>
+            <td style={print.headerCell}>
+              <span style={print.headerLabel}>DELIVERY TIME</span>
+            </td>
+            <td style={{ ...print.headerCell, color: "#c00", fontWeight: 700 }}>{beo.deliveryTime || "—"}</td>
+          </tr>
+          <tr>
+            <td style={print.headerCell}>
+              <span style={print.headerLabel}>ADDRESS</span>
+            </td>
+            <td style={print.headerCell}>{beo.address}</td>
+            <td style={print.headerCell}>
+              <span style={print.headerLabel}>DELIVERY NOTES</span>
+            </td>
+            <td style={{ ...print.headerCell, color: "#c00", fontWeight: 700, whiteSpace: "pre-line" }}>{beo.deliveryNotes || "—"}</td>
+          </tr>
+          <tr>
+            <td style={print.headerCell}>
+              <span style={print.headerLabel}>CITY, ST</span>
+            </td>
+            <td style={print.headerCell}>{beo.cityState}</td>
+            <td style={print.headerCell} />
+            <td style={print.headerCell} />
+          </tr>
+          <tr>
+            <td style={print.headerCell} />
+            <td style={print.headerCell} />
+            <td style={{ ...print.headerCell, fontWeight: 700 }}>EMPLOYEE</td>
+            <td style={print.headerCell}>{beo.employee || "—"}</td>
+          </tr>
+        </tbody>
+      </table>
     </>
   );
 };
@@ -1132,8 +1189,17 @@ function parseBEOTimeline(text: string | null | undefined): TimelineEntry[] {
 // ── Main Component ──
 const CHECK_STORAGE_KEY = (eid: string) => `kitchen-beo-check-${eid}`;
 
+const getKitchenBeoEventIdFromUrl = (): string | null => {
+  const parts = window.location.pathname.split("/");
+  const idx = parts.indexOf("kitchen-beo-print");
+  if (idx !== -1 && parts[idx + 1]) return parts[idx + 1];
+  return null;
+};
+
 const KitchenBEOPrintPage: React.FC = () => {
   const { selectedEventId, selectedEventData, loadEvents, loadEventData, selectEvent, setFields } = useEventStore();
+  const urlKitchenEventId = getKitchenBeoEventIdFromUrl();
+  const eventIdForBoxedOrders = urlKitchenEventId ?? selectedEventId ?? null;
   const [loading, setLoading] = useState(true);
   const [menuItemData, setMenuItemData] = useState<Record<string, { name: string; childIds: string[] }>>({});
   const [stationsData, setStationsData] = useState<Array<{ id: string; stationType: string; stationItems: string[]; stationNotes: string; beoPlacement?: "Presented Appetizer" | "Buffet Metal" | "Buffet China" }>>([]);
@@ -1200,24 +1266,23 @@ const KitchenBEOPrintPage: React.FC = () => {
     });
   }, [selectedEventId, selectedEventData]);
 
-  // Fetch boxed lunch orders for event (used in delivery BEO DELI section)
+  // Fetch boxed lunch orders for event (used in delivery BEO DELI section). URL wins so data matches /kitchen-beo-print/:id before store syncs.
   useEffect(() => {
-    if (!selectedEventId) {
+    if (!eventIdForBoxedOrders) {
       setBoxedLunchOrders([]);
       return;
     }
-    loadBoxedLunchOrdersByEventId(selectedEventId).then((result) => {
+    loadBoxedLunchOrdersByEventId(eventIdForBoxedOrders).then((result) => {
       if (!isErrorResult(result)) setBoxedLunchOrders(result);
       else setBoxedLunchOrders([]);
     });
-  }, [selectedEventId]);
+  }, [eventIdForBoxedOrders]);
 
   // Fetch menu items with Item Name + Child Items (linked records)
   // Exclude STATIONS — those are station IDs; we fetch stations separately and add station item IDs here
   useEffect(() => {
     const parentIds = new Set<string>();
-    const eventTypeRaw = asSingleSelectName(selectedEventData?.[FIELD_IDS.EVENT_TYPE])?.toLowerCase() ?? "";
-    const isDelivery = eventTypeRaw.includes("delivery") || eventTypeRaw.includes("pick up") || eventTypeRaw.includes("pickup");
+    const isDelivery = isDeliveryOrPickup(asSingleSelectName(selectedEventData?.[FIELD_IDS.EVENT_TYPE]) ?? "");
     const fieldIdsToFetch = isDelivery
       ? DELIVERY_MENU_SECTION_CONFIG.flatMap((c) => c.fieldIds)
       : MENU_SECTION_CONFIG.map((c) => c.fieldId).filter((fid) => fid !== FIELD_IDS.STATIONS);
@@ -1360,18 +1425,6 @@ const KitchenBEOPrintPage: React.FC = () => {
             }
           });
         }
-        // Merge boxed lunch orders into DELI section (delivery only)
-        if (config.title.includes("DELI") && boxedLunchOrders.length > 0) {
-          for (const order of boxedLunchOrders) {
-            for (const item of order.items) {
-              if (!(item.quantity > 0)) continue;
-              const name = item.boxedLunchTypeName || "Boxed Lunch";
-              const spec = item.customizations?.[0]?.specialRequests?.trim();
-              const qty = spec ? `${spec} × ${item.quantity}` : String(item.quantity);
-              allItems.push({ qty, name });
-            }
-          }
-        }
         // Merge platter orders (from localStorage) into DELI section — header + sub-items to match BEO samples
         if (config.title.includes("DELI") && selectedEventId) {
           const platterRows = getPlatterOrdersByEventId(selectedEventId);
@@ -1401,6 +1454,15 @@ const KitchenBEOPrintPage: React.FC = () => {
             vessel: "DISPOSABLE",
             items: allItems,
           });
+        }
+      }
+      const extra = buildBoxedLunchKitchenSectionsFromOrders(boxedLunchOrders) as MenuSection[];
+      if (extra.length > 0) {
+        const deliIdx = sections.findIndex((s) => s.title === "DELI - DISPOSABLE");
+        if (deliIdx >= 0) {
+          sections.splice(deliIdx + 1, 0, ...extra);
+        } else {
+          sections.unshift(...extra);
         }
       }
     } else {
@@ -1507,10 +1569,10 @@ const KitchenBEOPrintPage: React.FC = () => {
     return sections;
   };
 
-  // Detect service type: Full Service, Delivery, or Pick Up
-  const eventTypeRaw = asSingleSelectName(selectedEventData?.[FIELD_IDS.EVENT_TYPE])?.toLowerCase() ?? "";
-  const isPickUp = eventTypeRaw.includes("pick up") || eventTypeRaw.includes("pickup");
-  const isDelivery = eventTypeRaw.includes("delivery") || isPickUp;
+  // Detect service type: Full Service, Delivery, or Pick Up (match BeoPrintPage / isDeliveryOrPickup)
+  const eventTypeLabel = asSingleSelectName(selectedEventData?.[FIELD_IDS.EVENT_TYPE]) ?? "";
+  const isDelivery = isDeliveryOrPickup(eventTypeLabel);
+  const isPickUp = isPickup(eventTypeLabel);
   const serviceType: "full-service" | "delivery" = isDelivery ? "delivery" : "full-service";
 
   // Build BEO data from real event — use formula/print fields when available, fallback to source fields

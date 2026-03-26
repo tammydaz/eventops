@@ -6,7 +6,7 @@ import {
   PRODUCTION_COLORS,
   type ProductionColor,
 } from "../lib/productionHelpers";
-import { formatClock12FromSeconds, formatDetailDateTimeLine, listPrimaryLabel } from "../lib/eventListRowMeta";
+import { formatClock12FromSeconds, listPrimaryLabel } from "../lib/eventListRowMeta";
 import { StaffingAttentionBadge } from "./StaffingAttentionBadge";
 import { useEventStore } from "../state/eventStore";
 import { FOH_BEO_FIRED_FIELD_ID, FOH_SPECK_COMPLETE_FIELD_ID } from "../services/airtable/events";
@@ -37,15 +37,9 @@ export type ListDetailEvent = {
   timelineRaw?: string;
   paymentStatus?: string;
   invoicePaid?: boolean;
+  /** Street + city/state from BEO header (client or venue) */
+  addressDisplay?: string;
 };
-
-function formatDayHeader(dateStr: string): string {
-  const [y, m, day] = dateStr.split("-").map(Number);
-  const d = new Date(y, m - 1, day);
-  const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-  return `${days[d.getDay()]}, ${months[d.getMonth()]} ${day}, ${y}`;
-}
 
 /** Parse TIMELINE long text into rows (line = "4:00 PM – Title | subtitle" or free text). */
 function parseTimelineLines(raw: string | undefined): { time: string; title: string; sub?: string }[] {
@@ -75,12 +69,6 @@ function notesToBullets(raw: string | undefined): string[] {
   return raw.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
 }
 
-function isPaidLabel(event: ListDetailEvent): boolean {
-  if (event.invoicePaid) return true;
-  const s = (event.paymentStatus ?? "").toLowerCase();
-  return /paid|complete|received/.test(s);
-}
-
 type Props = {
   event: ListDetailEvent;
   isFOH: boolean;
@@ -88,15 +76,6 @@ type Props = {
   onClose: () => void;
   onOpenEvent: () => void;
 };
-
-function IconCalendar({ className }: { className?: string }) {
-  return (
-    <svg className={className} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden>
-      <rect x="3" y="5" width="18" height="16" rx="2" />
-      <path d="M3 11h18M8 3v4M16 3v4" strokeLinecap="round" />
-    </svg>
-  );
-}
 
 function IconPin({ className }: { className?: string }) {
   return (
@@ -107,11 +86,20 @@ function IconPin({ className }: { className?: string }) {
   );
 }
 
-function IconCard({ className }: { className?: string }) {
+function IconAddress({ className }: { className?: string }) {
   return (
     <svg className={className} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden>
-      <rect x="2" y="5" width="20" height="14" rx="2" />
-      <path d="M2 10h20" />
+      <path d="M3 10.5L12 3l9 7.5V21a1 1 0 01-1 1H4a1 1 0 01-1-1V10.5z" strokeLinejoin="round" />
+      <path d="M9 22V12h6v10" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function IconUser({ className }: { className?: string }) {
+  return (
+    <svg className={className} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden>
+      <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" strokeLinecap="round" />
+      <circle cx="12" cy="7" r="4" />
     </svg>
   );
 }
@@ -180,18 +168,18 @@ export function EventListDetailSidebar({ event, isFOH, compactLayout, onClose, o
 
   const timelineRows = parseTimelineLines(event.timelineRaw);
   const noteLines = notesToBullets(event.beoNotes);
-  const paid = isPaidLabel(event);
-  const paymentLine = event.paymentStatus?.trim() || "—";
 
-  if (isFOH) {
-    return (
+  /* Single layout (Client/Venue + timeline + notes) — not gated by role. */
+  return (
       <aside className={fohAsideClass} aria-label="Event details">
         <div className="dp-foh-mock-top">
           <button type="button" className="dp-event-detail-sidebar-close dp-foh-mock-close" onClick={onClose} aria-label="Close panel">
             ✕
           </button>
           <div className="dp-foh-mock-title-row">
-            <h2 className="dp-foh-mock-title">{listPrimaryLabel(event.client)}</h2>
+            <h2 className="dp-foh-mock-title">
+              {event.name?.trim() && event.name !== "Untitled" ? event.name : listPrimaryLabel(event.client)}
+            </h2>
             <span
               className={`dp-foh-mock-status ${event.beoSentToBOH === true ? "dp-foh-mock-status--confirmed" : ""}`}
               style={
@@ -207,10 +195,6 @@ export function EventListDetailSidebar({ event, isFOH, compactLayout, onClose, o
               {event.beoSentToBOH === true && <span className="dp-foh-mock-status-dot" />}
               {statusLabel}
             </span>
-          </div>
-          <div className="dp-foh-mock-datetime">
-            <IconCalendar className="dp-foh-mock-datetime-icon" />
-            <span>{formatDetailDateTimeLine(event)}</span>
           </div>
           <div className="dp-foh-mock-actions-bar">
             <StaffingAttentionBadge
@@ -271,22 +255,32 @@ export function EventListDetailSidebar({ event, isFOH, compactLayout, onClose, o
           </div>
         </div>
 
-        <div className="dp-foh-mock-grid dp-foh-mock-grid--venue-pay">
-          <div className="dp-foh-mock-cell">
-            <div className="dp-foh-mock-cell-head">
-              <IconPin />
-              <span>Venue</span>
+        <div className="dp-foh-mock-info-rows" aria-label="Event summary">
+          <div className="dp-foh-mock-info-row">
+            <div className="dp-foh-mock-info-item">
+              <IconUser className="dp-foh-mock-info-icon" />
+              <div className="dp-foh-mock-info-text">
+                <span className="dp-foh-mock-info-label">Client</span>
+                <span className="dp-foh-mock-info-value">{listPrimaryLabel(event.client)}</span>
+              </div>
             </div>
-            <div className="dp-foh-mock-cell-value">{event.venue !== "—" ? event.venue : "—"}</div>
+            <div className="dp-foh-mock-info-item">
+              <IconPin className="dp-foh-mock-info-icon" />
+              <div className="dp-foh-mock-info-text">
+                <span className="dp-foh-mock-info-label">Venue</span>
+                <span className="dp-foh-mock-info-value">{event.venue !== "—" ? event.venue : "—"}</span>
+              </div>
+            </div>
           </div>
-          <div className="dp-foh-mock-cell">
-            <div className="dp-foh-mock-cell-head">
-              <IconCard />
-              <span>Payment</span>
-            </div>
-            <div className="dp-foh-mock-cell-value dp-foh-mock-payment-row">
-              <span>{paymentLine}</span>
-              {paid && <span className="dp-foh-mock-paid-badge">PAID</span>}
+          <div className="dp-foh-mock-info-row">
+            <div className="dp-foh-mock-info-item dp-foh-mock-info-item--full">
+              <IconAddress className="dp-foh-mock-info-icon" />
+              <div className="dp-foh-mock-info-text">
+                <span className="dp-foh-mock-info-label">Address</span>
+                <span className="dp-foh-mock-info-value dp-foh-mock-info-value--address">
+                  {event.addressDisplay && event.addressDisplay !== "—" ? event.addressDisplay : "—"}
+                </span>
+              </div>
             </div>
           </div>
         </div>
@@ -322,7 +316,7 @@ export function EventListDetailSidebar({ event, isFOH, compactLayout, onClose, o
           )}
         </div>
 
-        <div className="dp-foh-mock-section">
+        <div className="dp-foh-mock-section dp-foh-mock-section--notes">
           <h3 className="dp-foh-mock-section-title">Notes</h3>
           <div className="dp-foh-mock-notes-box">
             {noteLines.length === 0 ? (
@@ -351,80 +345,5 @@ export function EventListDetailSidebar({ event, isFOH, compactLayout, onClose, o
           Double-click a card to open · Single-click for details
         </p>
       </aside>
-    );
-  }
-
-  /* ── Non-FOH: original list layout ── */
-  return (
-    <aside className={baseAsideClass} aria-label="Event details">
-      <div className="dp-event-detail-sidebar-header">
-        <h2 className="dp-event-detail-sidebar-title">{listPrimaryLabel(event.client)}</h2>
-        <div className="dp-event-detail-sidebar-header-actions">
-          <button type="button" className="dp-event-detail-sidebar-close" onClick={onClose} aria-label="Close panel">
-            ✕
-          </button>
-        </div>
-      </div>
-      <span
-        className="dp-event-detail-sidebar-badge"
-        style={{
-          color: hex,
-          borderColor: `${hex}80`,
-          backgroundColor: `${hex}14`,
-        }}
-      >
-        {statusLabel}
-      </span>
-
-      <dl className="dp-event-detail-sidebar-dl">
-        <div className="dp-event-detail-sidebar-row">
-          <dt>Date</dt>
-          <dd>{event.eventDate ? formatDayHeader(event.eventDate) : "—"}</dd>
-        </div>
-        <div className="dp-event-detail-sidebar-row">
-          <dt>Venue</dt>
-          <dd>{event.venue !== "—" ? event.venue : "—"}</dd>
-        </div>
-        <div className="dp-event-detail-sidebar-row">
-          <dt>Guests</dt>
-          <dd>{event.guests}</dd>
-        </div>
-        <div className="dp-event-detail-sidebar-row">
-          <dt>Type</dt>
-          <dd>{event.eventType}</dd>
-        </div>
-        <div className="dp-event-detail-sidebar-row">
-          <dt>Service</dt>
-          <dd>{event.serviceStyle}</dd>
-        </div>
-        {(event.phone?.trim() ?? "") && (
-          <div className="dp-event-detail-sidebar-row">
-            <dt>Phone</dt>
-            <dd>
-              <a href={`tel:${event.phone}`} className="dp-event-detail-sidebar-tel">
-                {event.phone}
-              </a>
-            </dd>
-          </div>
-        )}
-      </dl>
-
-      <div className="dp-event-detail-sidebar-staff">
-        <span className="dp-event-detail-sidebar-staff-label">Staffing</span>
-        <StaffingAttentionBadge event={event} linkNowsta={false} />
-      </div>
-
-      {event.isDemo ? (
-        <p className="dp-event-detail-sidebar-hint">Demo event — not linked to a record.</p>
-      ) : (
-        <div className="dp-event-detail-sidebar-actions">
-          <button type="button" className="dp-event-detail-sidebar-open-btn" onClick={onOpenEvent}>
-            Open event
-          </button>
-        </div>
-      )}
-
-      <p className="dp-event-detail-sidebar-footnote">Double-click a card in the list to open the event. Single-click selects details here.</p>
-    </aside>
   );
 }

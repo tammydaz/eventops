@@ -1,10 +1,10 @@
 /**
  * Intake/FOH — two-row top chrome matching dashboard command bar:
- * Werx + nav (Clients, Calendar, Tasks, Reports) + utilities, then search + filter dropdowns.
+ * Werx + nav (Clients, Calendar, Reports) + utilities, then search + filter dropdowns.
  * Does not include "Command View" (per product request).
  */
 import { useEffect, useMemo, useRef, useState, useDeferredValue } from "react";
-import { Link, NavLink, useNavigate } from "react-router-dom";
+import { NavLink, useNavigate } from "react-router-dom";
 import { useEventStore } from "../state/eventStore";
 import { useAuthStore } from "../state/authStore";
 import { listPrimaryLabel } from "../lib/eventListRowMeta";
@@ -51,11 +51,8 @@ export function IntakeFOHCommandTop({ onOpenMobileMenu }: Props) {
   const { events: rawEvents, loadEvents, selectEvent } = useEventStore();
   const [searchQuery, setSearchQuery] = useState("");
   const deferredSearchQuery = useDeferredValue(searchQuery);
-  const [newTaskMenuOpen, setNewTaskMenuOpen] = useState(false);
   const commandSearchInputRef = useRef<HTMLInputElement>(null);
   const searchWrapRef = useRef<HTMLDivElement>(null);
-  const newTaskWrapRef = useRef<HTMLDivElement>(null);
-
   const filters = useIntakeFOHCommandFilters();
   if (!filters) {
     throw new Error("IntakeFOHCommandTop must be used inside IntakeFOHCommandProvider");
@@ -76,15 +73,6 @@ export function IntakeFOHCommandTop({ onOpenMobileMenu }: Props) {
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
   }, [searchQuery]);
-
-  useEffect(() => {
-    if (!newTaskMenuOpen) return;
-    const handler = (e: MouseEvent) => {
-      if (newTaskWrapRef.current && !newTaskWrapRef.current.contains(e.target as Node)) setNewTaskMenuOpen(false);
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [newTaskMenuOpen]);
 
   const eventDataList = useMemo((): SearchRow[] => {
     return rawEvents.map((e) => {
@@ -151,11 +139,12 @@ export function IntakeFOHCommandTop({ onOpenMobileMenu }: Props) {
           <NavLink className={({ isActive }) => `dp-command-nav-text ${isActive ? "active" : ""}`} to="/foh/leads">
             Clients
           </NavLink>
-          <NavLink end className={({ isActive }) => `dp-command-nav-text ${isActive ? "active" : ""}`} to="/intake-foh">
+          <NavLink
+            end
+            className={({ isActive }) => `dp-command-nav-text ${isActive ? "active" : ""}`}
+            to="/intake-foh?eventView=calendar"
+          >
             Calendar
-          </NavLink>
-          <NavLink className={({ isActive }) => `dp-command-nav-text ${isActive ? "active" : ""}`} to="/watchtower">
-            Tasks
           </NavLink>
           <NavLink className={({ isActive }) => `dp-command-nav-text ${isActive ? "active" : ""}`} to="/profit/">
             Reports
@@ -180,12 +169,6 @@ export function IntakeFOHCommandTop({ onOpenMobileMenu }: Props) {
             </svg>
             <span className="dp-command-bell-badge">3</span>
           </button>
-          <Link className="dp-command-icon-btn" to="/admin" aria-label="Settings">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
-              <circle cx="12" cy="12" r="3" />
-              <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" strokeLinecap="round" />
-            </svg>
-          </Link>
           <div className="dp-command-avatar" aria-hidden title={user?.name ?? "User"}>
             {userInitials(user?.name)}
           </div>
@@ -295,27 +278,6 @@ export function IntakeFOHCommandTop({ onOpenMobileMenu }: Props) {
           <button type="button" className="dp-command-btn-secondary" onClick={() => navigate("/event/new")}>
             + New Client
           </button>
-          <div className="dp-command-split" ref={newTaskWrapRef}>
-            <button type="button" className="dp-command-split-main" onClick={() => navigate("/watchtower")}>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
-                <path d="M9 11H5a2 2 0 00-2 2v7a2 2 0 002 2h4m0-11V9a2 2 0 012-2h2a2 2 0 012 2v2m-6 4h6m6 0v7a2 2 0 01-2 2h-4m4-9h-4" strokeLinecap="round" />
-              </svg>
-              New Task
-            </button>
-            <button type="button" className="dp-command-split-chevron" aria-expanded={newTaskMenuOpen} aria-label="Task actions" onClick={() => setNewTaskMenuOpen((o) => !o)}>
-              ▾
-            </button>
-            {newTaskMenuOpen && (
-              <div className="dp-command-split-menu" role="menu">
-                <Link to="/watchtower" className="dp-command-split-menu-item" role="menuitem" onClick={() => setNewTaskMenuOpen(false)}>
-                  Open Watchtower
-                </Link>
-                <Link to="/feedback-issues" className="dp-command-split-menu-item" role="menuitem" onClick={() => setNewTaskMenuOpen(false)}>
-                  Feedback & issues
-                </Link>
-              </div>
-            )}
-          </div>
         </div>
       </div>
     </div>

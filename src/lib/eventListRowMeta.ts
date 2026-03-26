@@ -27,6 +27,70 @@ export function formatDetailDateTimeLine(event: { eventDate?: string; dispatchTi
   return datePart;
 }
 
+function cityStateZipLine(city?: string, state?: string, zip?: string): string {
+  const c = (city ?? "").trim();
+  const s = (state ?? "").trim();
+  const z = (zip ?? "").trim();
+  if (!c && !s && !z) return "";
+  if (c && s && z) return `${c}, ${s} ${z}`;
+  if (c && s) return `${c}, ${s}`;
+  return [c, s, z].filter(Boolean).join(", ");
+}
+
+/** Street + city/state/zip for sidebar — client fields when event is at client address, else venue fields. */
+export function displayAddressForListItem(e: {
+  venue?: string;
+  venueStreet?: string;
+  venueCity?: string;
+  venueState?: string;
+  venueZip?: string;
+  clientStreet?: string;
+  clientCity?: string;
+  clientState?: string;
+  clientZip?: string;
+}): string {
+  const vName = (e.venue ?? "").trim();
+  const hasVenueGeo = !!(
+    e.venueStreet?.trim() ||
+    e.venueCity?.trim() ||
+    e.venueState?.trim() ||
+    e.venueZip?.trim()
+  );
+  if (hasVenueGeo) {
+    const lines: string[] = [];
+    if (vName && vName !== "—") lines.push(vName);
+    if (e.venueStreet?.trim()) lines.push(e.venueStreet.trim());
+    const line2 = cityStateZipLine(e.venueCity, e.venueState, e.venueZip);
+    if (line2) lines.push(line2);
+    return lines.join("\n") || "—";
+  }
+  const lines: string[] = [];
+  if (vName && vName !== "—") lines.push(vName);
+  if (e.clientStreet?.trim()) lines.push(e.clientStreet.trim());
+  const line2 = cityStateZipLine(e.clientCity, e.clientState, e.clientZip);
+  if (line2) lines.push(line2);
+  const out = lines.join("\n");
+  return out || "—";
+}
+
+/**
+ * Prefer Airtable venue; when missing, use the event-name suffix only if it is not a date
+ * (formula titles like "Client – 03/26/2026" must not show the date as venue).
+ */
+export function venueDisplayFromListItem(e: { eventName?: string; venue?: string }): string {
+  const fromField = (e.venue ?? "").trim();
+  if (fromField && fromField !== "—") return fromField;
+  const parts = (e.eventName ?? "").split(/\s*[–—-]\s*/);
+  const second = parts[1]?.trim() ?? "";
+  if (!second) return "—";
+  const looksLikeDate =
+    /^\d{1,2}\/\d{1,2}\/\d{2,4}$/.test(second) ||
+    /^\d{1,2}\/\d{1,2}\/\d{2}$/.test(second) ||
+    /^\d{4}-\d{2}-\d{2}$/.test(second);
+  if (looksLikeDate) return "—";
+  return second;
+}
+
 /** Primary label for list/command views — client only (no event title). */
 export function listPrimaryLabel(client: string): string {
   const t = (client ?? "").trim();

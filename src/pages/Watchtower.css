@@ -1,0 +1,204 @@
+/* Today's Tasks — /watchtower (screen + print) */
+
+.wt-page {
+  box-sizing: border-box;
+  min-height: 100vh;
+  background: linear-gradient(135deg, #0a0a0a 0%, #1a0a0a 50%, #0f0a15 100%);
+  color: #e0e0e0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+.wt-page-header {
+  padding: 16px 24px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.wt-back-link {
+  font-size: 14px;
+  font-weight: 600;
+  color: #00bcd4;
+  text-decoration: none;
+}
+
+.wt-back-link:hover {
+  color: #80deea;
+  text-decoration: underline;
+}
+
+.wt-page-main {
+  padding: 24px;
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.wt-todays-tasks {
+  padding: 20px 24px;
+  border-radius: 12px;
+  border: 1px solid rgba(0, 188, 212, 0.35);
+  background: linear-gradient(135deg, rgba(0, 188, 212, 0.08), rgba(20, 10, 15, 0.85));
+}
+
+.wt-todays-tasks-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px 16px;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(0, 188, 212, 0.25);
+}
+
+.wt-todays-tasks-title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 800;
+  color: #fff;
+  letter-spacing: 0.02em;
+}
+
+.wt-todays-tasks-date {
+  margin: 4px 0 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #00bcd4;
+}
+
+.wt-todays-tasks-print {
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 700;
+  border-radius: 8px;
+  border: 1px solid rgba(0, 188, 212, 0.5);
+  background: rgba(0, 188, 212, 0.15);
+  color: #b2ebf2;
+  cursor: pointer;
+}
+
+.wt-todays-tasks-print:hover {
+  background: rgba(0, 188, 212, 0.28);
+  color: #fff;
+}
+
+.wt-todays-tasks-loading,
+.wt-todays-tasks-empty,
+.wt-todays-tasks-error {
+  font-size: 14px;
+  color: #a0a0a0;
+  margin: 0;
+}
+
+.wt-todays-tasks-error {
+  color: #f87171;
+}
+
+.wt-todays-tasks-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.wt-todays-tasks-row {
+  padding: 12px 14px;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.wt-todays-tasks-row-main {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  align-items: baseline;
+  margin-bottom: 6px;
+}
+
+.wt-todays-tasks-event {
+  font-size: 13px;
+  font-weight: 700;
+  color: #e0e0e0;
+}
+
+.wt-todays-tasks-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: #fff;
+  flex: 1;
+  min-width: 160px;
+}
+
+.wt-todays-tasks-meta {
+  font-size: 12px;
+  color: #888;
+  font-weight: 600;
+}
+
+.wt-todays-tasks-notes {
+  margin: 0;
+  font-size: 12px;
+  color: #b0b0b0;
+  line-height: 1.45;
+  white-space: pre-wrap;
+}
+
+@media print {
+  .watchtower-no-print {
+    display: none !important;
+  }
+
+  .wt-page {
+    background: #fff !important;
+    color: #111 !important;
+    min-height: auto !important;
+  }
+
+  .wt-todays-tasks {
+    border: none !important;
+    background: #fff !important;
+    max-width: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  .wt-todays-tasks-header {
+    border-bottom: 2px solid #111 !important;
+    padding-bottom: 10px !important;
+  }
+
+  .wt-todays-tasks-title {
+    color: #111 !important;
+    font-size: 20px !important;
+  }
+
+  .wt-todays-tasks-date {
+    color: #333 !important;
+  }
+
+  .wt-todays-tasks-row {
+    background: #fff !important;
+    border: 1px solid #ccc !important;
+    break-inside: avoid;
+  }
+
+  .wt-todays-tasks-event {
+    color: #222 !important;
+  }
+
+  .wt-todays-tasks-name {
+    color: #111 !important;
+  }
+
+  .wt-todays-tasks-meta {
+    color: #555 !important;
+  }
+
+  .wt-todays-tasks-notes {
+    color: #444 !important;
+  }
+
+  .wt-todays-tasks-loading,
+  .wt-todays-tasks-empty,
+  .wt-todays-tasks-error {
+    color: #333 !important;
+  }
+}

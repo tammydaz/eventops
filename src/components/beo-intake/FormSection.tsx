@@ -209,26 +209,29 @@ export const FormSection = ({
   }, [defaultOpen]);
   const accent = dotColor?.trim() || null;
   const isBeoPillChrome = accent?.toUpperCase() === BEO_SECTION_PILL_ACCENT.toUpperCase();
-  const borderColor = isBeoPillChrome
-    ? BEO_SECTION_PILL_ACCENT
-    : accent
-      ? hexToRgba(accent, 0.55)
-      : isDelivery
-        ? "#eab308"
+  /** Delivery/pickup: yellow “dispatch” theme must win over the default cyan BEO pill chrome. */
+  const borderColor = isDelivery
+    ? "#eab308"
+    : isBeoPillChrome
+      ? BEO_SECTION_PILL_ACCENT
+      : accent
+        ? hexToRgba(accent, 0.55)
         : "#00bcd4";
-  const glowColor = isBeoPillChrome
-    ? "rgba(59, 130, 246, 0.2)"
-    : accent
-      ? hexToRgba(accent, 0.28)
-      : isDelivery
-        ? "rgba(234,179,8,0.15)"
+  const glowColor = isDelivery
+    ? "rgba(234,179,8,0.22)"
+    : isBeoPillChrome
+      ? "rgba(59, 130, 246, 0.2)"
+      : accent
+        ? hexToRgba(accent, 0.28)
         : "rgba(0,188,212,0.2)";
-  const titleAccent = isBeoPillChrome ? "#ffffff" : accent ?? "#fff";
-  const cardBackground = isBeoPillChrome
-    ? "#000000"
-    : accent
-      ? `linear-gradient(145deg, ${hexToRgba(accent, 0.16)}, ${hexToRgba(accent, 0.04)})`
-      : "rgba(30,15,15,0.6)";
+  const titleAccent = isDelivery ? "#fffbeb" : isBeoPillChrome ? "#ffffff" : accent ?? "#fff";
+  const cardBackground = isDelivery
+    ? "linear-gradient(160deg, rgba(234,179,8,0.16) 0%, rgba(90,70,12,0.1) 40%, rgba(0,0,0,0.55) 100%)"
+    : isBeoPillChrome
+      ? "#000000"
+      : accent
+        ? `linear-gradient(145deg, ${hexToRgba(accent, 0.16)}, ${hexToRgba(accent, 0.04)})`
+        : "rgba(30,15,15,0.6)";
 
   const handleSave = async () => {
     if (!selectedEventId) return;
@@ -425,24 +428,24 @@ export const FormSection = ({
                   letterSpacing: "0.2px",
                   borderRadius: "6px",
                   border: `1px solid ${
-                    isBeoPillChrome
-                      ? hexToRgba(BEO_SECTION_PILL_ACCENT, 0.55)
-                      : accent
-                        ? hexToRgba(accent, 0.45)
-                        : isDelivery
-                          ? "rgba(234,179,8,0.5)"
+                    isDelivery
+                      ? "rgba(234,179,8,0.55)"
+                      : isBeoPillChrome
+                        ? hexToRgba(BEO_SECTION_PILL_ACCENT, 0.55)
+                        : accent
+                          ? hexToRgba(accent, 0.45)
                           : "rgba(255,107,107,0.5)"
                   }`,
                   background: isSaving
                     ? "rgba(255,255,255,0.04)"
-                    : isBeoPillChrome
-                      ? hexToRgba(BEO_SECTION_PILL_ACCENT, 0.1)
-                      : accent
-                        ? hexToRgba(accent, 0.12)
-                        : isDelivery
-                          ? "rgba(234,179,8,0.15)"
+                    : isDelivery
+                      ? "rgba(234,179,8,0.14)"
+                      : isBeoPillChrome
+                        ? hexToRgba(BEO_SECTION_PILL_ACCENT, 0.1)
+                        : accent
+                          ? hexToRgba(accent, 0.12)
                           : "rgba(255,107,107,0.15)",
-                  color: isBeoPillChrome ? "#fff" : accent ? titleAccent : isDelivery ? "#eab308" : "#ff6b6b",
+                  color: isDelivery ? "#fef08a" : isBeoPillChrome ? "#fff" : accent ? titleAccent : "#ff6b6b",
                   cursor: isSaving ? "not-allowed" : "pointer",
                   opacity: isSaving ? 0.7 : 1,
                 }}

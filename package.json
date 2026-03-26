@@ -7,6 +7,7 @@
     "dev": "vite",
     "dev:full": "vercel dev",
     "build": "vite build",
+    "test:boxed-lunch-v2": "node scripts/boxedLunchV2Selftest.mjs",
     "lint": "eslint .",
     "preview": "vite preview",
     "schema": "node scripts/updateAirtableSchema.js",

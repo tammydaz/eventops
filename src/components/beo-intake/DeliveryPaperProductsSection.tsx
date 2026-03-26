@@ -69,9 +69,16 @@ const DEFAULT_UTENSILS: { item: string; qty: number }[] = [
   { item: "Roll Ups (napkin/utensil)", qty: 0 },
 ];
 
-type DeliveryPaperProductsSectionProps = { embedded?: boolean };
+type DeliveryPaperProductsSectionProps = {
+  embedded?: boolean;
+  /** Jump nav + anchor id (full BEO intake: beo-section-delivery-paper). */
+  sectionId?: string;
+};
 
-export const DeliveryPaperProductsSection = ({ embedded = false }: DeliveryPaperProductsSectionProps) => {
+export const DeliveryPaperProductsSection = ({
+  embedded = false,
+  sectionId = "beo-section-delivery-paper",
+}: DeliveryPaperProductsSectionProps) => {
   const { selectedEventId, selectedEventData, setFields } = useEventStore();
   const [paperNeeded, setPaperNeeded] = useState<"yes" | "no">("no");
   const [items, setItems] = useState<DeliveryItem[]>([]);
@@ -293,7 +300,14 @@ export const DeliveryPaperProductsSection = ({ embedded = false }: DeliveryPaper
   );
 
   return embedded ? content : (
-    <FormSection title="Paper Products & Utensils" dotColor="#22c55e" isDelivery>
+    <FormSection
+      title="Paper products & disposables"
+      subtitle="Same slot as full-service “Plates / Serviceware” — printed BEO block PAPER PRODUCTS & BEVERAGES"
+      dotColor="#22c55e"
+      isDelivery
+      sectionId={sectionId}
+      titleAlign="center"
+    >
       {content}
     </FormSection>
   );

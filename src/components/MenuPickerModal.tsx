@@ -116,11 +116,6 @@ export const MenuPickerModal: React.FC<MenuPickerModalProps> = ({ onAdd, already
         <h2 style={{ margin: "0 0 4px 0", fontSize: "16px", fontWeight: 600, color: "#fff", padding: "16px 16px 0" }}>
           {pickerTitle}
         </h2>
-        {pickerType === "deli" && (
-          <p style={{ margin: "0 0 12px 0", fontSize: 12, color: "rgba(255,255,255,0.6)", padding: "0 16px" }}>
-            These appear under DELI - DISPOSABLE on the BEO. Use Sandwich Platter for grouped options.
-          </p>
-        )}
 
         {!loading && items.length > 0 && (
           <div style={{ padding: "0 16px 12px" }}>

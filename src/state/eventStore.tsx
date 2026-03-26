@@ -13,7 +13,7 @@ import {
   type EventListItem,
 } from "../services/airtable/events";
 import { useAuthStore } from "./authStore";
-import { isErrorResult, asAirtableCheckbox } from "../services/airtable/selectors";
+import { isErrorResult, asAirtableCheckbox, asString } from "../services/airtable/selectors";
 
 type Fields = Record<string, unknown>;
 
@@ -177,6 +177,63 @@ export const useEventStore = create<EventStore>((set, get) => ({
     }
     if (FOH_SPECK_COMPLETE_FIELD_ID && FOH_SPECK_COMPLETE_FIELD_ID in patchFiltered) {
       listPatch.speckComplete = patchFiltered[FOH_SPECK_COMPLETE_FIELD_ID] === true;
+    }
+    /* Intake blur saves don't call loadEvents(); keep list rows in sync for sidebar + Today's Tasks BEO lines. */
+    if (FIELD_IDS.BEO_NOTES in filtered) {
+      const s = asString(filtered[FIELD_IDS.BEO_NOTES]);
+      listPatch.beoNotes = s.trim() || undefined;
+    }
+    if (FIELD_IDS.BEO_TIMELINE in filtered) {
+      const s = asString(filtered[FIELD_IDS.BEO_TIMELINE]);
+      listPatch.timelineRaw = s.trim() || undefined;
+    }
+    if (FIELD_IDS.VENUE in filtered) {
+      const s = asString(filtered[FIELD_IDS.VENUE]);
+      listPatch.venue = s.trim() || undefined;
+    }
+    if (FIELD_IDS.CLIENT_STREET in filtered) {
+      const s = asString(filtered[FIELD_IDS.CLIENT_STREET]);
+      listPatch.clientStreet = s.trim() || undefined;
+    }
+    if (FIELD_IDS.CLIENT_CITY in filtered) {
+      const s = asString(filtered[FIELD_IDS.CLIENT_CITY]);
+      listPatch.clientCity = s.trim() || undefined;
+    }
+    if (FIELD_IDS.CLIENT_STATE in filtered) {
+      const raw = filtered[FIELD_IDS.CLIENT_STATE];
+      const s =
+        typeof raw === "string"
+          ? raw.trim()
+          : raw && typeof raw === "object" && "name" in (raw as object)
+            ? String((raw as { name?: string }).name ?? "").trim()
+            : asString(raw).trim();
+      listPatch.clientState = s || undefined;
+    }
+    if (FIELD_IDS.CLIENT_ZIP in filtered) {
+      const s = asString(filtered[FIELD_IDS.CLIENT_ZIP]);
+      listPatch.clientZip = s.trim() || undefined;
+    }
+    if (FIELD_IDS.VENUE_ADDRESS in filtered) {
+      const s = asString(filtered[FIELD_IDS.VENUE_ADDRESS]);
+      listPatch.venueStreet = s.trim() || undefined;
+    }
+    if (FIELD_IDS.VENUE_CITY in filtered) {
+      const s = asString(filtered[FIELD_IDS.VENUE_CITY]);
+      listPatch.venueCity = s.trim() || undefined;
+    }
+    if (FIELD_IDS.VENUE_STATE in filtered) {
+      const raw = filtered[FIELD_IDS.VENUE_STATE];
+      const s =
+        typeof raw === "string"
+          ? raw.trim()
+          : raw && typeof raw === "object" && "name" in (raw as object)
+            ? String((raw as { name?: string }).name ?? "").trim()
+            : asString(raw).trim();
+      listPatch.venueState = s || undefined;
+    }
+    if (FIELD_IDS.VENUE_ZIP in filtered) {
+      const s = asString(filtered[FIELD_IDS.VENUE_ZIP]);
+      listPatch.venueZip = s.trim() || undefined;
     }
     if (Object.keys(listPatch).length > 0) {
       set((s) => ({
