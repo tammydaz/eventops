@@ -19,6 +19,7 @@ export type StationPresetKey =
   | "pasta-flight"
   | "farmers-fruit"
   | "fishermans-corner"
+  | "cravin-asian"
   | "barwerx"
   | "philly-jawn"
   | "salad-bar";
@@ -40,6 +41,7 @@ export const PRESET_NAME_PATTERNS: Record<StationPresetKey, string[]> = {
   "pasta-flight": ["pasta flight", "pasta flight presentation"],
   "farmers-fruit": ["farmers", "fruit", "farmers' market"],
   "fishermans-corner": ["fisherman", "fisherman's corner"],
+  "cravin-asian": ["cravin", "cravin' asian", "cravin asian"],
   barwerx: ["barwerx", "bar werx", "appetizer sampler"],
   "philly-jawn": ["philly jawn", "philly jawn"],
   "salad-bar": ["salad bar", "built by you salad", "foodwerx salad bar"],
@@ -201,6 +203,16 @@ export const FISHERMANS_CORNER = {
     "Sesame seared ahi tuna",
   ] as const,
   count: 2,
+};
+
+/** Cravin' Asian: Lo Mein protein (Chicken or Shrimp) + Potstickers protein (Chicken or Pork) + 2 fixed items */
+export const CRAVIN_ASIAN = {
+  loMeinOptions: ["Chicken", "Shrimp"] as const,
+  potstickerOptions: ["Chicken", "Pork"] as const,
+  included: [
+    "Tuna ceviche with English cucumber petals & crispy wontons",
+    "Vegetable spring rolls",
+  ] as const,
 };
 
 /** BarWerx Appetizer Sampler — fixed 4-item display, no choices */

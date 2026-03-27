@@ -15,7 +15,7 @@ import {
 } from "../../services/airtable/stationComponents";
 import { isErrorResult } from "../../services/airtable/selectors";
 import { CollapsibleSubsection } from "./FormSection";
-import { getStationPresetKey, TEX_MEX, RAMEN, ALL_AMERICAN, STREET_FOOD, RAW_BAR, CHARCUTERIE, CARVING, HIBACHI, CHICKEN_WAFFLE, LATE_NIGHT, FISHERMANS_CORNER } from "../../config/stationPresets";
+import { getStationPresetKey, TEX_MEX, RAMEN, ALL_AMERICAN, STREET_FOOD, RAW_BAR, CHARCUTERIE, CARVING, HIBACHI, CHICKEN_WAFFLE, LATE_NIGHT, FISHERMANS_CORNER, CRAVIN_ASIAN } from "../../config/stationPresets";
 
 /** Airtable uses "Starch"; we display "Starch (Pasta)" for pasta stations. */
 const TYPE_DISPLAY: Record<string, string> = {
@@ -272,6 +272,25 @@ function parseFishermansCornerCustomItems(text: string): { selected: string[] } 
   return { selected: items.slice(0, 2) };
 }
 
+/** Parse Cravin' Asian customItems */
+function parseCravinAsianCustomItems(text: string): { loMein: string; potstickers: string; included: string[] } | null {
+  if (!text?.trim()) return null;
+  const lines = text.split("\n").map((s) => s.trim());
+  let loMein = "";
+  let potstickers = "";
+  const included: string[] = [];
+  for (const line of lines) {
+    const lm = line.match(/^Lo\s*mein:\s*(.+)$/i);
+    if (lm) loMein = lm[1].trim();
+    const pm = line.match(/^Potstickers:\s*(.+)$/i);
+    if (pm) potstickers = pm[1].trim();
+    const im = line.match(/^Included:\s*(.+)$/i);
+    if (im) included.push(...im[1].split(",").map((s) => s.trim()).filter(Boolean));
+  }
+  if (!loMein && !potstickers && included.length === 0) return null;
+  return { loMein, potstickers, included };
+}
+
 /** Parse Chicken & Waffle customItems */
 function parseChickenWaffleCustomItems(text: string): {
   chicken: string;
@@ -442,6 +461,10 @@ export function StationComponentsConfigModal(props: {
   const [lateNightCustomItems, setLateNightCustomItems] = useState<string[]>([]);
   const [lateNightCustomInput, setLateNightCustomInput] = useState("");
   const [fishermansCornerSelected, setFishermansCornerSelected] = useState<string[]>(["", ""]);
+  const [cravinAsianLoMein, setCravinAsianLoMein] = useState<string>("");
+  const [cravinAsianPotstickers, setCravinAsianPotstickers] = useState<string>("");
+  const [cravinAsianIncluded, setCravinAsianIncluded] = useState<string[]>([]);
+  const [cravinAsianIncludedInput, setCravinAsianIncludedInput] = useState("");
   const addDropdownRef = useRef<HTMLDivElement>(null);
 
   const stationPresetKey = getStationPresetKey(presetName || "");
@@ -457,6 +480,7 @@ export function StationComponentsConfigModal(props: {
   const isLateNight = stationPresetKey === "late-night";
   const isFishermansCorner = stationPresetKey === "fishermans-corner";
   const isCharcuterie = stationPresetKey === "charcuterie";
+  const isCravinAsian = stationPresetKey === "cravin-asian";
 
   const applyAutoFill = useCallback(
     (defaults: StationComponent[], all: StationComponent[], opts: StationOption[]) => {
@@ -526,7 +550,7 @@ export function StationComponentsConfigModal(props: {
     let cancelled = false;
     setLoading(true);
     const name = (presetName || "").toLowerCase();
-    const skipAirtableLoad = name.includes("tex-mex") || name.includes("tex mex") || name.includes("ramen") || name.includes("all-american") || name.includes("all american") || name.includes("street food") || name.includes("raw bar") || name.includes("carving") || name.includes("hibachi") || (name.includes("chicken") && name.includes("waffle")) || name.includes("late night") || name.includes("vegetable") || name.includes("spreads") || name.includes("charcuterie") || name.includes("pasta flight") || name.includes("farmers") || name.includes("fisherman") || name.includes("barwerx") || name.includes("philly jawn") || name.includes("salad bar") || name.includes("built by you");
+    const skipAirtableLoad = name.includes("tex-mex") || name.includes("tex mex") || name.includes("ramen") || name.includes("all-american") || name.includes("all american") || name.includes("street food") || name.includes("raw bar") || name.includes("carving") || name.includes("hibachi") || (name.includes("chicken") && name.includes("waffle")) || name.includes("late night") || name.includes("vegetable") || name.includes("spreads") || name.includes("charcuterie") || name.includes("pasta flight") || name.includes("farmers") || name.includes("fisherman") || name.includes("cravin") || name.includes("barwerx") || name.includes("philly jawn") || name.includes("salad bar") || name.includes("built by you");
     if (skipAirtableLoad) {
       setAllComponents([]);
       setOptions([]);
@@ -705,6 +729,22 @@ export function StationComponentsConfigModal(props: {
           setFishermansCornerSelected(["Jumbo shrimp cocktail in mini martini glasses", "Jumbo lump crab salad shooters"]);
         } else {
           setFishermansCornerSelected(["", ""]);
+        }
+      }
+      if (name.includes("cravin")) {
+        const parsed = parseCravinAsianCustomItems(initialCustomItems);
+        if (parsed) {
+          setCravinAsianLoMein(parsed.loMein);
+          setCravinAsianPotstickers(parsed.potstickers);
+          setCravinAsianIncluded(parsed.included.length > 0 ? parsed.included : [...CRAVIN_ASIAN.included]);
+        } else if (isCreate) {
+          setCravinAsianLoMein("Chicken");
+          setCravinAsianPotstickers("Chicken");
+          setCravinAsianIncluded([...CRAVIN_ASIAN.included]);
+        } else {
+          setCravinAsianLoMein("");
+          setCravinAsianPotstickers("");
+          setCravinAsianIncluded([]);
         }
       }
       setLoading(false);
@@ -943,6 +983,15 @@ export function StationComponentsConfigModal(props: {
         setLoading(false);
         return;
       }
+      const isCravinAsianPreset = name.includes("cravin");
+      if (isCravinAsianPreset) {
+        setCravinAsianLoMein("Chicken");
+        setCravinAsianPotstickers("Chicken");
+        setCravinAsianIncluded([...CRAVIN_ASIAN.included]);
+        setSectionsExpanded(true);
+        setLoading(false);
+        return;
+      }
       let componentsToUse;
       if (isPastaPreset) {
         const all = await loadAllStationComponents();
@@ -1049,7 +1098,13 @@ export function StationComponentsConfigModal(props: {
     if (isFishermansCorner) {
       setFishermansCornerSelected(["", ""]);
     }
-  }, [initialBeoPlacement, isTexMex, isRamen, isAllAmerican, isStreetFood, isChickenWaffle, isRawBar, isCarving, isHibachi, isLateNight, isFishermansCorner]);
+    if (isCravinAsian) {
+      setCravinAsianLoMein("");
+      setCravinAsianPotstickers("");
+      setCravinAsianIncluded([]);
+      setCravinAsianIncludedInput("");
+    }
+  }, [initialBeoPlacement, isTexMex, isRamen, isAllAmerican, isStreetFood, isChickenWaffle, isRawBar, isCarving, isHibachi, isLateNight, isFishermansCorner, isCravinAsian]);
 
   // Close add dropdown when clicking outside
   useEffect(() => {
@@ -1266,6 +1321,27 @@ export function StationComponentsConfigModal(props: {
       return;
     }
 
+    if (isCravinAsian) {
+      const hasPlacement = beoPlacement === "Presented Appetizer" || beoPlacement === "Buffet Metal" || beoPlacement === "Buffet China";
+      const hasLoMein = cravinAsianLoMein.trim().length > 0;
+      const hasPotstickers = cravinAsianPotstickers.trim().length > 0;
+      const missing: string[] = [];
+      if (!hasPlacement) missing.push("BEO Placement");
+      if (!hasLoMein) missing.push("Lo Mein protein");
+      if (!hasPotstickers) missing.push("Potstickers protein");
+      if (missing.length > 0) {
+        window.alert(`Please fill out the entire form before saving. Missing: ${missing.join(", ")}.`);
+        return;
+      }
+      const lines = [
+        `Lo mein: ${cravinAsianLoMein}`,
+        `Potstickers: ${cravinAsianPotstickers}`,
+        ...(cravinAsianIncluded.length > 0 ? [`Included: ${cravinAsianIncluded.join(", ")}`] : []),
+      ];
+      onConfirm({ componentIds: [], customItems: lines.join("\n"), beoPlacement: hasPlacement ? beoPlacement : undefined });
+      return;
+    }
+
     const isSimpleStation = stationPresetKey === "vegetable" || stationPresetKey === "spreads-breads" || stationPresetKey === "charcuterie" || stationPresetKey === "pasta-flight" || stationPresetKey === "farmers-fruit" || stationPresetKey === "barwerx" || stationPresetKey === "philly-jawn";
     if (isSimpleStation) {
       const hasPlacement = beoPlacement === "Presented Appetizer" || beoPlacement === "Buffet Metal" || beoPlacement === "Buffet China";
@@ -1374,7 +1450,7 @@ export function StationComponentsConfigModal(props: {
           <button
             type="button"
             onClick={handleClearAll}
-            disabled={loading || (selectedComponentIds.length === 0 && !(isTexMex || isRamen || isAllAmerican || isStreetFood || isChickenWaffle || isRawBar || isCarving || isHibachi || isLateNight || isFishermansCorner))}
+            disabled={loading || (selectedComponentIds.length === 0 && !(isTexMex || isRamen || isAllAmerican || isStreetFood || isChickenWaffle || isRawBar || isCarving || isHibachi || isLateNight || isFishermansCorner || isCravinAsian))}
             style={{
               padding: "8px 16px",
               borderRadius: 6,
@@ -1383,8 +1459,8 @@ export function StationComponentsConfigModal(props: {
               color: "#a0a0a0",
               fontSize: 12,
               fontWeight: 600,
-              cursor: loading || (selectedComponentIds.length === 0 && !(isTexMex || isRamen || isAllAmerican || isStreetFood || isChickenWaffle || isRawBar || isCarving || isHibachi || isLateNight || isFishermansCorner)) ? "not-allowed" : "pointer",
-              opacity: loading || (selectedComponentIds.length === 0 && !(isTexMex || isRamen || isAllAmerican || isStreetFood || isChickenWaffle || isRawBar || isCarving || isHibachi || isLateNight || isFishermansCorner)) ? 0.5 : 1,
+              cursor: loading || (selectedComponentIds.length === 0 && !(isTexMex || isRamen || isAllAmerican || isStreetFood || isChickenWaffle || isRawBar || isCarving || isHibachi || isLateNight || isFishermansCorner || isCravinAsian)) ? "not-allowed" : "pointer",
+              opacity: loading || (selectedComponentIds.length === 0 && !(isTexMex || isRamen || isAllAmerican || isStreetFood || isChickenWaffle || isRawBar || isCarving || isHibachi || isLateNight || isFishermansCorner || isCravinAsian)) ? 0.5 : 1,
             }}
           >
             Clear All & Start Over
@@ -2252,6 +2328,110 @@ export function StationComponentsConfigModal(props: {
                         <input type="text" value={lateNightCustomInput} onChange={(e) => setLateNightCustomInput(e.target.value)} placeholder="Type custom item..." style={{ ...rowInputStyle, minWidth: 120, width: "auto" }} onKeyDown={(e) => { if (e.key === "Enter" && lateNightCustomInput.trim()) { setLateNightCustomItems((prev) => [...prev, lateNightCustomInput.trim()]); setLateNightCustomInput(""); } }} />
                         <button type="button" onClick={() => { if (lateNightCustomInput.trim()) { setLateNightCustomItems((prev) => [...prev, lateNightCustomInput.trim()]); setLateNightCustomInput(""); } }} style={{ padding: "5px 10px", borderRadius: 6, border: "1px solid #94a3b8", background: "rgba(148,163,184,0.15)", color: "#94a3b8", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>+ Add</button>
                       </div>
+                    </div>
+                  </CollapsibleSubsection>
+                </>
+              );
+            })()
+          ) : presetId && isCravinAsian ? (
+            (() => {
+              const rowInputStyle = { padding: "5px 8px", borderRadius: 5, border: "1px solid #444", backgroundColor: "#1a1a1a", color: "#e0e0e0", fontSize: 12, minWidth: 0, width: "100%" };
+              return (
+                <>
+                  <div style={{ marginBottom: 16 }}>
+                    <label style={{ ...labelStyle, display: "block", marginBottom: 6 }}>BEO Placement <span style={{ color: "#ff6b6b" }}>*</span></label>
+                    <p style={{ margin: "0 0 8px 0", fontSize: 11, color: "#999" }}>Required — for placement on the BEO</p>
+                    <select value={beoPlacement} onChange={(e) => setBeoPlacement(e.target.value as "Presented Appetizer" | "Buffet Metal" | "Buffet China" | "")} style={{ ...rowInputStyle, minWidth: 160, width: "auto" }}>
+                      <option value="">Select...</option>
+                      <option value="Presented Appetizer">Presented Appetizer</option>
+                      <option value="Buffet Metal">Buffet Metal</option>
+                      <option value="Buffet China">Buffet China</option>
+                    </select>
+                  </div>
+                  <CollapsibleSubsection title="Lo Mein - Pick 1 Protein" icon="▶" defaultOpen={true} accentColor="#eab308">
+                    <div style={{ gridColumn: "1 / -1" }}>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                          <select
+                            value={(CRAVIN_ASIAN.loMeinOptions as readonly string[]).includes(cravinAsianLoMein) ? cravinAsianLoMein : (cravinAsianLoMein ? "__custom__" : "")}
+                            onChange={(e) => { if (e.target.value === "__custom__") return; setCravinAsianLoMein(e.target.value); }}
+                            style={{ ...rowInputStyle, minWidth: 200, width: "auto" }}
+                          >
+                            <option value="">Select...</option>
+                            {CRAVIN_ASIAN.loMeinOptions.map((opt) => (<option key={opt} value={opt}>{opt}</option>))}
+                            <option value="__custom__">Other (type below)...</option>
+                          </select>
+                          <button type="button" onClick={() => setCravinAsianLoMein("")} disabled={!cravinAsianLoMein} style={{ width: 26, height: 26, padding: 0, borderRadius: 5, border: "1px solid #555", background: "#333", color: "#eab308", fontSize: 13, fontWeight: "bold", cursor: cravinAsianLoMein ? "pointer" : "default", display: "flex", alignItems: "center", justifyContent: "center", opacity: cravinAsianLoMein ? 1 : 0.4 }}>✕</button>
+                        </div>
+                        <input
+                          type="text"
+                          value={!(CRAVIN_ASIAN.loMeinOptions as readonly string[]).includes(cravinAsianLoMein) ? cravinAsianLoMein : ""}
+                          onChange={(e) => setCravinAsianLoMein(e.target.value)}
+                          placeholder="Type custom..."
+                          style={{ ...rowInputStyle, minWidth: 160, width: "auto" }}
+                        />
+                      </div>
+                    </div>
+                  </CollapsibleSubsection>
+                  <CollapsibleSubsection title="Potstickers - Pick 1 Protein" icon="▶" defaultOpen={true} accentColor="#a855f7">
+                    <div style={{ gridColumn: "1 / -1" }}>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                          <select
+                            value={(CRAVIN_ASIAN.potstickerOptions as readonly string[]).includes(cravinAsianPotstickers) ? cravinAsianPotstickers : (cravinAsianPotstickers ? "__custom__" : "")}
+                            onChange={(e) => { if (e.target.value === "__custom__") return; setCravinAsianPotstickers(e.target.value); }}
+                            style={{ ...rowInputStyle, minWidth: 200, width: "auto" }}
+                          >
+                            <option value="">Select...</option>
+                            {CRAVIN_ASIAN.potstickerOptions.map((opt) => (<option key={opt} value={opt}>{opt}</option>))}
+                            <option value="__custom__">Other (type below)...</option>
+                          </select>
+                          <button type="button" onClick={() => setCravinAsianPotstickers("")} disabled={!cravinAsianPotstickers} style={{ width: 26, height: 26, padding: 0, borderRadius: 5, border: "1px solid #555", background: "#333", color: "#a855f7", fontSize: 13, fontWeight: "bold", cursor: cravinAsianPotstickers ? "pointer" : "default", display: "flex", alignItems: "center", justifyContent: "center", opacity: cravinAsianPotstickers ? 1 : 0.4 }}>✕</button>
+                        </div>
+                        <input
+                          type="text"
+                          value={!(CRAVIN_ASIAN.potstickerOptions as readonly string[]).includes(cravinAsianPotstickers) ? cravinAsianPotstickers : ""}
+                          onChange={(e) => setCravinAsianPotstickers(e.target.value)}
+                          placeholder="Type custom..."
+                          style={{ ...rowInputStyle, minWidth: 160, width: "auto" }}
+                        />
+                      </div>
+                    </div>
+                  </CollapsibleSubsection>
+                  <CollapsibleSubsection title="Included (Fixed Items)" icon="▶" defaultOpen={true} accentColor="#22c55e">
+                    <div style={{ gridColumn: "1 / -1" }}>
+                      {(() => {
+                        const available = (CRAVIN_ASIAN.included as readonly string[]).filter((opt) => !cravinAsianIncluded.includes(opt));
+                        return (
+                          <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
+                            {cravinAsianIncluded.map((item, idx) => {
+                              const isCustom = !(CRAVIN_ASIAN.included as readonly string[]).includes(item);
+                              return (
+                                <div key={`${idx}-${item}`} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                                  <select
+                                    value={isCustom ? "__custom__" : item}
+                                    onChange={(e) => { if (e.target.value === "__custom__") return; const next = [...cravinAsianIncluded]; next[idx] = e.target.value; setCravinAsianIncluded(next); }}
+                                    style={{ ...rowInputStyle, minWidth: 300, width: "auto" }}
+                                  >
+                                    <option value="">Select item...</option>
+                                    {(CRAVIN_ASIAN.included as readonly string[]).map((opt) => (<option key={opt} value={opt}>{opt}</option>))}
+                                    {isCustom && <option value="__custom__">{item}</option>}
+                                  </select>
+                                  <button type="button" onClick={() => setCravinAsianIncluded((prev) => prev.filter((_, i) => i !== idx))} style={{ width: 26, height: 26, padding: 0, borderRadius: 5, border: "1px solid #555", background: "#333", color: "#22c55e", fontSize: 13, fontWeight: "bold", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>✕</button>
+                                </div>
+                              );
+                            })}
+                            {available.length > 0 && (
+                              <select value="" onChange={(e) => { if (e.target.value) setCravinAsianIncluded((prev) => [...prev, e.target.value]); }} style={{ ...rowInputStyle, minWidth: 200, width: "auto" }}>
+                                <option value="">Add from list...</option>
+                                {available.map((opt) => (<option key={opt} value={opt}>{opt}</option>))}
+                              </select>
+                            )}
+                            <input type="text" value={cravinAsianIncludedInput} onChange={(e) => setCravinAsianIncludedInput(e.target.value)} placeholder="Type custom item..." style={{ ...rowInputStyle, minWidth: 160, width: "auto" }} onKeyDown={(e) => { if (e.key === "Enter" && cravinAsianIncludedInput.trim()) { setCravinAsianIncluded((prev) => [...prev, cravinAsianIncludedInput.trim()]); setCravinAsianIncludedInput(""); } }} />
+                            <button type="button" onClick={() => { if (cravinAsianIncludedInput.trim()) { setCravinAsianIncluded((prev) => [...prev, cravinAsianIncludedInput.trim()]); setCravinAsianIncludedInput(""); } }} style={{ padding: "5px 10px", borderRadius: 6, border: "1px solid #22c55e", background: "rgba(34,197,94,0.15)", color: "#22c55e", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>+ Add Component</button>
+                          </div>
+                        );
+                      })()}
                     </div>
                   </CollapsibleSubsection>
                 </>
