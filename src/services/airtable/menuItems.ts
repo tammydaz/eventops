@@ -139,7 +139,7 @@ export async function fetchMenuItemsByBoxLunchType(
     console.warn(`fetchMenuItemsByBoxLunchType: unexpected value "${boxLunchType}" — skipping fetch`);
     return [];
   }
-  const escaped = String(boxLunchType).replace(/"/g, '\\"');
+  const escaped = String(boxLunchType).replace(/\\/g, "\\\\").replace(/"/g, '\\"');
   const filterByFormula = `{Box Lunch Type} = "${escaped}"`;
   return fetchMenuItemsByFilterFormula(filterByFormula);
 }
