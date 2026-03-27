@@ -121,7 +121,10 @@ export function BoxedLunchSection({ eventId, canEdit }: Props) {
         if (isSaladBoxedLunchBox(v2.boxTypeId, loadedBox)) {
           setSandwiches(buildSaladRowsFromLoaded(v2.sandwiches));
         } else if (anyCatalog) {
-          // Catalog mode: pre-populate catalogQtys from saved sandwiches by name matching
+          // Catalog mode: pre-populate catalogQtys from saved sandwiches by name matching.
+          // The V2 payload stores display names (not IDs) by design, so name-matching is the
+          // only reliable way to restore selections. Items whose names changed in Airtable
+          // since the last save will not be pre-populated (they can be re-entered manually).
           const initQtys: Record<TabKey, Record<string, number>> = { classic: {}, gourmet: {}, wrap: {} };
           for (const saved of v2.sandwiches) {
             for (const tab of TAB_KEYS) {

@@ -132,6 +132,13 @@ export type BoxLunchTypeValue = "Classic Sandwich" | "Gourmet Sandwich" | "Wrap"
 export async function fetchMenuItemsByBoxLunchType(
   boxLunchType: BoxLunchTypeValue
 ): Promise<MenuItemRecord[]> {
+  // Runtime guard: ensure the value is one of the three known enum strings before
+  // embedding it in the Airtable formula, preventing accidental injection.
+  const VALID: readonly string[] = ["Classic Sandwich", "Gourmet Sandwich", "Wrap"];
+  if (!VALID.includes(boxLunchType)) {
+    console.warn(`fetchMenuItemsByBoxLunchType: unexpected value "${boxLunchType}" — skipping fetch`);
+    return [];
+  }
   const escaped = String(boxLunchType).replace(/"/g, '\\"');
   const filterByFormula = `{Box Lunch Type} = "${escaped}"`;
   return fetchMenuItemsByFilterFormula(filterByFormula);
