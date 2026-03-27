@@ -1124,16 +1124,32 @@ function parseServicewareLines(text: string): { item: string; qty: string; suppl
   return items;
 }
 
-/** Build delivery beverages from hydration/soda fields */
+/** Build delivery beverages.
+ *  Primary source: SERVICEWARE_NOTES (bullet lines saved by DeliveryPaperProductsSection).
+ *  Fallback: legacy hydration/soda fields so older events still print correctly.
+ */
 function buildDeliveryBeveragesFromEvent(fields: Record<string, unknown> | null): BeverageItem[] {
   if (!fields) return [];
   const items: BeverageItem[] = [];
-  const soda = asStringArray(fields[FIELD_IDS.HYDRATION_SODA_SELECTION]);
-  if (soda.length > 0) items.push({ qty: "", item: soda.join(", ") });
-  const water = asSingleSelectName(fields[FIELD_IDS.HYDRATION_BOTTLED_WATER]);
-  if (water) items.push({ qty: "", item: `Bottled Water: ${water}` });
-  const other = asString(fields[FIELD_IDS.HYDRATION_OTHER]);
-  if (other?.trim()) items.push({ qty: "", item: other });
+
+  // Primary: structured beverage lines stored in SERVICEWARE_NOTES
+  const notesRaw = asString(fields[FIELD_IDS.SERVICEWARE_NOTES]);
+  if (notesRaw?.trim()) {
+    parseServicewareLines(notesRaw).forEach((p) => {
+      items.push({ qty: p.qty, item: p.item });
+    });
+  }
+
+  // Fallback: older hydration fields (kept so pre-new-UI events still show)
+  if (items.length === 0) {
+    const soda = asStringArray(fields[FIELD_IDS.HYDRATION_SODA_SELECTION]);
+    if (soda.length > 0) items.push({ qty: "", item: soda.join(", ") });
+    const water = asSingleSelectName(fields[FIELD_IDS.HYDRATION_BOTTLED_WATER]);
+    if (water) items.push({ qty: "", item: `Bottled Water: ${water}` });
+    const other = asString(fields[FIELD_IDS.HYDRATION_OTHER]);
+    if (other?.trim()) items.push({ qty: "", item: other });
+  }
+
   return items;
 }
 

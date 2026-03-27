@@ -4,74 +4,116 @@ import { FIELD_IDS } from "../../services/airtable/events";
 import { asString, asSingleSelectName } from "../../services/airtable/selectors";
 import { FormSection } from "./FormSection";
 
-type DeliveryItem = {
-  id: string;
-  item: string;
-  supplier: string;
-  qty: number | null;
+// Row definitions — every label is the exact text that appears on the printed
+// delivery BEO (so round-tripping load->save->print stays consistent).
+
+type PaperRowDef = {
+  key: string;
+  label: string;
+  printLabel: string;
+  group: "plates" | "cutlery" | "glassware";
+  optional?: boolean;
 };
 
-function formatLine(item: DeliveryItem): string {
-  if (!item.item.trim()) return "";
-  const hasQty = item.qty !== null && item.qty !== undefined && String(item.qty).trim() !== "";
-  const suffix = hasQty ? ` – ${item.qty}` : "";
-  return `• ${item.item.trim()} (${item.supplier})${suffix}`;
+const PAPER_ROWS: PaperRowDef[] = [
+  { key: "bowls",          label: "Bowls",           printLabel: "Bowls",          group: "plates",    optional: true  },
+  { key: "small_plates",   label: "Small Plates",    printLabel: "Small Plates",   group: "plates",    optional: false },
+  { key: "large_plates",   label: "Large Plates",    printLabel: "Large Plates",   group: "plates",    optional: false },
+  { key: "forks",          label: "Forks",           printLabel: "Forks",          group: "cutlery",   optional: false },
+  { key: "teaspoons",      label: "Teaspoons",       printLabel: "Teaspoons",      group: "cutlery",   optional: false },
+  { key: "knives",         label: "Knives",          printLabel: "Knives",         group: "cutlery",   optional: false },
+  { key: "coffee_cups",    label: "Coffee Cups",     printLabel: "Coffee Cups",    group: "glassware", optional: true  },
+  { key: "dinner_napkins", label: "Dinner Napkins",  printLabel: "Dinner Napkins", group: "cutlery",   optional: false },
+  { key: "tongs",          label: "Tongs",           printLabel: "Tongs",          group: "cutlery",   optional: false },
+  { key: "serving_spoons", label: "Serving Spoons",  printLabel: "Serving Spoons", group: "cutlery",   optional: false },
+];
+
+const HOT_ROWS: PaperRowDef[] = [
+  { key: "chafer_racks", label: "Aluminum Wire Chafer Racks", printLabel: "Aluminum Wire Chafer Racks", group: "cutlery" },
+  { key: "water_pans",   label: "Water Pans",              printLabel: "Water Pans",                 group: "cutlery" },
+  { key: "sternos",      label: "Sternos",                 printLabel: "Sternos",                    group: "cutlery" },
+];
+
+const EXTRAS_ROWS: PaperRowDef[] = [
+  { key: "roll_ups",     label: "Roll Ups",                printLabel: "Roll Ups",                       group: "cutlery", optional: true },
+  { key: "table_covers", label: "Disp. Table Covers",      printLabel: "White Disposable Table Covers",  group: "cutlery", optional: true },
+];
+
+type BevRowDef = {
+  key: string;
+  label: string;
+  printLabel: string;
+};
+
+const BEV_ROWS: BevRowDef[] = [
+  { key: "oj",         label: "Orange Juice",           printLabel: "Orange Juice"                   },
+  { key: "coffee_reg", label: "Coffee - Reg (boxes)",   printLabel: "Coffee Regular Boxes"           },
+  { key: "coffee_dec", label: "Coffee - Decaf (boxes)", printLabel: "Coffee Decaf Boxes"             },
+  { key: "soda_cans",  label: "Soda Cans (Assorted)",   printLabel: "Cold Assorted Soda Cans"        },
+  { key: "iced_tea",   label: "Iced Tea Bottles",       printLabel: "Cold Assorted Iced Tea Bottles" },
+  { key: "water",      label: "Water Bottles",          printLabel: "Water Bottles"                  },
+];
+
+// Storage helpers — same bullet format "• PrintLabel (FoodWerx Standard) – qty"
+// used everywhere else so parseServicewareLines() in print pages stays compatible.
+
+function toBulletLine(printLabel: string, qty: number | null): string | null {
+  if (!qty || qty <= 0) return null;
+  return `\u2022 ${printLabel} (FoodWerx Standard) \u2013 ${qty}`;
 }
 
-function parseLines(text: string): DeliveryItem[] {
-  const lines = (text || "").split(/\n/).filter(Boolean);
-  const items: DeliveryItem[] = [];
-  for (const line of lines) {
-    const bullet = (line.startsWith("•") ? line.slice(1) : line).trim();
+function parseBulletLines(text: string): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const line of (text || "").split(/\n/).filter(Boolean)) {
+    const bullet = (line.startsWith("\u2022") ? line.slice(1) : line).trim();
     if (!bullet) continue;
     const parenStart = bullet.indexOf("(");
-    const parenEnd = bullet.indexOf(")");
-    if (parenStart >= 0 && parenEnd > parenStart) {
-      const itemName = bullet.slice(0, parenStart).trim();
-      const supplier = bullet.slice(parenStart + 1, parenEnd).trim();
-      const rest = bullet.slice(parenEnd + 1).trim();
-      const dashMatch = rest.match(/[–\-]\s*(.+)/);
-      const qtyStr = dashMatch ? dashMatch[1].replace("Provided by host", "").trim() : "";
-      const qty = qtyStr ? (parseInt(qtyStr, 10) || null) : null;
-      items.push({ id: `dp-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`, item: itemName, supplier, qty });
-    }
+    const itemName = parenStart >= 0 ? bullet.slice(0, parenStart).trim() : bullet;
+    const rest = parenStart >= 0 ? bullet.slice(bullet.indexOf(")") + 1).trim() : "";
+    const dashMatch = rest.match(/[\u2013\-]\s*(\d+)/);
+    const qty = dashMatch ? parseInt(dashMatch[1], 10) : 0;
+    if (itemName && qty > 0) out[itemName.toLowerCase()] = qty;
   }
-  return items;
+  return out;
 }
 
-function generateId() {
-  return `dp-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+function mapPaperFromSaved(saved: Record<string, number>, rows: PaperRowDef[]): Record<string, number | null> {
+  const out: Record<string, number | null> = {};
+  for (const row of rows) out[row.key] = saved[row.printLabel.toLowerCase()] ?? null;
+  return out;
+}
+
+function mapBevFromSaved(saved: Record<string, number>): Record<string, number | null> {
+  const out: Record<string, number | null> = {};
+  for (const row of BEV_ROWS) out[row.key] = saved[row.printLabel.toLowerCase()] ?? null;
+  return out;
 }
 
 const GUEST_COUNT_BUFFER = 15;
 
-function autoFillDeliveryPaper(guestCount: number): DeliveryItem[] {
-  const count = Math.max(0, Number(guestCount) || 0) + GUEST_COUNT_BUFFER;
-  const appetizerQty = count * 2;
-  return [
-    { id: generateId(), item: "Small Plates – Standard (app + dessert)", supplier: "FoodWerx Standard", qty: appetizerQty },
-    { id: generateId(), item: "Large Plates – Standard (dinner)", supplier: "FoodWerx Standard", qty: count },
-    { id: generateId(), item: "Forks – Standard", supplier: "FoodWerx Standard", qty: count },
-    { id: generateId(), item: "Knives – Standard", supplier: "FoodWerx Standard", qty: count },
-    { id: generateId(), item: "Spoons – Standard", supplier: "FoodWerx Standard", qty: count },
-    { id: generateId(), item: "FW Napkins – Standard", supplier: "FoodWerx Standard", qty: count },
-    { id: generateId(), item: "Cocktail Napkins – Standard", supplier: "FoodWerx Standard", qty: count },
-    { id: generateId(), item: "Large Cups – Standard", supplier: "FoodWerx Standard", qty: count },
-    { id: generateId(), item: "Small Cups – Standard", supplier: "FoodWerx Standard", qty: count },
-  ];
+function autoFillPaperQtys(guestCount: number): Record<string, number | null> {
+  const n = Math.max(0, guestCount) + GUEST_COUNT_BUFFER;
+  return {
+    bowls: null,
+    small_plates: n,
+    large_plates: n,
+    forks: n,
+    teaspoons: Math.ceil(n * 0.25),
+    knives: n,
+    coffee_cups: null,
+    dinner_napkins: Math.round(n * 1.5),
+    tongs: 3,
+    serving_spoons: 2,
+    chafer_racks: null,
+    water_pans: null,
+    sternos: null,
+    roll_ups: null,
+    table_covers: null,
+  };
 }
-
-const DEFAULT_UTENSILS: { item: string; qty: number }[] = [
-  { item: "Plastic Tongs", qty: 3 },
-  { item: "Serving Spoons", qty: 2 },
-  { item: "Wire Chafing Frame w/ Water Pan", qty: 1 },
-  { item: "Sternos", qty: 4 },
-  { item: "Roll Ups (napkin/utensil)", qty: 0 },
-];
 
 type DeliveryPaperProductsSectionProps = {
   embedded?: boolean;
-  /** Jump nav + anchor id (full BEO intake: beo-section-delivery-paper). */
   sectionId?: string;
 };
 
@@ -80,229 +122,344 @@ export const DeliveryPaperProductsSection = ({
   sectionId = "beo-section-delivery-paper",
 }: DeliveryPaperProductsSectionProps) => {
   const { selectedEventId, selectedEventData, setFields } = useEventStore();
-  const [paperNeeded, setPaperNeeded] = useState<"yes" | "no">("no");
-  const [items, setItems] = useState<DeliveryItem[]>([]);
+
+  const [paperNeeded, setPaperNeeded]             = useState<"yes" | "no">("no");
+  const [beveragesIncluded, setBeveragesIncluded] = useState<"yes" | "no">("no");
+  const [paperQtys, setPaperQtys]                 = useState<Record<string, number | null>>({});
+  const [bevQtys, setBevQtys]                     = useState<Record<string, number | null>>({});
+  const [showHotEquipment, setShowHotEquipment]   = useState(false);
+  const [showOptional, setShowOptional]           = useState<Record<string, boolean>>({});
+
   const hasLoadedRef = useRef(false);
-  const skipLoadRef = useRef(false);
+  const skipLoadRef  = useRef(false);
 
   const guestCount = selectedEventData?.[FIELD_IDS.GUEST_COUNT] != null
     ? Number(selectedEventData[FIELD_IDS.GUEST_COUNT])
     : 0;
 
+  // Load from Airtable
   const loadFromAirtable = useCallback(() => {
     if (!selectedEventId || !selectedEventData) {
       setPaperNeeded("no");
-      setItems([]);
+      setBeveragesIncluded("no");
+      setPaperQtys({});
+      setBevQtys({});
       hasLoadedRef.current = false;
       return;
     }
-    if (skipLoadRef.current) {
-      skipLoadRef.current = false;
-      return;
+    if (skipLoadRef.current) { skipLoadRef.current = false; return; }
+
+    const combined: Record<string, number> = {};
+    for (const fid of [FIELD_IDS.PLATES_LIST, FIELD_IDS.CUTLERY_LIST, FIELD_IDS.GLASSWARE_LIST]) {
+      Object.assign(combined, parseBulletLines(asString(selectedEventData[fid])));
     }
-    const platesRaw = asString(selectedEventData[FIELD_IDS.PLATES_LIST]);
-    const cutleryRaw = asString(selectedEventData[FIELD_IDS.CUTLERY_LIST]);
-    const glasswareRaw = asString(selectedEventData[FIELD_IDS.GLASSWARE_LIST]);
-    const combined = [platesRaw, cutleryRaw, glasswareRaw].filter(Boolean).join("\n");
-    const parsed = parseLines(combined);
-    const src = asSingleSelectName(selectedEventData[FIELD_IDS.SERVICEWARE_SOURCE]);
-    const needed = src === "FoodWerx" || src === "Mixed" || parsed.length > 0 ? "yes" : "no";
-    setPaperNeeded(needed);
-    setItems(parsed.length > 0 ? parsed : []);
+    const allPaperRows = [...PAPER_ROWS, ...HOT_ROWS, ...EXTRAS_ROWS];
+    const loadedPaper  = mapPaperFromSaved(combined, allPaperRows);
+    setPaperQtys(loadedPaper);
+
+    if (HOT_ROWS.some((r) => (loadedPaper[r.key] ?? 0) > 0)) setShowHotEquipment(true);
+
+    const revealed: Record<string, boolean> = {};
+    for (const row of [...PAPER_ROWS, ...EXTRAS_ROWS].filter((r) => r.optional)) {
+      if ((loadedPaper[row.key] ?? 0) > 0) revealed[row.key] = true;
+    }
+    setShowOptional(revealed);
+
+    const src      = asSingleSelectName(selectedEventData[FIELD_IDS.SERVICEWARE_SOURCE]);
+    const hasItems = allPaperRows.some((r) => (loadedPaper[r.key] ?? 0) > 0);
+    setPaperNeeded(src === "FoodWerx" || src === "Mixed" || hasItems ? "yes" : "no");
+
+    const bevSaved  = parseBulletLines(asString(selectedEventData[FIELD_IDS.SERVICEWARE_NOTES]));
+    const loadedBev = mapBevFromSaved(bevSaved);
+    setBevQtys(loadedBev);
+    setBeveragesIncluded(BEV_ROWS.some((r) => (loadedBev[r.key] ?? 0) > 0) ? "yes" : "no");
+
     hasLoadedRef.current = true;
   }, [selectedEventId, selectedEventData]);
 
+  // Save to Airtable
   const saveToAirtable = useCallback(
-    async (needed: "yes" | "no", itemsData: DeliveryItem[]) => {
+    async (
+      needed: "yes" | "no",
+      bevIncluded: "yes" | "no",
+      qtys: Record<string, number | null>,
+      bev: Record<string, number | null>,
+    ) => {
       if (!selectedEventId) return;
       skipLoadRef.current = true;
-      const plates: DeliveryItem[] = [];
-      const cutlery: DeliveryItem[] = [];
-      const glassware: DeliveryItem[] = [];
-      const plateKeywords = ["plate", "bowl"];
-      const glassKeywords = ["cup", "glass"];
-      for (const it of itemsData) {
-        const lower = it.item.toLowerCase();
-        if (plateKeywords.some((k) => lower.includes(k))) plates.push(it);
-        else if (glassKeywords.some((k) => lower.includes(k))) glassware.push(it);
-        else cutlery.push(it);
+
+      const plates: string[]    = [];
+      const cutlery: string[]   = [];
+      const glassware: string[] = [];
+
+      if (needed === "yes") {
+        for (const row of [...PAPER_ROWS, ...HOT_ROWS, ...EXTRAS_ROWS]) {
+          const line = toBulletLine(row.printLabel, qtys[row.key] ?? null);
+          if (!line) continue;
+          if (row.group === "plates")         plates.push(line);
+          else if (row.group === "glassware") glassware.push(line);
+          else                                cutlery.push(line);
+        }
       }
-      const platesStr = needed === "yes" ? plates.map(formatLine).filter(Boolean).join("\n") : "";
-      const cutleryStr = needed === "yes" ? cutlery.map(formatLine).filter(Boolean).join("\n") : "";
-      const glasswareStr = needed === "yes" ? glassware.map(formatLine).filter(Boolean).join("\n") : "";
-      const source = needed === "yes" ? "FoodWerx" : "Client";
+
+      const bevLines: string[] = [];
+      if (bevIncluded === "yes") {
+        for (const row of BEV_ROWS) {
+          const line = toBulletLine(row.printLabel, bev[row.key] ?? null);
+          if (line) bevLines.push(line);
+        }
+      }
+
       await setFields(selectedEventId, {
-        [FIELD_IDS.PLATES_LIST]: platesStr || null,
-        [FIELD_IDS.CUTLERY_LIST]: cutleryStr || null,
-        [FIELD_IDS.GLASSWARE_LIST]: glasswareStr || null,
-        [FIELD_IDS.SERVICEWARE_SOURCE]: source,
+        [FIELD_IDS.PLATES_LIST]:       plates.join("\n")    || null,
+        [FIELD_IDS.CUTLERY_LIST]:      cutlery.join("\n")   || null,
+        [FIELD_IDS.GLASSWARE_LIST]:    glassware.join("\n") || null,
+        [FIELD_IDS.SERVICEWARE_NOTES]: bevLines.join("\n")  || null,
+        [FIELD_IDS.SERVICEWARE_SOURCE]: needed === "yes" ? "FoodWerx" : "Client",
       });
     },
-    [selectedEventId, setFields]
+    [selectedEventId, setFields],
   );
 
-  useEffect(() => {
-    loadFromAirtable();
-  }, [loadFromAirtable]);
+  useEffect(() => { loadFromAirtable(); }, [loadFromAirtable]);
 
+  // Debounced auto-save on any value change
   useEffect(() => {
     if (!selectedEventId || !hasLoadedRef.current) return;
-    const t = setTimeout(() => {
-      saveToAirtable(paperNeeded, items);
-    }, 600);
+    const t = setTimeout(() => saveToAirtable(paperNeeded, beveragesIncluded, paperQtys, bevQtys), 600);
     return () => clearTimeout(t);
-  }, [selectedEventId, paperNeeded, items, saveToAirtable]);
+  }, [selectedEventId, paperNeeded, beveragesIncluded, paperQtys, bevQtys, saveToAirtable]);
 
-  const handleAutoFill = () => {
-    const filled = autoFillDeliveryPaper(guestCount);
-    const utensils = DEFAULT_UTENSILS.map((u) => ({
-      id: generateId(),
-      item: u.item,
-      supplier: "FoodWerx Standard",
-      qty: u.qty > 0 ? u.qty : guestCount + GUEST_COUNT_BUFFER,
-    }));
-    setItems([...filled, ...utensils]);
-    setPaperNeeded("yes");
-  };
+  const updatePaper = (key: string, qty: number | null) =>
+    setPaperQtys((prev) => ({ ...prev, [key]: qty }));
 
-  const updateItem = (id: string, updates: Partial<DeliveryItem>) => {
-    setItems((prev) =>
-      prev.map((it) => (it.id === id ? { ...it, ...updates } : it))
-    );
-  };
+  const updateBev = (key: string, qty: number | null) =>
+    setBevQtys((prev) => ({ ...prev, [key]: qty }));
 
-  const removeItem = (id: string) => {
-    setItems((prev) => prev.filter((it) => it.id !== id));
-  };
+  const toggleOptional = (key: string) =>
+    setShowOptional((prev) => ({ ...prev, [key]: !prev[key] }));
 
-  const addItem = () => {
-    setItems((prev) => [
-      ...prev,
-      { id: generateId(), item: "", supplier: "FoodWerx Standard", qty: null },
-    ]);
-  };
-
-  const inputStyle = {
-    padding: "8px 10px",
-    borderRadius: "6px",
-    border: "1px solid #444",
-    backgroundColor: "#1a1a1a",
+  // Styles
+  const qtyInput: React.CSSProperties = {
+    width: 60,
+    padding: "5px 6px",
+    borderRadius: 5,
+    border: "1px solid rgba(255,255,255,0.15)",
+    backgroundColor: "rgba(0,0,0,0.3)",
     color: "#e0e0e0",
-    fontSize: "13px",
+    fontSize: 13,
+    textAlign: "center",
+    fontWeight: 600,
+    flexShrink: 0,
+  };
+
+  const rowSt: React.CSSProperties = {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: "5px 4px",
+    borderBottom: "1px solid rgba(255,255,255,0.05)",
+    gap: 8,
+  };
+
+  const rowLbl: React.CSSProperties = {
+    fontSize: 13,
+    color: "rgba(255,255,255,0.85)",
+    fontWeight: 500,
+    flex: 1,
     minWidth: 0,
   };
 
-  const labelStyle = {
-    display: "block" as const,
-    fontSize: "11px",
-    color: "#999",
-    marginBottom: "6px",
-    fontWeight: "600" as const,
+  const subHead = (color = "#22c55e"): React.CSSProperties => ({
+    fontSize: 10,
+    fontWeight: 700,
+    color,
+    letterSpacing: "0.8px",
+    textTransform: "uppercase",
+    paddingBottom: 4,
+    borderBottom: `1px solid ${color}44`,
+    marginBottom: 4,
+    marginTop: 10,
+    display: "block",
+  });
+
+  const panel: React.CSSProperties = {
+    flex: "1 1 260px",
+    minWidth: 0,
+    backgroundColor: "rgba(0,0,0,0.2)",
+    borderRadius: 8,
+    padding: "12px 14px",
+    border: "1px solid rgba(34,197,94,0.2)",
   };
 
-  const buttonStyle = {
-    padding: "10px 16px",
-    border: "2px solid #22c55e",
-    borderRadius: "8px",
-    backgroundColor: "transparent",
-    color: "#22c55e",
-    fontSize: "14px",
+  const ynBtn = (active: boolean, col = "#22c55e"): React.CSSProperties => ({
+    padding: "4px 14px",
+    borderRadius: 20,
+    border: `1px solid ${active ? col : "rgba(255,255,255,0.15)"}`,
+    backgroundColor: active ? `${col}22` : "transparent",
+    color: active ? col : "rgba(255,255,255,0.45)",
+    fontSize: 12,
+    fontWeight: 700,
     cursor: "pointer",
-    fontWeight: 600,
+    letterSpacing: "0.5px",
+  });
+
+  const chip = (active: boolean): React.CSSProperties => ({
+    fontSize: 11,
+    color: active ? "#22c55e" : "#6b7280",
+    cursor: "pointer",
+    padding: "2px 8px",
+    borderRadius: 4,
+    border: `1px dashed ${active ? "#22c55e" : "#555"}`,
+    background: "none",
+  });
+
+  const renderPaperRow = (row: PaperRowDef) => {
+    if (row.optional && !showOptional[row.key]) return null;
+    return (
+      <div key={row.key} style={rowSt}>
+        <span style={rowLbl}>{row.label}</span>
+        <input
+          type="number"
+          min="0"
+          value={paperQtys[row.key] ?? ""}
+          onChange={(e) => updatePaper(row.key, e.target.value ? parseInt(e.target.value, 10) : null)}
+          placeholder="--"
+          style={qtyInput}
+        />
+      </div>
+    );
   };
+
+  const renderBevRow = (row: BevRowDef) => (
+    <div key={row.key} style={rowSt}>
+      <span style={rowLbl}>{row.label}</span>
+      <input
+        type="number"
+        min="0"
+        value={bevQtys[row.key] ?? ""}
+        onChange={(e) => updateBev(row.key, e.target.value ? parseInt(e.target.value, 10) : null)}
+        placeholder="--"
+        style={{ ...qtyInput, borderColor: "rgba(59,130,246,0.3)" }}
+      />
+    </div>
+  );
 
   const content = (
     <div style={{ gridColumn: "1 / -1" }}>
-      <label style={labelStyle}>Paper Products Needed?</label>
-      <div style={{ display: "flex", gap: 32, marginBottom: 16 }}>
-        <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
-          <input
-            type="radio"
-            name="paperNeeded"
-            checked={paperNeeded === "yes"}
-            onChange={() => {
-              setPaperNeeded("yes");
-              if (items.length === 0) handleAutoFill();
-            }}
-          />
-          <span style={{ color: "#e0e0e0" }}>Yes</span>
-        </label>
-        <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
-          <input
-            type="radio"
-            name="paperNeeded"
-            checked={paperNeeded === "no"}
-            onChange={() => {
-              setPaperNeeded("no");
-              setItems([]);
-            }}
-          />
-          <span style={{ color: "#e0e0e0" }}>No (Client provides)</span>
-        </label>
+      {/* Toolbar */}
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14, flexWrap: "wrap" }}>
+        <button
+          type="button"
+          onClick={() => { setPaperQtys(autoFillPaperQtys(guestCount)); setPaperNeeded("yes"); }}
+          style={{
+            padding: "7px 14px",
+            borderRadius: 7,
+            border: "2px solid #22c55e",
+            backgroundColor: "rgba(34,197,94,0.1)",
+            color: "#22c55e",
+            fontSize: 12,
+            cursor: "pointer",
+            fontWeight: 700,
+          }}
+        >
+          Auto-fill for {guestCount || "?"} guests
+        </button>
+        <button
+          type="button"
+          onClick={() => { setPaperQtys({}); setBevQtys({}); setPaperNeeded("no"); setBeveragesIncluded("no"); }}
+          style={{
+            padding: "7px 12px",
+            borderRadius: 7,
+            border: "1px solid rgba(255,255,255,0.12)",
+            backgroundColor: "transparent",
+            color: "rgba(255,255,255,0.35)",
+            fontSize: 12,
+            cursor: "pointer",
+          }}
+        >
+          Clear all
+        </button>
       </div>
 
-      {paperNeeded === "yes" && (
-        <>
-          <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8 }}>
-            <button type="button" onClick={handleAutoFill} style={buttonStyle}>
-              Auto-fill for {guestCount} guests
-            </button>
-            <button type="button" onClick={addItem} style={{ ...buttonStyle, borderColor: "#22c55e", color: "#22c55e" }}>
-              + Add Item
-            </button>
+      {/* Two-panel layout matching the printed BEO left/right columns */}
+      <div style={{ display: "flex", gap: 14, flexWrap: "wrap", alignItems: "flex-start" }}>
+
+        {/* LEFT: Paper Products */}
+        <div style={panel}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+            <span style={{ fontSize: 11, color: "#999", fontWeight: 700, letterSpacing: "0.5px" }}>PAPER PRODUCTS:</span>
+            <button type="button" style={ynBtn(paperNeeded === "yes")} onClick={() => setPaperNeeded("yes")}>YES</button>
+            <button type="button" style={ynBtn(paperNeeded === "no")}  onClick={() => setPaperNeeded("no")}>NO</button>
           </div>
-          <div style={{ maxHeight: 300, overflowY: "auto" }}>
-            {items.map((it) => (
-              <div
-                key={it.id}
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "1fr 140px 80px 36px",
-                  gap: 8,
-                  alignItems: "center",
-                  marginBottom: 8,
-                }}
-              >
-                <input
-                  type="text"
-                  value={it.item}
-                  onChange={(e) => updateItem(it.id, { item: e.target.value })}
-                  placeholder="Item name"
-                  style={inputStyle}
-                />
-                <input
-                  type="text"
-                  value={it.supplier}
-                  onChange={(e) => updateItem(it.id, { supplier: e.target.value })}
-                  placeholder="Supplier"
-                  style={inputStyle}
-                />
-                <input
-                  type="number"
-                  value={it.qty ?? ""}
-                  onChange={(e) => updateItem(it.id, { qty: e.target.value ? parseInt(e.target.value, 10) : null })}
-                  placeholder="Qty"
-                  style={inputStyle}
-                />
-                <button
-                  type="button"
-                  onClick={() => removeItem(it.id)}
-                  style={{ background: "none", border: "none", color: "#ef4444", cursor: "pointer", fontSize: 18 }}
-                >
-                  ✕
-                </button>
+
+          {paperNeeded === "yes" && (
+            <>
+              {/* Always-visible rows */}
+              {PAPER_ROWS.filter((r) => !r.optional).map(renderPaperRow)}
+
+              {/* Optional row chips (Coffee Cups, Bowls) */}
+              <div style={{ display: "flex", gap: 6, marginTop: 8, marginBottom: 2, flexWrap: "wrap" }}>
+                {PAPER_ROWS.filter((r) => r.optional).map((row) => (
+                  <button key={row.key} type="button" style={chip(!!showOptional[row.key])} onClick={() => toggleOptional(row.key)}>
+                    {showOptional[row.key] ? "-" : "+"} {row.label}
+                  </button>
+                ))}
               </div>
-            ))}
+              {PAPER_ROWS.filter((r) => r.optional).map(renderPaperRow)}
+
+              {/* Hot Food Equipment */}
+              <button
+                type="button"
+                onClick={() => setShowHotEquipment((p) => !p)}
+                style={{ width: "100%", background: "none", border: "none", cursor: "pointer", display: "flex", alignItems: "center", padding: "6px 0 0" }}
+              >
+                <span style={subHead(showHotEquipment ? "#f97316" : "#6b7280")}>
+                  Hot food equipment {showHotEquipment ? "v" : ">"}
+                </span>
+              </button>
+              {showHotEquipment && HOT_ROWS.map(renderPaperRow)}
+
+              {/* Extras */}
+              <span style={subHead()}>Extras</span>
+              <div style={{ display: "flex", gap: 6, marginBottom: 4, flexWrap: "wrap" }}>
+                {EXTRAS_ROWS.map((row) => (
+                  <button key={row.key} type="button" style={chip(!!showOptional[row.key])} onClick={() => toggleOptional(row.key)}>
+                    {showOptional[row.key] ? "-" : "+"} {row.label}
+                  </button>
+                ))}
+              </div>
+              {EXTRAS_ROWS.map(renderPaperRow)}
+            </>
+          )}
+        </div>
+
+        {/* RIGHT: Beverages */}
+        <div style={{ ...panel, border: "1px solid rgba(59,130,246,0.25)" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+            <span style={{ fontSize: 11, color: "#999", fontWeight: 700, letterSpacing: "0.5px" }}>BEVERAGES:</span>
+            <button type="button" style={ynBtn(beveragesIncluded === "yes", "#3b82f6")} onClick={() => setBeveragesIncluded("yes")}>YES</button>
+            <button type="button" style={ynBtn(beveragesIncluded === "no")}             onClick={() => setBeveragesIncluded("no")}>NO</button>
           </div>
-        </>
-      )}
+
+          {beveragesIncluded === "yes"
+            ? BEV_ROWS.map(renderBevRow)
+            : (
+              <div style={{ fontSize: 12, color: "rgba(255,255,255,0.3)", padding: "8px 0", fontStyle: "italic" }}>
+                Toggle YES to add beverages (OJ, coffee, soda, etc.)
+              </div>
+            )
+          }
+        </div>
+
+      </div>
     </div>
   );
 
   return embedded ? content : (
     <FormSection
-      title="Paper products & disposables"
-      subtitle="Same slot as full-service “Plates / Serviceware” — printed BEO block PAPER PRODUCTS & BEVERAGES"
+      title="Paper Products & Beverages"
+      subtitle="Disposables, utensils & delivery beverages — printed BEO block"
       dotColor="#22c55e"
       isDelivery
       sectionId={sectionId}
