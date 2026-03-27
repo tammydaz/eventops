@@ -70,6 +70,7 @@ export function BoxedLunchSection({ eventId, canEdit }: Props) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [dirty, setDirty] = useState(false);
+  const [savedMsg, setSavedMsg] = useState<string | null>(null);
 
   // Catalog-mode state: per-tab items fetched from Airtable via {Box Lunch Type}
   const [activeTab, setActiveTab] = useState<TabKey>("classic");
@@ -158,6 +159,12 @@ export function BoxedLunchSection({ eventId, canEdit }: Props) {
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    if (!savedMsg) return;
+    const t = setTimeout(() => setSavedMsg(null), 3000);
+    return () => clearTimeout(t);
+  }, [savedMsg]);
 
   const box = getBoxTypeById(boxTypeId, mergedBoxTypes);
   const saladBoxMode = isSaladBoxedLunchBox(boxTypeId, box);
@@ -276,6 +283,8 @@ export function BoxedLunchSection({ eventId, canEdit }: Props) {
         setError(result.message ?? "Save failed");
         return;
       }
+      setError(null);
+      setSavedMsg("Saved!");
       setDirty(false);
       // Do not call load() here — Airtable read can lag and return [] briefly, which resets the form.
       setBoxTypeId(selectedBoxType);
@@ -687,6 +696,9 @@ export function BoxedLunchSection({ eventId, canEdit }: Props) {
           >
             Save boxed lunch
           </button>
+          {savedMsg && (
+            <div style={{ fontSize: 12, color: "#86efac", marginTop: 6 }}>{savedMsg}</div>
+          )}
         </>
       )}
     </div>
