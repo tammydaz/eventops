@@ -13,8 +13,21 @@ import {
   type BoxType,
 } from "../../config/boxedLunchBeo";
 import { loadBoxedLunchOrdersByEventId, upsertBoxedLunchOrderV2 } from "../../services/airtable/boxedLunchOrders";
-import { fetchBoxedLunchBoxMenuItems } from "../../services/airtable/menuItems";
+import {
+  fetchBoxedLunchBoxMenuItems,
+  fetchMenuItemsByBoxLunchType,
+  type BoxLunchTypeValue,
+  type MenuItemRecord,
+} from "../../services/airtable/menuItems";
 import { isErrorResult } from "../../services/airtable/selectors";
+
+const TAB_KEYS = ["classic", "gourmet", "wrap"] as const;
+type TabKey = (typeof TAB_KEYS)[number];
+const TAB_CONFIG: Record<TabKey, { label: string; airtableValue: BoxLunchTypeValue }> = {
+  classic: { label: "Classic", airtableValue: "Classic Sandwich" },
+  gourmet: { label: "Gourmet", airtableValue: "Gourmet Sandwich" },
+  wrap: { label: "Wrap", airtableValue: "Wrap" },
+};
 
 function rowId() {
   return `sand-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
@@ -58,15 +71,35 @@ export function BoxedLunchSection({ eventId, canEdit }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [dirty, setDirty] = useState(false);
 
+  // Catalog-mode state: per-tab items fetched from Airtable via {Box Lunch Type}
+  const [activeTab, setActiveTab] = useState<TabKey>("classic");
+  const [catalogItems, setCatalogItems] = useState<Record<TabKey, MenuItemRecord[]>>({
+    classic: [], gourmet: [], wrap: [],
+  });
+  const [catalogQtys, setCatalogQtys] = useState<Record<TabKey, Record<string, number>>>({
+    classic: {}, gourmet: {}, wrap: {},
+  });
+
   const load = useCallback(async () => {
     if (!eventId) return;
     setLoading(true);
     setError(null);
     try {
-      const [menuRes, orderRes] = await Promise.all([
+      const [menuRes, orderRes, classicRes, gourmetRes, wrapRes] = await Promise.all([
         fetchBoxedLunchBoxMenuItems(),
         loadBoxedLunchOrdersByEventId(eventId),
+        fetchMenuItemsByBoxLunchType("Classic Sandwich"),
+        fetchMenuItemsByBoxLunchType("Gourmet Sandwich"),
+        fetchMenuItemsByBoxLunchType("Wrap"),
       ]);
+
+      const newCatalogItems: Record<TabKey, MenuItemRecord[]> = {
+        classic: classicRes,
+        gourmet: gourmetRes,
+        wrap: wrapRes,
+      };
+      setCatalogItems(newCatalogItems);
+      const anyCatalog = TAB_KEYS.some((t) => newCatalogItems[t].length > 0);
 
       let merged = mergeBoxTypesWithAirtable(BOX_TYPES, menuRes);
 
@@ -87,6 +120,21 @@ export function BoxedLunchSection({ eventId, canEdit }: Props) {
         setBoxTypeId(v2.boxTypeId);
         if (isSaladBoxedLunchBox(v2.boxTypeId, loadedBox)) {
           setSandwiches(buildSaladRowsFromLoaded(v2.sandwiches));
+        } else if (anyCatalog) {
+          // Catalog mode: pre-populate catalogQtys from saved sandwiches by name matching
+          const initQtys: Record<TabKey, Record<string, number>> = { classic: {}, gourmet: {}, wrap: {} };
+          for (const saved of v2.sandwiches) {
+            for (const tab of TAB_KEYS) {
+              const match = newCatalogItems[tab].find((it) => it.name === saved.name);
+              if (match) {
+                initQtys[tab][match.id] = (initQtys[tab][match.id] ?? 0) + saved.qty;
+                break;
+              }
+            }
+          }
+          setCatalogQtys(initQtys);
+          // Keep sandwiches empty — catalog handles selections
+          setSandwiches([{ id: rowId(), name: "", qty: 1 }]);
         } else {
           setSandwiches(
             v2.sandwiches.length > 0
@@ -114,6 +162,25 @@ export function BoxedLunchSection({ eventId, canEdit }: Props) {
     sandwiches.map((s) => ({ name: s.name, qty: s.qty }))
   );
 
+  // Catalog mode is active when NOT in salad mode and at least one tab has Airtable items
+  const anyCatalogMode = !saladBoxMode && TAB_KEYS.some((t) => catalogItems[t].length > 0);
+  // Tabs whose Airtable fetch returned 0 items fall back to free-text rows
+  const hasFallbackTab = anyCatalogMode && TAB_KEYS.some((t) => catalogItems[t].length === 0);
+  const catalogTotalBoxes = anyCatalogMode
+    ? TAB_KEYS.reduce(
+        (sum, t) =>
+          sum +
+          Object.values(catalogQtys[t]).reduce(
+            (s, q) => s + Math.max(0, Math.floor(Number(q) || 0)),
+            0
+          ),
+        0
+      )
+    : 0;
+  const displayTotalBoxes = anyCatalogMode
+    ? catalogTotalBoxes + (hasFallbackTab ? totalBoxes : 0)
+    : totalBoxes;
+
   const updateRow = (id: string, patch: Partial<SandwichRow>) => {
     setDirty(true);
     setSandwiches((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)));
@@ -129,32 +196,63 @@ export function BoxedLunchSection({ eventId, canEdit }: Props) {
     setSandwiches((prev) => (prev.length <= 1 ? prev : prev.filter((r) => r.id !== id)));
   };
 
+  const updateCatalogQty = (tab: TabKey, itemId: string, qty: number) => {
+    setDirty(true);
+    setCatalogQtys((prev) => ({
+      ...prev,
+      [tab]: { ...prev[tab], [itemId]: Math.max(0, Math.floor(qty) || 0) },
+    }));
+  };
+
   const handleSaveBoxedLunch = async () => {
     if (!canEdit) return;
 
     const selectedEventId = eventId;
     const selectedBoxType = boxTypeId;
-    const sandwichRows = sandwiches;
 
-    if (!selectedEventId) {
-      return;
-    }
+    if (!selectedEventId || !selectedBoxType) return;
 
-    if (!selectedBoxType) {
-      return;
-    }
+    let lines: { name: string; qty: number }[] = [];
 
-    if (!sandwichRows || sandwichRows.length === 0) {
-      return;
-    }
-
-    const lines = sandwichRows
-      .map((s) => ({ name: s.name.trim(), qty: Math.max(0, Math.floor(Number(s.qty) || 0)) }))
-      .filter((s) => s.name && s.qty > 0);
-
-    if (lines.length === 0) {
-      setError(saladBoxMode ? "Enter at least one quantity for an entrée salad." : "Add at least one sandwich line with quantity.");
-      return;
+    if (saladBoxMode) {
+      // Salad box: build from sandwiches (salad rows)
+      lines = sandwiches
+        .map((s) => ({ name: s.name.trim(), qty: Math.max(0, Math.floor(Number(s.qty) || 0)) }))
+        .filter((s) => s.name && s.qty > 0);
+      if (lines.length === 0) {
+        setError("Enter at least one quantity for an entrée salad.");
+        return;
+      }
+    } else if (anyCatalogMode) {
+      // Catalog mode: collect non-zero quantities from all catalog tabs
+      for (const tab of TAB_KEYS) {
+        for (const item of catalogItems[tab]) {
+          const q = Math.max(0, Math.floor(Number(catalogQtys[tab][item.id]) || 0));
+          if (q > 0) lines.push({ name: item.name.trim(), qty: q });
+        }
+      }
+      // Also include free-text entries from any fallback tabs (0 catalog items)
+      if (hasFallbackTab) {
+        const freeLines = sandwiches
+          .map((s) => ({ name: s.name.trim(), qty: Math.max(0, Math.floor(Number(s.qty) || 0)) }))
+          .filter((s) => s.name && s.qty > 0);
+        lines.push(...freeLines);
+      }
+      if (lines.length === 0) {
+        setError("Add at least one sandwich with a quantity.");
+        return;
+      }
+    } else {
+      // Pure free-text mode
+      const sandwichRows = sandwiches;
+      if (!sandwichRows || sandwichRows.length === 0) return;
+      lines = sandwichRows
+        .map((s) => ({ name: s.name.trim(), qty: Math.max(0, Math.floor(Number(s.qty) || 0)) }))
+        .filter((s) => s.name && s.qty > 0);
+      if (lines.length === 0) {
+        setError("Add at least one sandwich line with quantity.");
+        return;
+      }
     }
 
     const selectedBox = getBoxTypeById(selectedBoxType, mergedBoxTypes);
@@ -180,6 +278,8 @@ export function BoxedLunchSection({ eventId, canEdit }: Props) {
       setBoxTypeId(selectedBoxType);
       if (selectedBox && isSaladBoxedLunchBox(selectedBoxType, selectedBox)) {
         setSandwiches(buildSaladRowsFromLoaded(lines));
+      } else if (anyCatalogMode) {
+        // catalogQtys already reflect the saved state; nothing to update
       } else {
         setSandwiches(lines.map((s) => ({ id: rowId(), name: s.name, qty: s.qty })));
       }
@@ -308,6 +408,159 @@ export function BoxedLunchSection({ eventId, canEdit }: Props) {
                 </div>
               ))}
             </div>
+          ) : anyCatalogMode ? (
+            <>
+              {/* Tab strip: Classic / Gourmet / Wrap */}
+              <div style={{ display: "flex", gap: 4, marginBottom: 12 }}>
+                {TAB_KEYS.map((tab) => (
+                  <button
+                    key={tab}
+                    type="button"
+                    onClick={() => setActiveTab(tab)}
+                    style={{
+                      padding: "6px 14px",
+                      fontSize: 12,
+                      fontWeight: 600,
+                      borderRadius: 6,
+                      border: `1px solid ${activeTab === tab ? "rgba(34,197,94,0.6)" : "rgba(255,255,255,0.12)"}`,
+                      background: activeTab === tab ? "rgba(34,197,94,0.2)" : "rgba(0,0,0,0.2)",
+                      color: activeTab === tab ? "#86efac" : "rgba(255,255,255,0.55)",
+                      cursor: "pointer",
+                    }}
+                  >
+                    {TAB_CONFIG[tab].label}
+                  </button>
+                ))}
+              </div>
+
+              {catalogItems[activeTab].length > 0 ? (
+                /* Catalog row list — static item names, qty inputs */
+                <div style={{ marginBottom: 12 }}>
+                  {catalogItems[activeTab].map((item) => (
+                    <div
+                      key={item.id}
+                      style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 8, flexWrap: "wrap" }}
+                    >
+                      <span
+                        style={{
+                          flex: "1 1 200px",
+                          minWidth: 160,
+                          padding: "8px 10px",
+                          borderRadius: 6,
+                          border: "1px solid rgba(255,255,255,0.12)",
+                          background: "rgba(0,0,0,0.2)",
+                          color: "#e5e7eb",
+                          fontSize: 14,
+                        }}
+                      >
+                        {item.name}
+                      </span>
+                      <input
+                        type="number"
+                        min={0}
+                        placeholder="Qty"
+                        value={(catalogQtys[activeTab][item.id] ?? 0) === 0 ? "" : catalogQtys[activeTab][item.id]}
+                        disabled={!canEdit}
+                        onChange={(e) =>
+                          updateCatalogQty(activeTab, item.id, parseInt(e.target.value, 10) || 0)
+                        }
+                        style={{
+                          width: 72,
+                          padding: "8px 10px",
+                          borderRadius: 6,
+                          border: "1px solid rgba(255,255,255,0.15)",
+                          background: "rgba(0,0,0,0.35)",
+                          color: "#fff",
+                          fontSize: 14,
+                        }}
+                      />
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                /* Free-text fallback for this tab — no Airtable items tagged yet */
+                <>
+                  {sandwiches.map((row) => (
+                    <div key={row.id} style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 8, flexWrap: "wrap" }}>
+                      <input
+                        type="text"
+                        list="boxed-sandwich-suggestions"
+                        placeholder="Sandwich name"
+                        value={row.name}
+                        disabled={!canEdit}
+                        onChange={(e) => updateRow(row.id, { name: e.target.value })}
+                        style={{
+                          flex: "1 1 200px",
+                          minWidth: 160,
+                          padding: "8px 10px",
+                          borderRadius: 6,
+                          border: "1px solid rgba(255,255,255,0.15)",
+                          background: "rgba(0,0,0,0.35)",
+                          color: "#fff",
+                          fontSize: 14,
+                        }}
+                      />
+                      <input
+                        type="number"
+                        min={0}
+                        placeholder="Qty"
+                        value={row.qty === 0 ? "" : row.qty}
+                        disabled={!canEdit}
+                        onChange={(e) => updateRow(row.id, { qty: parseInt(e.target.value, 10) || 0 })}
+                        style={{
+                          width: 72,
+                          padding: "8px 10px",
+                          borderRadius: 6,
+                          border: "1px solid rgba(255,255,255,0.15)",
+                          background: "rgba(0,0,0,0.35)",
+                          color: "#fff",
+                          fontSize: 14,
+                        }}
+                      />
+                      <button
+                        type="button"
+                        disabled={!canEdit || sandwiches.length <= 1}
+                        onClick={() => removeRow(row.id)}
+                        style={{
+                          padding: "6px 10px",
+                          fontSize: 12,
+                          borderRadius: 6,
+                          border: "1px solid rgba(239,68,68,0.5)",
+                          background: "transparent",
+                          color: "#f87171",
+                          cursor: canEdit && sandwiches.length > 1 ? "pointer" : "default",
+                        }}
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  ))}
+                  <datalist id="boxed-sandwich-suggestions">
+                    {SANDWICH_NAME_SUGGESTIONS.map((n) => (
+                      <option key={n} value={n} />
+                    ))}
+                  </datalist>
+                  <button
+                    type="button"
+                    disabled={!canEdit}
+                    onClick={addRow}
+                    style={{
+                      marginBottom: 12,
+                      padding: "8px 14px",
+                      fontSize: 12,
+                      fontWeight: 600,
+                      borderRadius: 6,
+                      border: "1px solid rgba(34,197,94,0.5)",
+                      background: "rgba(34,197,94,0.12)",
+                      color: "#86efac",
+                      cursor: canEdit ? "pointer" : "default",
+                    }}
+                  >
+                    + Add sandwich
+                  </button>
+                </>
+              )}
+            </>
           )
             : sandwiches.map((row) => (
                 <div key={row.id} style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 8, flexWrap: "wrap" }}>
@@ -364,7 +617,7 @@ export function BoxedLunchSection({ eventId, canEdit }: Props) {
                   </button>
                 </div>
               ))}
-          {!saladBoxMode && (
+          {!saladBoxMode && !anyCatalogMode && (
             <>
               <datalist id="boxed-sandwich-suggestions">
                 {SANDWICH_NAME_SUGGESTIONS.map((n) => (
@@ -406,7 +659,7 @@ export function BoxedLunchSection({ eventId, canEdit }: Props) {
             }}
           >
             <span style={{ fontSize: 13, fontWeight: 600, color: "#fef9c3" }}>Total boxes</span>
-            <span style={{ fontSize: 22, fontWeight: 800, color: "#facc15" }}>{totalBoxes}</span>
+            <span style={{ fontSize: 22, fontWeight: 800, color: "#facc15" }}>{displayTotalBoxes}</span>
           </div>
 
           {error && (

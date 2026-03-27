@@ -121,6 +121,22 @@ export async function fetchBoxedLunchBoxMenuItems(): Promise<MenuItemRecord[]> {
   return fetchMenuItemsByFilterFormula(BOXED_LUNCH_BOX_FILTER_FORMULA);
 }
 
+/** Valid values for the {Box Lunch Type} single-select on Menu Items (fld3QYpCSZaLTU2rg). */
+export type BoxLunchTypeValue = "Classic Sandwich" | "Gourmet Sandwich" | "Wrap";
+
+/**
+ * Fetch individual sandwich / wrap records tagged with a specific Box Lunch Type.
+ * Filters by {Box Lunch Type} field — NOT by {Category} — so this never interferes
+ * with the deli-tray picker, which filters by {Category}.
+ */
+export async function fetchMenuItemsByBoxLunchType(
+  boxLunchType: BoxLunchTypeValue
+): Promise<MenuItemRecord[]> {
+  const escaped = String(boxLunchType).replace(/"/g, '\\"');
+  const filterByFormula = `{Box Lunch Type} = "${escaped}"`;
+  return fetchMenuItemsByFilterFormula(filterByFormula);
+}
+
 /** Fetch menu items filtered by category key. Uses CATEGORY_MAP to build OR formula for Airtable Category field. */
 export async function fetchMenuItemsByCategory(categoryKey: string): Promise<MenuItemRecord[]> {
   const allowedCategories = CATEGORY_MAP[categoryKey as keyof typeof CATEGORY_MAP];
