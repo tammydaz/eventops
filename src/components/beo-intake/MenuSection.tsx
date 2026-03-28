@@ -2155,23 +2155,6 @@ export const MenuSection = ({ embedded = false, isDelivery = false }: MenuSectio
               />
             </div>
           </CollapsibleSubsection>
-
-          <CollapsibleSubsection title="CREATION STATION" icon="🍳" defaultOpen={false} isDelivery>
-            <div style={{ gridColumn: "1 / -1" }}>
-              <CreationStationContent
-                selectedEventId={selectedEventId}
-                canEdit={canEdit}
-                menuItems={menuItems}
-                menuItemNames={menuItemNames}
-                getItemName={getItemName}
-                fetchItemNames={fetchItemNames}
-                inputStyle={inputStyle}
-                labelStyle={labelStyle}
-                buttonStyle={buttonStyle}
-                addButtonStyle={deliverySmallAddStyle}
-              />
-            </div>
-          </CollapsibleSubsection>
         </>
       ) : (
         /* ── FULL SERVICE: Passed → Presented → Buffet Metal → China → Deli → Desserts → Platters → Stations ── */

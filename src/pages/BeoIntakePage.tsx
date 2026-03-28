@@ -831,43 +831,40 @@ export const BeoIntakePage = () => {
                                   }}
                                 >
                                   <div style={deliveryPairCol}>
-                                    <button type="button" disabled={isLocked} onClick={() => openPicker("passed", "passedApps", "Appetizer hot")} style={deliveryMenuBtn("#D32F2F")}>
-                                      Appetizer hot
+                                    <button type="button" disabled={isLocked} onClick={() => openPicker("passed", "passedApps", "HOT FOOD — TIN / HEATED")} style={deliveryMenuBtn("#D32F2F")}>
+                                      + Passed Apps
                                     </button>
-                                    <button type="button" disabled={isLocked} onClick={() => openPicker("presented", "presentedApps", "Appetizer disposable")} style={deliveryMenuBtn("#FBC02D")}>
-                                      Appetizer disposable
+                                    <button type="button" disabled={isLocked} onClick={() => openPicker("presented", "presentedApps", "HOT FOOD — TIN / HEATED")} style={deliveryMenuBtn("#FBC02D")}>
+                                      + Presented Apps
                                     </button>
                                   </div>
                                   <div style={deliveryPairCol}>
-                                    <button type="button" disabled={isLocked} onClick={() => openPicker("buffet_metal", "buffetMetal", "Buffet hot")} style={deliveryMenuBtn("#4DD0E1")}>
-                                      Buffet hot
+                                    <button type="button" disabled={isLocked} onClick={() => openPicker("buffet_metal", "buffetMetal", "HOT FOOD — TIN / HEATED")} style={deliveryMenuBtn("#4DD0E1")}>
+                                      + Hot Buffet
                                     </button>
-                                    <button type="button" disabled={isLocked} onClick={() => openPicker("buffet_china", "buffetChina", "Buffet disposable")} style={deliveryMenuBtn("#FF8A65")}>
-                                      Buffet disposable
+                                    <button type="button" disabled={isLocked} onClick={() => openPicker("buffet_china", "buffetChina", "COLD / DELI — PLASTIC CONTAINER")} style={deliveryMenuBtn("#FF8A65")}>
+                                      + Cold Sides
                                     </button>
                                   </div>
                                   <div style={deliveryPairCol}>
                                     <button type="button" disabled={isLocked} onClick={scrollToDeliveryBoxedLunch} style={deliveryMenuBtn("#22c55e")}>
-                                      Boxed lunch
+                                      + Boxed Items
                                     </button>
                                     <button type="button" disabled={isLocked} onClick={goToSandwichPlatters} style={deliveryMenuBtn("#f97316")}>
-                                      Sandwich platters
+                                      + Deli Platters
                                     </button>
                                   </div>
                                   <div style={deliveryPairCol}>
-                                    <button type="button" disabled={isLocked} onClick={() => openPicker("deli", "deliveryDeli", "Deli")} style={deliveryMenuBtn("#4CAF50")}>
-                                      Deli
+                                    <button type="button" disabled={isLocked} onClick={() => openPicker("deli", "deliveryDeli", "COLD / DELI — PLASTIC CONTAINER")} style={deliveryMenuBtn("#4CAF50")}>
+                                      + Deli
                                     </button>
-                                    <button type="button" disabled={isLocked} onClick={() => openPicker("room_temp", "roomTempDisplay", "Salad")} style={deliveryMenuBtn("#757575")}>
-                                      Salad
+                                    <button type="button" disabled={isLocked} onClick={() => openPicker("room_temp", "roomTempDisplay", "COLD / DELI — PLASTIC CONTAINER")} style={deliveryMenuBtn("#757575")}>
+                                      + Salads
                                     </button>
                                   </div>
                                   <div style={deliveryPairCol}>
-                                    <button type="button" disabled={isLocked} onClick={() => openPicker("desserts", "desserts", "Dessert disposable")} style={deliveryMenuBtn("#7B1FA2")}>
-                                      Dessert disposable
-                                    </button>
-                                    <button type="button" disabled={isLocked} onClick={scrollToBeoStations} style={deliveryMenuBtn(STATIONS_MENU_PILL)}>
-                                      Station
+                                    <button type="button" disabled={isLocked} onClick={() => openPicker("desserts", "desserts", "DESSERT / SNACKS")} style={deliveryMenuBtn("#7B1FA2")}>
+                                      + Dessert / Snacks
                                     </button>
                                   </div>
                                 </div>
@@ -1050,9 +1047,9 @@ export const BeoIntakePage = () => {
                                   <BoxedLunchSection eventId={selectedEventId} canEdit={!isLocked} />
                                 </div>
                                 <div id="beo-delivery-platters" style={{ paddingTop: 16, borderTop: "1px solid rgba(249,115,22,0.4)" }}>
-                                  <div style={{ fontSize: 13, fontWeight: 700, color: "rgba(253,186,116,0.95)", textAlign: "center", marginBottom: 10, letterSpacing: "0.04em" }}>Sandwich platters</div>
+                                  <div style={{ fontSize: 13, fontWeight: 700, color: "rgba(253,186,116,0.95)", textAlign: "center", marginBottom: 10, letterSpacing: "0.04em" }}>Deli Platters</div>
                                   {!sandwichPlatterModalOpen && (
-                                    <p style={{ fontSize: 12, color: "rgba(255,255,255,0.45)", textAlign: "center", margin: "0 0 10px" }}>Use the Sandwich platters button above to configure platter groups.</p>
+                                    <p style={{ fontSize: 12, color: "rgba(255,255,255,0.45)", textAlign: "center", margin: "0 0 10px" }}>Use the + Deli Platters button above to configure platter groups.</p>
                                   )}
                                   {sandwichPlatterModalOpen && (
                                     <SandwichPlatterConfigModal
@@ -1069,7 +1066,7 @@ export const BeoIntakePage = () => {
                                 </div>
                               </div>
                             )}
-                            {selectedEventId && (
+                            {selectedEventId && !isDelivery && (
                               <div id="beo-creation-stations" style={{ width: "100%", marginTop: 20 }}>
                                 <CreationStationContent
                                   selectedEventId={selectedEventId}
