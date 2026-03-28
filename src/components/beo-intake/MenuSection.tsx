@@ -1909,9 +1909,9 @@ export const MenuSection = ({ embedded = false, isDelivery = false }: MenuSectio
       </div>
 
       {isDelivery ? (
-        /* ── DELIVERY: HOT, DELI, KITCHEN, SALADS, DESSERTS ── */
+        /* ── DELIVERY: Locked structure — HOT FOOD → COLD/DELI → DESSERT/SNACKS ── */
         <>
-          <CollapsibleSubsection title="Appetizers — hot appetizers — disposable" icon="🔥" defaultOpen isDelivery>
+          <CollapsibleSubsection title="HOT FOOD — TIN / HEATED" icon="🔥" defaultOpen isDelivery>
             <div style={{ gridColumn: "1 / -1" }}>
               <label style={labelStyle}>Passed Appetizers</label>
               <div style={{ marginBottom: "8px" }}>
@@ -1930,7 +1930,7 @@ export const MenuSection = ({ embedded = false, isDelivery = false }: MenuSectio
                   />
                 ))}
               </div>
-              <button type="button" disabled={!canEdit} onClick={() => openPicker("passed", "passedApps", "Appetizers — hot appetizers — disposable")} style={deliverySmallAddStyle}>+ Add Passed Appetizer</button>
+              <button type="button" disabled={!canEdit} onClick={() => openPicker("passed", "passedApps", "HOT FOOD — TIN / HEATED")} style={deliverySmallAddStyle}>+ Add Passed Appetizer</button>
               <CustomFoodItemsBlock
                 value={customFields.customPassedApp}
                 fieldId={FIELD_IDS.CUSTOM_PASSED_APP}
@@ -1961,7 +1961,7 @@ export const MenuSection = ({ embedded = false, isDelivery = false }: MenuSectio
                     />
                   ))}
                 </div>
-                <button type="button" disabled={!canEdit} onClick={() => openPicker("presented", "presentedApps", "Appetizers — hot appetizers — disposable")} style={deliverySmallAddStyle}>+ Add Presented Appetizer</button>
+                <button type="button" disabled={!canEdit} onClick={() => openPicker("presented", "presentedApps", "HOT FOOD — TIN / HEATED")} style={deliverySmallAddStyle}>+ Add Presented Appetizer</button>
                 <CustomFoodItemsBlock
                   value={customFields.customPresentedApp}
                   fieldId={FIELD_IDS.CUSTOM_PRESENTED_APP}
@@ -1978,9 +1978,9 @@ export const MenuSection = ({ embedded = false, isDelivery = false }: MenuSectio
             </div>
           </CollapsibleSubsection>
 
-          <CollapsibleSubsection title="Buffet hot" icon="🔥" defaultOpen isDelivery>
+          <CollapsibleSubsection title="HOT FOOD — TIN / HEATED (Buffet)" icon="🔥" defaultOpen isDelivery>
             <div style={{ gridColumn: "1 / -1" }}>
-              <label style={labelStyle}>Buffet – Metal (hot items)</label>
+              <label style={labelStyle}>Hot Buffet Items</label>
               <div style={{ marginBottom: "8px" }}>
                 {selections.buffetMetal.map((itemId) => (
                   <MenuItemCard
@@ -1997,11 +1997,11 @@ export const MenuSection = ({ embedded = false, isDelivery = false }: MenuSectio
                   />
                 ))}
               </div>
-              <button type="button" disabled={!canEdit} onClick={() => openPicker("buffet_metal", "buffetMetal", "Buffet hot")} style={deliverySmallAddStyle}>+ Add Hot Buffet Item</button>
+              <button type="button" disabled={!canEdit} onClick={() => openPicker("buffet_metal", "buffetMetal", "HOT FOOD — TIN / HEATED")} style={deliverySmallAddStyle}>+ Add Hot Buffet Item</button>
             </div>
           </CollapsibleSubsection>
 
-          <CollapsibleSubsection title="Deli / sandwiches" icon="🥪" defaultOpen isDelivery>
+          <CollapsibleSubsection title="COLD / DELI — PLASTIC CONTAINER" icon="🥪" defaultOpen isDelivery>
             <div style={{ gridColumn: "1 / -1" }}>
               <label style={labelStyle}>Sandwiches & Wraps</label>
               <p style={{ fontSize: 12, color: "#888", margin: "0 0 8px 0" }}>
@@ -2024,7 +2024,7 @@ export const MenuSection = ({ embedded = false, isDelivery = false }: MenuSectio
                 ))}
               </div>
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
-                <button type="button" disabled={!canEdit} onClick={() => openPicker("deli", "deliveryDeli", "Deli / sandwiches")} style={deliverySmallAddStyle}>+ Add Deli Item</button>
+                <button type="button" disabled={!canEdit} onClick={() => openPicker("deli", "deliveryDeli", "COLD / DELI — PLASTIC CONTAINER")} style={deliverySmallAddStyle}>+ Add Deli Item</button>
                 <button type="button" onClick={() => setPlatterModalOpen((v) => !v)} style={{ ...deliverySmallAddStyle, borderColor: "#f97316", color: "#f97316" }}>{platterModalOpen ? "− Hide Platter Config" : "+ Add Sandwich Platter"}</button>
               </div>
               <BoxedLunchSection eventId={selectedEventId} canEdit={canEdit} />
@@ -2059,9 +2059,9 @@ export const MenuSection = ({ embedded = false, isDelivery = false }: MenuSectio
             </div>
           </CollapsibleSubsection>
 
-          <CollapsibleSubsection title="Buffet disposable" icon="🍳" defaultOpen isDelivery>
+          <CollapsibleSubsection title="COLD / DELI — PLASTIC CONTAINER (Cold Sides)" icon="🍳" defaultOpen isDelivery>
             <div style={{ gridColumn: "1 / -1" }}>
-              <label style={labelStyle}>Buffet – China (cold/kitchen items)</label>
+              <label style={labelStyle}>Cold Sides &amp; Kitchen Items</label>
               <div style={{ marginBottom: "8px" }}>
                 {selections.buffetChina.map((itemId) => (
                   <div key={itemId} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", backgroundColor: "#2a2a2a", border: deliveryItemBorder, borderRadius: "6px", padding: "8px 12px", marginBottom: "6px" }}>
@@ -2070,7 +2070,7 @@ export const MenuSection = ({ embedded = false, isDelivery = false }: MenuSectio
                   </div>
                 ))}
               </div>
-<button type="button" disabled={!canEdit} onClick={() => openPicker("buffet_china", "buffetChina", "Buffet disposable")} style={deliverySmallAddStyle}>+ Add Kitchen Item</button>
+<button type="button" disabled={!canEdit} onClick={() => openPicker("buffet_china", "buffetChina", "COLD / DELI — PLASTIC CONTAINER")} style={deliverySmallAddStyle}>+ Add Cold Side / Kitchen Item</button>
                 <CustomFoodItemsBlock
                   value={customFields.customBuffetChina}
                   fieldId={FIELD_IDS.CUSTOM_BUFFET_CHINA}
@@ -2086,9 +2086,9 @@ export const MenuSection = ({ embedded = false, isDelivery = false }: MenuSectio
             </div>
           </CollapsibleSubsection>
 
-          <CollapsibleSubsection title="Salads — disposable" icon="🥗" defaultOpen isDelivery>
+          <CollapsibleSubsection title="COLD / DELI — PLASTIC CONTAINER (Salads)" icon="🥗" defaultOpen isDelivery>
             <div style={{ gridColumn: "1 / -1" }}>
-              <label style={labelStyle}>Room Temp Display / Salads</label>
+              <label style={labelStyle}>Salads &amp; Room Temp Display</label>
               <div style={{ marginBottom: "8px" }}>
                 {selections.roomTempDisplay.map((itemId) => (
                   <MenuItemCard
@@ -2105,7 +2105,7 @@ export const MenuSection = ({ embedded = false, isDelivery = false }: MenuSectio
                   />
                 ))}
               </div>
-              <button type="button" disabled={!canEdit} onClick={() => openPicker("room_temp", "roomTempDisplay", "Salads — disposable")} style={deliverySmallAddStyle}>+ Add Salad Item</button>
+              <button type="button" disabled={!canEdit} onClick={() => openPicker("room_temp", "roomTempDisplay", "COLD / DELI — PLASTIC CONTAINER")} style={deliverySmallAddStyle}>+ Add Salad Item</button>
               <CustomFoodItemsBlock
                 value={customFields.customRoomTemp}
                 fieldId={FIELD_IDS.CUSTOM_ROOM_TEMP_DISPLAY}
@@ -2121,9 +2121,9 @@ export const MenuSection = ({ embedded = false, isDelivery = false }: MenuSectio
             </div>
           </CollapsibleSubsection>
 
-          <CollapsibleSubsection title="Dessert disposable" icon="🍰" defaultOpen isDelivery>
+          <CollapsibleSubsection title="DESSERT / SNACKS" icon="🍰" defaultOpen isDelivery>
             <div style={{ gridColumn: "1 / -1" }}>
-              <label style={labelStyle}>Desserts</label>
+              <label style={labelStyle}>Desserts &amp; Snacks</label>
               <div style={{ marginBottom: "8px" }}>
                 {selections.desserts.map((itemId) => (
                   <MenuItemCard
@@ -2140,7 +2140,7 @@ export const MenuSection = ({ embedded = false, isDelivery = false }: MenuSectio
                   />
                 ))}
               </div>
-              <button type="button" disabled={!canEdit} onClick={() => openPicker("desserts", "desserts", "Dessert disposable")} style={deliverySmallAddStyle}>+ Add Dessert</button>
+              <button type="button" disabled={!canEdit} onClick={() => openPicker("desserts", "desserts", "DESSERT / SNACKS")} style={deliverySmallAddStyle}>+ Add Dessert</button>
               <CustomFoodItemsBlock
                 value={customFields.customDessert}
                 fieldId={FIELD_IDS.CUSTOM_DESSERTS}

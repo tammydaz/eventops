@@ -1015,18 +1015,12 @@ const MENU_SECTION_CONFIG: { title: string; fieldId: string; customFieldId: stri
   { title: "DESSERTS", fieldId: FIELD_IDS.DESSERTS, customFieldId: FIELD_IDS.CUSTOM_DESSERTS },
 ];
 
-/** Delivery BEO section config — delivery-only fields (no metal/china/appetizer lanes; all disposable)
- * HOT = buffet metal + apps (not yet broken down hot/cold)
- * KITCHEN = buffet china + apps (same)
- * SALADS/DISPLAYS = room temp + displays
- * DELI = sandwiches, wraps, etc. (Deli field)
- */
+/** Delivery BEO section config — locked structure (2026-03-27). */
+// ── LOCKED Delivery BEO Section Structure (matches BeoPrintPage.tsx) ──
 const DELIVERY_MENU_SECTION_CONFIG: { title: string; fieldIds: string[]; customFieldIds: string[] }[] = [
-  { title: "HOT - DISPOSABLE", fieldIds: [FIELD_IDS.BUFFET_METAL, FIELD_IDS.PASSED_APPETIZERS, FIELD_IDS.PRESENTED_APPETIZERS], customFieldIds: [FIELD_IDS.CUSTOM_BUFFET_METAL, FIELD_IDS.CUSTOM_PASSED_APP, FIELD_IDS.CUSTOM_PRESENTED_APP] },
-  { title: "DELI - DISPOSABLE", fieldIds: [FIELD_IDS.DELIVERY_DELI], customFieldIds: [FIELD_IDS.CUSTOM_DELIVERY_DELI] },
-  { title: "KITCHEN - DISPOSABLE", fieldIds: [FIELD_IDS.BUFFET_CHINA], customFieldIds: [FIELD_IDS.CUSTOM_BUFFET_CHINA] },
-  { title: "SALADS - DISPOSABLE", fieldIds: [FIELD_IDS.ROOM_TEMP_DISPLAY], customFieldIds: [FIELD_IDS.CUSTOM_ROOM_TEMP_DISPLAY] },
-  { title: "DESSERTS - DISPOSABLE", fieldIds: [FIELD_IDS.DESSERTS], customFieldIds: [FIELD_IDS.CUSTOM_DESSERTS] },
+  { title: "HOT FOOD — TIN / HEATED", fieldIds: [FIELD_IDS.BUFFET_METAL, FIELD_IDS.PASSED_APPETIZERS, FIELD_IDS.PRESENTED_APPETIZERS], customFieldIds: [FIELD_IDS.CUSTOM_BUFFET_METAL, FIELD_IDS.CUSTOM_PASSED_APP, FIELD_IDS.CUSTOM_PRESENTED_APP] },
+  { title: "COLD / DELI — PLASTIC CONTAINER", fieldIds: [FIELD_IDS.DELIVERY_DELI, FIELD_IDS.BUFFET_CHINA, FIELD_IDS.ROOM_TEMP_DISPLAY], customFieldIds: [FIELD_IDS.CUSTOM_DELIVERY_DELI, FIELD_IDS.CUSTOM_BUFFET_CHINA, FIELD_IDS.CUSTOM_ROOM_TEMP_DISPLAY] },
+  { title: "DESSERT / SNACKS", fieldIds: [FIELD_IDS.DESSERTS], customFieldIds: [FIELD_IDS.CUSTOM_DESSERTS] },
 ];
 
 const MENU_TABLE = "tbl0aN33DGG6R1sPZ";
@@ -1474,11 +1468,23 @@ const KitchenBEOPrintPage: React.FC = () => {
       }
       const extra = buildBoxedLunchKitchenSectionsFromOrders(boxedLunchOrders) as MenuSection[];
       if (extra.length > 0) {
-        const deliIdx = sections.findIndex((s) => s.title === "DELI - DISPOSABLE");
-        if (deliIdx >= 0) {
-          sections.splice(deliIdx + 1, 0, ...extra);
-        } else {
-          sections.unshift(...extra);
+        // Merge same-titled sections; insert new sections after COLD / DELI
+        const toInsert: typeof extra = [];
+        for (const bs of extra) {
+          const idx = sections.findIndex((s) => s.title === bs.title);
+          if (idx >= 0) {
+            sections[idx] = { ...sections[idx], items: [...sections[idx].items, ...bs.items] };
+          } else {
+            toInsert.push(bs);
+          }
+        }
+        if (toInsert.length > 0) {
+          const deliIdx = sections.findIndex((s) => s.title === "COLD / DELI — PLASTIC CONTAINER");
+          if (deliIdx >= 0) {
+            sections.splice(deliIdx + 1, 0, ...toInsert);
+          } else {
+            sections.unshift(...toInsert);
+          }
         }
       }
     } else {

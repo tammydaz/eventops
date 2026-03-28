@@ -10,7 +10,7 @@ import { loadStationComponentNamesByIds } from "../services/airtable/stationComp
 import { loadBoxedLunchOrdersByEventId, type BoxedLunchOrder } from "../services/airtable/boxedLunchOrders";
 import { buildBoxedLunchBeoSectionsFromOrders } from "../utils/boxedLunchPrint";
 import { getPlatterOrdersByEventId } from "../state/platterOrdersStore";
-import { asBarServicePrimary, asLinkedRecordIds, asMultiSelectNames, asSingleSelectName, asString, asStringArray, isErrorResult } from "../services/airtable/selectors";
+import { asBarServicePrimary, asBoolean, asLinkedRecordIds, asMultiSelectNames, asSingleSelectName, asString, asStringArray, isErrorResult } from "../services/airtable/selectors";
 import { secondsToTimeString, secondsTo12HourString } from "../utils/timeHelpers";
 import { isDeliveryOrPickup } from "../lib/deliveryHelpers";
 import { FULL_BAR_PACKAGE, FULL_BAR_PACKAGE_SPECK_ROWS, getFullBarPackagePackoutItems, getSignatureCocktailGreeting, getNonStandardBarItems, parseBarItemTokens, isStandardBarItem } from "../constants/fullBarPackage";
@@ -44,10 +44,14 @@ type TopTab = "kitchenBEO" | "meetingBeoNotes" | "fullBeoPacket" | "buffetMenuSi
 
 // ── Section color by type ──
 const getSectionColor = (sectionTitle: string): string => {
-  // Delivery sections: all green
-  if (sectionTitle.includes("BOXED LUNCHES")) return "#22c55e";
-  if (sectionTitle.includes("WAX BAG")) return "#ca8a04";
-  if (sectionTitle.includes("DISPOSABLE")) return "#22c55e";
+  // Delivery sections — locked structure colors
+  if (sectionTitle.includes("HOT FOOD")) return "#f97316";            // section 1: orange (heat)
+  if (sectionTitle.includes("COLD / DELI")) return "#3b82f6";         // section 2: blue (cold)
+  if (sectionTitle.includes("BOXED ITEMS")) return "#22c55e";          // section 3: green (packaged)
+  if (sectionTitle.includes("DESSERT / SNACKS")) return "#ef4444";     // section 4: red (sweets)
+  if (sectionTitle === "BEVERAGES") return "#a855f7";                  // section 5: purple
+  if (sectionTitle === "SERVICEWARE") return "#6b7280";                // section 6: gray
+  // Full-service sections (unchanged)
   if (sectionTitle.includes("PASSED")) return "#22c55e";
   if (sectionTitle.includes("PRESENTED")) return "#f97316";
   if (sectionTitle.includes("BUFFET")) return "#3b82f6";
@@ -2814,6 +2818,10 @@ const BeoPrintPage: React.FC = () => {
   const notBuffetBanner = serviceStyle && !serviceStyle.toLowerCase().includes("buffet")
     ? `NOT BUFFET – ${serviceStyle.toUpperCase()}`
     : "";
+  // Delivery: "Food Must Go Hot" — when Kitchen On-Site = No and Food Must Go Hot is checked
+  const kitchenOnSite = asSingleSelectName(eventData[FIELD_IDS.KITCHEN_ON_SITE]);
+  const foodMustGoHot = asBoolean(eventData[FIELD_IDS.FOOD_MUST_GO_HOT]);
+  // showFoodMustGoHotBanner is computed below after isDelivery is available
 
   // Job number = order by dispatch time for that day (001 = earliest, etc.)
   const eventDateNorm = (eventDateRaw || "").trim();
@@ -2872,6 +2880,7 @@ const BeoPrintPage: React.FC = () => {
   // ── Menu Sections (linked items, or fallback to custom text from invoice)
   const eventType = asSingleSelectName(eventData[FIELD_IDS.EVENT_TYPE]);
   const isDelivery = isDeliveryOrPickup(eventType);
+  const showFoodMustGoHotBanner = isDelivery && foodMustGoHot;
 
   // Hard print order: Passed → Presented → Buffet Metal → Buffet China → Deli → Desserts
   // Stations route into their placement section (Presented Appetizer / Buffet Metal / Buffet China).
@@ -2885,12 +2894,29 @@ const BeoPrintPage: React.FC = () => {
     { title: "DESSERTS", fieldId: FIELD_IDS.DESSERTS, linkedFieldId: FIELD_IDS.DESSERTS, customFieldId: FIELD_IDS.CUSTOM_DESSERTS },
   ];
 
+  // ── LOCKED Delivery BEO Section Structure ──
+  // Section 1: HOT FOOD — TIN / HEATED  (hot entrées, hot apps, buffet metal)
+  // Section 2: COLD / DELI — PLASTIC CONTAINER  (deli, cold sides, salads)
+  // Section 3: BOXED ITEMS — INDIVIDUAL PACKAGING  (inserted from boxed lunch orders below)
+  // Section 4: DESSERT / SNACKS  (desserts and snack items)
+  // Section 5: BEVERAGES  (rendered separately from menu sections)
+  // Section 6: SERVICEWARE  (rendered separately from menu sections)
   const DELIVERY_SECTION_CONFIG: { title: string; fieldIds: string[]; customFieldIds: string[] }[] = [
-    { title: "HOT - DISPOSABLE", fieldIds: [FIELD_IDS.BUFFET_METAL, FIELD_IDS.PASSED_APPETIZERS, FIELD_IDS.PRESENTED_APPETIZERS], customFieldIds: [FIELD_IDS.CUSTOM_BUFFET_METAL, FIELD_IDS.CUSTOM_PASSED_APP, FIELD_IDS.CUSTOM_PRESENTED_APP] },
-    { title: "DELI - DISPOSABLE", fieldIds: [FIELD_IDS.DELIVERY_DELI], customFieldIds: [FIELD_IDS.CUSTOM_DELIVERY_DELI] },
-    { title: "KITCHEN - DISPOSABLE", fieldIds: [FIELD_IDS.BUFFET_CHINA], customFieldIds: [FIELD_IDS.CUSTOM_BUFFET_CHINA] },
-    { title: "SALADS - DISPOSABLE", fieldIds: [FIELD_IDS.ROOM_TEMP_DISPLAY], customFieldIds: [FIELD_IDS.CUSTOM_ROOM_TEMP_DISPLAY] },
-    { title: "DESSERTS - DISPOSABLE", fieldIds: [FIELD_IDS.DESSERTS], customFieldIds: [FIELD_IDS.CUSTOM_DESSERTS] },
+    {
+      title: "HOT FOOD — TIN / HEATED",
+      fieldIds: [FIELD_IDS.BUFFET_METAL, FIELD_IDS.PASSED_APPETIZERS, FIELD_IDS.PRESENTED_APPETIZERS],
+      customFieldIds: [FIELD_IDS.CUSTOM_BUFFET_METAL, FIELD_IDS.CUSTOM_PASSED_APP, FIELD_IDS.CUSTOM_PRESENTED_APP],
+    },
+    {
+      title: "COLD / DELI — PLASTIC CONTAINER",
+      fieldIds: [FIELD_IDS.DELIVERY_DELI, FIELD_IDS.BUFFET_CHINA, FIELD_IDS.ROOM_TEMP_DISPLAY],
+      customFieldIds: [FIELD_IDS.CUSTOM_DELIVERY_DELI, FIELD_IDS.CUSTOM_BUFFET_CHINA, FIELD_IDS.CUSTOM_ROOM_TEMP_DISPLAY],
+    },
+    {
+      title: "DESSERT / SNACKS",
+      fieldIds: [FIELD_IDS.DESSERTS],
+      customFieldIds: [FIELD_IDS.CUSTOM_DESSERTS],
+    },
   ];
 
   let menuSections: SectionData[] = isDelivery
@@ -3031,11 +3057,31 @@ const BeoPrintPage: React.FC = () => {
   if (isDelivery) {
     const boxedSlice = buildBoxedLunchBeoSectionsFromOrders(boxedLunchOrders);
     if (boxedSlice.length > 0) {
-      const deliIdx = menuSections.findIndex((s) => s.title === "DELI - DISPOSABLE");
-      if (deliIdx >= 0) {
-        menuSections = [...menuSections.slice(0, deliIdx + 1), ...boxedSlice, ...menuSections.slice(deliIdx + 1)];
-      } else {
-        menuSections = [...boxedSlice, ...menuSections];
+      // Separate "BOXED ITEMS" from any sections that share a title with existing delivery sections
+      const newSections: typeof menuSections = [];
+      const dedupSections: typeof menuSections = [];
+      for (const bs of boxedSlice) {
+        if (menuSections.some((s) => s.title === bs.title)) {
+          dedupSections.push(bs);
+        } else {
+          newSections.push(bs);
+        }
+      }
+      // Merge items into existing same-titled sections
+      for (const dup of dedupSections) {
+        const idx = menuSections.findIndex((s) => s.title === dup.title);
+        if (idx >= 0) {
+          menuSections[idx] = { ...menuSections[idx], items: [...menuSections[idx].items, ...dup.items] };
+        }
+      }
+      // Insert new sections (BOXED ITEMS) after COLD / DELI and before DESSERT / SNACKS
+      if (newSections.length > 0) {
+        const deliIdx = menuSections.findIndex((s) => s.title === "COLD / DELI — PLASTIC CONTAINER");
+        if (deliIdx >= 0) {
+          menuSections = [...menuSections.slice(0, deliIdx + 1), ...newSections, ...menuSections.slice(deliIdx + 1)];
+        } else {
+          menuSections = [...newSections, ...menuSections];
+        }
       }
     }
   }
@@ -3726,13 +3772,18 @@ const BeoPrintPage: React.FC = () => {
               </div>
             )}
 
-            {page.pageNum === 1 && (beoNotes.trim() || notBuffetBanner || allergies || religiousRestrictions.trim() || dietarySummary.trim()) && (
+            {page.pageNum === 1 && (beoNotes.trim() || notBuffetBanner || showFoodMustGoHotBanner || allergies || religiousRestrictions.trim() || dietarySummary.trim()) && (
               <div className="beo-banner-container">
                 {beoNotes.trim() && (
                   <div className="beo-banner-block" style={styles.beoNotesBanner}>📋 BEO NOTES: {beoNotes.trim()}</div>
                 )}
                 {notBuffetBanner && (
                   <div className="beo-banner-block" style={styles.notBuffetBanner}>{notBuffetBanner}</div>
+                )}
+                {showFoodMustGoHotBanner && (
+                  <div className="beo-banner-block" style={{ background: "#ff0000", color: "#fff", fontWeight: 700, padding: "5px 10px", borderRadius: 3, textAlign: "center", letterSpacing: 1, fontSize: 13, marginBottom: 4 }}>
+                    🔥 ALL FOOD MUST GO HOT — NO KITCHEN ON SITE
+                  </div>
                 )}
                 {allergies && (
                   <div className="beo-banner-block" style={styles.allergyBanner}>⚠️ ALLERGIES / DIETARY RESTRICTIONS: {allergies.toUpperCase()}</div>

@@ -130,12 +130,12 @@ export function buildBoxedLunchBeoSectionsFromOrders(
     })),
   ];
   const out: BeoPrintSectionSlice[] = [
-    { title: "DELI - BOXED LUNCHES", fieldId: "boxed-lunch-v2-deli", items: deliBoxed },
+    { title: "BOXED ITEMS — INDIVIDUAL PACKAGING", fieldId: "boxed-lunch-v2-deli", items: deliBoxed },
   ];
   if (box) {
     out.push(
       {
-        title: "SALAD - DISPOSABLE",
+        title: "COLD / DELI — PLASTIC CONTAINER",
         fieldId: "boxed-lunch-v2-salad",
         items: box.sides.map((side, i) => ({
           id: `boxed-v2-side-${i}`,
@@ -144,7 +144,7 @@ export function buildBoxedLunchBeoSectionsFromOrders(
         })),
       },
       {
-        title: "DESSERT - WAX BAG",
+        title: "DESSERT / SNACKS",
         fieldId: "boxed-lunch-v2-dessert",
         items: [{ id: "boxed-v2-dessert", name: `${total} ${box.dessert}`, specQty: "" }],
       }
@@ -172,17 +172,17 @@ export function buildBoxedLunchKitchenSectionsFromOrders(
     })),
   ];
   const out: KitchenMenuSectionSlice[] = [
-    { title: "DELI - BOXED LUNCHES", vessel: "", items: deliItems },
+    { title: "BOXED ITEMS — INDIVIDUAL PACKAGING", vessel: "", items: deliItems },
   ];
   if (box) {
     out.push(
       {
-        title: "SALAD - DISPOSABLE",
+        title: "COLD / DELI — PLASTIC CONTAINER",
         vessel: "",
         items: box.sides.map((side) => ({ qty: "—", name: `${total} ${side}` })),
       },
       {
-        title: "DESSERT - WAX BAG",
+        title: "DESSERT / SNACKS",
         vessel: "",
         items: [{ qty: "—", name: `${total} ${box.dessert}` }],
       }
