@@ -124,10 +124,8 @@ CREATE YOUR OWN OMELTTE BAR
 min_guests: 20
 
 Children:
-- [Egg Base] | type: choice_required | select: 1
-  - whole eggs
-  - egg whites
-- [Protein Choice] | type: choice_required | select: ?
+- whole eggs & egg whites | type: included
+- [Protein Choice] | type: choice_required | select: any
   - bacon
   - sausage (pork or turkey)
   - porkroll
@@ -143,6 +141,7 @@ Children:
 - fruit salad | type: included
 
 Notes:
-- ⚠️ FLAG: "your choice of" protein does not specify how many selections (select 1 vs. select any); cannot infer — needs confirmation
+- Protein = select any (no limit); confirmed by owner 2026-03-29
+- Egg base: both whole eggs and egg whites are included — not a choice field; confirmed by owner 2026-03-29
 - Source text spells "OMELTTE" — preserved as-is per Phase 1 typo rule
 - Vegetables and cheeses treated as included (available at the bar) per context; text does not frame them as a pick list
