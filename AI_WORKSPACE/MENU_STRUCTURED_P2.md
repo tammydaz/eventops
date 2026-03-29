@@ -14,6 +14,8 @@ ITEM: LOWER EAST SIDE
 Parent:
 LOWER EAST SIDE
 
+min_guests: 10
+
 Children:
 - bagels | type: included
 - nova lox | type: included
@@ -37,6 +39,8 @@ ITEM: BISTRO BRUNCH
 Parent:
 BISTRO BRUNCH
 
+min_guests: 10
+
 Children:
 - [Quiche Choice] | type: choice_required | select: 1
   - Lorraine
@@ -59,6 +63,8 @@ ITEM: JERSEY DINER
 
 Parent:
 JERSEY DINER
+
+min_guests: 10
 
 Children:
 - [Breakfast Meats] | type: choice_required | select: 2
@@ -86,6 +92,8 @@ ITEM: CHEF'S SPECIAL
 Parent:
 CHEF'S SPECIAL
 
+min_guests: 10
+
 Children:
 - Cinnamon cornflake crusted challah French toast | type: included
 - [Loaded Pancakes Flavor] | type: choice_required | select: 1
@@ -95,10 +103,16 @@ Children:
 - whipped cream | type: included
 - fruit kabobs with yogurt dip | type: included
 - [Breakfast Meat] | type: choice_required | select: 1
-  ⚠️ FLAG: "choice of breakfast meat" — no options listed in source text; options cannot be inferred
+  - bacon
+  - turkey bacon
+  - sausage
+  - turkey sausage
+  - Canadian bacon
+  - honey-smoked ham
 
 Notes:
 - Source text spells "challah" as "challa" — preserved as-is per Phase 1 typo rule; flagging here for awareness
+- Breakfast meat options confirmed by owner 2026-03-29; same options as JERSEY DINER
 
 ---
 
@@ -106,6 +120,8 @@ ITEM: CREATE YOUR OWN OMELTTE BAR
 
 Parent:
 CREATE YOUR OWN OMELTTE BAR
+
+min_guests: 20
 
 Children:
 - [Egg Base] | type: choice_required | select: 1
