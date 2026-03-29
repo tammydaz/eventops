@@ -1,0 +1,12 @@
+Item Name,Parent Item,Child Type,Choice Group,Selection Rule,Execution Type,Display Type,Notes,Test Status
+FRENCH THEMED BUFFET,,,,,CHAFER HOT,BUFFET,,
+Shashlik,FRENCH THEMED BUFFET,included,,,CHAFER HOT,,,
+Chicken Alla Griglia,FRENCH THEMED BUFFET,included,,,CHAFER HOT,,,
+Antipasta,FRENCH THEMED BUFFET,included,,,COLD DISPLAY,,,
+Focaccia Squares,FRENCH THEMED BUFFET,included,,,CHAFER HOT,,,
+Roasted Whole Herbs de Provence Chicken,FRENCH THEMED BUFFET,included,,,CHAFER HOT,,,
+Ratatouille,FRENCH THEMED BUFFET,included,,,CHAFER HOT,,,
+Pommes Puree,FRENCH THEMED BUFFET,included,,,CHAFER HOT,,,
+Salmon en Papillote,FRENCH THEMED BUFFET,included,,,CHAFER HOT,,,
+French Bean Salad,FRENCH THEMED BUFFET,included,,,COLD DISPLAY,,,
+French Baguette Slices,FRENCH THEMED BUFFET,included,,,CHAFER HOT,,,
