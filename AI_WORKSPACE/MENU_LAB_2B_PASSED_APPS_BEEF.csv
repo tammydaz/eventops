@@ -1,0 +1,12 @@
+Item Name,Parent Item,Child Type,Choice Group,Selection Rule,Execution Type,Display Type,Notes,Test Status
+PIGS IN A BLANKET,,,,,,,,
+CONEY ISLAND FRANKS,,,,,,,,
+MINI BEEF EMPANADAS,,,,,,,,
+CHEESESTEAK DUMPLING,,,,,,,,
+CHORIZO EMPANADA,,,,,,,,
+CHILI-SPICED BRISKET,,,,,,,,
+CABERNET-BRAISED SHORT RIBS,,,,,,,Description matches CHORIZO EMPANADA — likely source copy-paste error; preserved as-is,
+POLPETTI,,,,,,,,
+FOODWERX BABY BEEF WELLINGTONS,,,,,,,,
+MINI 2-BITE CHEESESTEAK,,,,,,,,
+MONGOLIAN BEEF SKEWER,,,,,,,,
