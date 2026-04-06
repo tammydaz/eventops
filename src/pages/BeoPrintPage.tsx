@@ -9,6 +9,7 @@ import { loadStationsByEventId } from "../services/airtable/linkedRecords";
 import { loadStationComponentNamesByIds } from "../services/airtable/stationComponents";
 import { loadBoxedLunchOrdersByEventId, type BoxedLunchOrder } from "../services/airtable/boxedLunchOrders";
 import { buildBoxedLunchBeoSectionsFromOrders } from "../utils/boxedLunchPrint";
+import { DELIVERY_SECTION_CONFIG } from "../config/deliverySectionConfig";
 import { getPlatterOrdersByEventId } from "../state/platterOrdersStore";
 import { asBarServicePrimary, asBoolean, asLinkedRecordIds, asMultiSelectNames, asSingleSelectName, asString, asStringArray, isErrorResult } from "../services/airtable/selectors";
 import { secondsToTimeString, secondsTo12HourString } from "../utils/timeHelpers";
@@ -2892,31 +2893,6 @@ const BeoPrintPage: React.FC = () => {
     { title: "BUFFET – CHINA", fieldId: FIELD_IDS.BUFFET_CHINA, linkedFieldId: FIELD_IDS.BUFFET_CHINA, customFieldId: FIELD_IDS.CUSTOM_BUFFET_CHINA },
     { title: "DELI", fieldId: FIELD_IDS.FULL_SERVICE_DELI, linkedFieldId: FIELD_IDS.FULL_SERVICE_DELI, customFieldId: FIELD_IDS.CUSTOM_FULL_SERVICE_DELI },
     { title: "DESSERTS", fieldId: FIELD_IDS.DESSERTS, linkedFieldId: FIELD_IDS.DESSERTS, customFieldId: FIELD_IDS.CUSTOM_DESSERTS },
-  ];
-
-  // ── LOCKED Delivery BEO Section Structure ──
-  // Section 1: HOT FOOD — TIN / HEATED  (hot entrées, hot apps, buffet metal)
-  // Section 2: COLD / DELI — PLASTIC CONTAINER  (deli, cold sides, salads)
-  // Section 3: BOXED ITEMS — INDIVIDUAL PACKAGING  (inserted from boxed lunch orders below)
-  // Section 4: DESSERT / SNACKS  (desserts and snack items)
-  // Section 5: BEVERAGES  (rendered separately from menu sections)
-  // Section 6: SERVICEWARE  (rendered separately from menu sections)
-  const DELIVERY_SECTION_CONFIG: { title: string; fieldIds: string[]; customFieldIds: string[] }[] = [
-    {
-      title: "HOT FOOD — TIN / HEATED",
-      fieldIds: [FIELD_IDS.BUFFET_METAL, FIELD_IDS.PASSED_APPETIZERS, FIELD_IDS.PRESENTED_APPETIZERS],
-      customFieldIds: [FIELD_IDS.CUSTOM_BUFFET_METAL, FIELD_IDS.CUSTOM_PASSED_APP, FIELD_IDS.CUSTOM_PRESENTED_APP],
-    },
-    {
-      title: "COLD / DELI — PLASTIC CONTAINER",
-      fieldIds: [FIELD_IDS.DELIVERY_DELI, FIELD_IDS.BUFFET_CHINA, FIELD_IDS.ROOM_TEMP_DISPLAY],
-      customFieldIds: [FIELD_IDS.CUSTOM_DELIVERY_DELI, FIELD_IDS.CUSTOM_BUFFET_CHINA, FIELD_IDS.CUSTOM_ROOM_TEMP_DISPLAY],
-    },
-    {
-      title: "DESSERT / SNACKS",
-      fieldIds: [FIELD_IDS.DESSERTS],
-      customFieldIds: [FIELD_IDS.CUSTOM_DESSERTS],
-    },
   ];
 
   let menuSections: SectionData[] = isDelivery

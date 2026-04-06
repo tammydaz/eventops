@@ -10,12 +10,7 @@ import { FIELD_IDS } from "../services/airtable/events";
 import { asString, asSingleSelectName, asLinkedRecordIds, isErrorResult } from "../services/airtable/selectors";
 import { secondsTo12HourString } from "../utils/timeHelpers";
 import { isDeliveryOrPickup } from "../lib/deliveryHelpers";
-import {
-  DELIVERY_HOT_APPETIZERS_BLOCK_KEY,
-  deliveryFoodListSectionKeys,
-  deliveryHotAppetizerRows,
-  shadowSectionHeading,
-} from "../lib/deliveryShadowSectionLabels";
+import { deliveryFoodListSectionKeys, rowsForDeliverySectionTitle, shadowSectionHeading } from "../lib/deliveryShadowSectionLabels";
 import type { EventMenuRow, EventMenuRowComponent } from "../services/airtable/eventMenu";
 import { loadStationsByEventId } from "../services/airtable/linkedRecords";
 import { fetchMenuItemNamesByIds } from "../services/airtable/menuItems";
@@ -350,10 +345,7 @@ export function BeoLivePreview({ shadowMenuRows }: { shadowMenuRows: ShadowMenuR
       <div style={s.sectionTitle}>Menu</div>
       {sections.length > 0 ? (
         sections.map((section) => {
-          const sectionRows =
-            isDelivery && section === DELIVERY_HOT_APPETIZERS_BLOCK_KEY
-              ? deliveryHotAppetizerRows(bySection)
-              : (bySection[section] ?? []);
+          const sectionRows = isDelivery ? rowsForDeliverySectionTitle(section, bySection) : (bySection[section] ?? []);
           const topLevel = sectionRows.filter((r) => !r.parentItemId).sort((a, b) => a.sortOrder - b.sortOrder);
           const childrenByParent = sectionRows
             .filter((r) => r.parentItemId)
@@ -374,11 +366,7 @@ export function BeoLivePreview({ shadowMenuRows }: { shadowMenuRows: ShadowMenuR
           orphans.forEach((r) => orderedRows.push({ row: r, isChild: false }));
           return (
             <div key={section} style={{ marginBottom: 8 }}>
-              <div style={s.subsectionLabel}>
-                {section === DELIVERY_HOT_APPETIZERS_BLOCK_KEY
-                  ? shadowSectionHeading(isDelivery, "Passed Appetizers")
-                  : shadowSectionHeading(isDelivery, section)}
-              </div>
+              <div style={s.subsectionLabel}>{shadowSectionHeading(isDelivery, section)}</div>
               {orderedRows.map(({ row, isChild }) => {
                 const displayName = row.customText?.trim() || row.catalogItemName || "—";
                 const components = (row.components ?? []).filter((c) => !c.isRemoved);

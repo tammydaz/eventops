@@ -11,6 +11,7 @@ import { EventSelector } from "../components/EventSelector";
 import { secondsTo12HourString } from "../utils/timeHelpers";
 import { MIMOSA_BAR_FRUIT_GARNISH_ITEMS } from "../constants/fullBarPackage";
 import { isDeliveryOrPickup, isPickup } from "../lib/deliveryHelpers";
+import { DELIVERY_SECTION_CONFIG } from "../config/deliverySectionConfig";
 
 // ── Types ──
 type SubItem = {
@@ -1015,14 +1016,6 @@ const MENU_SECTION_CONFIG: { title: string; fieldId: string; customFieldId: stri
   { title: "DESSERTS", fieldId: FIELD_IDS.DESSERTS, customFieldId: FIELD_IDS.CUSTOM_DESSERTS },
 ];
 
-/** Delivery BEO section config — locked structure (2026-03-27). */
-// ── LOCKED Delivery BEO Section Structure (matches BeoPrintPage.tsx) ──
-const DELIVERY_MENU_SECTION_CONFIG: { title: string; fieldIds: string[]; customFieldIds: string[] }[] = [
-  { title: "HOT FOOD — TIN / HEATED", fieldIds: [FIELD_IDS.BUFFET_METAL, FIELD_IDS.PASSED_APPETIZERS, FIELD_IDS.PRESENTED_APPETIZERS], customFieldIds: [FIELD_IDS.CUSTOM_BUFFET_METAL, FIELD_IDS.CUSTOM_PASSED_APP, FIELD_IDS.CUSTOM_PRESENTED_APP] },
-  { title: "COLD / DELI — PLASTIC CONTAINER", fieldIds: [FIELD_IDS.DELIVERY_DELI, FIELD_IDS.BUFFET_CHINA, FIELD_IDS.ROOM_TEMP_DISPLAY], customFieldIds: [FIELD_IDS.CUSTOM_DELIVERY_DELI, FIELD_IDS.CUSTOM_BUFFET_CHINA, FIELD_IDS.CUSTOM_ROOM_TEMP_DISPLAY] },
-  { title: "DESSERT / SNACKS", fieldIds: [FIELD_IDS.DESSERTS], customFieldIds: [FIELD_IDS.CUSTOM_DESSERTS] },
-];
-
 const MENU_TABLE = "tbl0aN33DGG6R1sPZ";
 const ITEM_NAME = FIELD_IDS.MENU_ITEM_NAME;
 // NON-NEGOTIABLE: Kitchen BEO and BEO Print MUST use THIS field ID for Child Items
@@ -1294,7 +1287,7 @@ const KitchenBEOPrintPage: React.FC = () => {
     const parentIds = new Set<string>();
     const isDelivery = isDeliveryOrPickup(asSingleSelectName(selectedEventData?.[FIELD_IDS.EVENT_TYPE]) ?? "");
     const fieldIdsToFetch = isDelivery
-      ? DELIVERY_MENU_SECTION_CONFIG.flatMap((c) => c.fieldIds)
+      ? DELIVERY_SECTION_CONFIG.flatMap((c) => c.fieldIds)
       : MENU_SECTION_CONFIG.map((c) => c.fieldId).filter((fid) => fid !== FIELD_IDS.STATIONS);
     fieldIdsToFetch.forEach((fid) => {
       const val = selectedEventData[fid];
@@ -1416,7 +1409,7 @@ const KitchenBEOPrintPage: React.FC = () => {
     };
 
     if (isDelivery) {
-      for (const config of DELIVERY_MENU_SECTION_CONFIG) {
+      for (const config of DELIVERY_SECTION_CONFIG) {
         const allItems: MenuItem[] = [];
         const seenNames = new Set<string>();
         for (const fid of config.fieldIds) {

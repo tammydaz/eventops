@@ -23,15 +23,7 @@ import { UnsavedChangesModal } from "../components/UnsavedChangesModal";
 import { useAuthStore } from "../state/authStore";
 import { canEditDispatchAndJobNumber } from "../lib/auth";
 import { isDeliveryOrPickup } from "../lib/deliveryHelpers";
-import {
-  DELIVERY_HOT_APPETIZERS_BLOCK_KEY,
-  DELIVERY_HOT_APPETIZER_INTERNAL,
-  deliveryFoodListSectionKeys,
-  deliveryHotAppetizerRows,
-  shadowSectionHeading,
-} from "../lib/deliveryShadowSectionLabels";
-import { SandwichPlatterConfigModal } from "../components/beo-intake/SandwichPlatterConfigModal";
-import { getPlatterOrdersByEventId, setPlatterOrdersForEvent } from "../state/platterOrdersStore";
+import { deliveryFoodListSectionKeys } from "../lib/deliveryShadowSectionLabels";
 import { isChangeRequested, allBOHConfirmedChange } from "../lib/productionHelpers";
 import { asSingleSelectName, asString, isErrorResult } from "../services/airtable/selectors";
 import { FIELD_IDS, getLockoutFieldIds, getBOHProductionFieldIds } from "../services/airtable/events";
@@ -52,8 +44,7 @@ import {
   type ChildOverridesData,
 } from "../services/airtable/eventMenu";
 import { fetchMenuItemChildren } from "../services/airtable/menuItems";
-import { CreationStationContent } from "../components/beo-intake/MenuSection";
-import { BoxedLunchSection } from "../components/beo-intake/BoxedLunchSection";
+import { CreationStationContent, MenuSection } from "../components/beo-intake/MenuSection";
 import { DeliveryPaperProductsSection } from "../components/beo-intake/DeliveryPaperProductsSection";
 import { BeoLivePreview } from "../components/BeoLivePreview";
 import { calculateAutoSpec, type FoodCategory } from "../utils/beoAutoSpec";
@@ -142,7 +133,6 @@ export const BeoIntakePage = () => {
   const [childSpecOverrides, setChildSpecOverrides] = useState<Record<string, string>>({});
   /** Shadow menu sections default expanded; `section === false` means user collapsed that header. */
   const [shadowMenuSectionExpanded, setShadowMenuSectionExpanded] = useState<Record<string, boolean>>({});
-  const [sandwichPlatterModalOpen, setSandwichPlatterModalOpen] = useState(false);
   const [showChangeRequestModal, setShowChangeRequestModal] = useState(false);
   const [pendingEventId, setPendingEventId] = useState<string | null>(null);
   const { user } = useAuthStore();
@@ -327,14 +317,12 @@ export const BeoIntakePage = () => {
       setShadowMenuRows([]);
       setEditingShadowRow(null);
       setShadowMenuSectionExpanded({});
-      setSandwichPlatterModalOpen(false);
       return;
     }
     shadowMenuStorageSkipRef.current = true;
     setShadowMenuRows([]);
     setEditingShadowRow(null);
     setShadowMenuSectionExpanded({});
-    setSandwichPlatterModalOpen(false);
   }, [selectedEventId]);
 
   useEffect(() => {
@@ -678,38 +666,6 @@ export const BeoIntakePage = () => {
     }, 280);
   }, []);
 
-  const scrollToDeliveryBoxedLunch = useCallback(() => {
-    jumpToBeoSection("beo-delivery-boxed-lunch");
-  }, []);
-
-  const goToSandwichPlatters = useCallback(() => {
-    if (isLocked) return;
-    setSandwichPlatterModalOpen(true);
-    jumpToBeoSection("beo-delivery-platters");
-  }, [isLocked]);
-
-  const deliveryMenuBtn = (color: string): React.CSSProperties => ({
-    minWidth: 140,
-    maxWidth: 220,
-    width: "100%",
-    padding: "10px 14px",
-    fontSize: 13,
-    fontWeight: 600,
-    borderRadius: 8,
-    border: `1px solid ${color}80`,
-    background: `linear-gradient(135deg, ${color}38, ${color}12)`,
-    color,
-    cursor: isLocked ? "default" : "pointer",
-  });
-
-  const deliveryPairCol: React.CSSProperties = {
-    display: "flex",
-    flexDirection: "column",
-    gap: 8,
-    alignItems: "stretch",
-    flex: "0 1 auto",
-  };
-
   return (
     <div
       className={`beo-intake-page${isDelivery ? " beo-intake-page--delivery" : ""}`}
@@ -797,7 +753,17 @@ export const BeoIntakePage = () => {
                 </div>
                 <div className="beo-main-content" style={{ flex: 1, minWidth: 0 }}>
                   <div className="beo-sections-grid" style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: "16px", alignItems: "stretch", width: "100%" }}>
-                    <div className="beo-header-form-grid" style={{ position: "relative", display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: "16px", alignItems: "stretch", width: "100%" }}>
+                    <div
+                      className={`beo-header-form-grid${!isDelivery ? " beo-full-service-intake-grid" : ""}`}
+                      style={{
+                        position: "relative",
+                        display: "grid",
+                        gap: "16px",
+                        alignItems: "stretch",
+                        width: "100%",
+                        ...(isDelivery ? { gridTemplateColumns: "minmax(0, 1fr)" } : {}),
+                      }}
+                    >
                       {isLocked && (
                         <div
                           className={`beo-locked-overlay ${canSubmitChangeRequest ? "beo-locked-foh" : "beo-locked-boh"}`}
@@ -805,8 +771,10 @@ export const BeoIntakePage = () => {
                           aria-label={canSubmitChangeRequest ? "Event is locked. Click to submit a change request." : "Event is locked. Only FOH can submit a change request to unlock."}
                         />
                       )}
-                      <HeaderSection jobNumberDisplay={jobNumberDisplay} dispatchTimeDisplay={dispatchTimeDisplay} canEditDispatch={canEditDispatch} eventDate={eventDateNorm} />
-                      <div style={{ gridColumn: "1 / -1" }}>
+                      <div className="beo-grid-span-full">
+                        <HeaderSection jobNumberDisplay={jobNumberDisplay} dispatchTimeDisplay={dispatchTimeDisplay} canEditDispatch={canEditDispatch} eventDate={eventDateNorm} />
+                      </div>
+                      <div className="beo-grid-span-full">
                         <FormSection
                           title="Menu"
                           defaultOpen={true}
@@ -816,63 +784,9 @@ export const BeoIntakePage = () => {
                           isDelivery={isDelivery}
                         >
                           <div className="beo-menu-inner" style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 0, gridColumn: "1 / -1", width: "100%", maxWidth: "100%", margin: "0 auto" }}>
+                            {!isDelivery && (
                             <div className="beo-menu-add-buttons" style={{ display: "flex", justifyContent: "center", flexWrap: "wrap", gap: "8px", marginBottom: "20px", overflowX: "auto", paddingBottom: "4px", alignItems: "flex-start" }}>
-                              {isDelivery ? (
-                                <div
-                                  style={{
-                                    display: "flex",
-                                    flexDirection: "row",
-                                    flexWrap: "wrap",
-                                    justifyContent: "center",
-                                    alignItems: "flex-start",
-                                    gap: 14,
-                                    width: "100%",
-                                    maxWidth: "100%",
-                                  }}
-                                >
-                                  <div style={deliveryPairCol}>
-                                    <button type="button" disabled={isLocked} onClick={() => openPicker("passed", "passedApps", "Appetizer hot")} style={deliveryMenuBtn("#D32F2F")}>
-                                      Appetizer hot
-                                    </button>
-                                    <button type="button" disabled={isLocked} onClick={() => openPicker("presented", "presentedApps", "Appetizer disposable")} style={deliveryMenuBtn("#FBC02D")}>
-                                      Appetizer disposable
-                                    </button>
-                                  </div>
-                                  <div style={deliveryPairCol}>
-                                    <button type="button" disabled={isLocked} onClick={() => openPicker("buffet_metal", "buffetMetal", "Buffet hot")} style={deliveryMenuBtn("#4DD0E1")}>
-                                      Buffet hot
-                                    </button>
-                                    <button type="button" disabled={isLocked} onClick={() => openPicker("buffet_china", "buffetChina", "Buffet disposable")} style={deliveryMenuBtn("#FF8A65")}>
-                                      Buffet disposable
-                                    </button>
-                                  </div>
-                                  <div style={deliveryPairCol}>
-                                    <button type="button" disabled={isLocked} onClick={scrollToDeliveryBoxedLunch} style={deliveryMenuBtn("#22c55e")}>
-                                      Boxed lunch
-                                    </button>
-                                    <button type="button" disabled={isLocked} onClick={goToSandwichPlatters} style={deliveryMenuBtn("#f97316")}>
-                                      Sandwich platters
-                                    </button>
-                                  </div>
-                                  <div style={deliveryPairCol}>
-                                    <button type="button" disabled={isLocked} onClick={() => openPicker("deli", "deliveryDeli", "Deli")} style={deliveryMenuBtn("#4CAF50")}>
-                                      Deli
-                                    </button>
-                                    <button type="button" disabled={isLocked} onClick={() => openPicker("room_temp", "roomTempDisplay", "Salad")} style={deliveryMenuBtn("#757575")}>
-                                      Salad
-                                    </button>
-                                  </div>
-                                  <div style={deliveryPairCol}>
-                                    <button type="button" disabled={isLocked} onClick={() => openPicker("desserts", "desserts", "Dessert disposable")} style={deliveryMenuBtn("#7B1FA2")}>
-                                      Dessert disposable
-                                    </button>
-                                    <button type="button" disabled={isLocked} onClick={scrollToBeoStations} style={deliveryMenuBtn(STATIONS_MENU_PILL)}>
-                                      Station
-                                    </button>
-                                  </div>
-                                </div>
-                              ) : (
-                                ((
+                                {(
                                   [
                                     ["+ Passed", "#D32F2F", () => openPicker("passed", "passedApps", "Passed Appetizers")],
                                     ["+ Presented", "#FBC02D", () => openPicker("presented", "presentedApps", "Presented Appetizers")],
@@ -886,10 +800,11 @@ export const BeoIntakePage = () => {
                                   <button key={label} type="button" disabled={isLocked} onClick={onClick} style={{ padding: "8px 16px", fontSize: 12, fontWeight: 600, borderRadius: 6, border: `1px solid ${color}80`, background: `linear-gradient(135deg, ${color}40, ${color}15)`, color, cursor: isLocked ? "default" : "pointer", flexShrink: 0 }}>
                                     {label}
                                   </button>
-                                )))
-                              )}
+                                ))}
                             </div>
-                            {shadowMenuRows.length === 0 ? (
+                            )}
+                            {!isDelivery && (
+                            shadowMenuRows.length === 0 ? (
                               <div
                                 style={{
                                   fontSize: "13px",
@@ -909,21 +824,8 @@ export const BeoIntakePage = () => {
                                   YOUR FOOD LIST
                                 </div>
                                 {(() => {
-                                  const sectionsToRender = deliveryFoodListSectionKeys(isDelivery, bySection, SECTION_ORDER);
+                                  const sectionsToRender = deliveryFoodListSectionKeys(false, bySection, SECTION_ORDER);
                                   const toggleSectionHeader = (sec: string) => {
-                                    if (isDelivery && sec === DELIVERY_HOT_APPETIZERS_BLOCK_KEY) {
-                                      setShadowMenuSectionExpanded((p) => {
-                                        const allOpen = DELIVERY_HOT_APPETIZER_INTERNAL.every((s) => p[s] !== false);
-                                        const next = { ...p };
-                                        if (allOpen) {
-                                          for (const s of DELIVERY_HOT_APPETIZER_INTERNAL) next[s] = false;
-                                        } else {
-                                          for (const s of DELIVERY_HOT_APPETIZER_INTERNAL) delete next[s];
-                                        }
-                                        return next;
-                                      });
-                                      return;
-                                    }
                                     setShadowMenuSectionExpanded((p) =>
                                       p[sec] === false
                                         ? (() => {
@@ -934,17 +836,12 @@ export const BeoIntakePage = () => {
                                     );
                                   };
                                   return sectionsToRender.map((section) => {
-                                const isDeliveryHotAppBlock = isDelivery && section === DELIVERY_HOT_APPETIZERS_BLOCK_KEY;
-                                const rowsForSection = isDeliveryHotAppBlock ? deliveryHotAppetizerRows(bySection) : (bySection[section] || []);
+                                const rowsForSection = bySection[section] || [];
                                 const guestCount = selectedEventData?.[FIELD_IDS.GUEST_COUNT] != null ? Number(selectedEventData[FIELD_IDS.GUEST_COUNT]) : 0;
                                 const tableBorder = "1px solid rgba(255,255,255,0.15)";
-                                const sectionColor = isDeliveryHotAppBlock ? "#fb923c" : SECTION_COLORS[section] || "#888";
-                                const sectionExpanded = isDeliveryHotAppBlock
-                                  ? DELIVERY_HOT_APPETIZER_INTERNAL.every((s) => shadowMenuSectionExpanded[s] !== false)
-                                  : shadowMenuSectionExpanded[section] !== false;
-                                const headerLabel = isDeliveryHotAppBlock
-                                  ? shadowSectionHeading(isDelivery, "Passed Appetizers").toUpperCase()
-                                  : shadowSectionHeading(isDelivery, section).toUpperCase();
+                                const sectionColor = SECTION_COLORS[section] || "#888";
+                                const sectionExpanded = shadowMenuSectionExpanded[section] !== false;
+                                const headerLabel = section.toUpperCase();
                                 return (
                                   <div key={section} style={{ width: "100%", marginBottom: 12, border: tableBorder, borderRadius: 8, backgroundColor: "rgba(0,0,0,0.2)", overflow: "hidden" }}>
                                     <div
@@ -978,11 +875,9 @@ export const BeoIntakePage = () => {
                                     {sectionExpanded && (
                                     <div style={{ padding: "8px 12px" }}>
                                       {rowsForSection.map((row, rowIdx) => {
-                                        const rowSection =
-                                          row.section?.trim() ||
-                                          (section === DELIVERY_HOT_APPETIZERS_BLOCK_KEY ? undefined : section);
+                                        const rowSection = row.section?.trim();
                                         if (!rowSection) return null;
-                                        const fieldId = getFieldIdForSection(rowSection, isDelivery);
+                                        const fieldId = getFieldIdForSection(rowSection, false);
                                         const category = SECTION_TO_CATEGORY[rowSection] ?? "buffet";
                                         const fullName = row.customText?.trim() ? row.customText : row.catalogItemName;
                                         const hasNameSuffix = fullName.includes(" – ");
@@ -1042,33 +937,9 @@ export const BeoIntakePage = () => {
                                   });
                                 })()}
                               </>
+                            )
                             )}
-                            {isDelivery && selectedEventId && (
-                              <div style={{ width: "100%", maxWidth: 640, marginTop: 24, display: "flex", flexDirection: "column", gap: 20 }}>
-                                <div id="beo-delivery-boxed-lunch" style={{ paddingTop: 16, borderTop: "1px solid rgba(34,197,94,0.35)" }}>
-                                  <div style={{ fontSize: 13, fontWeight: 700, color: "rgba(134,239,172,0.95)", textAlign: "center", marginBottom: 10, letterSpacing: "0.04em" }}>Boxed lunches</div>
-                                  <BoxedLunchSection eventId={selectedEventId} canEdit={!isLocked} />
-                                </div>
-                                <div id="beo-delivery-platters" style={{ paddingTop: 16, borderTop: "1px solid rgba(249,115,22,0.4)" }}>
-                                  <div style={{ fontSize: 13, fontWeight: 700, color: "rgba(253,186,116,0.95)", textAlign: "center", marginBottom: 10, letterSpacing: "0.04em" }}>Sandwich platters</div>
-                                  {!sandwichPlatterModalOpen && (
-                                    <p style={{ fontSize: 12, color: "rgba(255,255,255,0.45)", textAlign: "center", margin: "0 0 10px" }}>Use the Sandwich platters button above to configure platter groups.</p>
-                                  )}
-                                  {sandwichPlatterModalOpen && (
-                                    <SandwichPlatterConfigModal
-                                      open
-                                      inline
-                                      onClose={() => setSandwichPlatterModalOpen(false)}
-                                      onConfirm={(rows) => {
-                                        setPlatterOrdersForEvent(selectedEventId, rows);
-                                        setSandwichPlatterModalOpen(false);
-                                      }}
-                                      initialRows={getPlatterOrdersByEventId(selectedEventId)}
-                                    />
-                                  )}
-                                </div>
-                              </div>
-                            )}
+                            {isDelivery && <MenuSection embedded isDelivery />}
                             {selectedEventId && (
                               <div id="beo-creation-stations" style={{ width: "100%", marginTop: 20 }}>
                                 <CreationStationContent
@@ -1088,7 +959,7 @@ export const BeoIntakePage = () => {
                           </div>
                         </FormSection>
                       </div>
-                      <div style={{ gridColumn: "1 / -1" }}>
+                      <div style={isDelivery ? { gridColumn: "1 / -1" } : undefined}>
                         <FormSection title="Beverage Services" defaultOpen={false} sectionId="beo-section-bar" titleAlign="center" dotColor={BEO_SECTION_PILL_ACCENT} isDelivery={isDelivery}>
                           <BeverageServicesSection embedded />
                         </FormSection>
@@ -1101,7 +972,9 @@ export const BeoIntakePage = () => {
                       {!isDelivery && <KitchenAndServicewareSection />}
                       {!isDelivery && <TimelineSection />}
                       {!isDelivery && <SiteVisitLogisticsSection />}
-                      <EventCoreSection isDelivery={isDelivery} hideHeaderFields />
+                      <div className="beo-grid-span-full">
+                        <EventCoreSection isDelivery={isDelivery} hideHeaderFields />
+                      </div>
                     </div>
                     <ApprovalsLockoutSection eventId={selectedEventId} eventName={eventName} />
                   </div>

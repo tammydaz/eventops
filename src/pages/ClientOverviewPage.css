@@ -1,0 +1,27 @@
+/* Event history rows — full-row hit target, hover affordance */
+.clientOverviewEventRow {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr 1fr;
+  gap: 8px;
+  padding: 10px 8px;
+  border-bottom: 1px solid #2a2a2a;
+  border-radius: 6px;
+  cursor: pointer;
+  text-decoration: none;
+  color: inherit;
+  transition: background 0.15s ease;
+}
+
+.clientOverviewEventRow:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.clientOverviewEventRowMostRecent {
+  background: rgba(59, 130, 246, 0.06);
+  border-left: 3px solid rgba(59, 130, 246, 0.35);
+  border-bottom: 1px solid rgba(59, 130, 246, 0.15);
+}
+
+.clientOverviewEventRowMostRecent:hover {
+  background: rgba(255, 255, 255, 0.03);
+}

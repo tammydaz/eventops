@@ -1,0 +1,116 @@
+---
+description: Shadow Menu vs Corporate/Boxed Lunch — two parallel systems, NEVER merge
+alwaysApply: true
+---
+
+# FOODWERX SYSTEM ARCHITECTURE — LOCKED
+
+There are **TWO separate systems**. They must **NEVER** be merged, unified, or conflated in code or data model.
+
+---
+
+## SYSTEM 1: SHADOW MENU SYSTEM (CORE ENGINE)
+
+**Source of truth:** Event Menu (Shadow) table.
+
+**Structure:**
+
+- One row per selected menu item
+- Parent item → Menu Items table
+- Child items → linked via Child Items field
+- Overrides → stored per Event Menu row
+
+**Used for:** Passed Appetizers, Presented Appetizers, Buffet (Metal / China), Plated Items, Stations.
+
+**Drives:** BEO (primary), kitchen production, pack-out logic.
+
+**Rules:**
+
+- BEO renders **ONLY** from Event Menu (Shadow)
+- Child items display under parent
+- Overrides modify **display**, not Menu Items
+- **Menu Items table is NEVER mutated by events**
+
+---
+
+## SYSTEM 2: CORPORATE / BOXED LUNCH SYSTEM
+
+**Structure:** Boxed Lunch Orders → Boxed Lunch Order Items → Box Customizations.
+
+**Characteristics:** Quantity-driven (not row-per-item), distribution-based; aggregated counts (e.g. 15 Turkey, 75 Pasta Salad).
+
+**Used for:** Boxed lunches, sandwich platters, high-volume corporate orders.
+
+**BEO behavior:** Aggregated counts — **not** individual shadow-style rows.
+
+**Rules:**
+
+- **Does NOT** use Event Menu (Shadow)
+- **Does NOT** create shadow rows
+- Customizations are secondary (notes/aggregation), not core logic
+- Keep it fast, simple, production-friendly
+
+---
+
+## GLOBAL RULE
+
+Shadow Menu System and Corporate System are **parallel**.
+
+- Do **not** share structure between them
+- Do **not** share core logic between them
+- Do **not** merge implementations “for consistency”
+
+Each system serves a different operational purpose. Refactors, abstractions, or “single pipeline” designs that blend them are **out of scope** unless explicitly approved as a product decision.
+
+---
+
+## ENFORCEMENT — NON-NEGOTIABLE RULES
+
+### 1. NO CROSS-SYSTEM MODIFICATIONS
+
+**Code touching Event Menu (Shadow System) MUST NOT:**
+
+- read from Boxed Lunch tables
+- write to Boxed Lunch tables
+- depend on Box Customizations
+
+**Code touching Boxed Lunch System MUST NOT:**
+
+- create or modify Event Menu (Shadow) rows
+- use Shadow Menu logic
+- depend on Child Items or Overrides
+
+### 2. NO SHARED TRANSFORMATION LAYER
+
+- Do **NOT** create a shared “menu processing” or “unified pipeline”
+- Do **NOT** normalize Shadow + Boxed Lunch into one structure
+- Do **NOT** introduce abstraction that merges both systems
+
+### 3. WRITE SAFETY RULE
+
+Before modifying any code, the system MUST:
+
+- Identify which system is being modified: **Shadow Menu** or **Corporate / Boxed Lunch**
+- Explicitly state: **“This change affects ONLY [System Name]”**
+
+If **both** systems are affected → **STOP** and ask
+
+### 4. PRINT LOGIC PROTECTION
+
+- BEO rendering for Shadow **MUST ONLY** use Event Menu (Shadow)
+- Boxed Lunch output **MUST** remain aggregated (counts-based)
+
+**DO NOT:**
+
+- convert boxed lunch into row-based (shadow-style) rendering
+- inject boxed lunch into the Shadow rendering pipeline
+
+### 5. IF UNSURE — STOP
+
+If any requested change:
+
+- touches both systems
+- changes data flow between them
+- alters source-of-truth tables
+
+The system MUST: **STOP** → ask for clarification → **NOT** proceed
