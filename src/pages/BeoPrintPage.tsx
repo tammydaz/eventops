@@ -45,13 +45,20 @@ type TopTab = "kitchenBEO" | "meetingBeoNotes" | "fullBeoPacket" | "buffetMenuSi
 
 // ── Section color by type ──
 const getSectionColor = (sectionTitle: string): string => {
-  // Delivery sections — locked structure colors
-  if (sectionTitle.includes("HOT FOOD")) return "#f97316";            // section 1: orange (heat)
-  if (sectionTitle.includes("COLD / DELI")) return "#3b82f6";         // section 2: blue (cold)
-  if (sectionTitle.includes("BOXED ITEMS")) return "#22c55e";          // section 3: green (packaged)
-  if (sectionTitle.includes("DESSERT / SNACKS")) return "#ef4444";     // section 4: red (sweets)
-  if (sectionTitle === "BEVERAGES") return "#a855f7";                  // section 5: purple
-  if (sectionTitle === "SERVICEWARE") return "#6b7280";                // section 6: gray
+  // Delivery sections — colors by Execution Type
+  if (sectionTitle === "CHAFER HOT") return "#f97316";       // orange (heat)
+  if (sectionTitle === "CHAFER READY") return "#fb923c";     // light orange (warm/ready)
+  if (sectionTitle === "COLD DISPLAY") return "#3b82f6";     // blue (cold)
+  if (sectionTitle === "INDIVIDUAL PACKS") return "#22c55e"; // green (packaged)
+  if (sectionTitle === "BULK SIDES") return "#eab308";       // yellow (sides)
+  if (sectionTitle === "DESSERTS") return "#ef4444";         // red (sweets)
+  // Legacy delivery section titles (keep for backward compat during transition)
+  if (sectionTitle.includes("HOT FOOD")) return "#f97316";
+  if (sectionTitle.includes("COLD / DELI")) return "#3b82f6";
+  if (sectionTitle.includes("BOXED ITEMS")) return "#22c55e";
+  if (sectionTitle.includes("DESSERT / SNACKS")) return "#ef4444";
+  if (sectionTitle === "BEVERAGES") return "#a855f7";        // section 5: purple
+  if (sectionTitle === "SERVICEWARE") return "#6b7280";      // section 6: gray
   // Full-service sections (unchanged)
   if (sectionTitle.includes("PASSED")) return "#22c55e";
   if (sectionTitle.includes("PRESENTED")) return "#f97316";
@@ -2897,41 +2904,31 @@ const BeoPrintPage: React.FC = () => {
 
   let menuSections: SectionData[] = isDelivery
     ? DELIVERY_SECTION_CONFIG.map((config) => {
+        // Sections are filters on Execution Type — items come from Event Menu shadow rows.
         const allLinked: MenuLineItem[] = [];
         const seenIds = new Set<string>();
         const seenNames = new Set<string>();
-        for (const fid of config.fieldIds) {
-          for (const item of parseMenuItems(fid)) {
-            if (!seenIds.has(item.id)) {
-              seenIds.add(item.id);
-              seenNames.add(item.name);
-              allLinked.push(item);
+        for (const row of eventMenuRows) {
+          if (row.section !== config.executionType) continue;
+          if (row.catalogItemId) {
+            if (!seenIds.has(row.catalogItemId)) {
+              seenIds.add(row.catalogItemId);
+              const name = menuItemData[row.catalogItemId]?.name ?? row.displayName ?? "—";
+              if (name !== "—") {
+                seenNames.add(name);
+                allLinked.push({ id: row.catalogItemId, name });
+              }
+            }
+          } else if (row.customText?.trim()) {
+            const uid = `custom-${config.executionType}-${row.id}`;
+            if (!seenIds.has(uid)) {
+              seenIds.add(uid);
+              seenNames.add(row.customText.trim());
+              allLinked.push({ id: uid, name: row.customText.trim() });
             }
           }
         }
-        for (const customFid of config.customFieldIds || []) {
-          customTextToItems(asString(eventData[customFid]), `custom-${config.fieldIds[0]}-${customFid}`).forEach((c) => {
-            if (!seenNames.has(c.name)) {
-              seenNames.add(c.name);
-              allLinked.push(c);
-            }
-          });
-        }
-        // Merge platter orders (from localStorage) into DELI section
-        if (config.title.includes("DELI") && eventId) {
-          const platterRows = getPlatterOrdersByEventId(eventId);
-          for (const row of platterRows) {
-            if (!(row.quantity > 0) || row.picks.length === 0) continue;
-            const name = row.platterType;
-            const specQty = `${row.picks.join(", ")} × ${row.quantity}`;
-            const uniqueId = `platter-${row.id}`;
-            if (!seenIds.has(uniqueId)) {
-              seenIds.add(uniqueId);
-              allLinked.push({ id: uniqueId, name, specQty });
-            }
-          }
-        }
-        return { title: config.title, fieldId: config.fieldIds[0], items: allLinked };
+        return { title: config.title, fieldId: config.executionType, items: allLinked };
       }).filter((s) => s.items.length > 0)
     : FULL_SERVICE_SECTION_DEFS.map((def) => {
         // Build ONE synthetic item per station — expandItemToRows handles splitting into header + child rows
@@ -3050,13 +3047,13 @@ const BeoPrintPage: React.FC = () => {
           menuSections[idx] = { ...menuSections[idx], items: [...menuSections[idx].items, ...dup.items] };
         }
       }
-      // Insert new sections (BOXED ITEMS) after COLD / DELI and before DESSERT / SNACKS
+      // Insert new sections (BOXED ITEMS) after INDIVIDUAL PACKS (closest match for boxed items)
       if (newSections.length > 0) {
-        const deliIdx = menuSections.findIndex((s) => s.title === "COLD / DELI — PLASTIC CONTAINER");
-        if (deliIdx >= 0) {
-          menuSections = [...menuSections.slice(0, deliIdx + 1), ...newSections, ...menuSections.slice(deliIdx + 1)];
+        const insertAfterIdx = menuSections.findIndex((s) => s.title === "INDIVIDUAL PACKS");
+        if (insertAfterIdx >= 0) {
+          menuSections = [...menuSections.slice(0, insertAfterIdx + 1), ...newSections, ...menuSections.slice(insertAfterIdx + 1)];
         } else {
-          menuSections = [...newSections, ...menuSections];
+          menuSections = [...menuSections, ...newSections];
         }
       }
     }

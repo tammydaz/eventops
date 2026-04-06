@@ -4,6 +4,7 @@ import { FIELD_IDS, getFoodwerxArrivalFieldId, resolveFwStaffLineFromFields } fr
 import { asString, asBarServicePrimary, asMultiSelectNames, asBoolean, asStringArray, asLinkedRecordIds, asSingleSelectName, isErrorResult } from "../services/airtable/selectors";
 import { loadStationsByEventId } from "../services/airtable/linkedRecords";
 import { loadBoxedLunchOrdersByEventId, type BoxedLunchOrder } from "../services/airtable/boxedLunchOrders";
+import { loadEventMenuRows, type EventMenuRow } from "../services/airtable/eventMenu";
 import { buildBoxedLunchKitchenSectionsFromOrders } from "../utils/boxedLunchPrint";
 import { getPlatterOrdersByEventId } from "../state/platterOrdersStore";
 import { airtableFetch } from "../services/airtable/client";
@@ -1207,6 +1208,7 @@ const KitchenBEOPrintPage: React.FC = () => {
   const [menuItemData, setMenuItemData] = useState<Record<string, { name: string; childIds: string[] }>>({});
   const [stationsData, setStationsData] = useState<Array<{ id: string; stationType: string; stationItems: string[]; stationNotes: string; beoPlacement?: "Presented Appetizer" | "Buffet Metal" | "Buffet China" }>>([]);
   const [boxedLunchOrders, setBoxedLunchOrders] = useState<BoxedLunchOrder[]>([]);
+  const [eventMenuRows, setEventMenuRows] = useState<EventMenuRow[]>([]);
   const [fwArrivalFieldId, setFwArrivalFieldId] = useState<string | null>(null);
   const [checkState, setCheckState] = useState<Record<string, boolean>>({});
 
@@ -1281,13 +1283,23 @@ const KitchenBEOPrintPage: React.FC = () => {
     });
   }, [eventIdForBoxedOrders]);
 
+  // Load Event Menu shadow rows for delivery section rendering
+  useEffect(() => {
+    const eid = urlKitchenEventId ?? selectedEventId ?? null;
+    if (!eid) { setEventMenuRows([]); return; }
+    loadEventMenuRows(eid).then((result) => {
+      if (!isErrorResult(result)) setEventMenuRows(result);
+      else setEventMenuRows([]);
+    });
+  }, [urlKitchenEventId, selectedEventId]);
+
   // Fetch menu items with Item Name + Child Items (linked records)
   // Exclude STATIONS — those are station IDs; we fetch stations separately and add station item IDs here
   useEffect(() => {
     const parentIds = new Set<string>();
     const isDelivery = isDeliveryOrPickup(asSingleSelectName(selectedEventData?.[FIELD_IDS.EVENT_TYPE]) ?? "");
     const fieldIdsToFetch = isDelivery
-      ? DELIVERY_SECTION_CONFIG.flatMap((c) => c.fieldIds)
+      ? []  // Delivery sections use Event Menu shadow rows (by executionType), not event-linked fields
       : MENU_SECTION_CONFIG.map((c) => c.fieldId).filter((fid) => fid !== FIELD_IDS.STATIONS);
     fieldIdsToFetch.forEach((fid) => {
       const val = selectedEventData[fid];
@@ -1412,35 +1424,31 @@ const KitchenBEOPrintPage: React.FC = () => {
       for (const config of DELIVERY_SECTION_CONFIG) {
         const allItems: MenuItem[] = [];
         const seenNames = new Set<string>();
-        for (const fid of config.fieldIds) {
-          processField(fid).forEach((it) => {
-            if (!seenNames.has(it.name)) {
-              seenNames.add(it.name);
-              allItems.push(it);
-            }
-          });
-        }
-        for (const customFid of config.customFieldIds || []) {
-          customTextToItems(asString(selectedEventData[customFid])).forEach((it) => {
-            if (!seenNames.has(it.name)) {
-              seenNames.add(it.name);
-              allItems.push(it);
-            }
-          });
-        }
-        // Merge platter orders (from localStorage) into DELI section — header + sub-items to match BEO samples
-        if (config.title.includes("DELI") && selectedEventId) {
-          const platterRows = getPlatterOrdersByEventId(selectedEventId);
-          for (const row of platterRows) {
-            if (!(row.quantity > 0) || row.picks.length === 0) continue;
+        // Sections are filters on Execution Type — items come from Event Menu shadow rows.
+        for (const row of eventMenuRows) {
+          if (row.section !== config.executionType) continue;
+          if (row.catalogItemId) {
+            const data = menuItemData[row.catalogItemId];
+            const parentName = data?.name ?? row.displayName ?? "—";
+            if (parentName === "—") continue;
+            if (seenNames.has(parentName)) continue;
+            seenNames.add(parentName);
+            const childIds = data?.childIds ?? [];
+            const rows = expandItemToRows(parentName, childIds, menuItemData);
             allItems.push({
-              qty: String(row.quantity),
-              name: row.platterType,
-              subItems: row.picks.length > 0 ? row.picks.map((text) => ({ text })) : undefined,
+              qty: "—",
+              name: parentName,
+              subItems: rows.length > 1 ? rows.slice(1).map((r) => ({ text: r.lineName })) : undefined,
             });
+          } else if (row.customText?.trim()) {
+            const name = row.customText.trim();
+            if (!seenNames.has(name)) {
+              seenNames.add(name);
+              allItems.push({ qty: "—", name });
+            }
           }
         }
-        if (config.title.includes("DESSERT")) {
+        if (config.executionType === "DESSERTS") {
           const barServiceSelected = asMultiSelectNames(selectedEventData?.[FIELD_IDS.BAR_SERVICE]);
           if (barServiceSelected.some((s) => s.trim().toLowerCase() === "mimosa bar")) {
             MIMOSA_BAR_FRUIT_GARNISH_ITEMS.forEach((name) => {
@@ -1461,7 +1469,7 @@ const KitchenBEOPrintPage: React.FC = () => {
       }
       const extra = buildBoxedLunchKitchenSectionsFromOrders(boxedLunchOrders) as MenuSection[];
       if (extra.length > 0) {
-        // Merge same-titled sections; insert new sections after COLD / DELI
+        // Merge same-titled sections; insert new sections after INDIVIDUAL PACKS (closest match for boxed items)
         const toInsert: typeof extra = [];
         for (const bs of extra) {
           const idx = sections.findIndex((s) => s.title === bs.title);
@@ -1472,11 +1480,11 @@ const KitchenBEOPrintPage: React.FC = () => {
           }
         }
         if (toInsert.length > 0) {
-          const deliIdx = sections.findIndex((s) => s.title === "COLD / DELI — PLASTIC CONTAINER");
-          if (deliIdx >= 0) {
-            sections.splice(deliIdx + 1, 0, ...toInsert);
+          const insertAfterIdx = sections.findIndex((s) => s.title === "INDIVIDUAL PACKS");
+          if (insertAfterIdx >= 0) {
+            sections.splice(insertAfterIdx + 1, 0, ...toInsert);
           } else {
-            sections.unshift(...toInsert);
+            sections.push(...toInsert);
           }
         }
       }

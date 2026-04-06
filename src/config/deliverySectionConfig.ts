@@ -1,40 +1,40 @@
 /**
  * Single source of truth for delivery BEO menu sections (intake, print, kitchen BEO, shadow preview).
  * Do not duplicate section lists elsewhere — import this.
+ *
+ * Sections are NOT Airtable fields. Sections are filters on the Execution Type field in Menu_Lab.
+ * Field ID for Execution Type: fldnP7tCisqdDkaOI
  */
-import { FIELD_IDS } from "../services/airtable/events";
+
+/** Airtable field ID for the Execution Type field in the Menu_Lab table. */
+export const EXECUTION_TYPE_FIELD_ID = "fldnP7tCisqdDkaOI";
 
 export type DeliverySectionConfigRow = {
   title: string;
-  fieldIds: readonly string[];
-  customFieldIds: readonly string[];
+  /** Matches the Execution Type value in Menu_Lab / Event Menu shadow row section. */
+  executionType: string;
 };
 
-/** Locked delivery structure — same merge order as BeoPrintPage / KitchenBEOPrintPage */
+/** Locked delivery structure — sections derived from Execution Type, never from event field IDs. */
 export const DELIVERY_SECTION_CONFIG: readonly DeliverySectionConfigRow[] = [
-  {
-    title: "HOT FOOD — TIN / HEATED",
-    fieldIds: [FIELD_IDS.BUFFET_METAL, FIELD_IDS.PASSED_APPETIZERS, FIELD_IDS.PRESENTED_APPETIZERS],
-    customFieldIds: [FIELD_IDS.CUSTOM_BUFFET_METAL, FIELD_IDS.CUSTOM_PASSED_APP, FIELD_IDS.CUSTOM_PRESENTED_APP],
-  },
-  {
-    title: "COLD / DELI — PLASTIC CONTAINER",
-    fieldIds: [FIELD_IDS.DELIVERY_DELI, FIELD_IDS.BUFFET_CHINA, FIELD_IDS.ROOM_TEMP_DISPLAY],
-    customFieldIds: [FIELD_IDS.CUSTOM_DELIVERY_DELI, FIELD_IDS.CUSTOM_BUFFET_CHINA, FIELD_IDS.CUSTOM_ROOM_TEMP_DISPLAY],
-  },
-  {
-    title: "DESSERT / SNACKS",
-    fieldIds: [FIELD_IDS.DESSERTS],
-    customFieldIds: [FIELD_IDS.CUSTOM_DESSERTS],
-  },
+  { title: "CHAFER HOT",       executionType: "CHAFER HOT" },
+  { title: "CHAFER READY",     executionType: "CHAFER READY" },
+  { title: "COLD DISPLAY",     executionType: "COLD DISPLAY" },
+  { title: "INDIVIDUAL PACKS", executionType: "INDIVIDUAL PACKS" },
+  { title: "BULK SIDES",       executionType: "BULK SIDES" },
+  { title: "DESSERTS",         executionType: "DESSERTS" },
 ] as const;
 
 /**
  * Event Menu (shadow) "Section" values that belong to each DELIVERY_SECTION_CONFIG row (same order).
- * Used to aggregate preview rows and order sections — not for Airtable field wiring.
+ * Each section maps 1-to-1 with its executionType — no field ID wiring.
+ * Used to aggregate preview rows and order sections.
  */
 export const DELIVERY_SECTION_SHADOW_KEYS: readonly (readonly string[])[] = [
-  ["Passed Appetizers", "Presented Appetizers", "Buffet – Metal"],
-  ["Deli", "Buffet – China", "Room Temp", "Room Temp / Display"],
-  ["Desserts"],
+  ["CHAFER HOT"],
+  ["CHAFER READY"],
+  ["COLD DISPLAY"],
+  ["INDIVIDUAL PACKS"],
+  ["BULK SIDES"],
+  ["DESSERTS"],
 ] as const;
