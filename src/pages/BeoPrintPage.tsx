@@ -33,6 +33,8 @@ type MenuLineItem = {
 
 type SectionData = {
   title: string;
+  /** For full-service sections: the Airtable linked-record field ID.
+   *  For delivery sections: the executionType value used as a stable section key. */
   fieldId: string;
   items: MenuLineItem[];
 };

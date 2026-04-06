@@ -1,5 +1,5 @@
 /**
- * Single source of truth for delivery BEO menu sections (intake, print, kitchen BEO, shadow preview).
+ * Single source of truth for delivery BEO menu sections (intake, print, and kitchen BEO).
  * Do not duplicate section lists elsewhere — import this.
  *
  * Sections are NOT Airtable fields. Sections are filters on the Execution Type field in Menu_Lab.

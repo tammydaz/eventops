@@ -1298,17 +1298,18 @@ const KitchenBEOPrintPage: React.FC = () => {
   useEffect(() => {
     const parentIds = new Set<string>();
     const isDelivery = isDeliveryOrPickup(asSingleSelectName(selectedEventData?.[FIELD_IDS.EVENT_TYPE]) ?? "");
-    const fieldIdsToFetch = isDelivery
-      ? []  // Delivery sections use Event Menu shadow rows (by executionType), not event-linked fields
-      : MENU_SECTION_CONFIG.map((c) => c.fieldId).filter((fid) => fid !== FIELD_IDS.STATIONS);
-    fieldIdsToFetch.forEach((fid) => {
-      const val = selectedEventData[fid];
-      if (Array.isArray(val)) {
-        val.forEach((id: unknown) => {
-          if (typeof id === "string" && id.startsWith("rec")) parentIds.add(id);
-        });
-      }
-    });
+    if (!isDelivery) {
+      // Delivery sections use Event Menu shadow rows (by executionType) — no event-linked fields to collect
+      const fieldIdsToFetch = MENU_SECTION_CONFIG.map((c) => c.fieldId).filter((fid) => fid !== FIELD_IDS.STATIONS);
+      fieldIdsToFetch.forEach((fid) => {
+        const val = selectedEventData[fid];
+        if (Array.isArray(val)) {
+          val.forEach((id: unknown) => {
+            if (typeof id === "string" && id.startsWith("rec")) parentIds.add(id);
+          });
+        }
+      });
+    }
     const apiKey = (import.meta.env.VITE_AIRTABLE_API_KEY as string)?.trim() || "";
     const baseId = (import.meta.env.VITE_AIRTABLE_BASE_ID as string)?.trim() || "";
     if (!apiKey || !baseId) return;
