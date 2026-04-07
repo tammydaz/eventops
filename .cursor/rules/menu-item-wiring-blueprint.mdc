@@ -9,6 +9,40 @@ Any AI assistant should be able to follow this blueprint to add new items to eit
 
 ---
 
+## CRITICAL CONTEXT: BEO Headers Serve Different Purposes by Event Type
+
+### Full-Service BEO Headers (3 audiences)
+Full-service headers instruct **kitchen**, **on-site servers**, AND **pack-out crew**:
+
+| Header | Kitchen | Servers | Pack-Out |
+|--------|---------|---------|----------|
+| PASSED APPETIZERS | Cook/prep, send to venue | Keep in kitchen, pass on trays | Pack passing trays, toothpicks |
+| PRESENTED APPETIZERS | Cook/prep, send to venue | Goes out with appetizer course | Pack presentation platters |
+| BUFFET METAL | Prep in full pan (for reheating on site) | Place in chafer during buffet | Pack chafers + sterno + water pans |
+| BUFFET CHINA | Cold/room temp, plate on china | Unwrap and place on buffet | Pack risers only |
+| DESSERTS | Prep desserts | Place on dessert display | Pack dessert stands/platters |
+
+### Delivery BEO Headers (2 audiences — NO servers)
+Delivery headers instruct **kitchen** and **delivery drivers** only. Everything is disposable:
+
+| Header | Kitchen | Driver |
+|--------|---------|--------|
+| HOT - DISPOSABLE | Cook, pack in disposable chafer pans | Deliver hot items |
+| DELI - DISPOSABLE | Prep sandwiches/wraps, pack in trays | Deliver deli items |
+| COLD DISPLAY - DISPOSABLE | Prep cold items, pack in plastic | Deliver cold items |
+| SALADS - DISPOSABLE | Prep salads, pack in plastic containers | Deliver salads |
+| BREAKFAST - DISPOSABLE | Prep breakfast, pack in disposable | Deliver breakfast |
+| DESSERTS - DISPOSABLE | Pack desserts in bags/containers | Deliver desserts |
+
+### Same Item, Different Header
+The **same food item** (e.g. Chicken Marsala) gets a different header based on event type:
+- Full-service → BUFFET METAL (goes in chafer)
+- Delivery → HOT - DISPOSABLE (goes in disposable pan)
+
+The **Execution Type** field in Airtable (e.g. `CHAFER HOT`) determines the routing. The code translates it to the correct header based on whether the event is full-service or delivery. Do NOT create separate items for full-service vs delivery — the same item works for both.
+
+---
+
 ## CRITICAL ARCHITECTURE RULE
 
 There are **TWO separate menu item tables** that must stay in sync:
