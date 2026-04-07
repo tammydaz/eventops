@@ -23,23 +23,42 @@ Full-service headers instruct **kitchen**, **on-site servers**, AND **pack-out c
 | DESSERTS | Prep desserts | Place on dessert display | Pack dessert stands/platters |
 
 ### Delivery BEO Headers (2 audiences — NO servers)
-Delivery headers instruct **kitchen** and **delivery drivers** only. Everything is disposable:
+Two-part headers: **TEMP / VESSEL** — first word tells the driver, second word tells the kitchen.
 
-| Header | Kitchen | Driver |
-|--------|---------|--------|
-| HOT - DISPOSABLE | Cook, pack in disposable chafer pans | Deliver hot items |
-| DELI - DISPOSABLE | Prep sandwiches/wraps, pack in trays | Deliver deli items |
-| COLD DISPLAY - DISPOSABLE | Prep cold items, pack in plastic | Deliver cold items |
-| SALADS - DISPOSABLE | Prep salads, pack in plastic containers | Deliver salads |
-| BREAKFAST - DISPOSABLE | Prep breakfast, pack in disposable | Deliver breakfast |
-| DESSERTS - DISPOSABLE | Pack desserts in bags/containers | Deliver desserts |
+| Header on BEO | Execution Type (Airtable) | Kitchen | Driver |
+|---------------|--------------------------|---------|--------|
+| **HOT / TIN** | `CHAFER HOT` | Cook it, pack HOT in disposable chafer pan (tin) | Keep hot, deliver close to event time |
+| **READY / TIN** | `CHAFER READY` | Prep it, pack COLD in tin — client reheats later | No rush on timing, can go earlier |
+| **READY / DISPLAY** | `ROOM TEMP` | Arrange on presentation platter (cheese boards, crudite, fruit) | Handle carefully, presentation pieces |
+| **READY / COLD** | `COLD DISPLAY` | Cold items packed in containers | Deliver cold |
+| **READY / BULK** | `BULK SIDES` | Pack in bulk containers (pasta salad, fruit salad) | Deliver cold |
+| **INDIVIDUAL WRAPPED** | `INDIVIDUAL PACKS` | Wrap each one individually | Deliver individual items |
+| **SANDWICH TRAYS** | *(default deli)* | Prep sandwiches, arrange on trays | Deliver trays |
+| **BOXED LUNCHES** | *(own system)* | Aggregated counts — see Corporate/Boxed Lunch System | Deliver boxes |
+
+**HOT vs READY affects dispatch timing**: Hot items must leave closer to event time. Ready items can go earlier.
+
+### Execution Type → BEO Header Mapping (Code Reference)
+
+| Execution Type (Airtable) | Full-Service BEO Header | Delivery BEO Header | Code Route (`targetField`) |
+|--------------------------|------------------------|--------------------|----|
+| `CHAFER HOT` | BUFFET METAL | HOT / TIN | `buffetMetal` |
+| `CHAFER READY` | BUFFET METAL | READY / TIN | `buffetMetal` |
+| `ROOM TEMP` | ROOM TEMP / DISPLAY | READY / DISPLAY | `roomTempDisplay` |
+| `COLD DISPLAY` | BUFFET CHINA | READY / COLD | `buffetChina` |
+| `BULK SIDES` | BUFFET CHINA | READY / BULK | `buffetChina` |
+| `INDIVIDUAL PACKS` | *(n/a)* | INDIVIDUAL WRAPPED | `deliveryDeli` |
+| `DESSERTS` | DESSERTS | READY / COLD | `desserts` |
 
 ### Same Item, Different Header
 The **same food item** (e.g. Chicken Marsala) gets a different header based on event type:
-- Full-service → BUFFET METAL (goes in chafer)
-- Delivery → HOT - DISPOSABLE (goes in disposable pan)
+- Full-service → BUFFET METAL (goes in real chafer)
+- Delivery → HOT / TIN (goes in disposable chafer pan)
 
 The **Execution Type** field in Airtable (e.g. `CHAFER HOT`) determines the routing. The code translates it to the correct header based on whether the event is full-service or delivery. Do NOT create separate items for full-service vs delivery — the same item works for both.
+
+### Config file: `src/config/deliverySectionConfig.ts`
+All delivery BEO header labels, section routing, and Execution Type filtering logic lives here. The `deliveryItemBelongsInSection()` function assigns each item to exactly one section at print time.
 
 ---
 

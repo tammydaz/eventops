@@ -240,6 +240,13 @@ export async function fetchDeliveryMenuPickerItems(pickerType: string): Promise<
   if (pickerType === "delivery_chafer_ready") {
     return fetchChaferExecutionPickerItems(["CHAFER READY"]);
   }
+  if (pickerType === "delivery_ready_display") {
+    if (isMenuLabCatalog()) {
+      const f = buildMenuLabExecutionOrFormula(["ROOM TEMP", "DISPLAY"]);
+      if (f) return fetchMenuItemsByFilterFormula(f);
+    }
+    return fetchMenuItemsByCategory("room_temp");
+  }
   if (pickerType === "delivery_cold_display") {
     return fetchMenuItemsDeliveryColdDisplayWithRoutes();
   }

@@ -1,5 +1,14 @@
 /**
- * Delivery BEO — kitchen-facing sections (execution-language).
+ * Delivery BEO — kitchen + driver facing sections.
+ *
+ * Two-part headers: TEMP / VESSEL
+ *   HOT / TIN           → cook, pack hot in disposable chafer pan, serve immediately
+ *   READY / TIN         → prep, pack cold in disposable chafer pan, client reheats
+ *   READY / DISPLAY     → cold/room-temp presentation items (cheese boards, crudite, fruit)
+ *   READY / BULK        → bulk cold sides in containers (pasta salad, fruit salad)
+ *   INDIVIDUAL WRAPPED  → individually wrapped items (boxed lunches)
+ *   SANDWICH TRAYS      → deli trays
+ *
  * Intake, print, kitchen BEO, and shadow preview all derive from this config.
  */
 import { FIELD_IDS } from "../services/airtable/events";
@@ -7,6 +16,7 @@ import { FIELD_IDS } from "../services/airtable/events";
 export type DeliverySectionId =
   | "chafer_hot"
   | "chafer_ready"
+  | "ready_display"
   | "cold_display"
   | "bulk_sides"
   | "individual_wrapped"
@@ -44,10 +54,11 @@ export const DELIVERY_COURSE_BLOCK: Record<
   DeliverySectionId,
   { blockTitle: string; dotColor: string }
 > = {
-  chafer_hot: { blockTitle: "CHAFER HOT", dotColor: "#3b82f6" },
-  chafer_ready: { blockTitle: "CHAFER READY", dotColor: "#3b82f6" },
-  cold_display: { blockTitle: "COLD DISPLAY", dotColor: "#06b6d4" },
-  bulk_sides: { blockTitle: "BULK SIDES", dotColor: "#3b82f6" },
+  chafer_hot: { blockTitle: "HOT / TIN", dotColor: "#ef4444" },
+  chafer_ready: { blockTitle: "READY / TIN", dotColor: "#f97316" },
+  ready_display: { blockTitle: "READY / DISPLAY", dotColor: "#8b5cf6" },
+  cold_display: { blockTitle: "READY / COLD", dotColor: "#06b6d4" },
+  bulk_sides: { blockTitle: "READY / BULK", dotColor: "#3b82f6" },
   individual_wrapped: { blockTitle: "INDIVIDUAL WRAPPED", dotColor: "#eab308" },
   sandwich_trays: { blockTitle: "SANDWICH TRAYS", dotColor: "#d97706" },
 };
@@ -55,7 +66,7 @@ export const DELIVERY_COURSE_BLOCK: Record<
 export const DELIVERY_SECTION_CONFIG: readonly DeliverySectionRow[] = [
   {
     id: "chafer_hot",
-    title: "Chafer hot",
+    title: "Hot / Tin",
     icon: "🔥",
     pickerType: "delivery_chafer_hot",
     targetField: "buffetMetal",
@@ -68,7 +79,7 @@ export const DELIVERY_SECTION_CONFIG: readonly DeliverySectionRow[] = [
   },
   {
     id: "chafer_ready",
-    title: "Chafer ready",
+    title: "Ready / Tin",
     icon: "♨️",
     pickerType: "delivery_chafer_ready",
     targetField: "buffetMetal",
@@ -76,21 +87,29 @@ export const DELIVERY_SECTION_CONFIG: readonly DeliverySectionRow[] = [
     customFieldIds: [],
   },
   {
+    id: "ready_display",
+    title: "Ready / Display",
+    icon: "🧀",
+    pickerType: "delivery_ready_display",
+    targetField: "roomTempDisplay",
+    fieldIds: [FIELD_IDS.ROOM_TEMP_DISPLAY],
+    customFieldIds: [FIELD_IDS.CUSTOM_ROOM_TEMP_DISPLAY],
+  },
+  {
     id: "cold_display",
-    title: "Cold display",
+    title: "Ready / Cold",
     icon: "🧊",
     pickerType: "delivery_cold_display",
     targetField: "__delivery_cold__",
     fieldIds: COLD_EVENT_FIELDS,
     customFieldIds: [
       FIELD_IDS.CUSTOM_BUFFET_CHINA,
-      FIELD_IDS.CUSTOM_ROOM_TEMP_DISPLAY,
       FIELD_IDS.CUSTOM_DESSERTS,
     ],
   },
   {
     id: "bulk_sides",
-    title: "Bulk sides",
+    title: "Ready / Bulk",
     icon: "🍲",
     pickerType: "delivery_bulk_sides",
     targetField: "buffetChina",
@@ -99,7 +118,7 @@ export const DELIVERY_SECTION_CONFIG: readonly DeliverySectionRow[] = [
   },
   {
     id: "individual_wrapped",
-    title: "Individual wrapped",
+    title: "Individual Wrapped",
     icon: "📦",
     pickerType: "delivery_individual_wrapped",
     targetField: "deliveryDeli",
@@ -108,7 +127,7 @@ export const DELIVERY_SECTION_CONFIG: readonly DeliverySectionRow[] = [
   },
   {
     id: "sandwich_trays",
-    title: "Sandwich trays",
+    title: "Sandwich Trays",
     icon: "🥪",
     pickerType: "delivery_sandwich_trays",
     targetField: "deliveryDeli",
@@ -126,6 +145,9 @@ export const DELIVERY_SECTION_SHADOW_KEYS: readonly (readonly string[])[] = DELI
     if (row.id === "chafer_hot" || row.id === "chafer_ready") {
       return ["Passed Appetizers", "Presented Appetizers", "Buffet – Metal"];
     }
+    if (row.id === "ready_display") {
+      return ["Room Temp", "Room Temp / Display"];
+    }
     if (row.id === "cold_display" || row.id === "bulk_sides") {
       return ["Buffet – China", "Room Temp", "Room Temp / Display", "Desserts"];
     }
@@ -137,7 +159,7 @@ const HOT_FIELD_SET = new Set(HOT_EVENT_FIELDS);
 const hasExec = (exec: string[], needle: string) =>
   exec.some((e) => e.toUpperCase().includes(needle.toUpperCase()));
 
-/** Print / UI: assign one linked item to at most one delivery section (priority: bulk > cold for china). */
+/** Print / UI: assign one linked item to at most one delivery section (priority: display > bulk > cold). */
 export function deliveryItemBelongsInSection(
   sectionId: DeliverySectionId,
   executionTokens: string[],
@@ -158,18 +180,26 @@ export function deliveryItemBelongsInSection(
       if (hasExec(executionTokens, "CHAFER READY")) return true;
       return false;
     }
+    case "ready_display": {
+      if (sourceFieldId !== FIELD_IDS.ROOM_TEMP_DISPLAY) return false;
+      if (hasExec(executionTokens, "ROOM TEMP") || hasExec(executionTokens, "DISPLAY")) return true;
+      if (legacy && sourceFieldId === FIELD_IDS.ROOM_TEMP_DISPLAY) return true;
+      return false;
+    }
     case "bulk_sides": {
       if (sourceFieldId !== FIELD_IDS.BUFFET_CHINA && sourceFieldId !== FIELD_IDS.ROOM_TEMP_DISPLAY)
         return false;
+      if (sourceFieldId === FIELD_IDS.ROOM_TEMP_DISPLAY) return false;
       if (hasExec(executionTokens, "BULK SIDES")) return true;
       return false;
     }
     case "cold_display": {
+      if (sourceFieldId === FIELD_IDS.ROOM_TEMP_DISPLAY) return false;
       if (sourceFieldId === FIELD_IDS.DESSERTS) {
         if (hasExec(executionTokens, "BULK SIDES")) return false;
         return true;
       }
-      if (sourceFieldId === FIELD_IDS.BUFFET_CHINA || sourceFieldId === FIELD_IDS.ROOM_TEMP_DISPLAY) {
+      if (sourceFieldId === FIELD_IDS.BUFFET_CHINA) {
         if (hasExec(executionTokens, "BULK SIDES")) return false;
         if (
           hasExec(executionTokens, "COLD DISPLAY") ||
