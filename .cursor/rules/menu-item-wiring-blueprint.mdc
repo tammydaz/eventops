@@ -1,0 +1,398 @@
+# MENU ITEM WIRING BLUEPRINT — How to Add New Menu Items, Packages & Station Pickers
+
+This document explains the **complete end-to-end pattern** for wiring menu items into the foodwerx intake system. It covers two proven patterns:
+
+1. **Delivery Packages** (e.g. Nicholas Continental) — shadow menu system
+2. **Full-Service Stations** (e.g. Viva La Pasta) — station preset system
+
+Any AI assistant should be able to follow this blueprint to add new items to either system.
+
+---
+
+## CRITICAL ARCHITECTURE RULE
+
+There are **TWO separate menu item tables** that must stay in sync:
+
+| Table | ID | Purpose |
+|-------|-----|---------|
+| **Menu_Lab** | `tbl6gXRT2FPpTdf0J` | Source of truth for **picker filtering** (has `Menu Section`, `Display Type`, `Execution Type` fields) |
+| **Legacy Menu Items** | `tbl0aN33DGG6R1sPZ` | Source of truth for **Events linked records** (all Events table linked record fields point here) |
+
+**Both tables must have matching records by name.** The picker queries Menu_Lab for filtering, but resolves the item's name to its legacy table record ID before saving to the Events table.
+
+### Key Field IDs
+
+**Menu_Lab (`tbl6gXRT2FPpTdf0J`):**
+- Item Name: `fldpbzDFSg9sYeexU`
+- Child Items: `fldDDfLJTI6BK1zKd` (linked records within Menu_Lab)
+- Parent Item: `fldLrxghm3bUg0bCx`
+- Display Type: `flddOn21WHp7XEaP9` (multi-select)
+- Execution Type: `fldnP7tCisqdDkaOI` (multi-select)
+- Menu Section: `fld8Okh1qBnMeHwIN` (multi-select — used for delivery intake grouping)
+- Test Status: `fldpLvIaTNhtVNeF1` (NOT used in picker formulas)
+
+**Legacy Menu Items (`tbl0aN33DGG6R1sPZ`):**
+- Item Name: `fldW5gfSlHRTl01v1`
+- Child Items: `fldIu6qmlUwAEn2W9`
+- Parent Item: `fldBzB941q8TDeqm3`
+- Description: `fldtN2hxy9TS559Rm`
+- Dietary Tags: `fldUSr1QgzP4nv9vs`
+- Sauces: `fldCUjK7oBckAuNNa`
+
+---
+
+## PATTERN 1: DELIVERY PACKAGES (Nicholas Continental Model)
+
+### What the user sees
+1. Click a header button (e.g. "BREAKFAST") in delivery intake
+2. A picker modal shows all items tagged with that section's `Menu Section` tags
+3. User picks a package (e.g. "Nicholas Continental")
+4. If the package has children → edit modal auto-opens showing default components
+5. User can modify (remove/add children, change quantities)
+6. Each child item prints on its own line on the BEO with a quantity ("speck")
+
+### Step-by-step to add a new delivery package
+
+#### Step 1: Create records in Menu_Lab
+
+Create the **parent** record:
+```
+POST https://api.airtable.com/v0/appMLgdc3QpV2pwoz/tbl6gXRT2FPpTdf0J
+{
+  "fields": {
+    "fldpbzDFSg9sYeexU": "Nicholas Continental",       // Item Name
+    "fld8Okh1qBnMeHwIN": ["Breakfast - Room Temp"],     // Menu Section (determines which picker tab shows it)
+    "flddOn21WHp7XEaP9": ["DISPLAY"],                   // Display Type
+    "fldnP7tCisqdDkaOI": ["COLD DISPLAY"]               // Execution Type (determines BEO section routing)
+  }
+}
+```
+
+Create **child** records (each component):
+```
+POST https://api.airtable.com/v0/appMLgdc3QpV2pwoz/tbl6gXRT2FPpTdf0J
+{
+  "fields": {
+    "fldpbzDFSg9sYeexU": "Bagels",
+    "fldLrxghm3bUg0bCx": ["recPARENT_ID"],              // Parent Item → links to parent
+    "fld8Okh1qBnMeHwIN": ["Breakfast - Room Temp"],
+    "flddOn21WHp7XEaP9": ["DISPLAY"],
+    "fldnP7tCisqdDkaOI": ["COLD DISPLAY"]
+  }
+}
+```
+
+Then update the parent's Child Items field:
+```
+PATCH https://api.airtable.com/v0/appMLgdc3QpV2pwoz/tbl6gXRT2FPpTdf0J/recPARENT_ID
+{
+  "fields": {
+    "fldDDfLJTI6BK1zKd": ["recCHILD1", "recCHILD2", "recCHILD3"]
+  }
+}
+```
+
+#### Step 2: Create matching records in Legacy Menu Items
+
+The **exact same names** must exist in the legacy table. The picker resolves Menu_Lab names → legacy IDs.
+
+```
+POST https://api.airtable.com/v0/appMLgdc3QpV2pwoz/tbl0aN33DGG6R1sPZ
+{
+  "fields": {
+    "fldW5gfSlHRTl01v1": "Nicholas Continental"    // Item Name (must match Menu_Lab exactly)
+  }
+}
+```
+
+Create children in legacy table too, and link them via Child Items (`fldIu6qmlUwAEn2W9`).
+
+#### Step 3: Verify the Menu Section tag is mapped
+
+In `src/services/airtable/menuCatalogConfig.ts`, the `DELIVERY_INTAKE_SECTIONS` array maps picker buttons to Menu Section tags:
+
+```typescript
+{
+  id: "breakfast",
+  title: "BREAKFAST",
+  icon: "☀️",
+  menuSectionTags: ["Breakfast - Room Temp", "Breakfast - Hot", "Breakfast - Complements"],
+}
+```
+
+If your new item uses a Menu Section tag NOT in this list, add it.
+
+#### Step 4: Verify Execution Type routing
+
+In `src/services/airtable/menuItems.ts`, the function `routeTargetFieldFromExecutionTokens()` maps Execution Type → Events table field:
+
+```
+CHAFER HOT → buffetMetal
+COLD DISPLAY → buffetChina
+INDIVIDUAL PACKS → deliveryDeli
+ROOM TEMP → roomTempDisplay
+```
+
+If your item's Execution Type isn't mapped, add it.
+
+### Code flow (for reference)
+
+1. **Picker loads items**: `fetchDeliveryIntakeItems()` in `menuItems.ts` queries Menu_Lab by `Menu Section` tags, filters out child-only items, resolves names to legacy IDs
+2. **User picks item**: `handlePickerAdd()` in `BeoIntakePage.tsx` creates a shadow row via `createEventMenuRow()` using the legacy ID
+3. **Auto-open modal**: If `item.hasChildren === true`, a `setTimeout(..., 300)` opens the edit modal
+4. **Sync to Events**: `syncShadowToEvent()` writes the shadow row's catalog item ID to the appropriate Events field
+5. **BEO Print**: `BeoPrintPage.tsx` reads Events fields, resolves item names via `fetchMenuItems()` (with legacy fallback), renders parent + children via `expandItemToRows()`
+
+### Files involved
+- `src/services/airtable/menuCatalogConfig.ts` — DELIVERY_INTAKE_SECTIONS, Menu Section tags
+- `src/services/airtable/menuItems.ts` — fetchDeliveryIntakeItems, routeTargetFieldFromExecutionTokens, fetchMenuItemChildren, fetchMenuItemNamesByIds
+- `src/components/beo-intake/MenuSection.tsx` — delivery header buttons, fetchItemNames
+- `src/pages/BeoIntakePage.tsx` — handlePickerAdd, auto-open modal, shadow row rendering
+- `src/components/MenuPickerModal.tsx` — picker UI
+- `src/services/airtable/eventMenu.ts` — createEventMenuRow, syncShadowToEvent, loadEventMenuRows
+- `src/pages/BeoPrintPage.tsx` — BEO print rendering, expandItemToRows, legacy fallback
+- `src/pages/KitchenBEOPrintPage.tsx` — Kitchen BEO, same pattern
+
+### Legacy fallback pattern
+
+Every function that fetches item data MUST have a legacy fallback:
+1. Try configured table (Menu_Lab) first
+2. If ID not found → try legacy table with correct legacy field IDs
+3. This is because shadow rows store legacy IDs, but `.env` points to Menu_Lab
+
+---
+
+## PATTERN 2: FULL-SERVICE STATIONS (Viva La Pasta Model)
+
+### What the user sees
+1. In full-service intake → Stations section → pick a station type (e.g. "Viva La Pasta")
+2. The `StationComponentsConfigModal` opens
+3. Shows sections grouped by component type (Starch, Sauce, Protein, Vegetable, Topping)
+4. Each section has a selection limit (e.g. "Pick 2 pastas", "Pick 3 sauces")
+5. User selects from dropdowns; save validates all required selections are made
+6. Station prints on BEO with components listed
+
+### Airtable structure for stations
+
+Three dedicated tables (NOT Menu Items):
+
+| Table | Env Var | Purpose |
+|-------|---------|---------|
+| Station Presets | `VITE_AIRTABLE_STATION_PRESETS_TABLE` = `tbl6HdKHF8f9OEadE` | One row per station type (e.g. "Viva La Pasta") |
+| Station Components | `VITE_AIRTABLE_STATION_COMPONENTS_TABLE` = `tblQuBGWfASBz5zfe` | Individual items (e.g. "Penne", "Alfredo") with component type |
+| Station Options | `VITE_AIRTABLE_STATION_OPTIONS_TABLE` = `tbloJSO6IEzY6Bd35` | Selection rules (e.g. "Starch: pick 2", "Sauce: pick 3") |
+
+**Station Presets** links to:
+- Default Components (linked records → Station Components) — items included by default
+- Available Options (linked records → Station Options) — selection rules
+
+**Station Components** has:
+- Name (text)
+- Component Type (single select: Starch, Protein, Sauce, Vegetable, Topping, Other)
+- Is Default (checkbox)
+
+**Station Options** has:
+- Option Name (text)
+- Component Type (single select)
+- Number of Selections Allowed (number) — this is the "Pick N" limit
+
+### Step-by-step to add a new station
+
+#### Step 1: Create Station Components in Airtable
+
+For each item the station offers (e.g. Penne, Rigatoni, Alfredo, Marinara):
+```
+POST /Station Components table
+{
+  "fields": {
+    "Name": "Penne",
+    "Component Type": "Starch",
+    "Is Default": true
+  }
+}
+```
+
+#### Step 2: Create Station Options (selection rules)
+
+For each component type that requires a pick:
+```
+POST /Station Options table
+{
+  "fields": {
+    "Option Name": "Pasta Selection",
+    "Component Type": "Starch",
+    "Number of Selections Allowed": 2
+  }
+}
+```
+
+#### Step 3: Create or update the Station Preset
+
+Link the components and options to the preset:
+```
+PATCH /Station Presets table/recPRESET_ID
+{
+  "fields": {
+    "Name": "Viva La Pasta",
+    "Default Components": ["recCOMP1", "recCOMP2", ...],
+    "Available Options": ["recOPT1", "recOPT2", ...]
+  }
+}
+```
+
+#### Step 4: Add config in code (if custom UI needed)
+
+For stations needing special UI beyond the generic preset modal:
+
+1. **`src/config/stationPresets.ts`** — Add a preset key and config object:
+   ```typescript
+   export const MY_STATION = {
+     proteinOptions: ["Chicken", "Beef"] as const,
+     proteinCount: 2,
+     included: ["Rice", "Vegetables"] as const,
+   };
+   ```
+
+2. **`src/constants/stationItemMapping.ts`** — Add item IDs and pick counts:
+   ```typescript
+   STATION_ITEM_IDS["My Station"] = ["recId1", "recId2"];
+   STATION_INSTRUCTIONS["My Station"] = "Choose 2 proteins";
+   STATION_PICK_COUNT["My Station"] = 2;
+   ```
+
+3. **`src/components/beo-intake/StationComponentsConfigModal.tsx`** — Add custom rendering if the generic grouped-by-type layout doesn't fit (most stations use the generic layout; only Viva La Pasta and a few others have custom UI).
+
+### Code flow
+1. User picks station type → `loadStationPresets()` fetches preset record
+2. Modal opens → `loadAllComponentsForPreset()` fetches linked components
+3. Components grouped by type → `loadStationOptionsForPreset()` fetches pick limits
+4. User selects → `handleConfirm()` validates all required picks are filled
+5. Save → station record created/updated in Stations table linked to Event
+
+### Files involved
+- `src/config/stationPresets.ts` — preset configs (Tex-Mex, Ramen, etc.)
+- `src/constants/stationItemMapping.ts` — item IDs, instructions, pick counts
+- `src/constants/stations.ts` — Stations table field IDs
+- `src/services/airtable/stationComponents.ts` — load presets, components, options
+- `src/components/beo-intake/StationComponentsConfigModal.tsx` — modal UI (LOCKED — see station-components-config-locked.mdc)
+
+---
+
+## PATTERN 3: BOXED LUNCHES (Separate System)
+
+Boxed lunches use their own tables (NOT shadow menu, NOT stations):
+- `Boxed Lunch Orders` (`tbldRHfhjCY4x2Hyy`)
+- `Boxed Lunch Order Items` (`tblbkSAnNpUkjWtsa`)
+- `Box Customizations` (`tblAulNkoIFgNhJxw`)
+
+V2 payload stores JSON in the `orderName` field with prefix `FWX_BOXED_V2:`.
+
+Sandwich choices come from `fetchMenuItemsByBoxLunchType()` which queries Menu Items by `Box Lunch Type` field.
+
+### Files
+- `src/config/boxedLunchBeo.ts` — box types, sandwich suggestions
+- `src/services/airtable/boxedLunchOrders.ts` — load/save orders
+- `src/components/beo-intake/BoxedLunchSection.tsx` — intake UI
+- `src/utils/boxedLunchPrint.ts` — BEO print rendering
+
+---
+
+## PATTERN 4: SANDWICH PLATTERS (LocalStorage)
+
+Sandwich platters use `localStorage` (NOT Airtable):
+- Config in `src/config/sandwichPlatterConfig.ts` — PLATTER_CHOICES defines types, options, maxPick
+- State in `src/state/platterOrdersStore.ts`
+- UI in `src/components/beo-intake/SandwichPlatterConfigModal.tsx`
+
+To add a new platter type, add it to `PLATTER_CHOICES` with options and maxPick.
+
+---
+
+## COMMON MISTAKES TO AVOID
+
+1. **ID mismatch**: Creating items only in Menu_Lab but not in Legacy table → items save silently fails because Events linked fields point to legacy table
+2. **Missing legacy fallback**: Any new function that fetches item data by ID must check BOTH tables
+3. **Wrong Execution Type**: If Execution Type doesn't map in `routeTargetFieldFromExecutionTokens()`, the item won't route to the correct BEO section
+4. **Child-only items showing in picker**: Items with a Parent Item should be filtered out of the picker (they're components, not top-level selections)
+5. **Menu Section tag mismatch**: The tag string in Airtable must EXACTLY match the string in `DELIVERY_INTAKE_SECTIONS.menuSectionTags`
+
+---
+
+## EXISTING MENU SECTION TAGS (as of April 2026)
+
+These tags exist in Menu_Lab's Menu Section field:
+- `Breakfast - Room Temp` (49 items)
+- `Breakfast - Hot` (58 items)
+- `Breakfast - Complements` (8 items)
+- `Lunch - Classic Sandwiches` (26 items)
+- `Lunch - Signature Specialty` (29 items)
+- `Lunch - Wraps` (9 items)
+- `Lunch - Panini` (5 items)
+- `Lunch - Hoagies` (9 items)
+- `Salads - Classic` (233 items)
+- `Salads - Signature` (5 items)
+- `Hot Lunch` (323 items)
+- `Ambient Displays` (75 items)
+- `Desserts` (71 items)
+- `Breaks and Snacks` (36 items)
+- `Beverages` (18 items)
+
+---
+
+---
+
+## CURRENT GAP ANALYSIS (April 2026)
+
+### Full-Service Intake — Picker Issues
+
+The full-service pickers (Passed Apps, Presented Apps, Buffet Metal, Buffet China, Desserts, Stations) work differently depending on which table is configured:
+
+**When `.env` points to Menu_Lab (`tbl6gXRT2FPpTdf0J`):**
+- Pickers use `Display Type` field to filter
+- BUT Menu_Lab only has these Display Type values: `BUFFET` (85), `DISPLAY` (43), `COLD DISPLAY` (13)
+- The picker code expects: `PASSED APPETIZERS`, `PRESENTED APPETIZERS`, `BUFFET METAL`, `BUFFET CHINA`, `DESSERTS`, `STATION`
+- **Result: ALL full-service pickers show 0 items from Menu_Lab**
+
+**When `.env` points to Legacy (`tbl0aN33DGG6R1sPZ`):**
+- Pickers use `Category` field (single select)
+- Legacy has: `Passed App` (17), `Presented App` (30), `Buffet Metal` (3), `Buffet` (41), `Dessert` (42), `Station Item` (39)
+- These match the legacy picker formula patterns
+- **Full-service works correctly with legacy table**
+
+### To fix full-service pickers with Menu_Lab:
+
+**Option A (Recommended — fastest):** Add the missing Display Type values to Menu_Lab records. Bulk-update records to add tags like `PASSED APPETIZERS`, `PRESENTED APPETIZERS`, `BUFFET METAL`, `BUFFET CHINA`, `DESSERTS`, `STATION` to the Display Type multi-select field. Use the legacy Category as a guide for which tag each item should get.
+
+**Option B:** Modify the picker code in `menuCatalogConfig.ts` to map existing Menu_Lab Display Type values to the picker categories. E.g., map `BUFFET` → `buffet_metal`, `DISPLAY` → `presented`, etc. Risk: too coarse — one `BUFFET` tag covers items that should be in different sections.
+
+### Legacy Table Category → Menu_Lab Display Type mapping guide:
+
+| Legacy Category | Should get Display Type | Notes |
+|----------------|------------------------|-------|
+| Passed App | PASSED APPETIZERS | 17 items |
+| Presented App | PRESENTED APPETIZERS | 30 items |
+| Buffet Metal | BUFFET METAL | 3 items (need more) |
+| Buffet, Buffet Item, Entrée, Protein, Pasta, Vegetable, Starch | BUFFET METAL or BUFFET CHINA | Need to sort by hot vs cold |
+| Dessert, Dessert (Individual), Dessert (Display) | DESSERTS | 54 items total |
+| Station Item | STATION | 39 items |
+| Deli, Deli/Sandwhiches | Already handled by delivery intake | |
+| Component | Child items — no Display Type needed | |
+
+---
+
+## QUICK REFERENCE: Adding a menu section to delivery intake
+
+1. Ensure items in Menu_Lab have the correct `Menu Section` tag
+2. Ensure matching items exist in Legacy Menu Items table (same name)
+3. Add the tag to `DELIVERY_INTAKE_SECTIONS` in `menuCatalogConfig.ts` if not already there
+4. Ensure `Execution Type` maps to a BEO section in `routeTargetFieldFromExecutionTokens()`
+5. Test: click the header button → verify items appear in picker → pick one → verify it shows in food list and on BEO print
+
+## QUICK REFERENCE: Adding a station to full-service intake
+
+1. Create components in Station Components table with correct Component Type
+2. Create options in Station Options table with selection limits
+3. Create/update preset in Station Presets table, linking components and options
+4. If custom UI needed: add config in `stationPresets.ts`, mapping in `stationItemMapping.ts`
+5. Station type must be in `STATION_TYPE_OPTIONS` in `stations.ts`
+6. Test: select station type → verify modal shows grouped components → verify pick limits enforce → verify BEO print
