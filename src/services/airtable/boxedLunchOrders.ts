@@ -310,6 +310,34 @@ export async function upsertBoxedLunchOrderV2(
   return { orderId: orderRes.records[0].id };
 }
 
+/**
+ * Clone all boxed lunch orders from one event to another.
+ * Handles V2 (JSON blob) orders by creating new order records linked to the target event.
+ */
+export async function cloneBoxedLunchOrdersToEvent(
+  sourceEventId: string,
+  targetEventId: string
+): Promise<{ success: true } | AirtableErrorResult> {
+  const orders = await loadBoxedLunchOrdersByEventId(sourceEventId);
+  if (isErrorResult(orders)) return orders;
+  if (orders.length === 0) return { success: true };
+
+  for (const order of orders) {
+    const createFields: Record<string, unknown> = {
+      [BOXED_LUNCH_ORDERS_FIELD_IDS.orderName]: order.orderName,
+      [BOXED_LUNCH_ORDERS_FIELD_IDS.clientEvent]: [targetEventId],
+    };
+    const createRes = await airtableFetch<{ records?: Array<{ id: string }> }>(
+      `/${BOXED_LUNCH_ORDERS_TABLE}`,
+      { method: "POST", body: JSON.stringify({ records: [{ fields: createFields }] }) }
+    );
+    if (isErrorResult(createRes) || !createRes.records?.[0]) {
+      return { error: true, message: "Failed to clone boxed lunch order" };
+    }
+  }
+  return { success: true };
+}
+
 /** @deprecated Legacy Pick1/Pick2 — retained for one-off migration scripts only */
 export async function createBoxedLunchOrderFromRows(
   eventId: string,
