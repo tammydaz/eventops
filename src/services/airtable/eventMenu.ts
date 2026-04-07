@@ -266,6 +266,39 @@ export async function createEventMenuRow(
 }
 
 /**
+ * Clones all Event Menu shadow rows from one event to another.
+ * Copies section, catalog item, sort order, custom text, sauce override, pack-out notes, and child overrides.
+ */
+export async function cloneEventMenuShadowRowsFromEvent(
+  sourceEventId: string,
+  targetEventId: string
+): Promise<{ success: true } | AirtableErrorResult> {
+  const rows = await loadEventMenuRows(sourceEventId);
+  if (isErrorResult(rows)) return rows;
+  if (rows.length === 0) return { success: true };
+
+  for (const row of rows) {
+    if (!row.catalogItemId?.startsWith("rec")) continue;
+    const fields: Record<string, unknown> = {
+      Event: [targetEventId],
+      Section: row.section,
+      "Catalog Item": [row.catalogItemId],
+      "Sort Order": row.sortOrder,
+      "Line Type": "Catalog",
+      Mode: "DEFAULT",
+    };
+    if (row.customText) fields["Custom Text"] = row.customText;
+    if (row.sauceOverride) fields["Sauce Override"] = row.sauceOverride;
+    if (row.packOutNotes) fields["Pack-Out Notes"] = row.packOutNotes;
+    if (row.childOverrides) fields["Child Overrides"] = JSON.stringify(row.childOverrides);
+    if (row.parentItemId) fields["Parent Item"] = [row.parentItemId];
+    const result = await createRecord("Event Menu (SHADOW SYSTEM)", fields);
+    if (isErrorResult(result)) return result;
+  }
+  return { success: true };
+}
+
+/**
  * Deletes one record from Event Menu (SHADOW SYSTEM). Does NOT touch Events or Menu Items.
  */
 export async function deleteEventMenuRow(
