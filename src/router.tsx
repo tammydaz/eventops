@@ -21,6 +21,10 @@ import DeliveryCommandPage from "./pages/DeliveryCommandPage";
 const KitchenLandingPage = lazy(() => import("./pages/KitchenLandingPage").then((m) => ({ default: m.default })));
 const FlairLandingPage = lazy(() => import("./pages/FlairLandingPage").then((m) => ({ default: m.default })));
 const DeliveryLandingPage = lazy(() => import("./pages/DeliveryLandingPage").then((m) => ({ default: m.default })));
+const DeliveryIntakeLandingPage = lazy(() =>
+  import("./pages/DeliveryIntakeLandingPage").then((m) => ({ default: m.default }))
+);
+const ClientOverviewPage = lazy(() => import("./pages/ClientOverviewPage").then((m) => ({ default: m.default })));
 const OpsChiefLandingPage = lazy(() => import("./pages/OpsChiefLandingPage").then((m) => ({ default: m.default })));
 import LeadIntakePage from "./pages/LeadIntakePage";
 
@@ -40,6 +44,7 @@ import EarlyEventSections from "./pages/EarlyEventSections";
 
 const DELIVERY_NAV = [
   { label: "Delivery Home", href: "/delivery-command", icon: "🚚" },
+  { label: "Staff intake", href: "/delivery/intake", icon: "📝" },
   { label: "Dispatch", href: "/delivery-command/dispatch", icon: "📋" },
   { label: "Kitchen BEO", href: "/kitchen-beo-print", icon: "🍳" },
 ];
@@ -60,6 +65,14 @@ export const Router = ({ selectedEventId }: { selectedEventId: string | null }) 
     <Routes>
       <Route path="/event/:id" element={<EventOverviewPage />} />
       <Route path="/lead/:id" element={<FOHLeadOverview />} />
+      <Route
+        path="/client/:clientId"
+        element={
+          <Suspense fallback={<div style={{ padding: 24, color: "#888" }}>Loading…</div>}>
+            <ClientOverviewPage />
+          </Suspense>
+        }
+      />
       <Route path="*" element={<RouterContent pathname={pathname} selectedEventId={selectedEventId} />} />
     </Routes>
   );
@@ -231,6 +244,14 @@ function RouterContent({ pathname, selectedEventId }: { pathname: string; select
     return (
       <Suspense fallback={<div style={{ padding: 24, color: "#888" }}>Loading…</div>}>
         <DeliveryLandingPage />
+      </Suspense>
+    );
+  }
+
+  if (pathname === "/delivery/intake") {
+    return (
+      <Suspense fallback={<div style={{ padding: 24, color: "#888" }}>Loading…</div>}>
+        <DeliveryIntakeLandingPage />
       </Suspense>
     );
   }

@@ -3,6 +3,7 @@ import { FIELD_IDS, type TimelineDetails } from "../../services/airtable/events"
 import { asString } from "../../services/airtable/selectors";
 import { useEventStore } from "../../state/eventStore";
 import { useAuthStore } from "../../state/authStore";
+import { canEditDispatchTime } from "../../lib/auth";
 import { secondsToTimeString, timeStringToSeconds } from "../../utils/timeHelpers";
 
 const emptyDetails: TimelineDetails = {
@@ -19,7 +20,7 @@ export const TimelinePanel = () => {
   const { selectedEventId, selectedEventData, setFields } = useEventStore();
   const { user } = useAuthStore();
   const [details, setDetails] = useState<TimelineDetails>(emptyDetails);
-  const canEditDispatchTime = user?.role === "ops_admin";
+  const allowDispatchEdit = canEditDispatchTime(user?.role);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isOpen, setIsOpen] = useState(false);
@@ -70,12 +71,12 @@ export const TimelinePanel = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
           <label className="text-xs uppercase tracking-widest text-gray-400">
-            Dispatch Time{!canEditDispatchTime ? " (read-only)" : ""}
+            Dispatch Time{!allowDispatchEdit ? " (read-only)" : ""}
           </label>
           <input
             type="time"
             value={details.dispatchTime === "—" || !details.dispatchTime ? "" : details.dispatchTime}
-            disabled={!canEdit || !canEditDispatchTime}
+            disabled={!canEdit || !allowDispatchEdit}
             onChange={(event) => {
               const val = event.target.value;
               handleChange("dispatchTime", val);

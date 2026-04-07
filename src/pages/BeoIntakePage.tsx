@@ -1,4 +1,4 @@
-import React, { useEffect, useLayoutEffect, useState, useCallback, useRef, type ReactNode } from "react";
+import React, { useEffect, useLayoutEffect, useState, useCallback, useRef, useMemo, type ReactNode } from "react";
 import { Link, useNavigate, useSearchParams, useLocation } from "react-router-dom";
 import { useEventStore } from "../state/eventStore";
 import { DASHBOARD_CALENDAR_TO } from "../lib/dashboardRoutes";
@@ -21,7 +21,7 @@ import { SubmitChangeRequestModal } from "../components/SubmitChangeRequestModal
 import { MissingFieldsModal } from "../components/MissingFieldsModal";
 import { UnsavedChangesModal } from "../components/UnsavedChangesModal";
 import { useAuthStore } from "../state/authStore";
-import { canEditDispatchAndJobNumber } from "../lib/auth";
+import { canEditDispatchTime } from "../lib/auth";
 import { isDeliveryOrPickup } from "../lib/deliveryHelpers";
 import { deliveryFoodListSectionKeys } from "../lib/deliveryShadowSectionLabels";
 import { isChangeRequested, allBOHConfirmedChange } from "../lib/productionHelpers";
@@ -31,7 +31,13 @@ import { secondsTo12HourString } from "../utils/timeHelpers";
 import { createTask } from "../services/airtable/tasks";
 import { MenuPickerModal } from "../components/MenuPickerModal";
 import { usePickerStore } from "../state/usePickerStore";
-import { updateMenuItemVesselType, VESSEL_TYPE_VALUES, fetchMenuItemNamesByIds } from "../services/airtable/menuItems";
+import {
+  DELIVERY_COLD_DISPLAY_TARGET_FIELD,
+  DELIVERY_INTAKE_TARGET_FIELD,
+  fetchMenuItemNamesByIds,
+  updateMenuItemVesselType,
+  VESSEL_TYPE_VALUES,
+} from "../services/airtable/menuItems";
 import {
   createEventMenuRow,
   targetFieldToSection,
@@ -158,7 +164,7 @@ export const BeoIntakePage = () => {
   const jobIndex = selectedEventId ? sortedByDispatch.findIndex((e) => e.id === selectedEventId) + 1 : 0;
   const jobNumberDisplay = jobIndex > 0 ? String(jobIndex).padStart(3, "0") : "—";
   const dispatchTimeDisplay = selectedEventData ? secondsTo12HourString(selectedEventData[FIELD_IDS.DISPATCH_TIME]) : "—";
-  const canEditDispatch = canEditDispatchAndJobNumber(user?.role ?? null);
+  const canEditDispatch = canEditDispatchTime(user?.role ?? null);
 
   const selectEventRef = useRef(selectEvent);
   selectEventRef.current = selectEvent;
@@ -497,8 +503,12 @@ export const BeoIntakePage = () => {
   );
 
   const handlePickerAdd = useCallback(
-    async (item: { id: string; name: string }) => {
-      const targetField = usePickerStore.getState().targetField;
+    async (item: { id: string; name: string; routeTargetField?: string; hasChildren?: boolean }) => {
+      const storeTarget = usePickerStore.getState().targetField;
+      const targetField =
+        storeTarget === DELIVERY_COLD_DISPLAY_TARGET_FIELD || storeTarget === DELIVERY_INTAKE_TARGET_FIELD
+          ? item.routeTargetField ?? null
+          : item.routeTargetField ?? storeTarget;
       if (!selectedEventId || !targetField) return;
       const mappedSection = targetFieldToSection(targetField);
       if (!mappedSection) return;
@@ -506,8 +516,9 @@ export const BeoIntakePage = () => {
       const createResult = await createEventMenuRow(selectedEventId, mappedSection, item.id);
       if (createResult && "error" in createResult) return;
 
+      const newRowId = (createResult as { id: string }).id;
       const newRow: EventMenuRow & { catalogItemName: string; components?: EventMenuRowComponent[] } = {
-        id: (createResult as { id: string }).id,
+        id: newRowId,
         section: mappedSection,
         sortOrder: 0,
         catalogItemId: item.id,
@@ -528,6 +539,21 @@ export const BeoIntakePage = () => {
       await loadShadowMenu({ retryIfEmpty: true });
       await loadEventData(selectedEventId);
 
+      // Auto-open edit modal for packages with children so user can configure them
+      if (item.hasChildren) {
+        setTimeout(() => {
+          setShadowMenuRows((current) => {
+            const row = current.find((r) => r.catalogItemId === item.id);
+            if (row) {
+              setEditingShadowRow(row);
+              setEditDraft({ customText: row.customText ?? "", packOutNotes: row.packOutNotes ?? "" });
+              setEditDisplayNameEditing(false);
+            }
+            return current;
+          });
+        }, 300);
+      }
+
       const vesselTypeMap: Record<string, string> = {
         buffetMetal: VESSEL_TYPE_VALUES.METAL_HOT,
         buffetChina: VESSEL_TYPE_VALUES.CHINA_COLD,
@@ -542,23 +568,78 @@ export const BeoIntakePage = () => {
     [selectedEventId, loadShadowMenu, loadEventData]
   );
 
+  const handlePickerRemove = useCallback(
+    async (catalogItemId: string, itemName?: string) => {
+      if (!selectedEventId) return;
+      let row = shadowMenuRows.find((r) => r.catalogItemId === catalogItemId);
+      if (!row && itemName) {
+        const nameLower = itemName.toLowerCase();
+        row = shadowMenuRows.find(
+          (r) => (r.catalogItemName ?? "").toLowerCase() === nameLower ||
+                 (r.customText ?? "").toLowerCase() === nameLower
+        );
+      }
+      if (!row) return;
+      await deleteEventMenuRow(row.id);
+      await syncShadowToEvent(selectedEventId);
+      await loadShadowMenu();
+    },
+    [selectedEventId, shadowMenuRows, loadShadowMenu]
+  );
+
   const targetField = usePickerStore((s) => s.targetField);
+  const pickerTypeOpen = usePickerStore((s) => s.pickerType);
   const openPicker = usePickerStore((s) => s.openPicker);
-  const pickerAlreadyAddedIds = (() => {
+  const pickerAlreadyAddedIds = useMemo(() => {
     if (!targetField) return [];
+    if (targetField === DELIVERY_INTAKE_TARGET_FIELD) {
+      const ids: string[] = [];
+      for (const r of shadowMenuRows) {
+        if (r.catalogItemId) ids.push(r.catalogItemId);
+      }
+      return ids;
+    }
+    const hotSections = new Set(["Passed Appetizers", "Presented Appetizers", "Buffet – Metal"]);
+    const coldSections = new Set(["Buffet – China", "Room Temp", "Room Temp / Display", "Desserts"]);
+    if (pickerTypeOpen === "delivery_chafer_hot" || pickerTypeOpen === "delivery_chafer_ready") {
+      return shadowMenuRows
+        .filter((r) => r.catalogItemId && hotSections.has(r.section))
+        .map((r) => r.catalogItemId as string);
+    }
+    if (targetField === DELIVERY_COLD_DISPLAY_TARGET_FIELD) {
+      return shadowMenuRows
+        .filter((r) => r.catalogItemId && coldSections.has(r.section))
+        .map((r) => r.catalogItemId as string);
+    }
+    if (pickerTypeOpen === "delivery_bulk_sides") {
+      return shadowMenuRows
+        .filter(
+          (r) =>
+            r.catalogItemId &&
+            (r.section === "Buffet – China" || r.section === "Room Temp" || r.section === "Room Temp / Display")
+        )
+        .map((r) => r.catalogItemId as string);
+    }
     const section = targetFieldToSection(targetField);
     if (!section) return [];
     return shadowMenuRows
       .filter((r) => r.section === section && r.catalogItemId)
       .map((r) => r.catalogItemId as string);
-  })();
+  }, [targetField, pickerTypeOpen, shadowMenuRows]);
+
+  const pickerAlreadyAddedNames = useMemo(() => {
+    if (targetField !== DELIVERY_INTAKE_TARGET_FIELD) return undefined;
+    return shadowMenuRows
+      .filter((r) => r.catalogItemName)
+      .map((r) => r.catalogItemName as string);
+  }, [targetField, shadowMenuRows]);
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (usePickerStore.getState().isOpen) return;
       if (usePickerStore.getState().isWithinCloseGrace()) return;
       const target = e.target as HTMLElement;
-      if (target.closest(".picker-modal-backdrop") || target.closest(".picker-modal") || target.closest(".picker-done-button") || target.closest(".station-config-modal") || target.closest(".station-picker-modal")) return;
+      if (target.closest(".picker-modal-backdrop") || target.closest(".picker-modal") || target.closest(".picker-done-button") || target.closest(".station-config-modal") || target.closest(".station-picker-modal") || target.closest("[role='dialog']")) return;
       if (!target.closest(".beo-pill")) {
         window.dispatchEvent(new CustomEvent("beo-collapse-all-pills"));
       }
@@ -774,10 +855,15 @@ export const BeoIntakePage = () => {
                       <div className="beo-grid-span-full">
                         <HeaderSection jobNumberDisplay={jobNumberDisplay} dispatchTimeDisplay={dispatchTimeDisplay} canEditDispatch={canEditDispatch} eventDate={eventDateNorm} />
                       </div>
+                      {isDelivery ? (
+                        <div className="beo-grid-span-full">
+                          <EventCoreSection isDelivery hideHeaderFields />
+                        </div>
+                      ) : null}
                       <div className="beo-grid-span-full">
                         <FormSection
                           title="Menu"
-                          defaultOpen={true}
+                          defaultOpen={!isDelivery || shadowMenuRows.length > 0}
                           sectionId="beo-section-menu"
                           titleAlign="center"
                           dotColor={BEO_SECTION_PILL_ACCENT}
@@ -803,7 +889,7 @@ export const BeoIntakePage = () => {
                                 ))}
                             </div>
                             )}
-                            {!isDelivery && (
+                            {(
                             shadowMenuRows.length === 0 ? (
                               <div
                                 style={{
@@ -939,7 +1025,14 @@ export const BeoIntakePage = () => {
                               </>
                             )
                             )}
-                            {isDelivery && <MenuSection embedded isDelivery />}
+                            {isDelivery && (
+                              <MenuSection
+                                embedded
+                                isDelivery
+                                shadowMenuRows={shadowMenuRows}
+                                loadShadowMenu={loadShadowMenu}
+                              />
+                            )}
                             {selectedEventId && (
                               <div id="beo-creation-stations" style={{ width: "100%", marginTop: 20 }}>
                                 <CreationStationContent
@@ -972,9 +1065,11 @@ export const BeoIntakePage = () => {
                       {!isDelivery && <KitchenAndServicewareSection />}
                       {!isDelivery && <TimelineSection />}
                       {!isDelivery && <SiteVisitLogisticsSection />}
-                      <div className="beo-grid-span-full">
-                        <EventCoreSection isDelivery={isDelivery} hideHeaderFields />
-                      </div>
+                      {!isDelivery ? (
+                        <div className="beo-grid-span-full">
+                          <EventCoreSection isDelivery={false} hideHeaderFields />
+                        </div>
+                      ) : null}
                     </div>
                     <ApprovalsLockoutSection eventId={selectedEventId} eventName={eventName} />
                   </div>
@@ -1035,9 +1130,6 @@ export const BeoIntakePage = () => {
                       </div>
                     )}
                   </div>
-
-                  <label style={{ fontSize: 12, color: "rgba(255,255,255,0.7)" }}>Pack-Out Notes</label>
-                  <input type="text" value={editDraft.packOutNotes} onChange={(e) => setEditDraft((d) => ({ ...d, packOutNotes: e.target.value }))} placeholder="Notes" style={{ padding: "8px 12px", borderRadius: 6, border: "1px solid #444", background: "#0a0a0a", color: "#fff", fontSize: 14 }} />
 
                   <div style={{ borderTop: "1px solid rgba(255,255,255,0.2)", marginTop: 8, paddingTop: 12 }}>
                     <div style={{ fontSize: 13, fontWeight: 600, color: "#fff", marginBottom: 8 }}>Added Items</div>
@@ -1125,7 +1217,7 @@ export const BeoIntakePage = () => {
               </div>
             </div>
           )}
-          <MenuPickerModal onAdd={handlePickerAdd} alreadyAddedIds={pickerAlreadyAddedIds} />
+          <MenuPickerModal onAdd={handlePickerAdd} onRemove={handlePickerRemove} alreadyAddedIds={pickerAlreadyAddedIds} alreadyAddedNames={pickerAlreadyAddedNames} />
         </div>
       </div>
       <BeoIntakeActionBar eventId={selectedEventId} isLocked={isLocked} onReopenRequest={isLocked && canSubmitChangeRequest ? () => setShowChangeRequestModal(true) : undefined} onSendToBOH={!isDelivery && !isLocked ? handleClickSendToBOH : undefined} shadowMenuRows={shadowMenuRows} />

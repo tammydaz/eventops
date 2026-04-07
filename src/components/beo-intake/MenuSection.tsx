@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, Fragment, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { FIELD_IDS } from "../../services/airtable/events";
 import { CATEGORY_MAP, type MenuCategoryKey } from "../../constants/menuCategories";
@@ -17,7 +17,8 @@ import {
   getStationTypeOptions,
   type LinkedRecordItem,
 } from "../../services/airtable/linkedRecords";
-import { airtableFetch } from "../../services/airtable/client";
+import { airtableFetch, getMenuItemsTable } from "../../services/airtable/client";
+import { getMenuCatalogFieldIds } from "../../services/airtable/menuCatalogConfig";
 import { loadStationPresets, loadStationComponentNamesByIds } from "../../services/airtable/stationComponents";
 import { StationComponentsConfigModal } from "./StationComponentsConfigModal";
 import { BoxedLunchSection } from "./BoxedLunchSection";
@@ -26,87 +27,68 @@ import { SALAD_BAR } from "../../config/stationPresets";
 import { getPlatterOrdersByEventId, setPlatterOrdersForEvent } from "../../state/platterOrdersStore";
 import { asLinkedRecordIds, asSingleSelectName, asString, isErrorResult } from "../../services/airtable/selectors";
 import { useEventStore } from "../../state/eventStore";
-import { FormSection, CollapsibleSubsection } from "./FormSection";
+import { FormSection, BEO_SECTION_PILL_ACCENT } from "./FormSection";
 import { CustomFoodItemsBlock } from "./CustomFoodItemsBlock";
 import { getSauceOverrides, setSauceOverride, type SauceOverride, type SauceOverrideValue } from "../../state/sauceOverrideStore";
 import { calculateAutoSpec, type FoodCategory } from "../../utils/beoAutoSpec";
 import { getBeoSpecStorageKey, getSpecOverrideKey } from "../../utils/beoSpecStorage";
-import { DELIVERY_SECTION_CONFIG } from "../../config/deliverySectionConfig";
+import {
+  DELIVERY_COURSE_BLOCK,
+  DELIVERY_SECTION_CONFIG,
+  deliveryItemBelongsInSection,
+  type DeliverySectionRow,
+} from "../../config/deliverySectionConfig";
+import { DELIVERY_INTAKE_SECTIONS, LEGACY_MENU_ITEMS_TABLE_ID } from "../../services/airtable/menuCatalogConfig";
+import { DELIVERY_INTAKE_TARGET_FIELD, fetchExecutionTokensByMenuItemIds } from "../../services/airtable/menuItems";
+import { deleteEventMenuRow, syncShadowToEvent } from "../../services/airtable/eventMenu";
 
-const MENU_ITEM_SAUCE_FIELD_ID = "fldCUjK7oBckAuNNa"; // Menu Items.Sauces (Long text)
+function laneToFoodCategory(lane: string): FoodCategory {
+  if (lane === "passedAppetizers") return "passed";
+  if (lane === "presentedAppetizers") return "presented";
+  if (lane === "desserts") return "dessert";
+  return "buffet";
+}
 
-/** Menu item card with sauce override dropdown (Default / None / Other…) */
-function MenuItemCard(props: {
-  itemId: string;
-  itemName: string;
-  defaultSauce: string | null;
-  sauceOverrides: Record<string, SauceOverride>;
-  onSauceChange: (itemId: string, override: SauceOverride) => void;
-  onRemove: () => void;
-  canEdit: boolean;
-  removeColor: string;
-  itemBorder: string;
-}) {
-  const { itemId, itemName, defaultSauce, sauceOverrides, onSauceChange, onRemove, canEdit, removeColor, itemBorder } = props;
-  const override = sauceOverrides[itemId] ?? { sauceOverride: "Default" as SauceOverrideValue, customSauce: null };
-  const showCustomInput = override.sauceOverride === "Other";
+function laneUsesSauceOnFirstChild(lane: string): boolean {
+  return lane === "passedAppetizers" || lane === "presentedAppetizers";
+}
 
-  const defaultLabel = defaultSauce?.trim() ? defaultSauce.trim() : "Default (none)";
-
+/** Delivery “Food List”: teal header, collapsible — matches full-service speck table layout. */
+function FoodListCollapsible(props: { title: string; defaultOpen?: boolean; children: ReactNode }) {
+  const { title, defaultOpen = false, children } = props;
+  const [open, setOpen] = useState(defaultOpen);
+  const accent = BEO_SECTION_PILL_ACCENT;
+  const border = "rgba(255,255,255,0.15)";
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 6, backgroundColor: "#2a2a2a", border: itemBorder, borderRadius: "6px", padding: "8px 12px", marginBottom: "6px" }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <span style={{ fontSize: "14px", color: "#e0e0e0" }}>{itemName}</span>
-        <button type="button" disabled={!canEdit} onClick={onRemove} style={{ background: "none", border: "none", color: removeColor, cursor: "pointer", fontSize: "16px", fontWeight: "bold" }}>✕</button>
-      </div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <label style={{ fontSize: "11px", color: "rgba(255,255,255,0.6)", flexShrink: 0 }}>Sauce:</label>
-          <select
-            value={override.sauceOverride}
-            onChange={(e) => {
-              const v = e.target.value as SauceOverrideValue;
-              onSauceChange(itemId, { sauceOverride: v, customSauce: v === "Other" ? override.customSauce : null });
-            }}
-            disabled={!canEdit}
-            style={{
-              flex: 1,
-              padding: "6px 10px",
-              fontSize: 12,
-              borderRadius: 6,
-              border: "1px solid #444",
-              background: "#1a1a1a",
-              color: "#e0e0e0",
-              cursor: canEdit ? "pointer" : "default",
-            }}
-          >
-            <option value="Default">{defaultLabel}</option>
-            <option value="None">None</option>
-            <option value="Other">Other…</option>
-          </select>
-        </div>
-        {showCustomInput && (
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <label style={{ fontSize: "11px", color: "rgba(255,255,255,0.6)", flexShrink: 0 }}>Custom Sauce:</label>
-            <input
-              type="text"
-              value={override.customSauce ?? ""}
-              onChange={(e) => onSauceChange(itemId, { ...override, customSauce: e.target.value || null })}
-              placeholder="Enter sauce name"
-              disabled={!canEdit}
-              style={{
-                flex: 1,
-                padding: "6px 10px",
-                fontSize: 12,
-                borderRadius: 6,
-                border: "1px solid #444",
-                background: "#1a1a1a",
-                color: "#e0e0e0",
-              }}
-            />
-          </div>
-        )}
-      </div>
+    <div
+      style={{
+        border: `1px solid ${border}`,
+        borderRadius: 8,
+        background: "#0a0a0a",
+        marginBottom: 12,
+        overflow: "hidden",
+      }}
+    >
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        style={{
+          width: "100%",
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
+          padding: "10px 14px",
+          background: "rgba(0,0,0,0.4)",
+          border: "none",
+          borderBottom: open ? `1px solid ${border}` : "none",
+          cursor: "pointer",
+          textAlign: "left",
+        }}
+      >
+        <span style={{ color: accent, fontSize: 11, width: 14, flexShrink: 0 }}>{open ? "▼" : "▶"}</span>
+        <span style={{ color: accent, fontWeight: 700, fontSize: 13, letterSpacing: "0.06em" }}>{title}</span>
+      </button>
+      {open && <div style={{ padding: "0 0 8px 0" }}>{children}</div>}
     </div>
   );
 }
@@ -1239,6 +1221,17 @@ type MenuSelections = {
   displays: string[];
 };
 
+/** Maps Events table linked-field IDs to `MenuSelections` keys (delivery grouping). */
+const EVENT_FIELD_ID_TO_LANE: Record<string, keyof MenuSelections> = {
+  [FIELD_IDS.PASSED_APPETIZERS]: "passedAppetizers",
+  [FIELD_IDS.PRESENTED_APPETIZERS]: "presentedAppetizers",
+  [FIELD_IDS.BUFFET_METAL]: "buffetMetal",
+  [FIELD_IDS.BUFFET_CHINA]: "buffetChina",
+  [FIELD_IDS.ROOM_TEMP_DISPLAY]: "roomTempDisplay",
+  [FIELD_IDS.DESSERTS]: "desserts",
+  [FIELD_IDS.DELIVERY_DELI]: "deliveryDeli",
+};
+
 type CustomFields = {
   customPassedApp: string;
   customPresentedApp: string;
@@ -1250,6 +1243,34 @@ type CustomFields = {
   customRoomTemp: string;
 };
 
+function deliveryCustomFieldHasValue(cfid: string, cf: CustomFields): boolean {
+  const t = (s: string | undefined) => (s?.trim() ?? "").length > 0;
+  if (cfid === FIELD_IDS.CUSTOM_BUFFET_METAL) return t(cf.customBuffetMetal);
+  if (cfid === FIELD_IDS.CUSTOM_PASSED_APP) return t(cf.customPassedApp);
+  if (cfid === FIELD_IDS.CUSTOM_PRESENTED_APP) return t(cf.customPresentedApp);
+  if (cfid === FIELD_IDS.CUSTOM_DELIVERY_DELI) return t(cf.customDeli);
+  if (cfid === FIELD_IDS.CUSTOM_BUFFET_CHINA) return t(cf.customBuffetChina);
+  if (cfid === FIELD_IDS.CUSTOM_ROOM_TEMP_DISPLAY) return t(cf.customRoomTemp);
+  if (cfid === FIELD_IDS.CUSTOM_DESSERTS) return t(cf.customDessert);
+  return false;
+}
+
+/** With an event selected: hide empty delivery buckets (like full-serve). Sandwich trays always show (boxed lunch + platters). */
+function shouldShowDeliveryFoodSection(
+  config: DeliverySectionRow,
+  sectionRowCount: number,
+  cf: CustomFields,
+  selectedEventId: string | null
+): boolean {
+  if (!selectedEventId) return true;
+  if (config.id === "sandwich_trays") return true;
+  if (sectionRowCount > 0) return true;
+  for (const cfid of config.customFieldIds) {
+    if (deliveryCustomFieldHasValue(cfid, cf)) return true;
+  }
+  return false;
+}
+
 type MenuItemRecord = {
   id: string;
   name: string;
@@ -1258,14 +1279,46 @@ type MenuItemRecord = {
   dietaryTags?: string;
 };
 
-const MENU_TABLE_ID = "tbl0aN33DGG6R1sPZ";
-const MENU_ITEM_NAME_FIELD_ID = "fldW5gfSlHRTl01v1"; // Item Name (not Description Name)
-const MENU_ITEMS_CHILD_ITEMS_FIELD_ID = "fldIu6qmlUwAEn2W9"; // Child Items (linked)
+/** Matches Event Menu (shadow) `Section` strings for each menu lane — must stay aligned with `targetFieldToSection`. */
+const MENU_LANE_TO_SHADOW_SECTION: Partial<Record<keyof MenuSelections, string>> = {
+  passedAppetizers: "Passed Appetizers",
+  presentedAppetizers: "Presented Appetizers",
+  buffetMetal: "Buffet – Metal",
+  buffetChina: "Buffet – China",
+  desserts: "Desserts",
+  deliveryDeli: "Deli",
+  fullServiceDeli: "Deli",
+  roomTempDisplay: "Room Temp / Display",
+};
 
-type MenuSectionProps = { embedded?: boolean; isDelivery?: boolean };
+function shadowRowMatchesLane(
+  r: { section: string; catalogItemId: string | null },
+  fieldKey: keyof MenuSelections,
+  itemId: string
+): boolean {
+  if (r.catalogItemId !== itemId) return false;
+  const hint = MENU_LANE_TO_SHADOW_SECTION[fieldKey];
+  if (!hint) return true;
+  if (r.section === hint) return true;
+  if (fieldKey === "roomTempDisplay" && (r.section === "Room Temp" || r.section === "Room Temp / Display")) return true;
+  return false;
+}
 
-export const MenuSection = ({ embedded = false, isDelivery = false }: MenuSectionProps) => {
-  const { selectedEventId, selectedEventData, setFields } = useEventStore();
+type MenuSectionProps = {
+  embedded?: boolean;
+  isDelivery?: boolean;
+  /** When set, removing a line deletes the shadow row + syncs so Print/BEO and Airtable stay aligned. */
+  shadowMenuRows?: Array<{ id: string; section: string; catalogItemId: string | null }>;
+  loadShadowMenu?: (opts?: { retryIfEmpty?: boolean }) => Promise<void>;
+};
+
+export const MenuSection = ({
+  embedded = false,
+  isDelivery = false,
+  shadowMenuRows: shadowMenuRowsForRemove,
+  loadShadowMenu,
+}: MenuSectionProps) => {
+  const { selectedEventId, selectedEventData, setFields, loadEventData } = useEventStore();
   const [menuItems, setMenuItems] = useState<LinkedRecordItem[]>([]);
   const [menuItemNames, setMenuItemNames] = useState<Record<string, string>>({});
   const [menuItemChildIds, setMenuItemChildIds] = useState<Record<string, string[]>>({});
@@ -1297,11 +1350,56 @@ export const MenuSection = ({ embedded = false, isDelivery = false }: MenuSectio
   const [showDressingPicker, setShowDressingPicker] = useState(false);
   const [dressingPickerSearch, setDressingPickerSearch] = useState("");
   const [platterModalOpen, setPlatterModalOpen] = useState(false);
+  /** Menu_Lab execution tokens per catalog id — used to bucket delivery sections. */
+  const [deliveryExecByItemId, setDeliveryExecByItemId] = useState<Record<string, string[]>>({});
   const [kitchenFields, setKitchenFields] = useState({ allergies: "", religious: "", dietaryMeals: "" });
   const [dietaryLine, setDietaryLine] = useState({ count: 1, type: "Gluten free", item: "" });
   const [openKitchenPill, setOpenKitchenPill] = useState<"allergies" | "religious" | "dietaryMeals" | "serviceStyle" | null>(null);
 
-  /** Delivery-only: opens/closes lane sections while editing. Does not save and does not change BEO output. */
+  useEffect(() => {
+    if (!isDelivery || !selectedEventId) {
+      setDeliveryExecByItemId({});
+      return;
+    }
+    const ids = new Set<string>();
+    const lanes: (keyof MenuSelections)[] = [
+      "passedAppetizers",
+      "presentedAppetizers",
+      "buffetMetal",
+      "buffetChina",
+      "roomTempDisplay",
+      "desserts",
+      "deliveryDeli",
+    ];
+    for (const lane of lanes) {
+      for (const id of selections[lane]) {
+        if (id.startsWith("rec")) ids.add(id);
+      }
+    }
+    const idArr = [...ids];
+    if (idArr.length === 0) {
+      setDeliveryExecByItemId({});
+      return;
+    }
+    let cancelled = false;
+    fetchExecutionTokensByMenuItemIds(idArr).then((map) => {
+      if (!cancelled) setDeliveryExecByItemId(map);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    isDelivery,
+    selectedEventId,
+    selections.passedAppetizers,
+    selections.presentedAppetizers,
+    selections.buffetMetal,
+    selections.buffetChina,
+    selections.roomTempDisplay,
+    selections.desserts,
+    selections.deliveryDeli,
+  ]);
+
   // Load menu items on mount
   useEffect(() => {
     let active = true;
@@ -1348,6 +1446,11 @@ export const MenuSection = ({ embedded = false, isDelivery = false }: MenuSectio
     const allNames: Record<string, string> = {};
     const allSauce: Record<string, string> = {};
     const allRecords: Array<{ id: string; fields: Record<string, unknown> }> = [];
+    const cat = getMenuCatalogFieldIds();
+    const MENU_TABLE_ID = getMenuItemsTable() || "tbl0aN33DGG6R1sPZ";
+    const MENU_ITEM_NAME_FIELD_ID = cat.itemNameFieldId;
+    const MENU_ITEMS_CHILD_ITEMS_FIELD_ID = cat.childItemsFieldId;
+    const MENU_ITEM_SAUCE_FIELD_ID = cat.longTextSaucesFieldId;
 
     for (let i = 0; i < uniqueIds.length; i += 10) {
       if (eventId && useEventStore.getState().selectedEventId !== eventId) return;
@@ -1357,7 +1460,7 @@ export const MenuSection = ({ embedded = false, isDelivery = false }: MenuSectio
       params.set("filterByFormula", formula);
       params.set("returnFieldsByFieldId", "true");
       params.append("fields[]", MENU_ITEM_NAME_FIELD_ID);
-      params.append("fields[]", MENU_ITEM_SAUCE_FIELD_ID);
+      if (MENU_ITEM_SAUCE_FIELD_ID) params.append("fields[]", MENU_ITEM_SAUCE_FIELD_ID);
       params.append("fields[]", MENU_ITEMS_CHILD_ITEMS_FIELD_ID);
 
       try {
@@ -1376,11 +1479,46 @@ export const MenuSection = ({ embedded = false, isDelivery = false }: MenuSectio
       allNames[rec.id] = typeof name === "string" ? name : rec.id;
     }
 
+    // Legacy fallback: IDs not found in configured table → try legacy Menu Items table
+    if (MENU_TABLE_ID !== LEGACY_MENU_ITEMS_TABLE_ID) {
+      const missingIds = uniqueIds.filter((id) => !allNames[id]);
+      if (missingIds.length > 0) {
+        const legacyLabel = "fldW5gfSlHRTl01v1";
+        const legacyChildren = "fldIu6qmlUwAEn2W9";
+        const legacySauce = MENU_ITEM_SAUCE_FIELD_ID;
+        for (let i = 0; i < missingIds.length; i += 10) {
+          if (eventId && useEventStore.getState().selectedEventId !== eventId) return;
+          const chunk = missingIds.slice(i, i + 10);
+          const formula = `OR(${chunk.map((id) => `RECORD_ID()='${id}'`).join(",")})`;
+          const params = new URLSearchParams();
+          params.set("filterByFormula", formula);
+          params.set("returnFieldsByFieldId", "true");
+          params.append("fields[]", legacyLabel);
+          params.append("fields[]", legacyChildren);
+          if (legacySauce) params.append("fields[]", legacySauce);
+          try {
+            const data = await airtableFetch<{ records?: Array<{ id: string; fields: Record<string, unknown> }> }>(
+              `/${LEGACY_MENU_ITEMS_TABLE_ID}?${params.toString()}`
+            );
+            if (!isErrorResult(data) && data?.records) {
+              for (const rec of data.records) {
+                const nameRaw = rec.fields[legacyLabel];
+                allNames[rec.id] = typeof nameRaw === "string" ? nameRaw : rec.id;
+                allRecords.push({ id: rec.id, fields: { ...rec.fields, [MENU_ITEM_NAME_FIELD_ID]: rec.fields[legacyLabel], [MENU_ITEMS_CHILD_ITEMS_FIELD_ID]: rec.fields[legacyChildren] } });
+              }
+            }
+          } catch (err) {
+            console.error("Failed legacy fallback for item names:", err);
+          }
+        }
+      }
+    }
+
     const childIdsToFetch = new Set<string>();
     const recordsNeedingChild: Array<{ recId: string; firstChildId: string }> = [];
     const childIdsByParent: Record<string, string[]> = {};
     for (const rec of allRecords) {
-      const sauceRaw = rec.fields[MENU_ITEM_SAUCE_FIELD_ID];
+      const sauceRaw = MENU_ITEM_SAUCE_FIELD_ID ? rec.fields[MENU_ITEM_SAUCE_FIELD_ID] : undefined;
       const sauce = typeof sauceRaw === "string" ? sauceRaw.trim() : "";
       const childIds = asLinkedRecordIds(rec.fields[MENU_ITEMS_CHILD_ITEMS_FIELD_ID]).filter((id) => id?.startsWith("rec"));
       if (childIds.length) childIdsByParent[rec.id] = childIds;
@@ -1417,6 +1555,35 @@ export const MenuSection = ({ embedded = false, isDelivery = false }: MenuSectio
           }
         } catch (err) {
           console.error("Failed to fetch child item names:", err);
+        }
+      }
+
+      // Legacy fallback for child IDs not found in configured table
+      if (MENU_TABLE_ID !== LEGACY_MENU_ITEMS_TABLE_ID) {
+        const missingChildIds = childIds.filter((id) => !allNames[id]);
+        if (missingChildIds.length > 0) {
+          const legacyLabel = "fldW5gfSlHRTl01v1";
+          for (let i = 0; i < missingChildIds.length; i += 10) {
+            const chunk = missingChildIds.slice(i, i + 10);
+            const formula = `OR(${chunk.map((id) => `RECORD_ID()='${id}'`).join(",")})`;
+            const p = new URLSearchParams();
+            p.set("filterByFormula", formula);
+            p.set("returnFieldsByFieldId", "true");
+            p.append("fields[]", legacyLabel);
+            try {
+              const data = await airtableFetch<{ records?: Array<{ id: string; fields: Record<string, unknown> }> }>(
+                `/${LEGACY_MENU_ITEMS_TABLE_ID}?${p.toString()}`
+              );
+              if (!isErrorResult(data) && data?.records) {
+                for (const rec of data.records) {
+                  const name = rec.fields[legacyLabel];
+                  allNames[rec.id] = typeof name === "string" ? name : rec.id;
+                }
+              }
+            } catch (err) {
+              console.error("Failed legacy fallback for child names:", err);
+            }
+          }
         }
       }
     }
@@ -1616,6 +1783,23 @@ export const MenuSection = ({ embedded = false, isDelivery = false }: MenuSectio
     const newItems = selections[fieldKey].filter((id) => id !== itemId);
     setSelections((prev) => ({ ...prev, [fieldKey]: newItems }));
 
+    const shadowRow = shadowMenuRowsForRemove?.find((r) => shadowRowMatchesLane(r, fieldKey, itemId));
+    if (shadowRow?.id && loadShadowMenu) {
+      const del = await deleteEventMenuRow(shadowRow.id);
+      if (isErrorResult(del)) {
+        await setFields(selectedEventId, { [fieldIdMap[fieldKey]]: newItems });
+        return;
+      }
+      const syncRes = await syncShadowToEvent(selectedEventId);
+      if (isErrorResult(syncRes)) {
+        await setFields(selectedEventId, { [fieldIdMap[fieldKey]]: newItems });
+        return;
+      }
+      await loadShadowMenu({ retryIfEmpty: true });
+      await loadEventData(selectedEventId, { quiet: true });
+      return;
+    }
+
     await setFields(selectedEventId, { [fieldIdMap[fieldKey]]: newItems });
   };
 
@@ -1705,11 +1889,6 @@ export const MenuSection = ({ embedded = false, isDelivery = false }: MenuSectio
     opacity: 1,
     transition: "background 0.2s ease, opacity 0.2s ease",
   };
-
-  const deliveryButtonStyle = { ...buttonStyle, borderColor: "#eab308", color: "#eab308" };
-  const deliverySmallAddStyle: React.CSSProperties = { ...smallAddButtonStyle, borderColor: "rgba(234,179,8,0.6)", color: "#eab308" };
-  const deliveryItemBorder = "1px solid #eab308";
-  const deliveryRemoveColor = "#eab308";
 
   const kitchenLabelStyle: React.CSSProperties = { fontSize: 10, fontWeight: 600, color: "rgba(255,255,255,0.7)", marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.05em" };
   const kitchenInputStyle: React.CSSProperties = { width: "100%", padding: "6px 8px", borderRadius: 4, border: "1px solid #444", backgroundColor: "#1a1a1a", color: "#e0e0e0", fontSize: 12, fontFamily: "inherit" };
@@ -1910,187 +2089,414 @@ export const MenuSection = ({ embedded = false, isDelivery = false }: MenuSectio
       </div>
 
       {isDelivery ? (
-        <>
-          {DELIVERY_SECTION_CONFIG.map((config, sectionIdx) => {
-            const icon = (["🔥", "🥪", "🍰"] as const)[sectionIdx] ?? "📋";
-            return (
-              <CollapsibleSubsection key={config.title} title={config.title} icon={icon} defaultOpen isDelivery>
-                <div style={{ gridColumn: "1 / -1" }}>
-                  {config.fieldIds.map((fieldId) => (
-                    <div key={fieldId} style={{ marginBottom: 16 }}>
-                      {fieldId === FIELD_IDS.BUFFET_METAL && (
-                        <>
-                          <label style={labelStyle}>Hot Buffet Items</label>
-                          <div style={{ marginBottom: "8px" }}>
-                            {selections.buffetMetal.map((itemId) => (
-                              <MenuItemCard
-                                key={itemId}
-                                itemId={itemId}
-                                itemName={getItemName(itemId)}
-                                defaultSauce={menuItemSauce[itemId] ?? null}
-                                sauceOverrides={sauceOverrides}
-                                onSauceChange={handleSauceChange}
-                                onRemove={() => removeMenuItem("buffetMetal", itemId)}
-                                canEdit={canEdit}
-                                removeColor={deliveryRemoveColor}
-                                itemBorder={deliveryItemBorder}
-                              />
-                            ))}
-                          </div>
-                          <button type="button" disabled={!canEdit} onClick={() => openPicker("buffet_metal", "buffetMetal", config.title)} style={deliverySmallAddStyle}>+ Add Hot Buffet Item</button>
-                        </>
-                      )}
-                      {fieldId === FIELD_IDS.PASSED_APPETIZERS && (
-                        <>
-                          <label style={labelStyle}>Passed Appetizers</label>
-                          <div style={{ marginBottom: "8px" }}>
-                            {selections.passedAppetizers.map((itemId) => (
-                              <MenuItemCard
-                                key={itemId}
-                                itemId={itemId}
-                                itemName={getItemName(itemId)}
-                                defaultSauce={menuItemSauce[itemId] ?? null}
-                                sauceOverrides={sauceOverrides}
-                                onSauceChange={handleSauceChange}
-                                onRemove={() => removeMenuItem("passedAppetizers", itemId)}
-                                canEdit={canEdit}
-                                removeColor={deliveryRemoveColor}
-                                itemBorder={deliveryItemBorder}
-                              />
-                            ))}
-                          </div>
-                          <button type="button" disabled={!canEdit} onClick={() => openPicker("passed", "passedApps", config.title)} style={deliverySmallAddStyle}>+ Add Passed Appetizer</button>
-                        </>
-                      )}
-                      {fieldId === FIELD_IDS.PRESENTED_APPETIZERS && (
-                        <>
-                          <label style={labelStyle}>Presented Appetizers</label>
-                          <div style={{ marginBottom: "8px" }}>
-                            {selections.presentedAppetizers.map((itemId) => (
-                              <MenuItemCard
-                                key={itemId}
-                                itemId={itemId}
-                                itemName={getItemName(itemId)}
-                                defaultSauce={menuItemSauce[itemId] ?? null}
-                                sauceOverrides={sauceOverrides}
-                                onSauceChange={handleSauceChange}
-                                onRemove={() => removeMenuItem("presentedAppetizers", itemId)}
-                                canEdit={canEdit}
-                                removeColor={deliveryRemoveColor}
-                                itemBorder={deliveryItemBorder}
-                              />
-                            ))}
-                          </div>
-                          <button type="button" disabled={!canEdit} onClick={() => openPicker("presented", "presentedApps", config.title)} style={deliverySmallAddStyle}>+ Add Presented Appetizer</button>
-                        </>
-                      )}
-                      {fieldId === FIELD_IDS.DELIVERY_DELI && (
-                        <>
-                          <label style={labelStyle}>Sandwiches &amp; Wraps</label>
-                          <p style={{ fontSize: 12, color: "#888", margin: "0 0 8px 0" }}>
-                            Add individual items from the menu, or use <strong>Sandwich Platter</strong> for preset groups (e.g. Classic Sandwiches, Signature Specialty) so the BEO prints the same way as your existing BEOs.
-                          </p>
-                          <div style={{ marginBottom: "8px" }}>
-                            {selections.deliveryDeli.map((itemId) => (
-                              <MenuItemCard
-                                key={itemId}
-                                itemId={itemId}
-                                itemName={getItemName(itemId)}
-                                defaultSauce={menuItemSauce[itemId] ?? null}
-                                sauceOverrides={sauceOverrides}
-                                onSauceChange={handleSauceChange}
-                                onRemove={() => removeMenuItem("deliveryDeli", itemId)}
-                                canEdit={canEdit}
-                                removeColor={deliveryRemoveColor}
-                                itemBorder={deliveryItemBorder}
-                              />
-                            ))}
-                          </div>
-                          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
-                            <button type="button" disabled={!canEdit} onClick={() => openPicker("deli", "deliveryDeli", config.title)} style={deliverySmallAddStyle}>+ Add Deli Item</button>
-                            <button type="button" onClick={() => setPlatterModalOpen((v) => !v)} style={{ ...deliverySmallAddStyle, borderColor: "#f97316", color: "#f97316" }}>{platterModalOpen ? "− Hide Platter Config" : "+ Add Sandwich Platter"}</button>
-                          </div>
-                          <BoxedLunchSection eventId={selectedEventId} canEdit={canEdit} />
-                          {platterModalOpen && (
-                            <SandwichPlatterConfigModal
-                              open
-                              inline
-                              onClose={() => setPlatterModalOpen(false)}
-                              onConfirm={(rows) => {
-                                if (!selectedEventId) {
-                                  setError("Select an event first");
-                                  return;
-                                }
-                                setPlatterOrdersForEvent(selectedEventId, rows);
-                                setPlatterModalOpen(false);
+        <div style={{ gridColumn: "1 / -1", width: "100%", display: "flex", justifyContent: "center" }}>
+          <div style={{ maxWidth: 720, width: "100%" }}>
+            {/* ── Client-facing menu section buttons ── */}
+            <div
+              style={{
+                textAlign: "center",
+                marginBottom: 6,
+                fontSize: 14,
+                fontWeight: 700,
+                letterSpacing: "0.14em",
+                color: "#fff",
+              }}
+            >
+              ADD FROM MENU
+            </div>
+            <div
+              className="beo-menu-add-buttons"
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))",
+                gap: 8,
+                marginBottom: 20,
+              }}
+            >
+              {DELIVERY_INTAKE_SECTIONS.map((sec) => (
+                <button
+                  key={sec.id}
+                  type="button"
+                  disabled={!canEdit}
+                  onClick={() =>
+                    openPicker(
+                      `delivery_intake_${sec.id}`,
+                      DELIVERY_INTAKE_TARGET_FIELD,
+                      `Add — ${sec.title}`
+                    )
+                  }
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: 6,
+                    padding: "12px 10px",
+                    borderRadius: 8,
+                    border: "1px solid rgba(255,255,255,0.18)",
+                    background: "rgba(255,255,255,0.05)",
+                    color: "#fff",
+                    fontSize: 12,
+                    fontWeight: 700,
+                    letterSpacing: "0.06em",
+                    cursor: canEdit ? "pointer" : "not-allowed",
+                    transition: "all 0.15s",
+                  }}
+                >
+                  <span style={{ fontSize: 16 }}>{sec.icon}</span>
+                  {sec.title}
+                </button>
+              ))}
+            </div>
+
+            {/* ── Kitchen-language food list — now rendered as shadow rows in BeoIntakePage ── */}
+            {false && (<><div
+              style={{
+                textAlign: "center",
+                marginBottom: 14,
+                fontSize: 14,
+                fontWeight: 700,
+                letterSpacing: "0.14em",
+                color: "#fff",
+              }}
+            >
+              YOUR FOOD LIST
+            </div>
+            {DELIVERY_SECTION_CONFIG.map((config) => {
+              const guestCount =
+                selectedEventData?.[FIELD_IDS.GUEST_COUNT] != null ? Number(selectedEventData[FIELD_IDS.GUEST_COUNT]) : 0;
+              const sectionRows: { itemId: string; lane: keyof MenuSelections; sourceFieldId: string }[] = [];
+              for (const fieldId of config.fieldIds) {
+                const lane = EVENT_FIELD_ID_TO_LANE[fieldId];
+                if (!lane) continue;
+                for (const itemId of selections[lane]) {
+                  const tokens = deliveryExecByItemId[itemId] ?? [];
+                  if (deliveryItemBelongsInSection(config.id, tokens, fieldId)) {
+                    sectionRows.push({ itemId, lane, sourceFieldId: fieldId });
+                  }
+                }
+              }
+              if (!shouldShowDeliveryFoodSection(config, sectionRows.length, customFields, selectedEventId)) {
+                return <Fragment key={config.id} />;
+              }
+              const course = DELIVERY_COURSE_BLOCK[config.id];
+              type DRow = {
+                rowKey: string;
+                parentId: string;
+                lane: keyof MenuSelections;
+                sourceFieldId: string;
+                isChild: boolean;
+                childId?: string;
+                isFirstChild?: boolean;
+                rowIdx: number;
+              };
+              const flatRows: DRow[] = [];
+              for (const sr of sectionRows) {
+                flatRows.push({
+                  rowKey: `p-${sr.itemId}-${sr.sourceFieldId}`,
+                  parentId: sr.itemId,
+                  lane: sr.lane,
+                  sourceFieldId: sr.sourceFieldId,
+                  isChild: false,
+                  rowIdx: 0,
+                });
+                (menuItemChildIds[sr.itemId] ?? []).forEach((childId, idx) => {
+                  flatRows.push({
+                    rowKey: `c-${sr.itemId}-${childId}-${sr.sourceFieldId}`,
+                    parentId: sr.itemId,
+                    lane: sr.lane,
+                    sourceFieldId: sr.sourceFieldId,
+                    isChild: true,
+                    childId,
+                    isFirstChild: idx === 0,
+                    rowIdx: idx + 1,
+                  });
+                });
+              }
+              const overrideInputStyle: React.CSSProperties = {
+                width: "100%",
+                padding: "4px 6px",
+                borderRadius: 4,
+                border: "1px solid rgba(255,255,255,0.12)",
+                background: "rgba(0,0,0,0.2)",
+                color: "#fff",
+                fontSize: 12,
+              };
+              return (
+                <FoodListCollapsible key={config.id} title={course.blockTitle}>
+                  <div style={{ margin: "0 8px 8px 8px" }}>
+                    <div
+                      style={{
+                        border: "1px solid rgba(255,255,255,0.12)",
+                        borderRadius: 6,
+                        overflow: "hidden",
+                        background: "rgba(0,0,0,0.35)",
+                      }}
+                    >
+                      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                        <thead>
+                          <tr>
+                            <th
+                              style={{
+                                textAlign: "left",
+                                padding: "6px 8px",
+                                borderBottom: "1px solid rgba(255,255,255,0.12)",
+                                fontWeight: 600,
+                                color: "#fff",
+                                width: "22%",
                               }}
-                              initialRows={selectedEventId ? getPlatterOrdersByEventId(selectedEventId) : []}
-                            />
+                            >
+                              Auto speck
+                            </th>
+                            <th
+                              style={{
+                                textAlign: "left",
+                                padding: "6px 8px",
+                                borderBottom: "1px solid rgba(255,255,255,0.12)",
+                                fontWeight: 600,
+                                color: "#fff",
+                                width: "44%",
+                              }}
+                            >
+                              Items
+                            </th>
+                            <th
+                              style={{
+                                textAlign: "left",
+                                padding: "6px 8px",
+                                borderBottom: "1px solid rgba(255,255,255,0.12)",
+                                fontWeight: 600,
+                                color: "#fff",
+                                width: "24%",
+                              }}
+                            >
+                              Override
+                            </th>
+                            <th style={{ width: 32 }} />
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {flatRows.length === 0 ? (
+                            <tr>
+                              <td
+                                colSpan={4}
+                                style={{ padding: "10px 8px", color: "rgba(255,255,255,0.45)", fontSize: 13 }}
+                              >
+                                No items yet.
+                              </td>
+                            </tr>
+                          ) : (
+                            flatRows.map((r) => {
+                              const specKey = getSpecOverrideKey(r.sourceFieldId, r.parentId, r.rowIdx);
+                              if (r.isChild && r.childId != null) {
+                                const ov = sauceOverrides[r.parentId];
+                                const defSauce = menuItemSauce[r.parentId] ?? "";
+                                const showSauce =
+                                  laneUsesSauceOnFirstChild(r.lane) && r.isFirstChild && (defSauce || ov);
+                                const childDisplaySpec =
+                                  (menuSpecOverrides[specKey] ?? "").trim() !== "" ? menuSpecOverrides[specKey] : "";
+                                return (
+                                  <tr key={r.rowKey} style={{ borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
+                                    <td style={{ padding: "4px 8px", color: "#fff", verticalAlign: "top" }}>
+                                      {childDisplaySpec || "—"}
+                                    </td>
+                                    <td style={{ padding: "4px 8px", color: "#fff", paddingLeft: 24, verticalAlign: "top" }}>
+                                      {showSauce ? (
+                                        <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                                          <select
+                                            value={
+                                              ov?.sauceOverride === "Other"
+                                                ? "Other"
+                                                : ov?.sauceOverride === "None"
+                                                  ? "None"
+                                                  : "Default"
+                                            }
+                                            disabled={!canEdit}
+                                            onChange={(e) => {
+                                              const v = e.target.value as SauceOverrideValue;
+                                              handleSauceChange(r.parentId, {
+                                                sauceOverride: v,
+                                                customSauce: v === "Other" ? ov?.customSauce ?? null : null,
+                                              });
+                                            }}
+                                            style={{ ...inputStyle, padding: "4px 6px", fontSize: 12 }}
+                                          >
+                                            <option value="Default">{defSauce?.trim() || "Default"}</option>
+                                            <option value="None">None</option>
+                                            <option value="Other">Other…</option>
+                                          </select>
+                                          {ov?.sauceOverride === "Other" && (
+                                            <input
+                                              type="text"
+                                              value={ov?.customSauce ?? ""}
+                                              onChange={(e) =>
+                                                handleSauceChange(r.parentId, {
+                                                  sauceOverride: "Other",
+                                                  customSauce: e.target.value || null,
+                                                })
+                                              }
+                                              placeholder="Custom sauce name"
+                                              disabled={!canEdit}
+                                              style={{ ...inputStyle, padding: "4px 6px", fontSize: 12 }}
+                                            />
+                                          )}
+                                        </div>
+                                      ) : (
+                                        <span style={{ fontSize: 13 }}>
+                                          <span style={{ color: "rgba(255,255,255,0.6)", marginRight: 4 }}>•</span>
+                                          ✓ {getItemName(r.childId)}
+                                        </span>
+                                      )}
+                                    </td>
+                                    <td style={{ padding: 2, verticalAlign: "top" }}>
+                                      <input
+                                        type="text"
+                                        value={menuSpecOverrides[specKey] ?? ""}
+                                        disabled={!canEdit}
+                                        onChange={(e) => handleSpecOverrideChange(specKey, e.target.value)}
+                                        placeholder="—"
+                                        style={overrideInputStyle}
+                                      />
+                                    </td>
+                                    <td />
+                                  </tr>
+                                );
+                              }
+                              const name = getItemName(r.parentId);
+                              const cat = laneToFoodCategory(r.lane);
+                              const spec = calculateAutoSpec(name, cat, guestCount);
+                              const displaySpec =
+                                (menuSpecOverrides[specKey] ?? "").trim() !== "" ? menuSpecOverrides[specKey] : spec.quantity;
+                              return (
+                                <tr key={r.rowKey} style={{ borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
+                                  <td style={{ padding: "4px 8px", color: "#fff", verticalAlign: "top" }}>{displaySpec}</td>
+                                  <td style={{ padding: "4px 8px", color: "#fff", verticalAlign: "top" }}>
+                                    <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 4 }}>{name}</div>
+                                    {!laneUsesSauceOnFirstChild(r.lane) && (
+                                      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginTop: 4 }}>
+                                        <select
+                                          value={
+                                            (sauceOverrides[r.parentId]?.sauceOverride === "Other"
+                                              ? "Other"
+                                              : sauceOverrides[r.parentId]?.sauceOverride === "None"
+                                                ? "None"
+                                                : "Default") as SauceOverrideValue
+                                          }
+                                          disabled={!canEdit}
+                                          onChange={(e) => {
+                                            const v = e.target.value as SauceOverrideValue;
+                                            const cur = sauceOverrides[r.parentId] ?? {
+                                              sauceOverride: "Default" as SauceOverrideValue,
+                                              customSauce: null,
+                                            };
+                                            handleSauceChange(r.parentId, {
+                                              sauceOverride: v,
+                                              customSauce: v === "Other" ? cur.customSauce : null,
+                                            });
+                                          }}
+                                          style={{ ...inputStyle, padding: "4px 6px", fontSize: 12, maxWidth: 200 }}
+                                        >
+                                          <option value="Default">
+                                            {menuItemSauce[r.parentId]?.trim() || "Default (none)"}
+                                          </option>
+                                          <option value="None">None</option>
+                                          <option value="Other">Other…</option>
+                                        </select>
+                                        {sauceOverrides[r.parentId]?.sauceOverride === "Other" && (
+                                          <input
+                                            type="text"
+                                            value={sauceOverrides[r.parentId]?.customSauce ?? ""}
+                                            onChange={(e) =>
+                                              handleSauceChange(r.parentId, {
+                                                sauceOverride: "Other",
+                                                customSauce: e.target.value || null,
+                                              })
+                                            }
+                                            placeholder="Custom sauce"
+                                            disabled={!canEdit}
+                                            style={{ ...inputStyle, padding: "4px 6px", fontSize: 12, maxWidth: 200 }}
+                                          />
+                                        )}
+                                      </div>
+                                    )}
+                                  </td>
+                                  <td style={{ padding: 2, verticalAlign: "top" }}>
+                                    <input
+                                      type="text"
+                                      value={menuSpecOverrides[specKey] ?? ""}
+                                      disabled={!canEdit}
+                                      onChange={(e) => handleSpecOverrideChange(specKey, e.target.value)}
+                                      placeholder="—"
+                                      style={overrideInputStyle}
+                                    />
+                                  </td>
+                                  <td style={{ padding: "4px 6px", verticalAlign: "top" }}>
+                                    <button
+                                      type="button"
+                                      disabled={!canEdit}
+                                      onClick={() => removeMenuItem(r.lane, r.parentId)}
+                                      style={{
+                                        background: "none",
+                                        border: "none",
+                                        color: "#ff6b6b",
+                                        cursor: "pointer",
+                                        fontSize: 16,
+                                        fontWeight: "bold",
+                                      }}
+                                      title="Remove"
+                                    >
+                                      ✕
+                                    </button>
+                                  </td>
+                                </tr>
+                              );
+                            })
                           )}
-                        </>
-                      )}
-                      {fieldId === FIELD_IDS.BUFFET_CHINA && (
-                        <>
-                          <label style={labelStyle}>Cold Sides &amp; Kitchen Items</label>
-                          <div style={{ marginBottom: "8px" }}>
-                            {selections.buffetChina.map((itemId) => (
-                              <div key={itemId} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", backgroundColor: "#2a2a2a", border: deliveryItemBorder, borderRadius: "6px", padding: "8px 12px", marginBottom: "6px" }}>
-                                <span style={{ fontSize: "14px", color: "#e0e0e0" }}>{getItemName(itemId)}</span>
-                                <button type="button" disabled={!canEdit} onClick={() => removeMenuItem("buffetChina", itemId)} style={{ background: "none", border: "none", color: deliveryRemoveColor, cursor: "pointer", fontSize: "16px", fontWeight: "bold" }}>✕</button>
-                              </div>
-                            ))}
-                          </div>
-                          <button type="button" disabled={!canEdit} onClick={() => openPicker("buffet_china", "buffetChina", config.title)} style={deliverySmallAddStyle}>+ Add Cold Side / Kitchen Item</button>
-                        </>
-                      )}
-                      {fieldId === FIELD_IDS.ROOM_TEMP_DISPLAY && (
-                        <>
-                          <label style={labelStyle}>Salads &amp; Room Temp Display</label>
-                          <div style={{ marginBottom: "8px" }}>
-                            {selections.roomTempDisplay.map((itemId) => (
-                              <MenuItemCard
-                                key={itemId}
-                                itemId={itemId}
-                                itemName={getItemName(itemId)}
-                                defaultSauce={menuItemSauce[itemId] ?? null}
-                                sauceOverrides={sauceOverrides}
-                                onSauceChange={handleSauceChange}
-                                onRemove={() => removeMenuItem("roomTempDisplay", itemId)}
-                                canEdit={canEdit}
-                                removeColor={deliveryRemoveColor}
-                                itemBorder={deliveryItemBorder}
-                              />
-                            ))}
-                          </div>
-                          <button type="button" disabled={!canEdit} onClick={() => openPicker("room_temp", "roomTempDisplay", config.title)} style={deliverySmallAddStyle}>+ Add Salad Item</button>
-                        </>
-                      )}
-                      {fieldId === FIELD_IDS.DESSERTS && (
-                        <>
-                          <label style={labelStyle}>Desserts &amp; Snacks</label>
-                          <div style={{ marginBottom: "8px" }}>
-                            {selections.desserts.map((itemId) => (
-                              <MenuItemCard
-                                key={itemId}
-                                itemId={itemId}
-                                itemName={getItemName(itemId)}
-                                defaultSauce={menuItemSauce[itemId] ?? null}
-                                sauceOverrides={sauceOverrides}
-                                onSauceChange={handleSauceChange}
-                                onRemove={() => removeMenuItem("desserts", itemId)}
-                                canEdit={canEdit}
-                                removeColor={deliveryRemoveColor}
-                                itemBorder={deliveryItemBorder}
-                              />
-                            ))}
-                          </div>
-                          <button type="button" disabled={!canEdit} onClick={() => openPicker("desserts", "desserts", config.title)} style={deliverySmallAddStyle}>+ Add Dessert</button>
-                        </>
-                      )}
+                        </tbody>
+                      </table>
                     </div>
-                  ))}
+                  </div>
+                  <div style={{ margin: "0 8px 8px 8px" }}>
+                    <button
+                      type="button"
+                      disabled={!canEdit}
+                      onClick={() => openPicker(config.pickerType, config.targetField, `Add — ${config.title}`)}
+                      style={smallAddButtonStyle}
+                    >
+                      + Add
+                    </button>
+                  </div>
+
+                  {config.id === "sandwich_trays" ? (
+                    <div style={{ margin: "12px 8px 0 8px" }}>
+                      <button
+                        type="button"
+                        onClick={() => setPlatterModalOpen((v) => !v)}
+                        style={{ ...smallAddButtonStyle, borderColor: "#f97316", color: "#f97316" }}
+                      >
+                        {platterModalOpen ? "− Hide platters" : "+ Sandwich platters"}
+                      </button>
+                      <BoxedLunchSection eventId={selectedEventId} canEdit={canEdit} />
+                      {platterModalOpen ? (
+                        <SandwichPlatterConfigModal
+                          open
+                          inline
+                          onClose={() => setPlatterModalOpen(false)}
+                          onConfirm={(rows) => {
+                            if (!selectedEventId) {
+                              setError("Select an event first");
+                              return;
+                            }
+                            setPlatterOrdersForEvent(selectedEventId, rows);
+                            setPlatterModalOpen(false);
+                          }}
+                          initialRows={selectedEventId ? getPlatterOrdersByEventId(selectedEventId) : []}
+                        />
+                      ) : null}
+                    </div>
+                  ) : null}
+
                   {config.customFieldIds.map((cfid) => (
-                    <div key={cfid} style={{ marginBottom: 12 }}>
+                    <div key={cfid} style={{ margin: "8px 8px 12px 8px" }}>
                       {cfid === FIELD_IDS.CUSTOM_BUFFET_METAL && (
                         <CustomFoodItemsBlock
                           value={customFields.customBuffetMetal}
@@ -2102,7 +2508,7 @@ export const MenuSection = ({ embedded = false, isDelivery = false }: MenuSectio
                           label="Custom hot buffet (not in menu)"
                           inputStyle={inputStyle}
                           labelStyle={labelStyle}
-                          buttonStyle={deliverySmallAddStyle}
+                          buttonStyle={smallAddButtonStyle}
                         />
                       )}
                       {cfid === FIELD_IDS.CUSTOM_PASSED_APP && (
@@ -2116,7 +2522,7 @@ export const MenuSection = ({ embedded = false, isDelivery = false }: MenuSectio
                           label="Custom (not in menu)"
                           inputStyle={inputStyle}
                           labelStyle={labelStyle}
-                          buttonStyle={deliverySmallAddStyle}
+                          buttonStyle={smallAddButtonStyle}
                         />
                       )}
                       {cfid === FIELD_IDS.CUSTOM_PRESENTED_APP && (
@@ -2130,7 +2536,7 @@ export const MenuSection = ({ embedded = false, isDelivery = false }: MenuSectio
                           label="Custom (not in menu)"
                           inputStyle={inputStyle}
                           labelStyle={labelStyle}
-                          buttonStyle={deliverySmallAddStyle}
+                          buttonStyle={smallAddButtonStyle}
                         />
                       )}
                       {cfid === FIELD_IDS.CUSTOM_DELIVERY_DELI && (
@@ -2141,10 +2547,10 @@ export const MenuSection = ({ embedded = false, isDelivery = false }: MenuSectio
                           notesPlaceholder="Notes (optional)"
                           canEdit={canEdit}
                           onSave={saveCustomField}
-                          label="+ Add Custom (not in menu)"
+                          label="Custom sandwich / wrap (not in menu)"
                           inputStyle={inputStyle}
                           labelStyle={labelStyle}
-                          buttonStyle={deliverySmallAddStyle}
+                          buttonStyle={smallAddButtonStyle}
                         />
                       )}
                       {cfid === FIELD_IDS.CUSTOM_BUFFET_CHINA && (
@@ -2155,10 +2561,10 @@ export const MenuSection = ({ embedded = false, isDelivery = false }: MenuSectio
                           notesPlaceholder="Notes (optional)"
                           canEdit={canEdit}
                           onSave={saveCustomField}
-                          label="+ Add Custom (not in menu)"
+                          label="Custom cold / bulk (not in menu)"
                           inputStyle={inputStyle}
                           labelStyle={labelStyle}
-                          buttonStyle={deliverySmallAddStyle}
+                          buttonStyle={smallAddButtonStyle}
                         />
                       )}
                       {cfid === FIELD_IDS.CUSTOM_ROOM_TEMP_DISPLAY && (
@@ -2169,10 +2575,10 @@ export const MenuSection = ({ embedded = false, isDelivery = false }: MenuSectio
                           notesPlaceholder="Notes (optional)"
                           canEdit={canEdit}
                           onSave={saveCustomField}
-                          label="+ Add Custom (not in menu)"
+                          label="Custom salad / display (not in menu)"
                           inputStyle={inputStyle}
                           labelStyle={labelStyle}
-                          buttonStyle={deliverySmallAddStyle}
+                          buttonStyle={smallAddButtonStyle}
                         />
                       )}
                       {cfid === FIELD_IDS.CUSTOM_DESSERTS && (
@@ -2183,19 +2589,19 @@ export const MenuSection = ({ embedded = false, isDelivery = false }: MenuSectio
                           notesPlaceholder="Notes (optional)"
                           canEdit={canEdit}
                           onSave={saveCustomField}
-                          label="Custom Desserts (not in menu)"
+                          label="Custom desserts (not in menu)"
                           inputStyle={inputStyle}
                           labelStyle={labelStyle}
-                          buttonStyle={deliverySmallAddStyle}
+                          buttonStyle={smallAddButtonStyle}
                         />
                       )}
                     </div>
                   ))}
-                </div>
-              </CollapsibleSubsection>
-            );
-          })}
-        </>
+                </FoodListCollapsible>
+              );
+            })}</>)}
+          </div>
+        </div>
       ) : (
         /* ── FULL SERVICE: Passed → Presented → Buffet Metal → China → Deli → Desserts → Platters → Stations ── */
         <div style={{ gridColumn: "1 / -1", width: "100%", display: "flex", justifyContent: "center" }}>

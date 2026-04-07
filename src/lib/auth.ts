@@ -6,8 +6,8 @@
 import { DASHBOARD_CALENDAR_TO } from "./dashboardRoutes";
 
 export type Role =
-  | "ops_admin"   // Full access, /watchtower (today's tasks), can edit dispatch/job#
-  | "ops_chief"   // Ops Chief / Expediter, can edit dispatch/job#
+  | "ops_admin"   // Full access, /watchtower (dispatch time is not editable — use Ops Chief role)
+  | "ops_chief"   // Ops Chief / Expediter; may edit dispatch time in intake
   | "kitchen"     // Kitchen + Open Event
   | "logistics"   // Delivery/Fleet + Open Event
   | "intake"      // Central Command (intake, quick intake, invoice)
@@ -32,7 +32,16 @@ export const ROLE_ROUTES: Record<Role, string[]> = {
   logistics: ["/", "/home", "/beo-intake", "/quick-intake", "/invoice-intake", "/delivery-command", "/kitchen-beo-print", "/returned-equipment", "/feedback-issues"],
   intake: ["/", "/home", "/beo-intake", "/quick-intake", "/invoice-intake", "/seed-demo", "/site-visit", "/beo-print", "/kitchen-beo-print", "/intake-foh", "/event", "/feedback-issues"],
   flair: ["/", "/home", "/beo-intake", "/quick-intake", "/invoice-intake", "/returned-equipment", "/beo-print", "/flair", "/feedback-issues"],
-  foh: ["/foh", "/intake-foh", "/event", "/invoice-intake", "/feedback-issues"],
+  foh: [
+    "/foh",
+    "/intake-foh",
+    "/event",
+    "/beo-intake",
+    "/client",
+    "/delivery/intake",
+    "/invoice-intake",
+    "/feedback-issues",
+  ],
 };
 
 /** Landing page path for each role after login. */
@@ -60,9 +69,14 @@ export function getLandingForRole(role: Role): string {
   return ROLE_LANDING[role];
 }
 
-/** Only Ops Chief and ops_admin can set dispatch time and job #; everyone else sees read-only. */
+/** Kitchen dispatch clock — editable in intake only for the Ops Chief role. */
+export function canEditDispatchTime(role: Role | undefined): boolean {
+  return role === "ops_chief";
+}
+
+/** @deprecated Use canEditDispatchTime — job # is not gated here. Kept for call-site compatibility. */
 export function canEditDispatchAndJobNumber(role: Role | undefined): boolean {
-  return role === "ops_admin" || role === "ops_chief";
+  return canEditDispatchTime(role);
 }
 
 /** Department circle IDs each role can see. ops_admin sees all. */

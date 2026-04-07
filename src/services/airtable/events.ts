@@ -82,6 +82,10 @@ export const FIELD_IDS = {
   CONTACT_PHONE: "fld4OK9zVwr16qMIt",
   PRIMARY_CONTACT_ROLE: "fldMTRGNFa4pHbjY5",
 
+  // ── On-Site Contact (Delivery) — independent of client fields ──
+  ONSITE_CONTACT_NAME: "fld5GS4l2RZP9K7pa",   // Single line text — "Contact Name"
+  ONSITE_CONTACT_PHONE: "fldrBQHuYwW5L6J2v",   // Phone number — "Contact Phone"
+
   // ── Menu Sections (Sacred Placement Lanes) ──
   PASSED_APPETIZERS: "fldpprTRRFNydiV1m",
   CUSTOM_PASSED_APP: "fldDbT9eLZUoJUnmS",
@@ -198,6 +202,7 @@ export const FIELD_IDS = {
 
   // ── Timeline & Logistics ──
   DISPATCH_TIME: "fld7m8eBhiJ58glyZ",  // CORE FIELD (source of truth). NEVER write to Dispatch Time (Print) fldbbHmaWqOBNUlJP
+  DELIVERY_TIME_WINDOW: "fldruc5PXOIrBFjDq", // Single line text — client-facing delivery window (e.g. "11-11:30am")
   EVENT_START_TIME: "fldDwDE87M9kFAIDn",  // duration (seconds) - was wrong ID
   EVENT_END_TIME: "fld7xeCnV751pxmWz",     // duration (seconds) - was wrong ID
   FOODWERX_ARRIVAL: "fldMYjGf8dQPNiY4Y",  // CORE FIELD (authoritative). DO NOT resolve by name; never use getFoodwerxArrivalFieldId() for arrival.
@@ -208,6 +213,9 @@ export const FIELD_IDS = {
   KITCHEN_ON_SITE: "fldSpUlS9qEQ5ly6T",        // Single select: Yes/No/None
   FOOD_MUST_GO_HOT: "fldJFB69mmB5T4Ysp",       // Checkbox
   NO_KITCHEN_RESOLUTION: "fldm6U2EI3fZ4x6fB",  // Single select: resolution when no kitchen on site
+
+  // ── Order Identification ──
+  HOUSE_ORDER_NUMBER: "fld81Ets4piDNrJLP", // Single line text — "House order #"
 
   // ── Status & Booking ──
   BOOKING_STATUS: "fldUfOemMR4gpALQR",
@@ -337,6 +345,8 @@ export type EventListItem = {
   paymentStatus?: string;
   /** Invoice paid checkbox */
   invoicePaid?: boolean;
+  /** First linked Client Intake record id (Events → Client), when present */
+  linkedClientRecordId?: string;
 };
 
 type AirtableFieldSchema = {
@@ -683,6 +693,7 @@ export const loadEvents = async (): Promise<EventListItem[] | AirtableErrorResul
   params.append("fields[]", FIELD_IDS.BEO_TIMELINE);
   params.append("fields[]", FIELD_IDS.PAYMENT_STATUS);
   params.append("fields[]", FIELD_IDS.INVOICE_PAID);
+  params.append("fields[]", FIELD_IDS.CLIENT);
   const createdTimeFieldId = await getCreatedTimeFieldId();
   if (createdTimeFieldId) {
     params.append("sort[0][field]", createdTimeFieldId);
@@ -759,6 +770,9 @@ export const loadEvents = async (): Promise<EventListItem[] | AirtableErrorResul
       if (lockoutIds.productionAcceptedDelivery) item.productionAcceptedDelivery = fields[lockoutIds.productionAcceptedDelivery] === true;
       if (lockoutIds.productionAcceptedOpsChief) item.productionAcceptedOpsChief = fields[lockoutIds.productionAcceptedOpsChief] === true;
     }
+    const clientLinks = asLinkedRecordIds(fields[FIELD_IDS.CLIENT]);
+    if (clientLinks.length > 0) item.linkedClientRecordId = clientLinks[0];
+
     if (bohIds) {
       if (bohIds.beoSentToBOH) item.beoSentToBOH = fields[bohIds.beoSentToBOH] === true;
       if (bohIds.productionColor) {
@@ -776,6 +790,115 @@ export const loadEvents = async (): Promise<EventListItem[] | AirtableErrorResul
     return item;
   });
 };
+
+/** Hardcoded field ID for "House order #" on the Events table. */
+export const HOUSE_ORDER_NUMBER_FIELD_ID: string = FIELD_IDS.HOUSE_ORDER_NUMBER;
+
+export type EventForClientOverview = {
+  id: string;
+  houseOrder?: string;
+  eventDate?: string;
+  eventType?: string;
+  guestCount?: number;
+};
+
+/** Suggest a new house-order string from the source (trailing digit bump, or append `-2`). */
+export function computeNextHouseOrderNumber(sourceHouse: string, _existingNums: string[]): string | null {
+  const t = sourceHouse.trim();
+  if (!t) return null;
+  const m = t.match(/^(.*?)(\d+)$/);
+  if (m) {
+    const prefix = m[1];
+    const n = parseInt(m[2], 10);
+    if (!isNaN(n)) return `${prefix}${n + 1}`;
+  }
+  return `${t}-2`;
+}
+
+/**
+ * Header / venue / notes only — used when staff start a **new** order for the same client.
+ * Does not include menu links, guest count, or event date.
+ */
+const NEW_DELIVERY_ORDER_CONTEXT_FIELD_IDS: readonly string[] = [
+  FIELD_IDS.CLIENT_FIRST_NAME,
+  FIELD_IDS.CLIENT_LAST_NAME,
+  FIELD_IDS.BUSINESS_NAME,
+  FIELD_IDS.CLIENT_EMAIL,
+  FIELD_IDS.CLIENT_PHONE,
+  FIELD_IDS.CLIENT_STREET,
+  FIELD_IDS.CLIENT_CITY,
+  FIELD_IDS.CLIENT_STATE,
+  FIELD_IDS.CLIENT_ZIP,
+  FIELD_IDS.PRIMARY_CONTACT_NAME,
+  FIELD_IDS.PRIMARY_CONTACT_PHONE,
+  FIELD_IDS.PRIMARY_CONTACT_ROLE,
+  FIELD_IDS.VENUE,
+  FIELD_IDS.VENUE_ADDRESS,
+  FIELD_IDS.VENUE_CITY,
+  FIELD_IDS.VENUE_STATE,
+  FIELD_IDS.VENUE_ZIP,
+  FIELD_IDS.LOAD_IN_NOTES,
+  FIELD_IDS.SPECIAL_NOTES,
+  FIELD_IDS.PARKING_NOTES,
+  FIELD_IDS.VENUE_NOTES,
+  FIELD_IDS.KITCHEN_ACCESS_NOTES,
+];
+
+export function buildNewDeliveryOrderContextPatch(sourceFields: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const fid of NEW_DELIVERY_ORDER_CONTEXT_FIELD_IDS) {
+    if (!(fid in sourceFields)) continue;
+    const v = sourceFields[fid];
+    if (v === undefined || v === null) continue;
+    if (typeof v === "string" && !v.trim()) continue;
+    if (Array.isArray(v) && v.length === 0) continue;
+    out[fid] = v;
+  }
+  return out;
+}
+
+/** Events linked to a Client Intake record, newest event date first. */
+export async function loadEventsForClientLinkedRecord(
+  clientRecordId: string
+): Promise<EventForClientOverview[] | AirtableErrorResult> {
+  const table = getEventsTable();
+  if (typeof table !== "string") return table;
+  const escaped = clientRecordId.replace(/'/g, "\\'");
+  const formula = `FIND('${escaped}', ARRAYJOIN({${FIELD_IDS.CLIENT}}))`;
+  const params = new URLSearchParams();
+  params.set("filterByFormula", formula);
+  params.set("pageSize", "100");
+  params.set("cellFormat", "json");
+  params.set("returnFieldsByFieldId", "true");
+  params.append("fields[]", FIELD_IDS.EVENT_DATE);
+  params.append("fields[]", FIELD_IDS.EVENT_TYPE);
+  params.append("fields[]", FIELD_IDS.GUEST_COUNT);
+  if (HOUSE_ORDER_NUMBER_FIELD_ID) {
+    params.append("fields[]", HOUSE_ORDER_NUMBER_FIELD_ID);
+  }
+  params.append("sort[0][field]", FIELD_IDS.EVENT_DATE);
+  params.append("sort[0][direction]", "desc");
+
+  type ListResponse = AirtableListResponse<Record<string, unknown>> & { offset?: string };
+  const data = await airtableFetch<ListResponse>(`/${table}?${params.toString()}`);
+  if (isErrorResult(data)) return data;
+  const records = data.records ?? [];
+  return records.map((record) => {
+    const f = record.fields ?? {};
+    const row: EventForClientOverview = {
+      id: record.id,
+      eventDate:
+        typeof f[FIELD_IDS.EVENT_DATE] === "string" ? (f[FIELD_IDS.EVENT_DATE] as string).slice(0, 10) : undefined,
+      eventType: asSingleSelectName(f[FIELD_IDS.EVENT_TYPE]) || undefined,
+      guestCount: typeof f[FIELD_IDS.GUEST_COUNT] === "number" ? (f[FIELD_IDS.GUEST_COUNT] as number) : undefined,
+    };
+    if (HOUSE_ORDER_NUMBER_FIELD_ID) {
+      const ho = asString(f[HOUSE_ORDER_NUMBER_FIELD_ID]);
+      if (ho) row.houseOrder = ho;
+    }
+    return row;
+  });
+}
 
 /** Parse Airtable time value (seconds number or ISO dateTime string) to seconds since midnight. */
 function parseTimeToSecondsSinceMidnight(
@@ -1225,9 +1348,13 @@ const SAVE_WHITELIST = new Set([
   "fldBuaBTjAkwmtd0J",   // CLIENT_ZIP
   "fldmsFPsl2gAtiSCD",   // PRIMARY_CONTACT_NAME
   "fld4OK9zVwr16qMIt",   // PRIMARY_CONTACT_PHONE
+  "fld5GS4l2RZP9K7pa",   // ONSITE_CONTACT_NAME ("Contact Name")
+  "fldrBQHuYwW5L6J2v",   // ONSITE_CONTACT_PHONE ("Contact Phone")
   // NOTE: fld9LnsDlMBTl7C1G is "Client Name Autofill - LEGACY" (formula) - READ ONLY, never write
   "fldMTRGNFa4pHbjY5",   // PRIMARY_CONTACT_ROLE
   "fld7m8eBhiJ58glyZ",   // DISPATCH_TIME (core field only; Print fldbbHmaWqOBNUlJP is formula — do not write)
+  "fldruc5PXOIrBFjDq",   // DELIVERY_TIME_WINDOW (single line text — client-facing delivery window)
+  "fld81Ets4piDNrJLP",   // HOUSE_ORDER_NUMBER (single line text — "House order #")
   "fldDwDE87M9kFAIDn",   // EVENT_START_TIME
   "fld7xeCnV751pxmWz",   // EVENT_END_TIME
   "fld807MPvraEV8QvN",   // VENUE_ARRIVAL_TIME

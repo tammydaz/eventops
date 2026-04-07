@@ -5,8 +5,10 @@ import { asString, asBarServicePrimary, asMultiSelectNames, asBoolean, asStringA
 import { loadStationsByEventId } from "../services/airtable/linkedRecords";
 import { loadBoxedLunchOrdersByEventId, type BoxedLunchOrder } from "../services/airtable/boxedLunchOrders";
 import { buildBoxedLunchKitchenSectionsFromOrders } from "../utils/boxedLunchPrint";
+import { formatPlatterPickForDisplay, hasPlatterPicks } from "../config/sandwichPlatterConfig";
 import { getPlatterOrdersByEventId } from "../state/platterOrdersStore";
-import { airtableFetch } from "../services/airtable/client";
+import { airtableFetch, getMenuItemsTable } from "../services/airtable/client";
+import { getMenuCatalogFieldIds, LEGACY_MENU_ITEMS_TABLE_ID } from "../services/airtable/menuCatalogConfig";
 import { EventSelector } from "../components/EventSelector";
 import { secondsTo12HourString } from "../utils/timeHelpers";
 import { MIMOSA_BAR_FRUIT_GARNISH_ITEMS } from "../constants/fullBarPackage";
@@ -1016,12 +1018,6 @@ const MENU_SECTION_CONFIG: { title: string; fieldId: string; customFieldId: stri
   { title: "DESSERTS", fieldId: FIELD_IDS.DESSERTS, customFieldId: FIELD_IDS.CUSTOM_DESSERTS },
 ];
 
-const MENU_TABLE = "tbl0aN33DGG6R1sPZ";
-const ITEM_NAME = FIELD_IDS.MENU_ITEM_NAME;
-// NON-NEGOTIABLE: Kitchen BEO and BEO Print MUST use THIS field ID for Child Items
-const CHILD_ITEMS_FIELD_ID = "fldIu6qmlUwAEn2W9";
-const CHILD_ITEMS = CHILD_ITEMS_FIELD_ID;
-
 const NOTES_SEP = " – ";
 
 /** Parse custom text (newline/comma/semicolon separated) into menu items. "Item – Notes" becomes parent + child. */
@@ -1302,6 +1298,12 @@ const KitchenBEOPrintPage: React.FC = () => {
     if (!apiKey || !baseId) return;
 
     const fetchMenuItems = async () => {
+      const cat = getMenuCatalogFieldIds();
+      const MENU_TABLE = getMenuItemsTable() || "tbl0aN33DGG6R1sPZ";
+      const ITEM_NAME = cat.itemNameFieldId;
+      const CHILD_ITEMS_FIELD_ID = cat.childItemsFieldId;
+      const CHILD_ITEMS = CHILD_ITEMS_FIELD_ID;
+
       let stationItemIds: string[] = [];
       if (selectedEventId) {
         const stationsResult = await loadStationsByEventId(selectedEventId, asLinkedRecordIds(selectedEventData?.[FIELD_IDS.STATIONS]));
@@ -1345,6 +1347,43 @@ const KitchenBEOPrintPage: React.FC = () => {
         for (let i = 0; i < toFetch.length; i += 10) {
           await fetchChunk(toFetch.slice(i, i + 10));
         }
+
+        // Legacy fallback for IDs not found in configured table
+        if (MENU_TABLE !== LEGACY_MENU_ITEMS_TABLE_ID) {
+          const missingIds = toFetch.filter((id) => !newData[id]);
+          if (missingIds.length > 0) {
+            const legacyLabel = "fldW5gfSlHRTl01v1";
+            const legacyChildren = "fldIu6qmlUwAEn2W9";
+            const fetchLegChunk = async (ids: string[]) => {
+              const formula = `OR(${ids.map((id) => `RECORD_ID()='${id}'`).join(",")})`;
+              const p = new URLSearchParams();
+              p.set("filterByFormula", formula);
+              p.set("returnFieldsByFieldId", "true");
+              p.append("fields[]", legacyLabel);
+              p.append("fields[]", legacyChildren);
+              const data = await airtableFetch<{ records?: Array<{ id: string; fields: Record<string, unknown> }> }>(
+                `/${LEGACY_MENU_ITEMS_TABLE_ID}?${p.toString()}`
+              );
+              if (!isErrorResult(data) && data?.records) {
+                for (const rec of data.records) {
+                  const nameRaw = rec.fields[legacyLabel];
+                  const rawChildren = rec.fields[legacyChildren] ?? [];
+                  const childIds = Array.isArray(rawChildren)
+                    ? rawChildren.map((item: unknown) => (typeof item === "string" ? item : (item && typeof item === "object" && "id" in item ? String((item as { id?: string }).id ?? "") : ""))).filter((id) => id.startsWith("rec"))
+                    : [];
+                  newData[rec.id] = {
+                    name: typeof nameRaw === "string" && nameRaw.trim() ? nameRaw.trim() : "—",
+                    childIds,
+                  };
+                }
+              }
+            };
+            for (let i = 0; i < missingIds.length; i += 10) {
+              await fetchLegChunk(missingIds.slice(i, i + 10));
+            }
+          }
+        }
+
         const childIdsToFetch = new Set<string>();
         Object.values(newData).forEach((d) => {
           d.childIds.forEach((cid) => {
@@ -1369,6 +1408,35 @@ const KitchenBEOPrintPage: React.FC = () => {
                 newData[rec.id].name = name;
               }
             });
+          }
+
+          // Legacy fallback for children not found in configured table
+          if (MENU_TABLE !== LEGACY_MENU_ITEMS_TABLE_ID) {
+            const missingChildren = [...childIdsToFetch].filter((id) => !newData[id]);
+            if (missingChildren.length > 0) {
+              const legacyLabel = "fldW5gfSlHRTl01v1";
+              for (let i = 0; i < missingChildren.length; i += 10) {
+                const chunk = missingChildren.slice(i, i + 10);
+                const p = new URLSearchParams();
+                p.set("filterByFormula", `OR(${chunk.map((id) => `RECORD_ID()='${id}'`).join(",")})`);
+                p.set("returnFieldsByFieldId", "true");
+                p.append("fields[]", legacyLabel);
+                const data = await airtableFetch<{ records?: Array<{ id: string; fields: Record<string, unknown> }> }>(
+                  `/${LEGACY_MENU_ITEMS_TABLE_ID}?${p.toString()}`
+                );
+                if (!isErrorResult(data) && data?.records) {
+                  for (const rec of data.records) {
+                    const nameRaw = rec.fields[legacyLabel];
+                    const name = typeof nameRaw === "string" && nameRaw.trim() ? nameRaw.trim() : "—";
+                    if (!newData[rec.id]) {
+                      newData[rec.id] = { name, childIds: [] };
+                    } else {
+                      newData[rec.id].name = name;
+                    }
+                  }
+                }
+              }
+            }
           }
         }
         setMenuItemData(newData);
@@ -1409,13 +1477,15 @@ const KitchenBEOPrintPage: React.FC = () => {
     };
 
     if (isDelivery) {
+      const globalSeenNames = new Set<string>();
       for (const config of DELIVERY_SECTION_CONFIG) {
         const allItems: MenuItem[] = [];
         const seenNames = new Set<string>();
         for (const fid of config.fieldIds) {
           processField(fid).forEach((it) => {
-            if (!seenNames.has(it.name)) {
+            if (!seenNames.has(it.name) && !globalSeenNames.has(it.name)) {
               seenNames.add(it.name);
+              globalSeenNames.add(it.name);
               allItems.push(it);
             }
           });
@@ -1432,11 +1502,12 @@ const KitchenBEOPrintPage: React.FC = () => {
         if (config.title.includes("DELI") && selectedEventId) {
           const platterRows = getPlatterOrdersByEventId(selectedEventId);
           for (const row of platterRows) {
-            if (!(row.quantity > 0) || row.picks.length === 0) continue;
+            if (!(row.quantity > 0) || !hasPlatterPicks(row)) continue;
+            const pickLines = row.picks.filter((p) => p.name.trim()).map((p) => formatPlatterPickForDisplay(p));
             allItems.push({
               qty: String(row.quantity),
               name: row.platterType,
-              subItems: row.picks.length > 0 ? row.picks.map((text) => ({ text })) : undefined,
+              subItems: pickLines.length > 0 ? pickLines.map((text) => ({ text })) : undefined,
             });
           }
         }
@@ -1552,11 +1623,12 @@ const KitchenBEOPrintPage: React.FC = () => {
         if (config.fieldId === FIELD_IDS.FULL_SERVICE_DELI && selectedEventId) {
           const platterRows = getPlatterOrdersByEventId(selectedEventId);
           for (const row of platterRows) {
-            if (!(row.quantity > 0) || row.picks.length === 0) continue;
+            if (!(row.quantity > 0) || !hasPlatterPicks(row)) continue;
+            const pickLines = row.picks.filter((p) => p.name.trim()).map((p) => formatPlatterPickForDisplay(p));
             combined.push({
               qty: String(row.quantity),
               name: row.platterType,
-              subItems: row.picks.length > 0 ? row.picks.map((text) => ({ text })) : undefined,
+              subItems: pickLines.length > 0 ? pickLines.map((text) => ({ text })) : undefined,
             });
           }
         }
@@ -1602,11 +1674,11 @@ const KitchenBEOPrintPage: React.FC = () => {
   const beo: BEOData = selectedEventData ? {
     serviceType,
     client: (asString(selectedEventData[FIELD_IDS.CLIENT_FIRST_NAME]) + " " + asString(selectedEventData[FIELD_IDS.CLIENT_LAST_NAME])).trim() || asString(selectedEventData[FIELD_IDS.CLIENT_BUSINESS_NAME]) || "No Client",
-    contact: asString(selectedEventData[FIELD_IDS.PRIMARY_CONTACT_NAME]),
-    phone: asString(selectedEventData[FIELD_IDS.CLIENT_PHONE]) || asString(selectedEventData[FIELD_IDS.PRIMARY_CONTACT_PHONE]),
+    contact: (isDelivery ? asString(selectedEventData[FIELD_IDS.ONSITE_CONTACT_NAME]) : "") || asString(selectedEventData[FIELD_IDS.PRIMARY_CONTACT_NAME]),
+    phone: asString(selectedEventData[FIELD_IDS.CLIENT_PHONE]) || (isDelivery ? asString(selectedEventData[FIELD_IDS.ONSITE_CONTACT_PHONE]) : "") || asString(selectedEventData[FIELD_IDS.PRIMARY_CONTACT_PHONE]),
     address: isPickUp ? "PICK UP" : (venueAddress || asString(selectedEventData[FIELD_IDS.CLIENT_STREET]) || clientAddress),
     cityState: isPickUp ? "" : (venueCityState || clientCityState),
-    orderNumber: "",
+    orderNumber: asString(selectedEventData[FIELD_IDS.HOUSE_ORDER_NUMBER])?.trim() || "",
     eventDate: formatEventDate(asString(selectedEventData[FIELD_IDS.EVENT_DATE])) || asString(selectedEventData[FIELD_IDS.EVENT_DATE]),
     guestCount: String(selectedEventData[FIELD_IDS.GUEST_COUNT] || ""),
     eventStart: secondsTo12HourString(selectedEventData[FIELD_IDS.EVENT_START_TIME]) || "",
@@ -1621,6 +1693,8 @@ const KitchenBEOPrintPage: React.FC = () => {
     deliveryTime: isPickUp
       ? "PICK UP"
       : (() => {
+          const window = asString(selectedEventData[FIELD_IDS.DELIVERY_TIME_WINDOW])?.trim();
+          if (window) return window.toUpperCase().includes("DELIVERY") ? window : `${window} DELIVERY`;
           const t = secondsTo12HourString(selectedEventData[FIELD_IDS.DISPATCH_TIME]) || asString(selectedEventData[FIELD_IDS.DISPATCH_TIME]) || "";
           return t ? (t.toUpperCase().includes("DELIVERY") ? t : `${t} DELIVERY`) : "";
         })(),

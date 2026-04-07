@@ -321,10 +321,20 @@ export function BeoLivePreview({ shadowMenuRows }: { shadowMenuRows: ShadowMenuR
         <Field lbl="Contact" val={contact || clientName} />
         <Field lbl="Guests" val={guestCount ? `${guestCount} guests` : ""} />
         <Field lbl="Phone" val={contactPhone || clientPhone} />
-        <Field lbl="Start" val={eventStart} />
+        {!isDelivery ? <Field lbl="Start" val={eventStart} /> : null}
         <Field lbl="Venue" val={venue} />
         {isDelivery ? (
-          <Field lbl="Dispatch" val={dispatch} />
+          <>
+            <Field
+              lbl="Delivery window"
+              val={
+                eventStart || eventEnd
+                  ? `${eventStart || "—"} – ${eventEnd || "—"}`
+                  : ""
+              }
+            />
+            <Field lbl="Dispatch" val={dispatch} />
+          </>
         ) : (
           <Field lbl="End" val={eventEnd} />
         )}
@@ -344,8 +354,14 @@ export function BeoLivePreview({ shadowMenuRows }: { shadowMenuRows: ShadowMenuR
 
       <div style={s.sectionTitle}>Menu</div>
       {sections.length > 0 ? (
-        sections.map((section) => {
-          const sectionRows = isDelivery ? rowsForDeliverySectionTitle(section, bySection) : (bySection[section] ?? []);
+        (() => {
+          const seenRowIds = new Set<string>();
+          return sections.map((section) => {
+          let sectionRows = isDelivery ? rowsForDeliverySectionTitle(section, bySection) : (bySection[section] ?? []);
+          if (isDelivery) {
+            sectionRows = sectionRows.filter((r) => !seenRowIds.has(r.id));
+            sectionRows.forEach((r) => seenRowIds.add(r.id));
+          }
           const topLevel = sectionRows.filter((r) => !r.parentItemId).sort((a, b) => a.sortOrder - b.sortOrder);
           const childrenByParent = sectionRows
             .filter((r) => r.parentItemId)
@@ -393,7 +409,8 @@ export function BeoLivePreview({ shadowMenuRows }: { shadowMenuRows: ShadowMenuR
               })}
             </div>
           );
-        })
+        });
+        })()
       ) : (
         <div style={s.emptyMenu}>No menu items added yet</div>
       )}

@@ -1,6 +1,6 @@
 /**
  * HeaderSection — single collapsible "Header" section that bundles all BEO header fields
- * in order: Client, Contact person, Event address, Event Date, Guests, times, FW Staff.
+ * Client, contact, address, date, guests, times; full service includes FW Staff / Nowsta (omitted for delivery/pickup).
  * Industry-standard: Client (name or company) + Contact person (with "Same as client").
  */
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -80,7 +80,7 @@ function formatDateForBeo(raw: string): string {
 type HeaderSectionProps = {
   jobNumberDisplay?: string;
   dispatchTimeDisplay?: string;
-  /** Only Ops Chief and ops_admin can edit dispatch time; others see read-only */
+  /** When true, dispatch time pickers are enabled; otherwise read-only */
   canEditDispatch?: boolean;
   /** Event date YYYY-MM-DD for saving dispatch time */
   eventDate?: string;
@@ -126,6 +126,8 @@ export const HeaderSection = ({ jobNumberDisplay = "—", dispatchTimeDisplay = 
 
   const [staffBreakdownModalOpen, setStaffBreakdownModalOpen] = useState(false);
   const [staffCounts, setStaffCounts] = useState<StaffCounts>({ lead: 0, captain: 0, server: 0, chef: 0, bartender: 0, utility: 0 });
+
+  const [houseOrderNumber, setHouseOrderNumber] = useState("");
 
   // Event core (date, guests, times, captain)
   const [eventDate, setEventDate] = useState("");
@@ -179,9 +181,11 @@ export const HeaderSection = ({ jobNumberDisplay = "—", dispatchTimeDisplay = 
     setCity(asString(d[FIELD_IDS.CLIENT_CITY]));
     setStateVal(asString(d[FIELD_IDS.CLIENT_STATE]));
     setZip(asString(d[FIELD_IDS.CLIENT_ZIP]));
-    setContactName(asString(d[FIELD_IDS.PRIMARY_CONTACT_NAME]));
-    setContactPhone(asString(d[FIELD_IDS.PRIMARY_CONTACT_PHONE]));
-    const primary = asString(d[FIELD_IDS.PRIMARY_CONTACT_NAME])?.trim();
+    const contactNameFieldId = isDelivery ? FIELD_IDS.ONSITE_CONTACT_NAME : FIELD_IDS.PRIMARY_CONTACT_NAME;
+    const contactPhoneFieldId = isDelivery ? FIELD_IDS.ONSITE_CONTACT_PHONE : FIELD_IDS.PRIMARY_CONTACT_PHONE;
+    setContactName(asString(d[contactNameFieldId]));
+    setContactPhone(asString(d[contactPhoneFieldId]));
+    const primary = asString(d[contactNameFieldId])?.trim();
     setContactSameAsClient(!primary || primary === full || primary === fn);
     setShowAddress(!!(asString(d[FIELD_IDS.CLIENT_STREET]) || asString(d[FIELD_IDS.CLIENT_CITY]) || asString(d[FIELD_IDS.CLIENT_STATE]) || asString(d[FIELD_IDS.CLIENT_ZIP])));
 
@@ -206,6 +210,7 @@ export const HeaderSection = ({ jobNumberDisplay = "—", dispatchTimeDisplay = 
     setCaptain(captainStr);
     setStaffCounts(parseStaffSummary(captainStr ?? ""));
     setStaffingConfirmedNowsta(asAirtableCheckbox(d[STAFFING_CONFIRMED_FIELD_ID]));
+    setHouseOrderNumber(asString(d[FIELD_IDS.HOUSE_ORDER_NUMBER]) ?? "");
     setCityStateLineDraft(null);
   }, [selectedEventId, selectedEventData, isDelivery, fwArrivalFieldId]);
 
@@ -233,7 +238,7 @@ export const HeaderSection = ({ jobNumberDisplay = "—", dispatchTimeDisplay = 
         [FIELD_IDS.CLIENT_LAST_NAME]: "",
         [FIELD_IDS.BUSINESS_NAME]: "",
       });
-      if (contactSameAsClient) await setFields(selectedEventId, { [FIELD_IDS.PRIMARY_CONTACT_NAME]: v });
+      if (contactSameAsClient) await setFields(selectedEventId, { [contactNameField]: v });
     }
   };
 
@@ -261,18 +266,28 @@ export const HeaderSection = ({ jobNumberDisplay = "—", dispatchTimeDisplay = 
     if (selectedEventId) {
       const seconds = hour * 3600 + minute * 60;
       const patch: Record<string, unknown> = { [fieldId]: seconds };
-      if (fieldId === FIELD_IDS.DISPATCH_TIME && eventDateProp) patch[FIELD_IDS.EVENT_DATE] = eventDateProp;
+      if (
+        (fieldId === FIELD_IDS.DISPATCH_TIME ||
+          fieldId === FIELD_IDS.EVENT_START_TIME ||
+          fieldId === FIELD_IDS.EVENT_END_TIME) &&
+        eventDateProp
+      ) {
+        patch[FIELD_IDS.EVENT_DATE] = eventDateProp;
+      }
       setFields(selectedEventId, patch);
     }
   };
+
+  const contactNameField = isDelivery ? FIELD_IDS.ONSITE_CONTACT_NAME : FIELD_IDS.PRIMARY_CONTACT_NAME;
+  const contactPhoneField = isDelivery ? FIELD_IDS.ONSITE_CONTACT_PHONE : FIELD_IDS.PRIMARY_CONTACT_PHONE;
 
   const applyContactSameAsClient = async () => {
     setContactName(clientName);
     setContactPhone(phone);
     if (selectedEventId) {
       await setFields(selectedEventId, {
-        [FIELD_IDS.PRIMARY_CONTACT_NAME]: clientName,
-        [FIELD_IDS.PRIMARY_CONTACT_PHONE]: phone,
+        [contactNameField]: clientName,
+        [contactPhoneField]: phone,
       });
     }
   };
@@ -323,20 +338,22 @@ export const HeaderSection = ({ jobNumberDisplay = "—", dispatchTimeDisplay = 
   };
 
   const openContactModal = () => {
-    setModalContactName(contactName);
-    setModalContactPhone(contactPhone);
+    setModalContactName(contactSameAsClient ? "" : contactName);
+    setModalContactPhone(contactSameAsClient ? phone : contactPhone);
     setContactModalOpen(true);
   };
 
   const saveContactModal = async () => {
-    setContactName(modalContactName.trim());
-    setContactPhone(modalContactPhone.trim());
-    setContactSameAsClient(false);
+    const name = modalContactName.trim();
+    const ph = modalContactPhone.trim() || phone;
+    setContactName(name || clientName);
+    setContactPhone(ph);
+    setContactSameAsClient(!name || name === clientName);
     setContactModalOpen(false);
     if (selectedEventId) {
       await setFields(selectedEventId, {
-        [FIELD_IDS.PRIMARY_CONTACT_NAME]: modalContactName.trim(),
-        [FIELD_IDS.PRIMARY_CONTACT_PHONE]: modalContactPhone.trim(),
+        [contactNameField]: name || clientName,
+        [contactPhoneField]: ph,
       });
     }
   };
@@ -457,6 +474,8 @@ export const HeaderSection = ({ jobNumberDisplay = "—", dispatchTimeDisplay = 
   const tableCellValue: React.CSSProperties = { padding: 0, border: "1px solid #444", background: "rgba(0,0,0,0.2)", verticalAlign: "middle" };
   const tableInput: React.CSSProperties = { width: "100%", minHeight: 32, padding: "4px 8px", border: "none", background: "transparent", color: "#e0e0e0", fontSize: 13, boxSizing: "border-box" as const };
 
+  const compactSelect: React.CSSProperties = { background: "#111", border: "1px solid #444", borderRadius: 3, color: "#fef08a", fontSize: 11, fontWeight: 600, padding: "2px 2px 2px 4px", outline: "none", cursor: "pointer", minWidth: 0 };
+
   const timeSelectInCell = (fieldId: string, key: "eventStartTime" | "eventEndTime" | "eventArrivalTime") => {
     const raw = key === "eventStartTime" ? eventStartTime : key === "eventEndTime" ? eventEndTime : eventArrivalTime;
     const hasValue = raw && raw !== "—";
@@ -468,12 +487,12 @@ export const HeaderSection = ({ jobNumberDisplay = "—", dispatchTimeDisplay = 
     const handleHour = (newHour12: number, newIsPM: boolean) => { const newHour24 = newHour12 === 12 ? (newIsPM ? 12 : 0) : (newIsPM ? newHour12 + 12 : newHour12); handleTimeSelectChange(fieldId, newHour24, minute); };
     const handleMinute = (newMinute: number) => handleTimeSelectChange(fieldId, hour24, newMinute);
     return (
-      <div style={{ display: "flex", alignItems: "center", gap: 2 }}>
-        <select value={String(hour12)} disabled={!canEdit} onChange={(e) => handleHour(Number(e.target.value), isPM)} style={{ ...tableInput, minHeight: 28, flex: "1 1 0", minWidth: 0 }}><option value="12">12</option>{[1,2,3,4,5,6,7,8,9,10,11].map((i) => <option key={i} value={i}>{i}</option>)}</select>
-        <span style={{ color: MUTED_COLOR }}>:</span>
-        <select value={String(minute)} disabled={!canEdit} onChange={(e) => handleMinute(Number(e.target.value))} style={{ ...tableInput, minHeight: 28, flex: "1 1 0", minWidth: 0 }}>{MINUTE_INCREMENTS.map((m) => <option key={m} value={m}>{String(m).padStart(2,"0")}</option>)}</select>
-        <select value={isPM ? "PM" : "AM"} disabled={!canEdit} onChange={(e) => handleHour(hour12, e.target.value === "PM")} style={{ ...tableInput, minHeight: 28, width: 44 }}><option value="AM">AM</option><option value="PM">PM</option></select>
-      </div>
+      <span style={{ display: "inline-flex", alignItems: "center", gap: 1 }}>
+        <select value={String(hour12)} disabled={!canEdit} onChange={(e) => handleHour(Number(e.target.value), isPM)} style={compactSelect}><option value="12">12</option>{[1,2,3,4,5,6,7,8,9,10,11].map((i) => <option key={i} value={i}>{i}</option>)}</select>
+        <span style={{ color: "#fef08a", fontSize: 11, fontWeight: 700 }}>:</span>
+        <select value={String(minute)} disabled={!canEdit} onChange={(e) => handleMinute(Number(e.target.value))} style={compactSelect}>{MINUTE_INCREMENTS.map((m) => <option key={m} value={m}>{String(m).padStart(2,"0")}</option>)}</select>
+        <select value={isPM ? "PM" : "AM"} disabled={!canEdit} onChange={(e) => handleHour(hour12, e.target.value === "PM")} style={{ ...compactSelect, width: 38 }}><option value="AM">AM</option><option value="PM">PM</option></select>
+      </span>
     );
   };
 
@@ -484,14 +503,13 @@ export const HeaderSection = ({ jobNumberDisplay = "—", dispatchTimeDisplay = 
   const dispatchHour12 = dispatchHour24 === 0 ? 12 : dispatchHour24 > 12 ? dispatchHour24 - 12 : dispatchHour24;
   const dispatchIsPM = dispatchHour24 >= 12;
   const dispatchHour24From12 = (h12: number, pm: boolean) => (h12 === 12 ? (pm ? 12 : 0) : (pm ? h12 + 12 : h12));
-  const timeSelectStyle: React.CSSProperties = { ...tableInput, minHeight: 24, width: 50, padding: "2px 6px", fontSize: 12, color: "#FBC02D" };
-  const amPmSelectStyle: React.CSSProperties = { ...timeSelectStyle, width: 48 };
+  const dispatchSelect: React.CSSProperties = { ...compactSelect, color: "#FBC02D" };
   const dispatchTimePicker = (
-    <span style={{ display: "inline-flex", alignItems: "center", gap: 2 }}>
-      <select value={String(dispatchHour12)} onChange={(e) => handleTimeSelectChange(FIELD_IDS.DISPATCH_TIME, dispatchHour24From12(Number(e.target.value), dispatchIsPM), dispatchMinute)} style={timeSelectStyle}><option value="12">12</option>{[1,2,3,4,5,6,7,8,9,10,11].map((i) => <option key={i} value={i}>{i}</option>)}</select>
-      <span style={{ color: "#FBC02D" }}>:</span>
-      <select value={String(dispatchMinute)} onChange={(e) => handleTimeSelectChange(FIELD_IDS.DISPATCH_TIME, dispatchHour24, Number(e.target.value))} style={timeSelectStyle}>{MINUTE_INCREMENTS.map((m) => <option key={m} value={m}>{String(m).padStart(2,"0")}</option>)}</select>
-      <select value={dispatchIsPM ? "PM" : "AM"} onChange={(e) => handleTimeSelectChange(FIELD_IDS.DISPATCH_TIME, dispatchHour24From12(dispatchHour12, e.target.value === "PM"), dispatchMinute)} style={amPmSelectStyle}><option value="AM">AM</option><option value="PM">PM</option></select>
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 1 }}>
+      <select value={String(dispatchHour12)} onChange={(e) => handleTimeSelectChange(FIELD_IDS.DISPATCH_TIME, dispatchHour24From12(Number(e.target.value), dispatchIsPM), dispatchMinute)} style={dispatchSelect}><option value="12">12</option>{[1,2,3,4,5,6,7,8,9,10,11].map((i) => <option key={i} value={i}>{i}</option>)}</select>
+      <span style={{ color: "#FBC02D", fontSize: 11, fontWeight: 700 }}>:</span>
+      <select value={String(dispatchMinute)} onChange={(e) => handleTimeSelectChange(FIELD_IDS.DISPATCH_TIME, dispatchHour24, Number(e.target.value))} style={dispatchSelect}>{MINUTE_INCREMENTS.map((m) => <option key={m} value={m}>{String(m).padStart(2,"0")}</option>)}</select>
+      <select value={dispatchIsPM ? "PM" : "AM"} onChange={(e) => handleTimeSelectChange(FIELD_IDS.DISPATCH_TIME, dispatchHour24From12(dispatchHour12, e.target.value === "PM"), dispatchMinute)} style={{ ...dispatchSelect, width: 38 }}><option value="AM">AM</option><option value="PM">PM</option></select>
     </span>
   );
 
@@ -502,13 +520,13 @@ export const HeaderSection = ({ jobNumberDisplay = "—", dispatchTimeDisplay = 
       subtitle={headerSummary}
       isDelivery={isDelivery}
       sectionId="beo-section-header"
-      defaultOpen={false}
+      defaultOpen={isDelivery}
       titleAlign="center"
       dotColor={BEO_SECTION_PILL_ACCENT}
     >
       <p style={{ gridColumn: "1 / -1", ...helperStyle, marginBottom: 14, marginTop: 0 }}>
         {isDelivery
-          ? "Delivery / pickup — times in the banner use Dispatch (same field the job list sorts by). Event start, end, and on-site arrival are not used."
+          ? "Delivery / pickup — set the client delivery window (start–end) here. Dispatch time is the kitchen handoff target; it is read-only unless your login may edit it."
           : "Click any cell to edit. Same layout as the printed BEO header."}
       </p>
       <div style={{ gridColumn: "1 / -1", overflow: "auto" }}>
@@ -517,53 +535,99 @@ export const HeaderSection = ({ jobNumberDisplay = "—", dispatchTimeDisplay = 
           <tbody>
             <tr>
               <td colSpan={4} style={{ padding: "8px", border: "1px solid #444", background: "rgba(0,0,0,0.2)", verticalAlign: "middle" }}>
-                <div style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "nowrap", alignItems: "center" }}>
+                <div style={{ display: "flex", gap: 8, justifyContent: "center", flexWrap: "wrap", alignItems: "center" }}>
                   <div
-                    style={
-                      isDelivery
-                        ? {
-                            display: "inline-flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            padding: "8px 14px",
-                            color: "#fef08a",
-                            fontSize: 12,
-                            fontWeight: 700,
-                            textTransform: "uppercase" as const,
-                            whiteSpace: "nowrap",
-                            border: "1px solid rgba(234, 179, 8, 0.55)",
-                            background: "linear-gradient(135deg, rgba(234, 179, 8, 0.22), rgba(234, 179, 8, 0.06))",
-                            width: 320,
-                            height: 36,
-                            boxSizing: "border-box",
-                            borderRadius: 6,
-                          }
-                        : {
-                            display: "inline-flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            padding: "8px 14px",
-                            color: "#4DD0E1",
-                            fontSize: 12,
-                            fontWeight: 700,
-                            textTransform: "uppercase" as const,
-                            whiteSpace: "nowrap",
-                            border: "1px solid rgba(77, 208, 225, 0.5)",
-                            background: "linear-gradient(135deg, rgba(77, 208, 225, 0.2), rgba(77, 208, 225, 0.06))",
-                            width: 320,
-                            height: 36,
-                            boxSizing: "border-box",
-                            borderRadius: 6,
-                          }
-                    }
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 4,
+                      padding: "6px 10px",
+                      color: isDelivery ? "#fef08a" : "#4DD0E1",
+                      fontSize: 11,
+                      fontWeight: 700,
+                      textTransform: "uppercase" as const,
+                      whiteSpace: "nowrap",
+                      border: `1px solid ${isDelivery ? "rgba(234, 179, 8, 0.55)" : "rgba(77, 208, 225, 0.5)"}`,
+                      background: isDelivery
+                        ? "linear-gradient(135deg, rgba(234, 179, 8, 0.22), rgba(234, 179, 8, 0.06))"
+                        : "linear-gradient(135deg, rgba(77, 208, 225, 0.2), rgba(77, 208, 225, 0.06))",
+                      boxSizing: "border-box",
+                      borderRadius: 6,
+                    }}
                   >
-                    {isDelivery ? "HOUSE ORDER #:" : "JOB #:"} {jobNumberDisplay}
+                    {isDelivery ? "Order #" : "Job #"}
+                    <input
+                      value={houseOrderNumber}
+                      disabled={!canEdit}
+                      onChange={(e) => { setHouseOrderNumber(e.target.value); setIntakeDirty(true); }}
+                      onBlur={() => save(FIELD_IDS.HOUSE_ORDER_NUMBER, houseOrderNumber.trim())}
+                      style={{
+                        background: "transparent",
+                        border: "none",
+                        borderBottom: "1px dashed currentColor",
+                        color: "inherit",
+                        fontSize: "inherit",
+                        fontWeight: "inherit",
+                        textTransform: "none" as const,
+                        width: 80,
+                        textAlign: "center",
+                        outline: "none",
+                        padding: "0 2px",
+                        cursor: "text",
+                      }}
+                      placeholder={jobNumberDisplay}
+                    />
                   </div>
-                  <div style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "8px 14px", color: "#FBC02D", fontSize: 12, fontWeight: 700, textTransform: "uppercase" as const, whiteSpace: "nowrap", border: "1px solid rgba(251, 192, 45, 0.5)", background: "linear-gradient(135deg, rgba(251, 192, 45, 0.2), rgba(251, 192, 45, 0.06))", width: 320, height: 36, boxSizing: "border-box", borderRadius: 6 }}>
-                    {isDelivery ? "DELIVERY TIME:" : "DISPATCH TIME:"}{" "}
-                    {canEditDispatch ? dispatchTimePicker : <><span style={{ color: "#FBC02D" }}>{dispatchTimeDisplay}</span></>}
-                    {!canEditDispatch && <span style={{ fontSize: 11, color: MUTED_COLOR, marginLeft: 4 }}>(read-only)</span>}
-                  </div>
+                  {isDelivery ? (
+                    <>
+                      <div
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: 6,
+                          padding: "6px 10px",
+                          color: "#fef08a",
+                          fontSize: 11,
+                          fontWeight: 700,
+                          border: "1px solid rgba(234, 179, 8, 0.55)",
+                          background: "linear-gradient(135deg, rgba(234, 179, 8, 0.22), rgba(234, 179, 8, 0.06))",
+                          boxSizing: "border-box",
+                          borderRadius: 6,
+                        }}
+                      >
+                        <span style={{ fontSize: 10, letterSpacing: "0.05em", textTransform: "uppercase" as const, whiteSpace: "nowrap" }}>Delivery</span>
+                        {timeSelectInCell(FIELD_IDS.EVENT_START_TIME, "eventStartTime")}
+                        <span style={{ color: "#FBC02D", fontWeight: 700 }}>–</span>
+                        {timeSelectInCell(FIELD_IDS.EVENT_END_TIME, "eventEndTime")}
+                      </div>
+                      <div
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: 6,
+                          padding: "6px 10px",
+                          color: "#FBC02D",
+                          fontSize: 11,
+                          fontWeight: 700,
+                          textTransform: "uppercase" as const,
+                          border: "1px solid rgba(251, 192, 45, 0.5)",
+                          background: "linear-gradient(135deg, rgba(251, 192, 45, 0.2), rgba(251, 192, 45, 0.06))",
+                          boxSizing: "border-box",
+                          borderRadius: 6,
+                        }}
+                      >
+                        <span style={{ fontSize: 10, letterSpacing: "0.05em", whiteSpace: "nowrap" }}>Dispatch</span>
+                        {canEditDispatch ? dispatchTimePicker : <span style={{ color: "#FBC02D", fontSize: 12 }}>{dispatchTimeDisplay}</span>}
+                        {!canEditDispatch && <span style={{ fontSize: 9, color: MUTED_COLOR, fontWeight: 500, textTransform: "none" as const }}>(read-only)</span>}
+                      </div>
+                    </>
+                  ) : (
+                    <div style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "8px 14px", color: "#FBC02D", fontSize: 12, fontWeight: 700, textTransform: "uppercase" as const, whiteSpace: "nowrap", border: "1px solid rgba(251, 192, 45, 0.5)", background: "linear-gradient(135deg, rgba(251, 192, 45, 0.2), rgba(251, 192, 45, 0.06))", width: 320, height: 36, boxSizing: "border-box", borderRadius: 6 }}>
+                      DISPATCH TIME:{" "}
+                      {canEditDispatch ? dispatchTimePicker : <><span style={{ color: "#FBC02D" }}>{dispatchTimeDisplay}</span></>}
+                      {!canEditDispatch && <span style={{ fontSize: 11, color: MUTED_COLOR, marginLeft: 4 }}>(read-only)</span>}
+                    </div>
+                  )}
                 </div>
               </td>
             </tr>
@@ -571,7 +635,16 @@ export const HeaderSection = ({ jobNumberDisplay = "—", dispatchTimeDisplay = 
               <td style={tableCellLabel}>CLIENT</td>
               <td style={tableCellValue}><input value={clientName} disabled={!canEdit} onChange={(e) => { setClientName(e.target.value); setIntakeDirty(true); }} onBlur={handleClientNameBlur} style={tableInput} placeholder="—" /></td>
               <td style={tableCellLabel}>{isDelivery ? "HOUSE ORDER #" : "ORDER #"}</td>
-              <td style={{ ...tableCellValue, color: MUTED_COLOR, padding: "6px 8px" }}>—</td>
+              <td style={tableCellValue}>
+                <input
+                  value={houseOrderNumber}
+                  disabled={!canEdit}
+                  onChange={(e) => { setHouseOrderNumber(e.target.value); setIntakeDirty(true); }}
+                  onBlur={() => save(FIELD_IDS.HOUSE_ORDER_NUMBER, houseOrderNumber.trim())}
+                  style={{ ...tableInput, cursor: "text" }}
+                  placeholder="Enter order #"
+                />
+              </td>
             </tr>
             <tr>
               <td style={tableCellLabel}>CONTACT</td>
@@ -582,7 +655,7 @@ export const HeaderSection = ({ jobNumberDisplay = "—", dispatchTimeDisplay = 
                   </button>
                 ) : (
                   <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", padding: "4px 8px" }}>
-                    <input value={contactName} disabled={!canEdit} onChange={(e) => setContactName(e.target.value)} onBlur={async (e) => { const v = e.target.value; if (selectedEventId) await setFields(selectedEventId, { [FIELD_IDS.PRIMARY_CONTACT_NAME]: v }); }} style={{ ...tableInput, flex: "1 1 120px" }} placeholder="Contact name" />
+                    <input value={contactName} disabled={!canEdit} onChange={(e) => setContactName(e.target.value)} onBlur={async (e) => { const v = e.target.value; if (selectedEventId) await setFields(selectedEventId, { [contactNameField]: v }); }} style={{ ...tableInput, flex: "1 1 120px" }} placeholder="Contact name" />
                     <button type="button" onClick={switchToContactSameAsClient} style={{ fontSize: 11, color: ACCENT_LINK, background: "none", border: "none", cursor: "pointer", textDecoration: "underline" }}>Same as client</button>
                   </div>
                 )}
@@ -602,9 +675,9 @@ export const HeaderSection = ({ jobNumberDisplay = "—", dispatchTimeDisplay = 
                     const v = e.target.value;
                     if (contactSameAsClient) {
                       await save(FIELD_IDS.CLIENT_PHONE, v);
-                      if (selectedEventId) await setFields(selectedEventId, { [FIELD_IDS.PRIMARY_CONTACT_PHONE]: v });
+                      if (selectedEventId) await setFields(selectedEventId, { [contactPhoneField]: v });
                     } else if (selectedEventId) {
-                      await setFields(selectedEventId, { [FIELD_IDS.PRIMARY_CONTACT_PHONE]: v });
+                      await setFields(selectedEventId, { [contactPhoneField]: v });
                     }
                   }}
                   style={tableInput}
@@ -756,49 +829,50 @@ export const HeaderSection = ({ jobNumberDisplay = "—", dispatchTimeDisplay = 
                 </tr>
               </>
             )}
-            <tr>
-              <td style={tableCellLabel} />
-              <td style={tableCellValue} />
-              <td style={tableCellLabel}>FW STAFF</td>
-              <td style={tableCellValue}>
-                <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", padding: "4px 8px" }}>
-                  <input value={captain} disabled={!canEdit} onChange={(e) => setCaptain(e.target.value)} onBlur={async (e) => {
-                    const v = e.target.value;
-                    setCaptain(v);
-                    if (selectedEventId) await saveField(FW_STAFF_SUMMARY_FIELD_ID, v);
-                  }} style={{ ...tableInput, flex: "1 1 100px" }} placeholder="e.g. 2 Servers, 1 Chef" />
-                  <button type="button" style={{ ...pillInactive, margin: 0 }} onClick={canEdit ? openStaffBreakdownModal : undefined} disabled={!canEdit}>Staff breakdown</button>
-                  <a href={NOWSTA_URL} target="_blank" rel="noopener noreferrer" style={{ fontSize: 12, fontWeight: 600, color: ACCENT_LINK }}>Nowsta →</a>
-                  {/* Always show (not gated on delivery/pickup) so the control does not disappear after type loads or for hybrid jobs. */}
-                  <label
-                    style={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: 6,
-                      fontSize: 12,
-                      color: "#e0e0e0",
-                      cursor: canEdit ? "pointer" : "default",
-                      whiteSpace: "nowrap",
-                      userSelect: "none",
-                    }}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={staffingConfirmedNowsta}
-                      disabled={!canEdit}
-                      onChange={async (e) => {
-                        const v = e.target.checked;
-                        setStaffingConfirmedNowsta(v);
-                        if (!selectedEventId) return;
-                        const ok = await saveField(STAFFING_CONFIRMED_FIELD_ID, v);
-                        if (ok === false) setStaffingConfirmedNowsta(!v);
+            {!isDelivery ? (
+              <tr>
+                <td style={tableCellLabel} />
+                <td style={tableCellValue} />
+                <td style={tableCellLabel}>FW STAFF</td>
+                <td style={tableCellValue}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", padding: "4px 8px" }}>
+                    <input value={captain} disabled={!canEdit} onChange={(e) => setCaptain(e.target.value)} onBlur={async (e) => {
+                      const v = e.target.value;
+                      setCaptain(v);
+                      if (selectedEventId) await saveField(FW_STAFF_SUMMARY_FIELD_ID, v);
+                    }} style={{ ...tableInput, flex: "1 1 100px" }} placeholder="e.g. 2 Servers, 1 Chef" />
+                    <button type="button" style={{ ...pillInactive, margin: 0 }} onClick={canEdit ? openStaffBreakdownModal : undefined} disabled={!canEdit}>Staff breakdown</button>
+                    <a href={NOWSTA_URL} target="_blank" rel="noopener noreferrer" style={{ fontSize: 12, fontWeight: 600, color: ACCENT_LINK }}>Nowsta →</a>
+                    <label
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 6,
+                        fontSize: 12,
+                        color: "#e0e0e0",
+                        cursor: canEdit ? "pointer" : "default",
+                        whiteSpace: "nowrap",
+                        userSelect: "none",
                       }}
-                    />
-                    Confirmed in Nowsta
-                  </label>
-                </div>
-              </td>
-            </tr>
+                    >
+                      <input
+                        type="checkbox"
+                        checked={staffingConfirmedNowsta}
+                        disabled={!canEdit}
+                        onChange={async (e) => {
+                          const v = e.target.checked;
+                          setStaffingConfirmedNowsta(v);
+                          if (!selectedEventId) return;
+                          const ok = await saveField(STAFFING_CONFIRMED_FIELD_ID, v);
+                          if (ok === false) setStaffingConfirmedNowsta(!v);
+                        }}
+                      />
+                      Confirmed in Nowsta
+                    </label>
+                  </div>
+                </td>
+              </tr>
+            ) : null}
           </tbody>
         </table>
       </div>
@@ -844,12 +918,13 @@ export const HeaderSection = ({ jobNumberDisplay = "—", dispatchTimeDisplay = 
       >
         <div style={{ background: "#1a1a1a", border: "1px solid #444", borderRadius: 8, padding: 20, minWidth: 320, maxWidth: 420 }} onClick={(e) => e.stopPropagation()}>
           <h3 id="contact-modal-title" style={{ margin: "0 0 14px", fontSize: 16, color: "#e0e0e0" }}>Contact person</h3>
-          <p style={{ ...helperStyle, marginBottom: 12 }}>Event will show this contact on the BEO. Client name stays saved.</p>
+          <p style={{ ...helperStyle, marginBottom: 12 }}>Leave blank to keep client info. Only fill what's different.</p>
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            <label style={labelStyle}>Contact name</label>
-            <input value={modalContactName} onChange={(e) => setModalContactName(e.target.value)} style={compactInputStyle} placeholder="Person to reach" />
+            <label style={labelStyle}>On-site contact name</label>
+            <input value={modalContactName} onChange={(e) => setModalContactName(e.target.value)} style={compactInputStyle} placeholder={clientName || "Person to reach"} />
             <label style={labelStyle}>Contact phone</label>
-            <input type="tel" value={modalContactPhone} onChange={(e) => setModalContactPhone(e.target.value)} style={compactInputStyle} placeholder="(555) 555-5555" />
+            <input type="tel" value={modalContactPhone} onChange={(e) => setModalContactPhone(e.target.value)} style={compactInputStyle} placeholder={phone || "(555) 555-5555"} />
+            {phone && !modalContactPhone && <span style={{ fontSize: 11, color: MUTED_COLOR }}>Will keep: {phone}</span>}
           </div>
           <div style={{ marginTop: 16, display: "flex", gap: 8, justifyContent: "flex-end" }}>
             <button type="button" onClick={() => setContactModalOpen(false)} style={pillInactive}>Cancel</button>
@@ -858,7 +933,7 @@ export const HeaderSection = ({ jobNumberDisplay = "—", dispatchTimeDisplay = 
         </div>
       </div>
     )}
-    {staffBreakdownModalOpen && (
+    {staffBreakdownModalOpen && !isDelivery && (
       <div
         role="dialog"
         aria-modal="true"

@@ -27,6 +27,8 @@ function App() {
   const isDeliveryCommand = pathname.startsWith("/delivery-command");
   const isIntakeFOH = pathname.startsWith("/intake-foh");
   const isEventOverview = pathname.startsWith("/event/");
+  const isClientOverview = pathname.startsWith("/client/");
+  const isDeliveryIntake = pathname === "/delivery/intake";
   const isEarlyEventSections = pathname.startsWith("/early-event-sections");
 
   useEffect(() => {
@@ -47,7 +49,7 @@ function App() {
     }
   }, [pathname, selectEvent]);
 
-  if (isPrintTest || isHome || isQuickIntake || isWatchtower || isPapaChulo || isFOH || isDashboardOld || isBeoIntake || isBeoPrint || isSeedDemo || isInvoiceIntake || isFeedbackIssues || isAdmin || isKitchen || isFlair || isDeliveryCommand || isIntakeFOH || isEventOverview || isEarlyEventSections) {
+  if (isPrintTest || isHome || isQuickIntake || isWatchtower || isPapaChulo || isFOH || isDashboardOld || isBeoIntake || isBeoPrint || isSeedDemo || isInvoiceIntake || isFeedbackIssues || isAdmin || isKitchen || isFlair || isDeliveryCommand || isIntakeFOH || isEventOverview || isClientOverview || isDeliveryIntake || isEarlyEventSections) {
     return (
       <AuthGuard>
         <Router selectedEventId={selectedEventId} />

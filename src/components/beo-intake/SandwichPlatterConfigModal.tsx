@@ -8,6 +8,9 @@ import { createPortal } from "react-dom";
 import {
   PLATTER_CHOICES,
   PLATTER_TYPES,
+  formatPlatterPickForDisplay,
+  normalizePlatterRow,
+  type PlatterPick,
   type PlatterRow,
 } from "../../config/sandwichPlatterConfig";
 
@@ -36,6 +39,12 @@ const rowInputStyle: React.CSSProperties = {
   minWidth: 0,
 };
 
+const MAX_PICK_QTY = 999;
+
+function clampPickQty(q: number): number {
+  return Math.max(1, Math.min(MAX_PICK_QTY, Math.floor(Number(q)) || 1));
+}
+
 export function SandwichPlatterConfigModal({
   open,
   onClose,
@@ -43,10 +52,14 @@ export function SandwichPlatterConfigModal({
   initialRows = [],
   inline = false,
 }: SandwichPlatterConfigModalProps) {
-  // Each row: platterType, picks (ordered slots), customPicks (typed extras), quantity
-  const [rows, setRows] = useState<(PlatterRow & { customPicks: string[] })[]>(() =>
+  // Each row: platterType, picks (ordered slots w/ qty per type), customPicks (typed extras), quantity
+  const [rows, setRows] = useState<(PlatterRow & { customPicks: PlatterPick[] })[]>(() =>
     initialRows.length > 0
-      ? initialRows.map((r) => ({ ...r, id: r.id || generateId(), customPicks: [] }))
+      ? initialRows.map((r) => ({
+          ...normalizePlatterRow(r),
+          id: r.id || generateId(),
+          customPicks: [],
+        }))
       : [{ id: generateId(), platterType: "Classic Sandwiches", picks: [], quantity: 1, customPicks: [] }]
   );
 
@@ -55,7 +68,13 @@ export function SandwichPlatterConfigModal({
 
   useEffect(() => {
     if (open && initialRows.length > 0) {
-      setRows(initialRows.map((r) => ({ ...r, id: r.id || generateId(), customPicks: [] })));
+      setRows(
+        initialRows.map((r) => ({
+          ...normalizePlatterRow(r),
+          id: r.id || generateId(),
+          customPicks: [],
+        })),
+      );
     }
   }, [open]);
 
@@ -64,7 +83,7 @@ export function SandwichPlatterConfigModal({
   const addRow = useCallback(() => {
     setRows((prev) => [
       ...prev,
-      { id: generateId(), platterType: "Classic Sandwiches", picks: [], quantity: 1, customPicks: [] },
+      { id: generateId(), platterType: "Classic Sandwiches", picks: [], quantity: 1, customPicks: [] as PlatterPick[] },
     ]);
   }, []);
 
@@ -87,8 +106,20 @@ export function SandwichPlatterConfigModal({
       const config = PLATTER_CHOICES[r.platterType];
       if (!config) return r;
       const next = [...r.picks];
-      while (next.length <= slotIdx) next.push("");
-      next[slotIdx] = value;
+      while (next.length <= slotIdx) next.push({ name: "", qty: 1 });
+      const prevPick = next[slotIdx] ?? { name: "", qty: 1 };
+      next[slotIdx] = { name: value, qty: prevPick.qty };
+      return { ...r, picks: next };
+    }));
+  }, []);
+
+  const updatePickQty = useCallback((rowId: string, slotIdx: number, qty: number) => {
+    setRows((prev) => prev.map((r) => {
+      if (r.id !== rowId) return r;
+      const next = [...r.picks];
+      while (next.length <= slotIdx) next.push({ name: "", qty: 1 });
+      const cur = next[slotIdx] ?? { name: "", qty: 1 };
+      next[slotIdx] = { ...cur, qty: clampPickQty(qty) };
       return { ...r, picks: next };
     }));
   }, []);
@@ -99,7 +130,7 @@ export function SandwichPlatterConfigModal({
       if (r.id !== rowId) return r;
       const config = PLATTER_CHOICES[r.platterType];
       if (!config || r.picks.length >= config.maxPick) return r;
-      return { ...r, picks: [...r.picks, ""] };
+      return { ...r, picks: [...r.picks, { name: "", qty: 1 }] };
     }));
   }, []);
 
@@ -107,7 +138,7 @@ export function SandwichPlatterConfigModal({
     setRows((prev) => prev.map((r) => {
       if (r.id !== rowId) return r;
       const next = [...r.picks];
-      next[slotIdx] = "";
+      next[slotIdx] = { name: "", qty: 1 };
       return { ...r, picks: next };
     }));
   }, []);
@@ -115,12 +146,23 @@ export function SandwichPlatterConfigModal({
   const addCustomPick = useCallback((rowId: string) => {
     const text = (customInputs[rowId] || "").trim();
     if (!text) return;
-    setRows((prev) => prev.map((r) => r.id === rowId ? { ...r, customPicks: [...r.customPicks, text] } : r));
+    setRows((prev) => prev.map((r) => r.id === rowId ? { ...r, customPicks: [...r.customPicks, { name: text, qty: 1 }] } : r));
     setCustomInputs((prev) => ({ ...prev, [rowId]: "" }));
   }, [customInputs]);
 
   const removeCustomPick = useCallback((rowId: string, idx: number) => {
     setRows((prev) => prev.map((r) => r.id === rowId ? { ...r, customPicks: r.customPicks.filter((_, i) => i !== idx) } : r));
+  }, []);
+
+  const updateCustomPickQty = useCallback((rowId: string, idx: number, qty: number) => {
+    setRows((prev) => prev.map((r) => {
+      if (r.id !== rowId) return r;
+      const next = [...r.customPicks];
+      const cur = next[idx];
+      if (!cur) return r;
+      next[idx] = { ...cur, qty: clampPickQty(qty) };
+      return { ...r, customPicks: next };
+    }));
   }, []);
 
   const handleConfirm = useCallback(() => {
@@ -138,7 +180,7 @@ export function SandwichPlatterConfigModal({
   }, [rows, onConfirm, onClose]);
 
   const handleClearAll = useCallback(() => {
-    setRows([{ id: generateId(), platterType: "Classic Sandwiches", picks: [], quantity: 1, customPicks: [] }]);
+    setRows([{ id: generateId(), platterType: "Classic Sandwiches", picks: [], quantity: 1, customPicks: [] as PlatterPick[] }]);
     setCustomInputs({});
   }, []);
 
@@ -181,14 +223,14 @@ export function SandwichPlatterConfigModal({
       {/* Body */}
       <div style={{ padding: "16px 20px", overflowY: "auto", flex: 1 }}>
         <p style={{ fontSize: 12, color: "#888", marginBottom: 16 }}>
-          Each platter shows only its own options. Use the dropdown slots to pick your selections, or type a custom item at the bottom of each platter.
+          Each platter shows only its own options. Use the dropdown slots to pick your selections; use +/− for how many of each type. Or type a custom item at the bottom of each platter.
         </p>
 
         {rows.map((row) => {
           const config = PLATTER_CHOICES[row.platterType];
           if (!config) return null;
-          const filledSlots = row.picks.filter(Boolean).length;
-          const totalSelected = filledSlots + row.customPicks.length;
+          const filledSlots = row.picks.filter((p) => p.name.trim()).length;
+          const totalSelected = filledSlots + row.customPicks.filter((p) => p.name.trim()).length;
           const slotsToShow = Math.max(row.picks.length, Math.min(config.maxPick, 1));
 
           return (
@@ -234,15 +276,19 @@ export function SandwichPlatterConfigModal({
               {/* Dropdown slots */}
               <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                 {Array.from({ length: slotsToShow }).map((_, slotIdx) => {
-                  const slotValue = row.picks[slotIdx] ?? "";
-                  const takenByOtherSlots = new Set(row.picks.filter((v, i) => i !== slotIdx && v));
+                  const pick = row.picks[slotIdx] ?? { name: "", qty: 1 };
+                  const slotValue = pick.name;
+                  const slotQty = clampPickQty(pick.qty);
+                  const takenByOtherSlots = new Set(
+                    row.picks.filter((p, i) => i !== slotIdx && p.name.trim()).map((p) => p.name),
+                  );
                   const availableOptions = config.options.filter((opt) => !takenByOtherSlots.has(opt));
                   return (
-                    <div key={slotIdx} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <div key={slotIdx} style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
                       <select
                         value={slotValue}
                         onChange={(e) => updatePickSlot(row.id, slotIdx, e.target.value)}
-                        style={{ ...rowInputStyle, flex: 1, fontSize: 12 }}
+                        style={{ ...rowInputStyle, flex: "1 1 160px", fontSize: 12, minWidth: 120 }}
                       >
                         <option value="">Select {config.label} option {slotIdx + 1}...</option>
                         {availableOptions.map((opt) => (
@@ -252,6 +298,59 @@ export function SandwichPlatterConfigModal({
                           <option value={slotValue}>{slotValue}</option>
                         )}
                       </select>
+                      <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
+                        <span style={{ fontSize: 10, color: "#666", width: 28 }}>Qty</span>
+                        <button
+                          type="button"
+                          aria-label="Decrease quantity"
+                          onClick={() => updatePickQty(row.id, slotIdx, slotQty - 1)}
+                          disabled={slotQty <= 1}
+                          style={{
+                            width: 28,
+                            height: 28,
+                            padding: 0,
+                            borderRadius: 5,
+                            border: "1px solid #555",
+                            background: "#333",
+                            color: "#e0e0e0",
+                            fontSize: 16,
+                            lineHeight: 1,
+                            cursor: slotQty <= 1 ? "default" : "pointer",
+                            opacity: slotQty <= 1 ? 0.4 : 1,
+                          }}
+                        >
+                          −
+                        </button>
+                        <input
+                          type="number"
+                          min={1}
+                          max={MAX_PICK_QTY}
+                          value={slotQty}
+                          onChange={(e) => updatePickQty(row.id, slotIdx, parseInt(e.target.value, 10))}
+                          style={{ ...rowInputStyle, width: 48, textAlign: "center", padding: "4px 4px" }}
+                        />
+                        <button
+                          type="button"
+                          aria-label="Increase quantity"
+                          onClick={() => updatePickQty(row.id, slotIdx, slotQty + 1)}
+                          disabled={slotQty >= MAX_PICK_QTY}
+                          style={{
+                            width: 28,
+                            height: 28,
+                            padding: 0,
+                            borderRadius: 5,
+                            border: "1px solid #555",
+                            background: "#333",
+                            color: "#e0e0e0",
+                            fontSize: 16,
+                            lineHeight: 1,
+                            cursor: slotQty >= MAX_PICK_QTY ? "default" : "pointer",
+                            opacity: slotQty >= MAX_PICK_QTY ? 0.4 : 1,
+                          }}
+                        >
+                          +
+                        </button>
+                      </div>
                       <button
                         type="button"
                         onClick={() => clearPickSlot(row.id, slotIdx)}
@@ -263,18 +362,74 @@ export function SandwichPlatterConfigModal({
                 })}
 
                 {/* Custom picks (typed extras) */}
-                {row.customPicks.map((cp, idx) => (
-                  <div key={`custom-${idx}`} style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                    <div style={{ ...rowInputStyle, flex: 1, fontSize: 12, color: "#aaa", background: "#1a1a1a", border: "1px solid #555", display: "flex", alignItems: "center" }}>
-                      {cp} <span style={{ marginLeft: 6, fontSize: 10, color: "#666" }}>(custom)</span>
+                {row.customPicks.map((cp, idx) => {
+                  const cq = clampPickQty(cp.qty);
+                  return (
+                    <div key={`custom-${idx}`} style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                      <div style={{ ...rowInputStyle, flex: "1 1 160px", fontSize: 12, color: "#aaa", background: "#1a1a1a", border: "1px solid #555", display: "flex", alignItems: "center", minWidth: 120 }}>
+                        {cp.name} <span style={{ marginLeft: 6, fontSize: 10, color: "#666" }}>(custom)</span>
+                      </div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
+                        <span style={{ fontSize: 10, color: "#666", width: 28 }}>Qty</span>
+                        <button
+                          type="button"
+                          aria-label="Decrease custom quantity"
+                          onClick={() => updateCustomPickQty(row.id, idx, cq - 1)}
+                          disabled={cq <= 1}
+                          style={{
+                            width: 28,
+                            height: 28,
+                            padding: 0,
+                            borderRadius: 5,
+                            border: "1px solid #555",
+                            background: "#333",
+                            color: "#e0e0e0",
+                            fontSize: 16,
+                            lineHeight: 1,
+                            cursor: cq <= 1 ? "default" : "pointer",
+                            opacity: cq <= 1 ? 0.4 : 1,
+                          }}
+                        >
+                          −
+                        </button>
+                        <input
+                          type="number"
+                          min={1}
+                          max={MAX_PICK_QTY}
+                          value={cq}
+                          onChange={(e) => updateCustomPickQty(row.id, idx, parseInt(e.target.value, 10))}
+                          style={{ ...rowInputStyle, width: 48, textAlign: "center", padding: "4px 4px" }}
+                        />
+                        <button
+                          type="button"
+                          aria-label="Increase custom quantity"
+                          onClick={() => updateCustomPickQty(row.id, idx, cq + 1)}
+                          disabled={cq >= MAX_PICK_QTY}
+                          style={{
+                            width: 28,
+                            height: 28,
+                            padding: 0,
+                            borderRadius: 5,
+                            border: "1px solid #555",
+                            background: "#333",
+                            color: "#e0e0e0",
+                            fontSize: 16,
+                            lineHeight: 1,
+                            cursor: cq >= MAX_PICK_QTY ? "default" : "pointer",
+                            opacity: cq >= MAX_PICK_QTY ? 0.4 : 1,
+                          }}
+                        >
+                          +
+                        </button>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => removeCustomPick(row.id, idx)}
+                        style={{ width: 26, height: 26, padding: 0, borderRadius: 5, border: "1px solid #555", background: "#333", color: "#ef4444", fontSize: 13, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}
+                      >✕</button>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => removeCustomPick(row.id, idx)}
-                      style={{ width: 26, height: 26, padding: 0, borderRadius: 5, border: "1px solid #555", background: "#333", color: "#ef4444", fontSize: 13, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}
-                    >✕</button>
-                  </div>
-                ))}
+                  );
+                })}
 
                 {/* Add more slot button */}
                 {row.picks.length < config.maxPick && totalSelected < config.maxPick && (
@@ -321,19 +476,22 @@ export function SandwichPlatterConfigModal({
         </button>
 
         {/* Summary */}
-        {rows.some((r) => (r.picks.filter(Boolean).length + r.customPicks.length) > 0 && r.quantity > 0) && (
+        {rows.some((r) => (r.picks.some((p) => p.name.trim()) || r.customPicks.some((p) => p.name.trim())) && r.quantity > 0) && (
           <div style={{ marginBottom: 12, padding: 12, background: "#1a1a1a", borderRadius: 8, border: "1px solid #333" }}>
             <div style={{ fontSize: 11, color: "#888", marginBottom: 8 }}>Summary</div>
             {rows
-              .filter((r) => (r.picks.filter(Boolean).length + r.customPicks.length) > 0 && r.quantity > 0)
+              .filter((r) => (r.picks.some((p) => p.name.trim()) || r.customPicks.some((p) => p.name.trim())) && r.quantity > 0)
               .map((row) => {
-                const allPicks = [...row.picks.filter(Boolean), ...row.customPicks];
+                const allPicks = [
+                  ...row.picks.filter((p) => p.name.trim()),
+                  ...row.customPicks.filter((p) => p.name.trim()),
+                ];
                 return (
                   <div key={row.id} style={{ fontSize: 12, color: "#c0c0c0", marginBottom: 4 }}>
                     <strong style={{ color: accentColor }}>{row.platterType}</strong> × {row.quantity}:
                     <div style={{ paddingLeft: 12, marginTop: 2 }}>
                       {allPicks.map((p, i) => (
-                        <div key={i} style={{ fontSize: 11, color: "#aaa" }}>• {p}</div>
+                        <div key={i} style={{ fontSize: 11, color: "#aaa" }}>• {formatPlatterPickForDisplay(p)}</div>
                       ))}
                     </div>
                   </div>

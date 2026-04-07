@@ -8,7 +8,8 @@
  * JOIN: Event → Menu Items (linked) → Master Menu Specs (linked from Menu Item)
  */
 
-import { airtableFetch, airtableMetaFetch, getBaseId, getEventsTable, getApiKey } from "../airtable/client";
+import { airtableFetch, airtableMetaFetch, getBaseId, getEventsTable, getApiKey, getMenuItemsTable } from "../airtable/client";
+import { getMenuCatalogFieldIds, syntheticCategoryFromMenuLabFields } from "../airtable/menuCatalogConfig";
 import type { AirtableListResponse, AirtableRecord, AirtableErrorResult } from "../airtable/client";
 import { isErrorResult, asString, asLinkedRecordIds, asNumber } from "../airtable/selectors";
 import { FIELD_IDS } from "../airtable/events";
@@ -18,14 +19,8 @@ import { getTier, normalizeSpecCategory, normalizeSpecUnitType } from "./specAlg
 import { TIER_TO_AIRTABLE_COLUMN } from "./airtableFields";
 
 // ── Table IDs ──
-const MENU_ITEMS_TABLE_ID = "tbl0aN33DGG6R1sPZ";
+const LEGACY_MENU_ITEMS_TABLE_ID = "tbl0aN33DGG6R1sPZ";
 const MASTER_MENU_SPECS_TABLE_ID = "tblGeCmzJscnocs1T";
-
-// ── Menu Items fields (TABLE 1) ──
-const MENU_ITEM_NAME = "fldW5gfSlHRTl01v1"; // Item Name (single line)
-const MENU_ITEM_CHILD_ITEMS = "fldIu6qmlUwAEn2W9"; // Child Items (linked)
-const MENU_ITEM_CATEGORY = "fldM7lWvjH8S0YNSX"; // Category
-const MENU_ITEM_SERVICE_TYPE = "fld2EhDP5GRalZJzQ"; // Service Type
 
 // ── Master Menu Specs fields (TABLE 2) — update IDs when available ──
 const SPEC_TIER_0_40 = "Spec_Tier_0_40";
@@ -209,16 +204,21 @@ export async function fetchSpecDataForEvent(eventId: string): Promise<SpecDataFo
     };
   }
 
-  // ── STEP 2: Fetch Menu Items (Item Name, Child Items, Category, Service Type) ──
-  const menuItemParams = new URLSearchParams();
-  menuItemParams.set("returnFieldsByFieldId", "true");
-  menuItemParams.append("fields[]", MENU_ITEM_NAME);
-  menuItemParams.append("fields[]", MENU_ITEM_CHILD_ITEMS);
-  menuItemParams.append("fields[]", MENU_ITEM_CATEGORY);
-  menuItemParams.append("fields[]", MENU_ITEM_SERVICE_TYPE);
+  // ── STEP 2: Fetch catalog rows (legacy Menu Items or Menu_Lab) ──
+  const cat = getMenuCatalogFieldIds();
+  const MENU_ITEMS_TABLE_ID = getMenuItemsTable() || LEGACY_MENU_ITEMS_TABLE_ID;
 
   const menuItemsById: Record<string, MenuItemWithMeta> = {};
   for (const id of menuItemIds) {
+    const menuItemParams = new URLSearchParams();
+    menuItemParams.set("returnFieldsByFieldId", "true");
+    menuItemParams.append("fields[]", cat.itemNameFieldId);
+    menuItemParams.append("fields[]", cat.childItemsFieldId);
+    if (cat.categoryFieldId) menuItemParams.append("fields[]", cat.categoryFieldId);
+    if (cat.serviceTypeFieldId) menuItemParams.append("fields[]", cat.serviceTypeFieldId);
+    if (cat.displayTypeFieldId) menuItemParams.append("fields[]", cat.displayTypeFieldId);
+    if (cat.executionTypeFieldId) menuItemParams.append("fields[]", cat.executionTypeFieldId);
+
     const rec = await airtableFetch<AirtableRecord<Record<string, unknown>>>(
       `/${MENU_ITEMS_TABLE_ID}/${id}?${menuItemParams.toString()}`
     );
@@ -227,14 +227,19 @@ export async function fetchSpecDataForEvent(eventId: string): Promise<SpecDataFo
       continue;
     }
     const f = rec.fields;
-    const nameRaw = f[MENU_ITEM_NAME];
+    const nameRaw = f[cat.itemNameFieldId];
     const name = typeof nameRaw === "string" ? nameRaw : (nameRaw && typeof nameRaw === "object" && "name" in nameRaw ? String((nameRaw as { name?: string }).name) : "") || "Unnamed";
+    const category =
+      cat.categoryFieldId != null
+        ? asString(f[cat.categoryFieldId]) || ""
+        : syntheticCategoryFromMenuLabFields(f, cat) || "";
+    const serviceType = cat.serviceTypeFieldId ? asString(f[cat.serviceTypeFieldId]) || "" : "";
     menuItemsById[id] = {
       id,
       itemName: name,
-      childItems: asLinkedRecordIds(f[MENU_ITEM_CHILD_ITEMS]),
-      category: asString(f[MENU_ITEM_CATEGORY]),
-      serviceType: asString(f[MENU_ITEM_SERVICE_TYPE]),
+      childItems: asLinkedRecordIds(f[cat.childItemsFieldId]),
+      category,
+      serviceType,
     };
   }
 

@@ -177,9 +177,61 @@ export const PLATTER_CHOICES: Record<
 
 export const PLATTER_TYPES = Object.keys(PLATTER_CHOICES);
 
+/** One sandwich type on a platter with optional quantity (per type, not platter count). */
+export type PlatterPick = {
+  name: string;
+  qty: number;
+};
+
 export type PlatterRow = {
   id: string;
   platterType: string;
-  picks: string[];
+  picks: PlatterPick[];
   quantity: number;
 };
+
+const MAX_PICK_QTY = 999;
+
+export function normalizePlatterPick(p: unknown): PlatterPick {
+  if (typeof p === "string") {
+    return { name: p.trim(), qty: 1 };
+  }
+  if (p && typeof p === "object" && "name" in p) {
+    const o = p as Record<string, unknown>;
+    const name = String(o.name ?? "").trim();
+    const qtyRaw = Number(o.qty);
+    const qty =
+      Number.isFinite(qtyRaw) && qtyRaw >= 1 ? Math.min(MAX_PICK_QTY, Math.floor(qtyRaw)) : 1;
+    return { name, qty };
+  }
+  return { name: "", qty: 1 };
+}
+
+/** Migrates legacy `picks: string[]` from localStorage to `PlatterPick[]`. */
+export function normalizePlatterPicks(picks: unknown): PlatterPick[] {
+  if (!Array.isArray(picks)) return [];
+  return picks.map(normalizePlatterPick);
+}
+
+export function normalizePlatterRow(row: Partial<PlatterRow> & Record<string, unknown>): PlatterRow {
+  return {
+    id: String(row.id ?? ""),
+    platterType: String(row.platterType ?? ""),
+    picks: normalizePlatterPicks(row.picks),
+    quantity: Math.max(0, Number(row.quantity) || 0),
+  };
+}
+
+export function hasPlatterPicks(row: PlatterRow): boolean {
+  return row.picks.some((p) => p.name.trim());
+}
+
+export function formatPlatterPickForDisplay(p: PlatterPick): string {
+  const n = p.name.trim();
+  if (!n) return "";
+  return p.qty > 1 ? `${n} × ${p.qty}` : n;
+}
+
+export function formatPlatterPicksLine(picks: PlatterPick[]): string {
+  return picks.filter((p) => p.name.trim()).map(formatPlatterPickForDisplay).join(", ");
+}

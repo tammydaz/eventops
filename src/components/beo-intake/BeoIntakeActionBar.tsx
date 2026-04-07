@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useEventStore } from "../../state/eventStore";
 import { DASHBOARD_CALENDAR_TO } from "../../lib/dashboardRoutes";
 import { syncShadowToEvent } from "../../services/airtable/eventMenu";
+import { isErrorResult } from "../../services/airtable/selectors";
 
 type ShadowMenuRow = { id: string; section: string; catalogItemId: string | null; catalogItemName?: string };
 
@@ -71,18 +72,27 @@ export const BeoIntakeActionBar = ({ eventId, isLocked, onReopenRequest, onSendT
     }
     setIsSaving(true);
     setSaveError(null);
-    const ok = await saveCurrentEvent(eventId);
-    if (!ok) {
-      const err = useEventStore.getState().saveError;
-      setSaveError(err ?? "Failed to save before opening BEO");
-    } else {
+    try {
+      const ok = await saveCurrentEvent(eventId);
+      if (!ok) {
+        const err = useEventStore.getState().saveError;
+        setSaveError(err ?? "Failed to save before opening BEO");
+        return;
+      }
       const injectedRows = (shadowMenuRows ?? [])
         .filter((r) => r.section && r.catalogItemId?.startsWith("rec"))
         .map((r) => ({ section: r.section, catalogItemId: r.catalogItemId! }));
-      await syncShadowToEvent(eventId, injectedRows.length > 0 ? { injectedRows } : undefined);
+      const syncRes = await syncShadowToEvent(eventId, injectedRows.length > 0 ? { injectedRows } : undefined);
+      if (isErrorResult(syncRes)) {
+        setSaveError(syncRes.message ?? "Menu sync failed before print. Check Airtable or try again.");
+        return;
+      }
       window.location.href = `/beo-print/${eventId}`;
+    } catch (e) {
+      setSaveError(e instanceof Error ? e.message : "Failed to open BEO");
+    } finally {
+      setIsSaving(false);
     }
-    setIsSaving(false);
   };
 
   const handleReturnToDashboard = () => {

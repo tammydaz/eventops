@@ -24,8 +24,9 @@ const PAPER_ROWS: PaperRowDef[] = [
   { key: "knives",         label: "Knives",          printLabel: "Knives",         group: "cutlery",   optional: false },
   { key: "coffee_cups",    label: "Coffee Cups",     printLabel: "Coffee Cups",    group: "glassware", optional: true  },
   { key: "dinner_napkins", label: "Dinner Napkins",  printLabel: "Dinner Napkins", group: "cutlery",   optional: false },
-  { key: "tongs",          label: "Tongs",           printLabel: "Tongs",          group: "cutlery",   optional: false },
-  { key: "serving_spoons", label: "Serving Spoons",  printLabel: "Serving Spoons", group: "cutlery",   optional: false },
+  /** Optional add-ons — not filled by "Auto-fill for N guests" */
+  { key: "tongs",          label: "Tongs",           printLabel: "Tongs",          group: "cutlery",   optional: true },
+  { key: "serving_spoons", label: "Serving Spoons",  printLabel: "Serving Spoons", group: "cutlery",   optional: true },
 ];
 
 const HOT_ROWS: PaperRowDef[] = [
@@ -43,6 +44,8 @@ type BevRowDef = {
   key: string;
   label: string;
   printLabel: string;
+  /** When set, UI shows a flavor dropdown; saved/printed as `${printLabel} — ${choice}` */
+  choices?: readonly string[];
 };
 
 const BEV_ROWS: BevRowDef[] = [
@@ -52,7 +55,32 @@ const BEV_ROWS: BevRowDef[] = [
   { key: "soda_cans",  label: "Soda Cans (Assorted)",   printLabel: "Cold Assorted Soda Cans"        },
   { key: "iced_tea",   label: "Iced Tea Bottles",       printLabel: "Cold Assorted Iced Tea Bottles" },
   { key: "water",      label: "Water Bottles",          printLabel: "Water Bottles"                  },
+  {
+    key: "infused_water",
+    label: "Infused Water",
+    printLabel: "Infused Water",
+    choices: [
+      "Lemon",
+      "Cucumber",
+      "Strawberry",
+      "Orange",
+      "Mint",
+      "Mixed Berry",
+      "Seasonal Citrus",
+    ],
+  },
 ];
+
+/** Space + em dash + space between base beverage name and flavor (printed line). */
+const BEV_FLAVOR_SEP = " \u2014 ";
+
+function getDefaultBevChoices(): Record<string, string> {
+  const d: Record<string, string> = {};
+  for (const row of BEV_ROWS) {
+    if (row.choices?.length) d[row.key] = row.choices[0];
+  }
+  return d;
+}
 
 // Storage helpers — same bullet format "• PrintLabel (FoodWerx Standard) – qty"
 // used everywhere else so parseServicewareLines() in print pages stays compatible.
@@ -85,8 +113,51 @@ function mapPaperFromSaved(saved: Record<string, number>, rows: PaperRowDef[]): 
 
 function mapBevFromSaved(saved: Record<string, number>): Record<string, number | null> {
   const out: Record<string, number | null> = {};
-  for (const row of BEV_ROWS) out[row.key] = saved[row.printLabel.toLowerCase()] ?? null;
+  for (const row of BEV_ROWS) {
+    if (row.choices?.length) {
+      const base = row.printLabel.toLowerCase();
+      let qty: number | null = null;
+      for (const [k, v] of Object.entries(saved)) {
+        if (
+          k === base ||
+          k.startsWith(base + BEV_FLAVOR_SEP) ||
+          k.startsWith(base + " — ") ||
+          k.startsWith(base + " - ")
+        ) {
+          qty = v;
+          break;
+        }
+      }
+      out[row.key] = qty;
+    } else {
+      out[row.key] = saved[row.printLabel.toLowerCase()] ?? null;
+    }
+  }
   return out;
+}
+
+function mapBevChoicesFromSaved(saved: Record<string, number>): Record<string, string> {
+  const choices = getDefaultBevChoices();
+  for (const row of BEV_ROWS) {
+    if (!row.choices?.length) continue;
+    const base = row.printLabel.toLowerCase();
+    const seps = [BEV_FLAVOR_SEP, " — ", " - "];
+    outer: for (const k of Object.keys(saved)) {
+      if (k === base) {
+        choices[row.key] = row.choices[0];
+        break;
+      }
+      for (const sep of seps) {
+        if (k.startsWith(base + sep)) {
+          const rest = k.slice((base + sep).length).trim();
+          const match = row.choices.find((c) => c.toLowerCase() === rest.toLowerCase());
+          choices[row.key] = match ?? rest;
+          break outer;
+        }
+      }
+    }
+  }
+  return choices;
 }
 
 const GUEST_COUNT_BUFFER = 15;
@@ -102,8 +173,8 @@ function autoFillPaperQtys(guestCount: number): Record<string, number | null> {
     knives: n,
     coffee_cups: null,
     dinner_napkins: Math.round(n * 1.5),
-    tongs: 3,
-    serving_spoons: 2,
+    tongs: null,
+    serving_spoons: null,
     chafer_racks: null,
     water_pans: null,
     sternos: null,
@@ -127,6 +198,7 @@ export const DeliveryPaperProductsSection = ({
   const [beveragesIncluded, setBeveragesIncluded] = useState<"yes" | "no">("no");
   const [paperQtys, setPaperQtys]                 = useState<Record<string, number | null>>({});
   const [bevQtys, setBevQtys]                     = useState<Record<string, number | null>>({});
+  const [bevChoices, setBevChoices]               = useState<Record<string, string>>(() => getDefaultBevChoices());
   const [showHotEquipment, setShowHotEquipment]   = useState(false);
   const [showOptional, setShowOptional]           = useState<Record<string, boolean>>({});
 
@@ -144,6 +216,7 @@ export const DeliveryPaperProductsSection = ({
       setBeveragesIncluded("no");
       setPaperQtys({});
       setBevQtys({});
+      setBevChoices(getDefaultBevChoices());
       hasLoadedRef.current = false;
       return;
     }
@@ -172,6 +245,7 @@ export const DeliveryPaperProductsSection = ({
     const bevSaved  = parseBulletLines(asString(selectedEventData[FIELD_IDS.SERVICEWARE_NOTES]));
     const loadedBev = mapBevFromSaved(bevSaved);
     setBevQtys(loadedBev);
+    setBevChoices(mapBevChoicesFromSaved(bevSaved));
     setBeveragesIncluded(BEV_ROWS.some((r) => (loadedBev[r.key] ?? 0) > 0) ? "yes" : "no");
 
     hasLoadedRef.current = true;
@@ -181,9 +255,10 @@ export const DeliveryPaperProductsSection = ({
   const saveToAirtable = useCallback(
     async (
       needed: "yes" | "no",
-      bevIncluded: "yes" | "no",
+          bevIncluded: "yes" | "no",
       qtys: Record<string, number | null>,
       bev: Record<string, number | null>,
+      bevChoiceMap: Record<string, string>,
     ) => {
       if (!selectedEventId) return;
       skipLoadRef.current = true;
@@ -226,9 +301,9 @@ export const DeliveryPaperProductsSection = ({
   // Debounced auto-save on any value change
   useEffect(() => {
     if (!selectedEventId || !hasLoadedRef.current) return;
-    const t = setTimeout(() => saveToAirtable(paperNeeded, beveragesIncluded, paperQtys, bevQtys), 600);
+    const t = setTimeout(() => saveToAirtable(paperNeeded, beveragesIncluded, paperQtys, bevQtys, bevChoices), 600);
     return () => clearTimeout(t);
-  }, [selectedEventId, paperNeeded, beveragesIncluded, paperQtys, bevQtys, saveToAirtable]);
+  }, [selectedEventId, paperNeeded, beveragesIncluded, paperQtys, bevQtys, bevChoices, saveToAirtable]);
 
   const updatePaper = (key: string, qty: number | null) =>
     setPaperQtys((prev) => ({ ...prev, [key]: qty }));
@@ -238,6 +313,22 @@ export const DeliveryPaperProductsSection = ({
 
   const toggleOptional = (key: string) =>
     setShowOptional((prev) => ({ ...prev, [key]: !prev[key] }));
+
+  const allPaperRowKeys = [...PAPER_ROWS, ...HOT_ROWS, ...EXTRAS_ROWS].map((r) => r.key);
+
+  const clearPaperSection = () => {
+    setPaperQtys((prev) => {
+      const next = { ...prev };
+      for (const key of allPaperRowKeys) next[key] = null;
+      return next;
+    });
+    setShowHotEquipment(false);
+    setShowOptional({});
+  };
+
+  const clearBeveragesSection = () => {
+    setBevQtys({});
+  };
 
   // Styles
   const qtyInput: React.CSSProperties = {
@@ -253,21 +344,33 @@ export const DeliveryPaperProductsSection = ({
     flexShrink: 0,
   };
 
+  /** Multi-column grid so paper / bev lists stay compact vertically */
+  const itemGrid: React.CSSProperties = {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fill, minmax(168px, 1fr))",
+    gap: 8,
+    width: "100%",
+  };
+
   const rowSt: React.CSSProperties = {
     display: "flex",
     alignItems: "center",
     justifyContent: "space-between",
-    padding: "5px 4px",
-    borderBottom: "1px solid rgba(255,255,255,0.05)",
+    padding: "6px 8px",
     gap: 8,
+    borderRadius: 6,
+    border: "1px solid rgba(255,255,255,0.08)",
+    background: "rgba(0,0,0,0.2)",
+    minWidth: 0,
   };
 
   const rowLbl: React.CSSProperties = {
-    fontSize: 13,
+    fontSize: 12,
     color: "rgba(255,255,255,0.85)",
     fontWeight: 500,
     flex: 1,
     minWidth: 0,
+    lineHeight: 1.25,
   };
 
   const subHead = (color = "#22c55e"): React.CSSProperties => ({
@@ -314,6 +417,18 @@ export const DeliveryPaperProductsSection = ({
     background: "none",
   });
 
+  const sectionClearBtn = (accent: "green" | "blue"): React.CSSProperties => ({
+    padding: "4px 10px",
+    borderRadius: 6,
+    border: `1px solid ${accent === "green" ? "rgba(34,197,94,0.35)" : "rgba(59,130,246,0.35)"}`,
+    backgroundColor: "transparent",
+    color: accent === "green" ? "rgba(34,197,94,0.85)" : "rgba(96,165,250,0.9)",
+    fontSize: 11,
+    fontWeight: 600,
+    cursor: "pointer",
+    flexShrink: 0,
+  });
+
   const renderPaperRow = (row: PaperRowDef) => {
     if (row.optional && !showOptional[row.key]) return null;
     return (
@@ -331,19 +446,61 @@ export const DeliveryPaperProductsSection = ({
     );
   };
 
-  const renderBevRow = (row: BevRowDef) => (
-    <div key={row.key} style={rowSt}>
-      <span style={rowLbl}>{row.label}</span>
-      <input
-        type="number"
-        min="0"
-        value={bevQtys[row.key] ?? ""}
-        onChange={(e) => updateBev(row.key, e.target.value ? parseInt(e.target.value, 10) : null)}
-        placeholder="--"
-        style={{ ...qtyInput, borderColor: "rgba(59,130,246,0.3)" }}
-      />
-    </div>
-  );
+  const bevSelectStyle: React.CSSProperties = {
+    flex: "1 1 120px",
+    minWidth: 100,
+    padding: "5px 6px",
+    borderRadius: 5,
+    border: "1px solid rgba(59,130,246,0.35)",
+    backgroundColor: "rgba(0,0,0,0.35)",
+    color: "#e0e0e0",
+    fontSize: 12,
+  };
+
+  const renderBevRow = (row: BevRowDef) => {
+    const qIn = { ...qtyInput, borderColor: "rgba(59,130,246,0.3)" };
+    if (row.choices?.length) {
+      const flavor = bevChoices[row.key] ?? row.choices[0];
+      return (
+        <div key={row.key} style={{ ...rowSt, flexDirection: "column", alignItems: "stretch", gap: 6 }}>
+          <span style={{ ...rowLbl, fontWeight: 600 }}>{row.label}</span>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+            <label style={{ fontSize: 10, color: "#888", flexShrink: 0 }}>Flavor</label>
+            <select
+              value={flavor}
+              onChange={(e) => setBevChoices((prev) => ({ ...prev, [row.key]: e.target.value }))}
+              style={bevSelectStyle}
+            >
+              {row.choices.map((c) => (
+                <option key={c} value={c}>{c}</option>
+              ))}
+            </select>
+            <input
+              type="number"
+              min="0"
+              value={bevQtys[row.key] ?? ""}
+              onChange={(e) => updateBev(row.key, e.target.value ? parseInt(e.target.value, 10) : null)}
+              placeholder="--"
+              style={qIn}
+            />
+          </div>
+        </div>
+      );
+    }
+    return (
+      <div key={row.key} style={rowSt}>
+        <span style={rowLbl}>{row.label}</span>
+        <input
+          type="number"
+          min="0"
+          value={bevQtys[row.key] ?? ""}
+          onChange={(e) => updateBev(row.key, e.target.value ? parseInt(e.target.value, 10) : null)}
+          placeholder="--"
+          style={qIn}
+        />
+      </div>
+    );
+  };
 
   const content = (
     <div style={{ gridColumn: "1 / -1" }}>
@@ -367,7 +524,7 @@ export const DeliveryPaperProductsSection = ({
         </button>
         <button
           type="button"
-          onClick={() => { setPaperQtys({}); setBevQtys({}); setPaperNeeded("no"); setBeveragesIncluded("no"); }}
+          onClick={() => { setPaperQtys({}); setBevQtys({}); setBevChoices(getDefaultBevChoices()); setPaperNeeded("no"); setBeveragesIncluded("no"); }}
           style={{
             padding: "7px 12px",
             borderRadius: 7,
@@ -387,18 +544,27 @@ export const DeliveryPaperProductsSection = ({
 
         {/* LEFT: Paper Products */}
         <div style={panel}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
-            <span style={{ fontSize: 11, color: "#999", fontWeight: 700, letterSpacing: "0.5px" }}>PAPER PRODUCTS:</span>
-            <button type="button" style={ynBtn(paperNeeded === "yes")} onClick={() => setPaperNeeded("yes")}>YES</button>
-            <button type="button" style={ynBtn(paperNeeded === "no")}  onClick={() => setPaperNeeded("no")}>NO</button>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 10, flexWrap: "wrap", width: "100%" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+              <span style={{ fontSize: 11, color: "#999", fontWeight: 700, letterSpacing: "0.5px" }}>PAPER PRODUCTS:</span>
+              <button type="button" style={ynBtn(paperNeeded === "yes")} onClick={() => setPaperNeeded("yes")}>YES</button>
+              <button type="button" style={ynBtn(paperNeeded === "no")}  onClick={() => setPaperNeeded("no")}>NO</button>
+            </div>
+            {paperNeeded === "yes" && (
+              <button type="button" style={sectionClearBtn("green")} onClick={clearPaperSection}>
+                Clear
+              </button>
+            )}
           </div>
 
           {paperNeeded === "yes" && (
             <>
               {/* Always-visible rows */}
-              {PAPER_ROWS.filter((r) => !r.optional).map(renderPaperRow)}
+              <div style={itemGrid}>
+                {PAPER_ROWS.filter((r) => !r.optional).map(renderPaperRow)}
+              </div>
 
-              {/* Optional row chips (Coffee Cups, Bowls) */}
+              {/* Optional add-on chips (not filled by auto-fill) */}
               <div style={{ display: "flex", gap: 6, marginTop: 8, marginBottom: 2, flexWrap: "wrap" }}>
                 {PAPER_ROWS.filter((r) => r.optional).map((row) => (
                   <button key={row.key} type="button" style={chip(!!showOptional[row.key])} onClick={() => toggleOptional(row.key)}>
@@ -406,7 +572,9 @@ export const DeliveryPaperProductsSection = ({
                   </button>
                 ))}
               </div>
-              {PAPER_ROWS.filter((r) => r.optional).map(renderPaperRow)}
+              <div style={itemGrid}>
+                {PAPER_ROWS.filter((r) => r.optional).map(renderPaperRow)}
+              </div>
 
               {/* Hot Food Equipment */}
               <button
@@ -418,7 +586,11 @@ export const DeliveryPaperProductsSection = ({
                   Hot food equipment {showHotEquipment ? "v" : ">"}
                 </span>
               </button>
-              {showHotEquipment && HOT_ROWS.map(renderPaperRow)}
+              {showHotEquipment && (
+                <div style={itemGrid}>
+                  {HOT_ROWS.map(renderPaperRow)}
+                </div>
+              )}
 
               {/* Extras */}
               <span style={subHead()}>Extras</span>
@@ -429,24 +601,37 @@ export const DeliveryPaperProductsSection = ({
                   </button>
                 ))}
               </div>
-              {EXTRAS_ROWS.map(renderPaperRow)}
+              <div style={itemGrid}>
+                {EXTRAS_ROWS.map(renderPaperRow)}
+              </div>
             </>
           )}
         </div>
 
         {/* RIGHT: Beverages */}
         <div style={{ ...panel, border: "1px solid rgba(59,130,246,0.25)" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
-            <span style={{ fontSize: 11, color: "#999", fontWeight: 700, letterSpacing: "0.5px" }}>BEVERAGES:</span>
-            <button type="button" style={ynBtn(beveragesIncluded === "yes", "#3b82f6")} onClick={() => setBeveragesIncluded("yes")}>YES</button>
-            <button type="button" style={ynBtn(beveragesIncluded === "no")}             onClick={() => setBeveragesIncluded("no")}>NO</button>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 10, flexWrap: "wrap", width: "100%" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+              <span style={{ fontSize: 11, color: "#999", fontWeight: 700, letterSpacing: "0.5px" }}>BEVERAGES:</span>
+              <button type="button" style={ynBtn(beveragesIncluded === "yes", "#3b82f6")} onClick={() => setBeveragesIncluded("yes")}>YES</button>
+              <button type="button" style={ynBtn(beveragesIncluded === "no")}             onClick={() => setBeveragesIncluded("no")}>NO</button>
+            </div>
+            {beveragesIncluded === "yes" && (
+              <button type="button" style={sectionClearBtn("blue")} onClick={clearBeveragesSection}>
+                Clear
+              </button>
+            )}
           </div>
 
           {beveragesIncluded === "yes"
-            ? BEV_ROWS.map(renderBevRow)
+            ? (
+              <div style={itemGrid}>
+                {BEV_ROWS.map(renderBevRow)}
+              </div>
+            )
             : (
               <div style={{ fontSize: 12, color: "rgba(255,255,255,0.3)", padding: "8px 0", fontStyle: "italic" }}>
-                Toggle YES to add beverages (OJ, coffee, soda, etc.)
+                Toggle YES to add beverages (OJ, coffee, infused water, soda, etc.)
               </div>
             )
           }

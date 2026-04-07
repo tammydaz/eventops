@@ -3,7 +3,8 @@
  */
 
 import { airtableFetch, type AirtableListResponse, type AirtableRecord, type AirtableErrorResult } from "./client";
-import { isErrorResult, asString } from "./selectors";
+import { isErrorResult, asString, asSingleSelectName } from "./selectors";
+import { FIELD_IDS } from "./events";
 
 export const CLIENT_INTAKE_TABLE_ID = "tblIpmULxKigGE8p4";
 
@@ -20,9 +21,74 @@ export type ClientIntakeSnapshot = {
   companyName?: string;
   phone?: string;
   email?: string;
+  /** Corporate / persistent defaults — wired via `VITE_CLIENT_INTAKE_DEFAULT_*_FIELD_ID` in `.env`. */
+  defaultClientStreet?: string;
+  defaultClientCity?: string;
+  defaultClientState?: string;
+  defaultClientZip?: string;
+  defaultDeliveryNotes?: string;
 };
 
-function buildSnapshotFromFields(f: Record<string, unknown>): ClientIntakeSnapshot {
+/**
+ * Optional field IDs on Client Intake for corporate default delivery address + notes.
+ *
+ * Create matching fields in Airtable, then set in `.env`, e.g.:
+ * - `VITE_CLIENT_INTAKE_DEFAULT_CLIENT_STREET_FIELD_ID=fld...`
+ * - `VITE_CLIENT_INTAKE_DEFAULT_CLIENT_CITY_FIELD_ID=fld...`
+ * - `VITE_CLIENT_INTAKE_DEFAULT_CLIENT_STATE_FIELD_ID=fld...`
+ * - `VITE_CLIENT_INTAKE_DEFAULT_CLIENT_ZIP_FIELD_ID=fld...`
+ * - `VITE_CLIENT_INTAKE_DEFAULT_DELIVERY_NOTES_FIELD_ID=fld...` (loading dock, instructions)
+ */
+export function getClientIntakeCorporateDefaultFieldIds(): {
+  clientStreet?: string;
+  clientCity?: string;
+  clientState?: string;
+  clientZip?: string;
+  deliveryNotes?: string;
+} {
+  const t = (s: string | undefined) => (typeof s === "string" ? s.trim() : "") || undefined;
+  return {
+    clientStreet: t(import.meta.env.VITE_CLIENT_INTAKE_DEFAULT_CLIENT_STREET_FIELD_ID as string | undefined),
+    clientCity: t(import.meta.env.VITE_CLIENT_INTAKE_DEFAULT_CLIENT_CITY_FIELD_ID as string | undefined),
+    clientState: t(import.meta.env.VITE_CLIENT_INTAKE_DEFAULT_CLIENT_STATE_FIELD_ID as string | undefined),
+    clientZip: t(import.meta.env.VITE_CLIENT_INTAKE_DEFAULT_CLIENT_ZIP_FIELD_ID as string | undefined),
+    deliveryNotes: t(import.meta.env.VITE_CLIENT_INTAKE_DEFAULT_DELIVERY_NOTES_FIELD_ID as string | undefined),
+  };
+}
+
+export function hasCorporateDeliveryDefaults(s: ClientIntakeSnapshot | null): boolean {
+  if (!s) return false;
+  return Boolean(
+    s.defaultClientStreet?.trim() ||
+      s.defaultClientCity?.trim() ||
+      s.defaultClientState?.trim() ||
+      s.defaultClientZip?.trim() ||
+      s.defaultDeliveryNotes?.trim()
+  );
+}
+
+/**
+ * Writes corporate client default address + delivery notes onto an Events PATCH payload.
+ * Used for **Start new order** only (Client Intake → new event). Do not use when copying header from a source event.
+ */
+export function applyCorporateClientDefaultsToEventPatch(
+  patch: Record<string, unknown>,
+  snapshot: ClientIntakeSnapshot | null
+): void {
+  if (!snapshot) return;
+  if (snapshot.defaultClientStreet?.trim()) patch[FIELD_IDS.CLIENT_STREET] = snapshot.defaultClientStreet.trim();
+  if (snapshot.defaultClientCity?.trim()) patch[FIELD_IDS.CLIENT_CITY] = snapshot.defaultClientCity.trim();
+  if (snapshot.defaultClientState?.trim()) {
+    patch[FIELD_IDS.CLIENT_STATE] = snapshot.defaultClientState.trim();
+  }
+  if (snapshot.defaultClientZip?.trim()) patch[FIELD_IDS.CLIENT_ZIP] = snapshot.defaultClientZip.trim();
+  if (snapshot.defaultDeliveryNotes?.trim()) patch[FIELD_IDS.LOAD_IN_NOTES] = snapshot.defaultDeliveryNotes.trim();
+}
+
+function buildSnapshotFromFields(
+  f: Record<string, unknown>,
+  corp: ReturnType<typeof getClientIntakeCorporateDefaultFieldIds>
+): ClientIntakeSnapshot {
   const out: ClientIntakeSnapshot = {};
   const name = asString(f[CLIENT_INTAKE_FIELDS.NAME]).trim();
   if (name) out.clientName = name;
@@ -32,6 +98,28 @@ function buildSnapshotFromFields(f: Record<string, unknown>): ClientIntakeSnapsh
   if (company) out.companyName = company;
   const email = asString(f[CLIENT_INTAKE_FIELDS.EMAIL]).trim();
   if (email) out.email = email;
+
+  if (corp.clientStreet) {
+    const v = asString(f[corp.clientStreet]).trim();
+    if (v) out.defaultClientStreet = v;
+  }
+  if (corp.clientCity) {
+    const v = asString(f[corp.clientCity]).trim();
+    if (v) out.defaultClientCity = v;
+  }
+  if (corp.clientState) {
+    const raw = f[corp.clientState];
+    const v = (asSingleSelectName(raw) || asString(raw)).trim();
+    if (v) out.defaultClientState = v;
+  }
+  if (corp.clientZip) {
+    const v = asString(f[corp.clientZip]).trim();
+    if (v) out.defaultClientZip = v;
+  }
+  if (corp.deliveryNotes) {
+    const v = asString(f[corp.deliveryNotes]).trim();
+    if (v) out.defaultDeliveryNotes = v;
+  }
   return out;
 }
 
@@ -259,6 +347,7 @@ export async function ensureClientIntakeRecordForContact(opts: {
 export async function loadClientIntakeRecord(
   recordId: string
 ): Promise<{ snapshot: ClientIntakeSnapshot } | AirtableErrorResult> {
+  const corp = getClientIntakeCorporateDefaultFieldIds();
   const params = new URLSearchParams();
   params.set("returnFieldsByFieldId", "true");
   params.set("cellFormat", "json");
@@ -266,6 +355,16 @@ export async function loadClientIntakeRecord(
   params.append("fields[]", CLIENT_INTAKE_FIELDS.PHONE);
   params.append("fields[]", CLIENT_INTAKE_FIELDS.COMPANY);
   params.append("fields[]", CLIENT_INTAKE_FIELDS.EMAIL);
+  const corpFieldIds = [
+    corp.clientStreet,
+    corp.clientCity,
+    corp.clientState,
+    corp.clientZip,
+    corp.deliveryNotes,
+  ].filter((id): id is string => Boolean(id));
+  for (const fid of corpFieldIds) {
+    params.append("fields[]", fid);
+  }
 
   const data = await airtableFetch<AirtableRecord<Record<string, unknown>>>(
     `/${CLIENT_INTAKE_TABLE_ID}/${recordId}?${params.toString()}`
@@ -273,5 +372,5 @@ export async function loadClientIntakeRecord(
   if (isErrorResult(data)) return data;
 
   const f = data.fields ?? {};
-  return { snapshot: buildSnapshotFromFields(f) };
+  return { snapshot: buildSnapshotFromFields(f, corp) };
 }

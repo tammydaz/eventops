@@ -17,6 +17,7 @@ const SCREEN_NAMES: Record<string, string> = {
   "/kitchen-beo-print": "Kitchen BEO Print",
   "/kitchen-prep": "Kitchen Prep",
   "/delivery-command": "Delivery Command",
+  "/delivery/intake": "Delivery Intake",
   "/returned-equipment": "Returned Equipment",
   "/post-event-debrief": "Post Event Debrief",
   "/site-visit": "Site Visit",

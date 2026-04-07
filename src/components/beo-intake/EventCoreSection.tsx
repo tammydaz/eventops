@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useEventStore } from "../../state/eventStore";
 import { useAuthStore } from "../../state/authStore";
+import { canEditDispatchTime } from "../../lib/auth";
 import { FIELD_IDS, FW_STAFF_SUMMARY_FIELD_ID, getFoodwerxArrivalFieldId, resolveFwStaffLineFromFields } from "../../services/airtable/events";
 import { asSingleSelectName, asString, asBoolean } from "../../services/airtable/selectors";
 import { FormSection, BEO_SECTION_PILL_ACCENT, Helper, inputStyle, labelStyle } from "./FormSection";
@@ -97,8 +98,7 @@ export const EventCoreSection = ({ isDelivery = false, hideHeaderFields = false 
   }, [selectedEventId, selectedEventData, fwArrivalFieldId]);
 
   const canEdit = Boolean(selectedEventId);
-  const isAdmin = user?.role === "ops_admin";
-  const canEditDispatchTime = canEdit && isAdmin;
+  const canEditDispatchField = canEdit && canEditDispatchTime(user?.role);
 
   const handleTimeChange = (stateKey: keyof EventCore, timeValue: string) => {
     setDetails(prev => ({ ...prev, [stateKey]: timeValue }));
@@ -142,6 +142,7 @@ export const EventCoreSection = ({ isDelivery = false, hideHeaderFields = false 
       dotColor={BEO_SECTION_PILL_ACCENT}
       isDelivery={isDelivery}
       sectionId="beo-section-event"
+      defaultOpen={isDelivery}
     >
       {!hideHeaderFields && (
         <>
@@ -264,7 +265,9 @@ export const EventCoreSection = ({ isDelivery = false, hideHeaderFields = false 
       )}
 
       {(() => {
-        const timeKeys = isDelivery ? (["dispatchTime"] as const) : (hideHeaderFields ? ([] as const) : (["dispatchTime", "eventStartTime", "eventEndTime", "eventArrivalTime"] as const));
+        const timeKeys = isDelivery
+          ? ([] as const)
+          : (hideHeaderFields ? ([] as const) : (["dispatchTime", "eventStartTime", "eventEndTime", "eventArrivalTime"] as const));
         return timeKeys.map((key) => {
         const fieldIdMap: Record<typeof timeKeys[number], string> = {
           dispatchTime: FIELD_IDS.DISPATCH_TIME,
@@ -298,10 +301,10 @@ export const EventCoreSection = ({ isDelivery = false, hideHeaderFields = false 
           handleTimeSelectChange(key, fieldIdMap[key], hour24, newMinute);
         };
         const isDispatchTime = key === "dispatchTime";
-        const fieldCanEdit = isDispatchTime ? canEditDispatchTime : canEdit;
+        const fieldCanEdit = isDispatchTime ? canEditDispatchField : canEdit;
         return (
           <div key={key}>
-            <label style={labelStyle}>{labelMap[key]}{isDispatchTime && !isAdmin ? " (read-only)" : ""}</label>
+            <label style={labelStyle}>{labelMap[key]}{isDispatchTime && !canEditDispatchField ? " (read-only)" : ""}</label>
             <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
               <select
                 value={String(hour12)}

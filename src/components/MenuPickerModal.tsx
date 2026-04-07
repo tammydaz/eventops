@@ -1,9 +1,15 @@
 import React, { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { usePickerStore } from "../state/usePickerStore";
-import { fetchMenuItemsByCategory } from "../services/airtable/menuItems";
+import { fetchMenuItemsByCategory, fetchDeliveryMenuPickerItems, isDeliveryPickerType } from "../services/airtable/menuItems";
 
-type PickerItem = { id: string; name: string; childItems?: string[] };
+/**
+ * Menu picker (BEO intake): items come from `fetchMenuItemsByCategory` / `fetchDeliveryMenuPickerItems`
+ * on `getMenuItemsTable()` (Menu_Lab when configured). Catalog filter is category/execution only —
+ * not Test Status. `search` filters the loaded list client-side; it cannot find items that belong
+ * to a different picker category (open the correct + Add for that section).
+ */
+type PickerItem = { id: string; name: string; childItems?: string[]; routeTargetField?: string };
 
 function getDisplayLabel(item: PickerItem): string {
   const parent = item.name;
@@ -22,7 +28,7 @@ function isValidPickerItem(item: PickerItem): boolean {
   return hasChildItems || !hasDashInName;
 }
 
-/** Group by base name. When duplicates exist, prefer item with Child Items; ignore items without children. */
+/** Group by base name. When duplicates exist, prefer item with Child Items; keep `routeTargetField` from winning row. */
 function preferItemWithChildren(items: PickerItem[]): PickerItem[] {
   const DASH_SPLIT = /\s*[-–—]\s+/;
   const byBase = new Map<string, PickerItem[]>();
@@ -40,17 +46,19 @@ function preferItemWithChildren(items: PickerItem[]): PickerItem[] {
     const best = candidates.reduce((a, b) =>
       getDisplayLabel(a).length >= getDisplayLabel(b).length ? a : b
     );
-    result.push(best);
+    result.push({ ...best });
   }
   return result.sort((a, b) => getDisplayLabel(a).localeCompare(getDisplayLabel(b)));
 }
 
 interface MenuPickerModalProps {
-  onAdd: (item: { id: string; name: string }) => void;
+  onAdd: (item: { id: string; name: string; routeTargetField?: string; hasChildren?: boolean }) => void;
+  onRemove?: (catalogItemId: string, itemName?: string) => void;
   alreadyAddedIds: string[];
+  alreadyAddedNames?: string[];
 }
 
-export const MenuPickerModal: React.FC<MenuPickerModalProps> = ({ onAdd, alreadyAddedIds }) => {
+export const MenuPickerModal: React.FC<MenuPickerModalProps> = ({ onAdd, onRemove, alreadyAddedIds, alreadyAddedNames }) => {
   const { isOpen, pickerType, pickerTitle, closePicker } = usePickerStore();
 
   const [items, setItems] = useState<PickerItem[]>([]);
@@ -63,9 +71,12 @@ export const MenuPickerModal: React.FC<MenuPickerModalProps> = ({ onAdd, already
 
     setSearch("");
     setLoading(true);
-    fetchMenuItemsByCategory(pickerType)
+    (isDeliveryPickerType(pickerType)
+      ? fetchDeliveryMenuPickerItems(pickerType)
+      : fetchMenuItemsByCategory(pickerType)
+    )
       .then((results) => {
-        const raw = results || [];
+        const raw = (results || []) as PickerItem[];
         const valid = raw.filter(isValidPickerItem);
         setItems(preferItemWithChildren(valid));
       })
@@ -148,7 +159,8 @@ export const MenuPickerModal: React.FC<MenuPickerModalProps> = ({ onAdd, already
           ) : (
             <div className="picker-list" style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
               {filteredItems.map((item) => {
-                const isAdded = alreadyAddedIds.includes(item.id);
+                const isAdded = alreadyAddedIds.includes(item.id) ||
+                  (alreadyAddedNames?.some((n) => n.toLowerCase() === item.name.toLowerCase()) ?? false);
                 return (
                   <div
                     key={item.id}
@@ -158,14 +170,21 @@ export const MenuPickerModal: React.FC<MenuPickerModalProps> = ({ onAdd, already
                       backgroundColor: isAdded ? "rgba(255,255,255,0.06)" : "transparent",
                       border: "1px solid rgba(255,255,255,0.1)",
                       borderRadius: "6px",
-                      cursor: isAdded ? "default" : "pointer",
+                      cursor: "pointer",
                       color: "#fff",
                       fontSize: "14px",
                       transition: "all 0.2s",
                     }}
                     onClick={() => {
-                      if (!isAdded) {
-                        onAdd(item);
+                      if (isAdded) {
+                        if (onRemove) onRemove(item.id, item.name);
+                      } else {
+                        onAdd({
+                          id: item.id,
+                          name: item.name,
+                          ...(item.routeTargetField ? { routeTargetField: item.routeTargetField } : {}),
+                          hasChildren: (item.childItems?.length ?? 0) > 0,
+                        });
                         closePicker();
                         requestAnimationFrame(() => {
                           document.querySelector(".beo-menu-add-buttons")?.scrollIntoView({ behavior: "smooth", block: "nearest" });
@@ -173,9 +192,14 @@ export const MenuPickerModal: React.FC<MenuPickerModalProps> = ({ onAdd, already
                       }
                     }}
                   >
-                    <span style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                      {isAdded && <span style={{ color: "rgba(255,255,255,0.7)" }}>✓</span>}
-                      {getDisplayLabel(item)}
+                    <span style={{ display: "flex", alignItems: "center", gap: "8px", justifyContent: "space-between", width: "100%" }}>
+                      <span style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                        {isAdded && <span style={{ color: "rgba(100,255,100,0.8)" }}>✓</span>}
+                        {getDisplayLabel(item)}
+                      </span>
+                      {isAdded && onRemove && (
+                        <span style={{ fontSize: 11, color: "rgba(255,100,100,0.8)", fontWeight: 500 }}>✕ remove</span>
+                      )}
                     </span>
                   </div>
                 );

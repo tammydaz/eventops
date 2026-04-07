@@ -453,20 +453,6 @@ export function EventsPipeline({ title = "Weekly Pipeline", compact = false, dep
     navigate(getTargetRoute(evt.id));
   };
 
-  /** Intake/FOH: first click opens the right action panel; second click on the same event opens Event Overview. */
-  const handleFOHEventClick = useCallback(
-    (evt: EventData) => {
-      if (evt.isDemo) return;
-      if (listDetailEventId === evt.id) {
-        handleSelectEvent(evt);
-      } else {
-        selectEvent(evt.id);
-        setListDetailEventId(evt.id);
-      }
-    },
-    [listDetailEventId]
-  );
-
   const getAcceptFieldId = async () => {
     const ids = await getLockoutFieldIds();
     if (!ids) return null;
@@ -520,7 +506,11 @@ export function EventsPipeline({ title = "Weekly Pipeline", compact = false, dep
 
   const pipelineIntakeFohClass =
     departmentContext === "intake_foh"
-      ? `pipeline-view--intake-foh${eventView === "list" ? " pipeline-view--intake-foh-list-fit" : ""}`
+      ? `pipeline-view--intake-foh${
+          eventView === "list" || !!(listDetailEventId && (eventView === "grid" || eventView === "calendar"))
+            ? " pipeline-view--intake-foh-list-fit"
+            : ""
+        }`
       : "";
 
   return (
@@ -735,47 +725,51 @@ export function EventsPipeline({ title = "Weekly Pipeline", compact = false, dep
         )}
         {eventsLoading && <div className="dp-events-loading">Loading events…</div>}
         {!eventsLoading && !eventsError && (
-          eventView === "grid" ? (
-            <div className="dp-events-grid">
-              {events.length === 0 ? (
-                <div className="dp-events-empty">
-                  <p>No events in &quot;{activeTab}&quot;</p>
-                  <p className="dp-events-empty-hint">
-                    {activeTab === "Today's Events" && "Try Week View or Upcoming Events, or add an event."}
-                    {(activeTab === "Weekly" || activeTab === "Upcoming Events") && "Add an event via Quick Intake or Upload Invoice."}
-                    {(activeTab === "Completed" || activeTab === "Archive") && "Past events will appear here."}
-                  </p>
+          <div className="dp-events-list-with-sidebar">
+            <div className="dp-events-area-inner-fill">
+              {eventView === "grid" ? (
+                <div className="dp-events-grid">
+                  {events.length === 0 ? (
+                    <div className="dp-events-empty">
+                      <p>No events in &quot;{activeTab}&quot;</p>
+                      <p className="dp-events-empty-hint">
+                        {activeTab === "Today's Events" && "Try Week View or Upcoming Events, or add an event."}
+                        {(activeTab === "Weekly" || activeTab === "Upcoming Events") && "Add an event via Quick Intake or Upload Invoice."}
+                        {(activeTab === "Completed" || activeTab === "Archive") && "Past events will appear here."}
+                      </p>
+                    </div>
+                  ) : (
+                    events.map((evt) => (
+                      <PipelineCard
+                        key={evt.id}
+                        event={evt}
+                        departmentKey={deptKey}
+                        viewingDepartment={viewingDepartment}
+                        isFOH={isFOH}
+                        onSelect={!isFOH && !evt.isDemo ? () => handleSelectEvent(evt) : undefined}
+                        onSelectDetail={isFOH && !evt.isDemo ? () => setListDetailEventId(evt.id) : undefined}
+                        onOpenEvent={isFOH && !evt.isDemo ? () => handleSelectEvent(evt) : undefined}
+                      />
+                    ))
+                  )}
                 </div>
+              ) : eventView === "calendar" ? (
+                <CalendarView
+                  events={events}
+                  busyDayDemo={calendarBusyDemo}
+                  calendarMonth={calendarMonth}
+                  calendarYear={calendarYear}
+                  monthNames={monthNames}
+                  dayNames={dayNames}
+                  deptKey={deptKey}
+                  isFOH={isFOH}
+                  onSelectEvent={isFOH ? undefined : handleSelectEvent}
+                  onSelectDetail={isFOH ? (evt) => setListDetailEventId(evt.id) : undefined}
+                  onOpenEvent={isFOH ? handleSelectEvent : undefined}
+                  goPrev={goPrevMonth}
+                  goNext={goNextMonth}
+                />
               ) : (
-                events.map((evt) => (
-                  <PipelineCard
-                    key={evt.id}
-                    event={evt}
-                    departmentKey={deptKey}
-                    viewingDepartment={viewingDepartment}
-                    isFOH={isFOH}
-                    onSelect={evt.isDemo ? undefined : () => handleSelectEvent(evt)}
-                  />
-                ))
-              )}
-            </div>
-          ) : eventView === "calendar" ? (
-            <CalendarView
-              events={events}
-              busyDayDemo={calendarBusyDemo}
-              calendarMonth={calendarMonth}
-              calendarYear={calendarYear}
-              monthNames={monthNames}
-              dayNames={dayNames}
-              deptKey={deptKey}
-              isFOH={isFOH}
-              onSelectEvent={handleSelectEvent}
-              goPrev={goPrevMonth}
-              goNext={goNextMonth}
-            />
-          ) : (
-            <div className="dp-events-list-with-sidebar">
-              <div className="dp-events-area-inner-fill">
                 <EventListByDay
                   events={events}
                   activeTab={activeTab}
@@ -788,18 +782,18 @@ export function EventsPipeline({ title = "Weekly Pipeline", compact = false, dep
                   onSelectDetail={(evt) => setListDetailEventId(evt.id)}
                   onOpenEvent={handleSelectEvent}
                 />
-              </div>
-              {listDetailEvent && (
-                <EventListDetailSidebar
-                  event={listDetailEvent}
-                  isFOH={isFOH}
-                  compactLayout={isFOH}
-                  onClose={() => setListDetailEventId(null)}
-                  onOpenEvent={() => handleSelectEvent(listDetailEvent)}
-                />
               )}
             </div>
-          )
+            {listDetailEvent ? (
+              <EventListDetailSidebar
+                event={listDetailEvent}
+                isFOH={isFOH}
+                compactLayout={isFOH}
+                onClose={() => setListDetailEventId(null)}
+                onOpenEvent={() => handleSelectEvent(listDetailEvent)}
+              />
+            ) : null}
+          </div>
         )}
       </div>
     </div>
@@ -816,6 +810,8 @@ function CalendarView({
   deptKey,
   isFOH,
   onSelectEvent,
+  onSelectDetail,
+  onOpenEvent,
   goPrev,
   goNext,
 }: {
@@ -828,7 +824,12 @@ function CalendarView({
   dayNames: string[];
   deptKey: DepartmentKey | null;
   isFOH?: boolean;
-  onSelectEvent: (evt: EventData) => void;
+  /** Non–Intake/FOH: single click opens event. */
+  onSelectEvent?: (evt: EventData) => void;
+  /** Intake/FOH: single click shows detail panel. */
+  onSelectDetail?: (evt: EventData) => void;
+  /** Intake/FOH: double click opens event. */
+  onOpenEvent?: (evt: EventData) => void;
   goPrev: () => void;
   goNext: () => void;
 }) {
@@ -863,6 +864,7 @@ function CalendarView({
   }, {});
 
   const hasUnacknowledgedForDepartment = useQuestionStore((s) => s.hasUnacknowledgedForDepartment);
+  const intakeFohDetailMode = !!(isFOH && onSelectDetail && onOpenEvent);
 
   return (
     <div className="dp-events-calendar">
@@ -903,8 +905,30 @@ function CalendarView({
                             data-production={prodColor}
                             role={canSelect ? "button" : undefined}
                             tabIndex={canSelect ? 0 : undefined}
-                            onClick={() => canSelect && onSelectEvent(evt)}
-                            onKeyDown={(e) => canSelect && (e.key === "Enter" || e.key === " ") && onSelectEvent(evt)}
+                            onClick={() => {
+                              if (!canSelect) return;
+                              if (intakeFohDetailMode) onSelectDetail!(evt);
+                              else onSelectEvent?.(evt);
+                            }}
+                            onDoubleClick={(e) => {
+                              if (!canSelect || !intakeFohDetailMode) return;
+                              e.preventDefault();
+                              onOpenEvent!(evt);
+                            }}
+                            onKeyDown={(e) => {
+                              if (!canSelect) return;
+                              if (intakeFohDetailMode) {
+                                if (e.key === " " || e.key === "Spacebar") {
+                                  e.preventDefault();
+                                  onSelectDetail!(evt);
+                                } else if (e.key === "Enter") {
+                                  e.preventDefault();
+                                  onOpenEvent!(evt);
+                                }
+                              } else if (e.key === "Enter" || e.key === " ") {
+                                onSelectEvent?.(evt);
+                              }
+                            }}
                           >
                             {listPrimaryLabel(evt.client)}
                             <StaffingAttentionBadge event={evt} />
@@ -924,7 +948,23 @@ function CalendarView({
   );
 }
 
-function PipelineCard({ event, departmentKey, viewingDepartment, isFOH, onSelect }: { event: EventData; departmentKey: DepartmentKey | null; viewingDepartment?: QuestionTargetDepartment | null; isFOH?: boolean; onSelect?: () => void }) {
+function PipelineCard({
+  event,
+  departmentKey,
+  viewingDepartment,
+  isFOH,
+  onSelect,
+  onSelectDetail,
+  onOpenEvent,
+}: {
+  event: EventData;
+  departmentKey: DepartmentKey | null;
+  viewingDepartment?: QuestionTargetDepartment | null;
+  isFOH?: boolean;
+  onSelect?: () => void;
+  onSelectDetail?: () => void;
+  onOpenEvent?: () => void;
+}) {
   const hasUnacknowledgedForDepartment = useQuestionStore((s) => s.hasUnacknowledgedForDepartment);
   const prodColor = isFOH ? getProductionColorForFOH(event) : getProductionColor(event);
   const blinking = !event.isDemo && (
@@ -934,16 +974,38 @@ function PipelineCard({ event, departmentKey, viewingDepartment, isFOH, onSelect
   );
   const needsChangeConfirm = !event.isDemo && departmentKey && needsChangeConfirmation(event, departmentKey);
   const frozen = !event.isDemo && isProductionFrozen(event);
+  const detailMode = !!(onSelectDetail && onOpenEvent);
+  const interactive = !!(onSelect || detailMode);
 
   return (
     <AskFOHPopover eventId={event.id} eventName={listPrimaryLabel(event.client)} viewingDepartment={viewingDepartment ?? null} disabled={event.isDemo}>
       <article
-        className={`dp-card dp-card-production dp-card-${prodColor} ${blinking ? "dp-card-blink" : ""} ${needsChangeConfirm ? "dp-card-beo-updated" : ""} ${frozen ? "dp-card-frozen" : ""} ${onSelect ? "dp-card-clickable" : ""} ${event.isDemo ? "dp-card-demo" : ""}`}
+        className={`dp-card dp-card-production dp-card-${prodColor} ${blinking ? "dp-card-blink" : ""} ${needsChangeConfirm ? "dp-card-beo-updated" : ""} ${frozen ? "dp-card-frozen" : ""} ${interactive ? "dp-card-clickable" : ""} ${event.isDemo ? "dp-card-demo" : ""}`}
         data-production={prodColor}
-        role={onSelect ? "button" : undefined}
-        tabIndex={onSelect ? 0 : undefined}
-        onClick={onSelect}
-        onKeyDown={(e) => onSelect && (e.key === "Enter" || e.key === " ") && onSelect()}
+        role={interactive ? "button" : undefined}
+        tabIndex={interactive ? 0 : undefined}
+        onClick={detailMode ? onSelectDetail : onSelect}
+        onDoubleClick={
+          detailMode
+            ? (e) => {
+                e.preventDefault();
+                onOpenEvent();
+              }
+            : undefined
+        }
+        onKeyDown={(e) => {
+          if (detailMode) {
+            if (e.key === " " || e.key === "Spacebar") {
+              e.preventDefault();
+              onSelectDetail();
+            } else if (e.key === "Enter") {
+              e.preventDefault();
+              onOpenEvent();
+            }
+          } else if (onSelect && (e.key === "Enter" || e.key === " ")) {
+            onSelect();
+          }
+        }}
       >
         <div className="dp-card-neon-top" />
         {needsChangeConfirm && (

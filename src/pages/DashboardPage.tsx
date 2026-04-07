@@ -388,8 +388,9 @@ export default function DashboardPage() {
   const listDetailEvent = useMemo(() => events.find((e) => e.id === listDetailEventId) ?? null, [events, listDetailEventId]);
 
   useEffect(() => {
+    if (isIntakeFOHRole) return;
     if (eventView !== "list") setListDetailEventId(null);
-  }, [eventView]);
+  }, [eventView, isIntakeFOHRole]);
 
   const searchResults = useMemo(() => {
     const q = deferredSearchQuery.trim().toLowerCase();
@@ -888,120 +889,152 @@ export default function DashboardPage() {
             <div className="dp-events-loading">Loading events…</div>
           )}
           {!eventsLoading && !eventsError && (
-            eventView === "grid" ? (
-              <div className="dp-events-grid">
-                {events.length === 0 ? (
-                  <div className="dp-events-empty">
-                    <p>No events in &quot;{activeTab}&quot;</p>
-                    <p className="dp-events-empty-hint">
-                      {activeTab === "Today's Events" && "Try Week View or Upcoming Events, or add an event."}
-                      {(activeTab === "Weekly" || activeTab === "Upcoming Events") && "Add an event via Quick Intake or Upload Invoice."}
-                      {(activeTab === "Completed" || activeTab === "Archive") && "Past events will appear here."}
-                    </p>
-                  </div>
-                ) : (
-                  events.map((evt) => (
-                    <PremiumCard key={evt.id} event={evt} viewMode={viewMode} departmentKey={dashboardDept} viewingDepartment={viewingDepartment} onSelect={evt.isDemo ? undefined : () => handleSelectEvent(evt)} />
-                  ))
-                )}
-              </div>
-            ) : eventView === "calendar" ? (
-              (() => {
-                const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
-                const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-                const firstDay = new Date(calendarYear, calendarMonth, 1);
-                const lastDay = new Date(calendarYear, calendarMonth + 1, 0);
-                const startOffset = firstDay.getDay();
-                const daysInMonth = lastDay.getDate();
-                const totalCells = Math.ceil((startOffset + daysInMonth) / 7) * 7;
-                const cells: { day: number | null; dateStr: string | null }[] = [];
-                for (let i = 0; i < startOffset; i++) cells.push({ day: null, dateStr: null });
-                for (let d = 1; d <= daysInMonth; d++) {
-                  const m = String(calendarMonth + 1).padStart(2, "0");
-                  const day = String(d).padStart(2, "0");
-                  cells.push({ day: d, dateStr: `${calendarYear}-${m}-${day}` });
-                }
-                while (cells.length < totalCells) cells.push({ day: null, dateStr: null });
-                const eventsInMonth = events.filter((e) => {
-                  const d = e.eventDate ?? "";
-                  return d.startsWith(`${calendarYear}-${String(calendarMonth + 1).padStart(2, "0")}`);
-                });
-                const byDate = eventsInMonth.reduce<Record<string, EventData[]>>((acc, evt) => {
-                  const d = evt.eventDate ?? "";
-                  if (!acc[d]) acc[d] = [];
-                  acc[d].push(evt);
-                  return acc;
-                }, {});
-                const goPrev = () => {
-                  if (calendarMonth === 0) {
-                    setCalendarMonth(11);
-                    setCalendarYear((y) => y - 1);
-                  } else setCalendarMonth((m) => m - 1);
-                };
-                const goNext = () => {
-                  if (calendarMonth === 11) {
-                    setCalendarMonth(0);
-                    setCalendarYear((y) => y + 1);
-                  } else setCalendarMonth((m) => m + 1);
-                };
-                return (
-                  <div className="dp-events-calendar">
-                    <div className="dp-calendar-header">
-                      <button type="button" className="dp-calendar-nav" onClick={goPrev} aria-label="Previous month">
-                        ‹
-                      </button>
-                      <h2 className="dp-calendar-title">{monthNames[calendarMonth]} {calendarYear}</h2>
-                      <button type="button" className="dp-calendar-nav" onClick={goNext} aria-label="Next month">
-                        ›
-                      </button>
-                    </div>
-                    <div className="dp-calendar-month">
-                      <div className="dp-calendar-weekdays">
-                        {dayNames.map((d) => (
-                          <div key={d} className="dp-calendar-weekday">{d}</div>
-                        ))}
+            <div className="dp-events-list-with-sidebar">
+              <div className="dp-events-area-inner-fill">
+                {eventView === "grid" ? (
+                  <div className="dp-events-grid">
+                    {events.length === 0 ? (
+                      <div className="dp-events-empty">
+                        <p>No events in &quot;{activeTab}&quot;</p>
+                        <p className="dp-events-empty-hint">
+                          {activeTab === "Today's Events" && "Try Week View or Upcoming Events, or add an event."}
+                          {(activeTab === "Weekly" || activeTab === "Upcoming Events") && "Add an event via Quick Intake or Upload Invoice."}
+                          {(activeTab === "Completed" || activeTab === "Archive") && "Past events will appear here."}
+                        </p>
                       </div>
-                      <div className="dp-calendar-days">
-                        {cells.map((cell, i) => (
-                          <div key={i} className={`dp-calendar-cell ${cell.day === null ? "empty" : ""}`}>
-                                {cell.day !== null && (
-                              <>
-                                <div className="dp-calendar-day-num">{cell.day}</div>
-                                {cell.dateStr && byDate[cell.dateStr] && (
-                                  <div className="dp-calendar-day-events">
-                                    {byDate[cell.dateStr].map((evt) => {
-                                      const prodColor = getProductionColor(evt);
-                                      const canSelect = !evt.isDemo;
-                                      return (
-                                        <div
-                                          key={evt.id}
-                                          className={`dp-calendar-event ${!evt.isDemo && (dashboardDept ? shouldBlinkForDepartment(evt, dashboardDept) : shouldBlink(evt)) ? "dp-calendar-event-blink" : ""} ${evt.isDemo ? "dp-calendar-event-demo" : ""}`}
-                                          data-production={prodColor}
-                                          role={canSelect ? "button" : undefined}
-                                          tabIndex={canSelect ? 0 : undefined}
-                                          onClick={() => canSelect && handleSelectEvent(evt)}
-                                          onKeyDown={(e) => canSelect && (e.key === "Enter" || e.key === " ") && handleSelectEvent(evt)}
-                                        >
-                                          {listPrimaryLabel(evt.client)}
-                                          <StaffingAttentionBadge event={evt} />
-                                          {evt.isDemo && <span className="dp-calendar-event-demo-badge">Demo</span>}
-                                        </div>
-                                      );
-                                    })}
-                                  </div>
-                                )}
-                              </>
-                            )}
+                    ) : (
+                      events.map((evt) => (
+                        <PremiumCard
+                          key={evt.id}
+                          event={evt}
+                          viewMode={viewMode}
+                          departmentKey={dashboardDept}
+                          viewingDepartment={viewingDepartment}
+                          onSelect={!isIntakeFOHRole && !evt.isDemo ? () => handleSelectEvent(evt) : undefined}
+                          onSelectDetail={isIntakeFOHRole && !evt.isDemo ? () => setListDetailEventId(evt.id) : undefined}
+                          onOpenEvent={isIntakeFOHRole && !evt.isDemo ? () => handleSelectEvent(evt) : undefined}
+                        />
+                      ))
+                    )}
+                  </div>
+                ) : eventView === "calendar" ? (
+                  (() => {
+                    const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+                    const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+                    const intakeFohDetailMode = isIntakeFOHRole;
+                    const firstDay = new Date(calendarYear, calendarMonth, 1);
+                    const lastDay = new Date(calendarYear, calendarMonth + 1, 0);
+                    const startOffset = firstDay.getDay();
+                    const daysInMonth = lastDay.getDate();
+                    const totalCells = Math.ceil((startOffset + daysInMonth) / 7) * 7;
+                    const cells: { day: number | null; dateStr: string | null }[] = [];
+                    for (let i = 0; i < startOffset; i++) cells.push({ day: null, dateStr: null });
+                    for (let d = 1; d <= daysInMonth; d++) {
+                      const m = String(calendarMonth + 1).padStart(2, "0");
+                      const day = String(d).padStart(2, "0");
+                      cells.push({ day: d, dateStr: `${calendarYear}-${m}-${day}` });
+                    }
+                    while (cells.length < totalCells) cells.push({ day: null, dateStr: null });
+                    const eventsInMonth = events.filter((e) => {
+                      const d = e.eventDate ?? "";
+                      return d.startsWith(`${calendarYear}-${String(calendarMonth + 1).padStart(2, "0")}`);
+                    });
+                    const byDate = eventsInMonth.reduce<Record<string, EventData[]>>((acc, evt) => {
+                      const d = evt.eventDate ?? "";
+                      if (!acc[d]) acc[d] = [];
+                      acc[d].push(evt);
+                      return acc;
+                    }, {});
+                    const goPrev = () => {
+                      if (calendarMonth === 0) {
+                        setCalendarMonth(11);
+                        setCalendarYear((y) => y - 1);
+                      } else setCalendarMonth((m) => m - 1);
+                    };
+                    const goNext = () => {
+                      if (calendarMonth === 11) {
+                        setCalendarMonth(0);
+                        setCalendarYear((y) => y + 1);
+                      } else setCalendarMonth((m) => m + 1);
+                    };
+                    return (
+                      <div className="dp-events-calendar">
+                        <div className="dp-calendar-header">
+                          <button type="button" className="dp-calendar-nav" onClick={goPrev} aria-label="Previous month">
+                            ‹
+                          </button>
+                          <h2 className="dp-calendar-title">{monthNames[calendarMonth]} {calendarYear}</h2>
+                          <button type="button" className="dp-calendar-nav" onClick={goNext} aria-label="Next month">
+                            ›
+                          </button>
+                        </div>
+                        <div className="dp-calendar-month">
+                          <div className="dp-calendar-weekdays">
+                            {dayNames.map((d) => (
+                              <div key={d} className="dp-calendar-weekday">{d}</div>
+                            ))}
                           </div>
-                        ))}
+                          <div className="dp-calendar-days">
+                            {cells.map((cell, i) => (
+                              <div key={i} className={`dp-calendar-cell ${cell.day === null ? "empty" : ""}`}>
+                                {cell.day !== null && (
+                                  <>
+                                    <div className="dp-calendar-day-num">{cell.day}</div>
+                                    {cell.dateStr && byDate[cell.dateStr] && (
+                                      <div className="dp-calendar-day-events">
+                                        {byDate[cell.dateStr].map((evt) => {
+                                          const prodColor = getProductionColor(evt);
+                                          const canSelect = !evt.isDemo;
+                                          return (
+                                            <div
+                                              key={evt.id}
+                                              className={`dp-calendar-event ${!evt.isDemo && (dashboardDept ? shouldBlinkForDepartment(evt, dashboardDept) : shouldBlink(evt)) ? "dp-calendar-event-blink" : ""} ${evt.isDemo ? "dp-calendar-event-demo" : ""}`}
+                                              data-production={prodColor}
+                                              role={canSelect ? "button" : undefined}
+                                              tabIndex={canSelect ? 0 : undefined}
+                                              onClick={() => {
+                                                if (!canSelect) return;
+                                                if (intakeFohDetailMode) setListDetailEventId(evt.id);
+                                                else handleSelectEvent(evt);
+                                              }}
+                                              onDoubleClick={(e) => {
+                                                if (!canSelect || !intakeFohDetailMode) return;
+                                                e.preventDefault();
+                                                handleSelectEvent(evt);
+                                              }}
+                                              onKeyDown={(e) => {
+                                                if (!canSelect) return;
+                                                if (intakeFohDetailMode) {
+                                                  if (e.key === " " || e.key === "Spacebar") {
+                                                    e.preventDefault();
+                                                    setListDetailEventId(evt.id);
+                                                  } else if (e.key === "Enter") {
+                                                    e.preventDefault();
+                                                    handleSelectEvent(evt);
+                                                  }
+                                                } else if (e.key === "Enter" || e.key === " ") {
+                                                  handleSelectEvent(evt);
+                                                }
+                                              }}
+                                            >
+                                              {listPrimaryLabel(evt.client)}
+                                              <StaffingAttentionBadge event={evt} />
+                                              {evt.isDemo && <span className="dp-calendar-event-demo-badge">Demo</span>}
+                                            </div>
+                                          );
+                                        })}
+                                      </div>
+                                    )}
+                                  </>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                  </div>
-                );
-              })()
-            ) : (
-              <div className="dp-events-list-with-sidebar">
-                <div className="dp-events-area-inner-fill">
+                    );
+                  })()
+                ) : (
                   <EventListByDay
                     events={events}
                     activeTab={activeTab}
@@ -1014,17 +1047,18 @@ export default function DashboardPage() {
                     onSelectDetail={(evt) => setListDetailEventId(evt.id)}
                     onOpenEvent={handleSelectEvent}
                   />
-                </div>
-                {listDetailEvent && (
-                  <EventListDetailSidebar
-                    event={listDetailEvent}
-                    isFOH={isIntakeFOHRole}
-                    onClose={() => setListDetailEventId(null)}
-                    onOpenEvent={() => handleSelectEvent(listDetailEvent)}
-                  />
                 )}
               </div>
-            )
+              {listDetailEvent ? (
+                <EventListDetailSidebar
+                  event={listDetailEvent}
+                  isFOH={isIntakeFOHRole}
+                  compactLayout={isIntakeFOHRole}
+                  onClose={() => setListDetailEventId(null)}
+                  onOpenEvent={() => handleSelectEvent(listDetailEvent)}
+                />
+              ) : null}
+            </div>
           )}
         </div>
       </main>
@@ -1036,21 +1070,59 @@ export default function DashboardPage() {
 /* ═══════════════════════════════════════════
    PREMIUM EVENT CARD (INLINE)
    ═══════════════════════════════════════════ */
-function PremiumCard({ event, viewMode, onSelect, departmentKey, viewingDepartment }: { event: EventData; viewMode: ViewMode; onSelect?: () => void; departmentKey?: DepartmentKey | null; viewingDepartment?: QuestionTargetDepartment | null }) {
+function PremiumCard({
+  event,
+  viewMode,
+  onSelect,
+  onSelectDetail,
+  onOpenEvent,
+  departmentKey,
+  viewingDepartment,
+}: {
+  event: EventData;
+  viewMode: ViewMode;
+  onSelect?: () => void;
+  onSelectDetail?: () => void;
+  onOpenEvent?: () => void;
+  departmentKey?: DepartmentKey | null;
+  viewingDepartment?: QuestionTargetDepartment | null;
+}) {
   const prodColor = getProductionColor(event);
   const blinking = !event.isDemo && (departmentKey ? shouldBlinkForDepartment(event, departmentKey) : shouldBlink(event));
   const needsChangeConfirm = !event.isDemo && departmentKey && needsChangeConfirmation(event, departmentKey);
   const frozen = !event.isDemo && isProductionFrozen(event);
+  const detailMode = !!(onSelectDetail && onOpenEvent);
+  const interactive = !!(onSelect || detailMode);
 
   return (
     <AskFOHPopover eventId={event.id} eventName={listPrimaryLabel(event.client)} viewingDepartment={viewingDepartment ?? null} disabled={event.isDemo}>
       <article
-        className={`dp-card dp-card-production dp-card-${prodColor} ${blinking ? "dp-card-blink" : ""} ${needsChangeConfirm ? "dp-card-beo-updated" : ""} ${frozen ? "dp-card-frozen" : ""} ${onSelect ? "dp-card-clickable" : ""} ${event.isDemo ? "dp-card-demo" : ""}`}
+        className={`dp-card dp-card-production dp-card-${prodColor} ${blinking ? "dp-card-blink" : ""} ${needsChangeConfirm ? "dp-card-beo-updated" : ""} ${frozen ? "dp-card-frozen" : ""} ${interactive ? "dp-card-clickable" : ""} ${event.isDemo ? "dp-card-demo" : ""}`}
         data-production={prodColor}
-        role={onSelect ? "button" : undefined}
-        tabIndex={onSelect ? 0 : undefined}
-        onClick={onSelect}
-        onKeyDown={(e) => onSelect && (e.key === "Enter" || e.key === " ") && onSelect()}
+        role={interactive ? "button" : undefined}
+        tabIndex={interactive ? 0 : undefined}
+        onClick={detailMode ? onSelectDetail : onSelect}
+        onDoubleClick={
+          detailMode
+            ? (e) => {
+                e.preventDefault();
+                onOpenEvent();
+              }
+            : undefined
+        }
+        onKeyDown={(e) => {
+          if (detailMode) {
+            if (e.key === " " || e.key === "Spacebar") {
+              e.preventDefault();
+              onSelectDetail();
+            } else if (e.key === "Enter") {
+              e.preventDefault();
+              onOpenEvent();
+            }
+          } else if (onSelect && (e.key === "Enter" || e.key === " ")) {
+            onSelect();
+          }
+        }}
       >
         {/* Top neon line */}
         <div className="dp-card-neon-top" />

@@ -4,12 +4,14 @@ import { useEventStore } from "../state/eventStore";
 import { useAuthStore } from "../state/authStore";
 import { useBeoPrintStore } from "../state/beoPrintStore";
 import { FIELD_IDS, getBarServiceFieldId, getLockoutFieldIds, getBOHProductionFieldIds, resolveFwStaffLineFromFields } from "../services/airtable/events";
-import { airtableFetch } from "../services/airtable/client";
+import { airtableFetch, getMenuItemsTable } from "../services/airtable/client";
+import { getMenuCatalogFieldIds, LEGACY_MENU_ITEMS_TABLE_ID } from "../services/airtable/menuCatalogConfig";
 import { loadStationsByEventId } from "../services/airtable/linkedRecords";
 import { loadStationComponentNamesByIds } from "../services/airtable/stationComponents";
 import { loadBoxedLunchOrdersByEventId, type BoxedLunchOrder } from "../services/airtable/boxedLunchOrders";
 import { buildBoxedLunchBeoSectionsFromOrders } from "../utils/boxedLunchPrint";
 import { DELIVERY_SECTION_CONFIG } from "../config/deliverySectionConfig";
+import { formatPlatterPicksLine, hasPlatterPicks } from "../config/sandwichPlatterConfig";
 import { getPlatterOrdersByEventId } from "../state/platterOrdersStore";
 import { asBarServicePrimary, asBoolean, asLinkedRecordIds, asMultiSelectNames, asSingleSelectName, asString, asStringArray, isErrorResult } from "../services/airtable/selectors";
 import { secondsToTimeString, secondsTo12HourString } from "../utils/timeHelpers";
@@ -2609,18 +2611,18 @@ const BeoPrintPage: React.FC = () => {
       });
     });
 
-    const MENU_TABLE = "tbl0aN33DGG6R1sPZ";
-    const ITEM_NAME = FIELD_IDS.MENU_ITEM_NAME;
-    // NON-NEGOTIABLE: Kitchen BEO and BEO Print MUST use THIS field ID for Child Items
-    const CHILD_ITEMS_FIELD_ID = "fldIu6qmlUwAEn2W9";
-    const CHILD_ITEMS = CHILD_ITEMS_FIELD_ID;
-    const DESCRIPTION = FIELD_IDS.MENU_ITEM_DESCRIPTION;
-    const DIETARY_TAGS = FIELD_IDS.MENU_ITEM_DIETARY_TAGS;
-    const MENU_ITEM_SAUCE_FIELD_ID = "fldCUjK7oBckAuNNa"; // Menu Items.Sauces (Long text)
     const baseId = (import.meta.env.VITE_AIRTABLE_BASE_ID as string)?.trim() || "";
     if (!baseId) return;
 
     const fetchMenuItems = async () => {
+      const cat = getMenuCatalogFieldIds();
+      const MENU_TABLE = getMenuItemsTable() || "tbl0aN33DGG6R1sPZ";
+      const ITEM_NAME = cat.itemNameFieldId;
+      const CHILD_ITEMS_FIELD_ID = cat.childItemsFieldId;
+      const CHILD_ITEMS = CHILD_ITEMS_FIELD_ID;
+      const DESCRIPTION = cat.clientDescriptionFieldId;
+      const DIETARY_TAGS = cat.dietaryTagsFieldId;
+      const MENU_ITEM_SAUCE_FIELD_ID = cat.longTextSaucesFieldId;
       if (eventId && !isDelivery) {
         const stationsResult = await loadStationsByEventId(eventId, asLinkedRecordIds(eventData[FIELD_IDS.STATIONS]));
         if (!isErrorResult(stationsResult)) {
@@ -2650,9 +2652,9 @@ const BeoPrintPage: React.FC = () => {
         params.set("returnFieldsByFieldId", "true");
         params.append("fields[]", ITEM_NAME);
         params.append("fields[]", CHILD_ITEMS);
-        params.append("fields[]", DESCRIPTION);
-        params.append("fields[]", DIETARY_TAGS);
-        params.append("fields[]", MENU_ITEM_SAUCE_FIELD_ID);
+        if (DESCRIPTION) params.append("fields[]", DESCRIPTION);
+        if (DIETARY_TAGS) params.append("fields[]", DIETARY_TAGS);
+        if (MENU_ITEM_SAUCE_FIELD_ID) params.append("fields[]", MENU_ITEM_SAUCE_FIELD_ID);
         const data = await airtableFetch<{ records?: Array<{ id: string; fields: Record<string, unknown> }> }>(
           `/${MENU_TABLE}?${params.toString()}`
         );
@@ -2663,9 +2665,9 @@ const BeoPrintPage: React.FC = () => {
             const childIds = Array.isArray(rawChildItems)
               ? rawChildItems.map((item: unknown) => (typeof item === "string" ? item : (item && typeof item === "object" && "id" in item ? String((item as { id?: string }).id ?? "") : ""))).filter((id) => id.startsWith("rec"))
               : [];
-            const descRaw = rec.fields[DESCRIPTION];
-            const tagsRaw = rec.fields[DIETARY_TAGS];
-            const sauceRaw = rec.fields[MENU_ITEM_SAUCE_FIELD_ID];
+            const descRaw = DESCRIPTION ? rec.fields[DESCRIPTION] : undefined;
+            const tagsRaw = DIETARY_TAGS ? rec.fields[DIETARY_TAGS] : undefined;
+            const sauceRaw = MENU_ITEM_SAUCE_FIELD_ID ? rec.fields[MENU_ITEM_SAUCE_FIELD_ID] : undefined;
             const description = typeof descRaw === "string" ? descRaw : undefined;
             const dietaryTags = Array.isArray(tagsRaw)
               ? tagsRaw.map((t) => (typeof t === "string" ? t : (t && typeof t === "object" && "name" in t ? String((t as { name: string }).name) : ""))).filter(Boolean).join(" ")
@@ -2695,6 +2697,59 @@ const BeoPrintPage: React.FC = () => {
         for (let w = 0; w < parentChunks.length; w += PARENT_CONCURRENT) {
           await Promise.all(parentChunks.slice(w, w + PARENT_CONCURRENT).map((ids) => fetchChunk(ids)));
         }
+
+        // Legacy fallback: any IDs not found in the configured table (Menu_Lab) — try legacy table
+        if (MENU_TABLE !== LEGACY_MENU_ITEMS_TABLE_ID) {
+          const missingIds = toFetch.filter((id) => !newData[id]);
+          if (missingIds.length > 0) {
+            const legacyLabel = "fldW5gfSlHRTl01v1";
+            const legacyChildren = "fldIu6qmlUwAEn2W9";
+            const legacyDesc = "fldtN2hxy9TS559Rm";
+            const legacyDietary = "fldUSr1QgzP4nv9vs";
+            const legacySauceField = "fldCUjK7oBckAuNNa";
+            const fetchLegacyChunk = async (ids: string[]) => {
+              const formula = `OR(${ids.map((id) => `RECORD_ID()='${id}'`).join(",")})`;
+              const p = new URLSearchParams();
+              p.set("filterByFormula", formula);
+              p.set("returnFieldsByFieldId", "true");
+              p.append("fields[]", legacyLabel);
+              p.append("fields[]", legacyChildren);
+              p.append("fields[]", legacyDesc);
+              p.append("fields[]", legacyDietary);
+              p.append("fields[]", legacySauceField);
+              const data = await airtableFetch<{ records?: Array<{ id: string; fields: Record<string, unknown> }> }>(
+                `/${LEGACY_MENU_ITEMS_TABLE_ID}?${p.toString()}`
+              );
+              if (!isErrorResult(data) && data?.records) {
+                for (const rec of data.records) {
+                  const name = rec.fields[legacyLabel];
+                  const rawChildren = rec.fields[legacyChildren] ?? [];
+                  const childIds = Array.isArray(rawChildren)
+                    ? rawChildren.map((item: unknown) => (typeof item === "string" ? item : (item && typeof item === "object" && "id" in item ? String((item as { id?: string }).id ?? "") : ""))).filter((id) => id.startsWith("rec"))
+                    : [];
+                  const descRaw = rec.fields[legacyDesc];
+                  const tagsRaw = rec.fields[legacyDietary];
+                  const sauceRaw = rec.fields[legacySauceField];
+                  newData[rec.id] = {
+                    name: typeof name === "string" ? name : rec.id,
+                    childIds,
+                    description: typeof descRaw === "string" ? descRaw : undefined,
+                    dietaryTags: Array.isArray(tagsRaw) ? tagsRaw.map((t) => (typeof t === "string" ? t : "")).filter(Boolean).join(" ") : typeof tagsRaw === "string" ? tagsRaw : undefined,
+                    sauce: typeof sauceRaw === "string" ? sauceRaw.trim() : undefined,
+                  };
+                }
+              }
+            };
+            const legChunks: string[][] = [];
+            for (let i = 0; i < missingIds.length; i += PARENT_CHUNK) {
+              legChunks.push(missingIds.slice(i, i + PARENT_CHUNK));
+            }
+            for (let w = 0; w < legChunks.length; w += PARENT_CONCURRENT) {
+              await Promise.all(legChunks.slice(w, w + PARENT_CONCURRENT).map((ids) => fetchLegacyChunk(ids)));
+            }
+          }
+        }
+
         const childIdsToFetch = new Set<string>();
         Object.values(newData).forEach((d) => {
           d.childIds.forEach((cid) => {
@@ -2704,7 +2759,7 @@ const BeoPrintPage: React.FC = () => {
         if (childIdsToFetch.size > 0) {
           const mergeChildRecord = (rec: { id: string; fields: Record<string, unknown> }) => {
             const name = rec.fields[ITEM_NAME];
-            const tagsRaw = rec.fields[DIETARY_TAGS];
+            const tagsRaw = DIETARY_TAGS ? rec.fields[DIETARY_TAGS] : undefined;
             const dietaryTags = Array.isArray(tagsRaw)
               ? tagsRaw.map((t) => (typeof t === "string" ? t : (t && typeof t === "object" && "name" in t ? String((t as { name: string }).name) : ""))).filter(Boolean).join(" ")
               : typeof tagsRaw === "string" ? tagsRaw
@@ -2732,7 +2787,7 @@ const BeoPrintPage: React.FC = () => {
             childParams.set("filterByFormula", `OR(${ids.map((id) => `RECORD_ID()='${id}'`).join(",")})`);
             childParams.set("returnFieldsByFieldId", "true");
             childParams.append("fields[]", ITEM_NAME);
-            childParams.append("fields[]", DIETARY_TAGS);
+            if (DIETARY_TAGS) childParams.append("fields[]", DIETARY_TAGS);
             const childData = await airtableFetch<{ records?: Array<{ id: string; fields: Record<string, unknown> }> }>(
               `/${MENU_TABLE}?${childParams.toString()}`
             );
@@ -2742,6 +2797,34 @@ const BeoPrintPage: React.FC = () => {
           };
           for (let w = 0; w < childChunks.length; w += CHILD_CONCURRENT) {
             await Promise.all(childChunks.slice(w, w + CHILD_CONCURRENT).map((ids) => fetchChildChunk(ids)));
+          }
+
+          // Legacy fallback for children not found in configured table
+          if (MENU_TABLE !== LEGACY_MENU_ITEMS_TABLE_ID) {
+            const missingChildren = childList.filter((id) => !newData[id]);
+            if (missingChildren.length > 0) {
+              const legacyLabel = "fldW5gfSlHRTl01v1";
+              const fetchLegacyChildChunk = async (ids: string[]) => {
+                const p = new URLSearchParams();
+                p.set("filterByFormula", `OR(${ids.map((id) => `RECORD_ID()='${id}'`).join(",")})`);
+                p.set("returnFieldsByFieldId", "true");
+                p.append("fields[]", legacyLabel);
+                if (DIETARY_TAGS) p.append("fields[]", DIETARY_TAGS);
+                const data = await airtableFetch<{ records?: Array<{ id: string; fields: Record<string, unknown> }> }>(
+                  `/${LEGACY_MENU_ITEMS_TABLE_ID}?${p.toString()}`
+                );
+                if (!isErrorResult(data) && data?.records) {
+                  for (const rec of data.records) mergeChildRecord({ ...rec, fields: { ...rec.fields, [ITEM_NAME]: rec.fields[legacyLabel] } });
+                }
+              };
+              const legChildChunks: string[][] = [];
+              for (let i = 0; i < missingChildren.length; i += CHILD_CHUNK) {
+                legChildChunks.push(missingChildren.slice(i, i + CHILD_CHUNK));
+              }
+              for (let w = 0; w < legChildChunks.length; w += CHILD_CONCURRENT) {
+                await Promise.all(legChildChunks.slice(w, w + CHILD_CONCURRENT).map((ids) => fetchLegacyChildChunk(ids)));
+              }
+            }
           }
         }
         setMenuItemData(newData);
@@ -2776,9 +2859,10 @@ const BeoPrintPage: React.FC = () => {
   };
 
   const clientName = `${f(FIELD_IDS.CLIENT_FIRST_NAME)} ${f(FIELD_IDS.CLIENT_LAST_NAME)}`.trim();
-  const contactName = f(FIELD_IDS.PRIMARY_CONTACT_NAME) || "";
+  const isDeliveryForContact = isDeliveryOrPickup(asSingleSelectName(eventData[FIELD_IDS.EVENT_TYPE]));
+  const contactName = (isDeliveryForContact ? f(FIELD_IDS.ONSITE_CONTACT_NAME) : "") || f(FIELD_IDS.PRIMARY_CONTACT_NAME) || "";
   const clientPhone = f(FIELD_IDS.CLIENT_PHONE);
-  const contactPhone = f(FIELD_IDS.CONTACT_PHONE);
+  const contactPhone = (isDeliveryForContact ? f(FIELD_IDS.ONSITE_CONTACT_PHONE) : "") || f(FIELD_IDS.CONTACT_PHONE);
 
   // Venue name: VenuePrint formula (falls back to "Residence") or VENUE
   const eventLocation = f(FIELD_IDS.VENUE_PRINT) || f(FIELD_IDS.VENUE);
@@ -2805,7 +2889,8 @@ const BeoPrintPage: React.FC = () => {
   const eventStart = secondsTo12HourString(eventData[FIELD_IDS.EVENT_START_TIME]);
   const eventEnd = secondsTo12HourString(eventData[FIELD_IDS.EVENT_END_TIME]);
   const guestCount = f(FIELD_IDS.GUEST_COUNT);
-  const dispatchTime = secondsTo12HourString(eventData[FIELD_IDS.DISPATCH_TIME]) || f(FIELD_IDS.DISPATCH_TIME) || "TBD";
+  const deliveryTimeWindow = f(FIELD_IDS.DELIVERY_TIME_WINDOW)?.trim() || "";
+  const dispatchTime = deliveryTimeWindow || secondsTo12HourString(eventData[FIELD_IDS.DISPATCH_TIME]) || f(FIELD_IDS.DISPATCH_TIME) || "TBD";
   const fwStaff = resolveFwStaffLineFromFields(eventData as Record<string, unknown>);
   const eventArrival =
     secondsTo12HourString(eventData[FIELD_IDS.FOODWERX_ARRIVAL]) ||
@@ -2837,9 +2922,9 @@ const BeoPrintPage: React.FC = () => {
   const jobIndex = selectedEventId
     ? sortedByDispatch.findIndex((e) => e.id === selectedEventId) + 1
     : 0;
-  const jobNumberDisplay = jobIndex > 0
-    ? String(jobIndex).padStart(3, "0")
-    : "—";
+  const houseOrder = f(FIELD_IDS.HOUSE_ORDER_NUMBER)?.trim() || "";
+  const jobNumberDisplay = houseOrder
+    || (jobIndex > 0 ? String(jobIndex).padStart(3, "0") : "—");
   const phone = contactPhone || clientPhone;
 
   // ── Parse linked menu items (handles Airtable formats: string[], {id:string}[], or single value) ──
@@ -2895,6 +2980,7 @@ const BeoPrintPage: React.FC = () => {
     { title: "DESSERTS", fieldId: FIELD_IDS.DESSERTS, linkedFieldId: FIELD_IDS.DESSERTS, customFieldId: FIELD_IDS.CUSTOM_DESSERTS },
   ];
 
+  const globalSeenIds = new Set<string>();
   let menuSections: SectionData[] = isDelivery
     ? DELIVERY_SECTION_CONFIG.map((config) => {
         const allLinked: MenuLineItem[] = [];
@@ -2902,8 +2988,9 @@ const BeoPrintPage: React.FC = () => {
         const seenNames = new Set<string>();
         for (const fid of config.fieldIds) {
           for (const item of parseMenuItems(fid)) {
-            if (!seenIds.has(item.id)) {
+            if (!seenIds.has(item.id) && !globalSeenIds.has(item.id)) {
               seenIds.add(item.id);
+              globalSeenIds.add(item.id);
               seenNames.add(item.name);
               allLinked.push(item);
             }
@@ -2921,9 +3008,9 @@ const BeoPrintPage: React.FC = () => {
         if (config.title.includes("DELI") && eventId) {
           const platterRows = getPlatterOrdersByEventId(eventId);
           for (const row of platterRows) {
-            if (!(row.quantity > 0) || row.picks.length === 0) continue;
+            if (!(row.quantity > 0) || !hasPlatterPicks(row)) continue;
             const name = row.platterType;
-            const specQty = `${row.picks.join(", ")} × ${row.quantity}`;
+            const specQty = `${formatPlatterPicksLine(row.picks)} × ${row.quantity}`;
             const uniqueId = `platter-${row.id}`;
             if (!seenIds.has(uniqueId)) {
               seenIds.add(uniqueId);
@@ -3019,11 +3106,11 @@ const BeoPrintPage: React.FC = () => {
         if (def.fieldId === FIELD_IDS.FULL_SERVICE_DELI && eventId) {
           const platterRows = getPlatterOrdersByEventId(eventId);
           for (const row of platterRows) {
-            if (!(row.quantity > 0) || row.picks.length === 0) continue;
+            if (!(row.quantity > 0) || !hasPlatterPicks(row)) continue;
             items.push({
               id: `platter-fs-${row.id}`,
               name: row.platterType,
-              specQty: `${row.picks.join(", ")} × ${row.quantity}`,
+              specQty: `${formatPlatterPicksLine(row.picks)} × ${row.quantity}`,
             });
           }
         }

@@ -126,10 +126,11 @@ export const useEventStore = create<EventStore>((set, get) => ({
 
   updateEvent: async (eventId, patch) => {
     const { selectedEventId, eventData } = get();
-    // Dispatch time is read-only except for ops_admin
+    // Dispatch time — only ops_chief may PATCH (others see read-only in UI; strips if sent)
     const role = useAuthStore.getState().user?.role;
+    const canWriteDispatch = role === "ops_chief";
     const patchFiltered =
-      role !== "ops_admin" && FIELD_IDS.DISPATCH_TIME in patch
+      !canWriteDispatch && FIELD_IDS.DISPATCH_TIME in patch
         ? (() => {
             const { [FIELD_IDS.DISPATCH_TIME]: _, ...rest } = patch;
             return rest;
@@ -137,6 +138,8 @@ export const useEventStore = create<EventStore>((set, get) => ({
         : patch;
     const timeFieldIdSet = new Set<string>([
       FIELD_IDS.DISPATCH_TIME,
+      FIELD_IDS.EVENT_START_TIME,
+      FIELD_IDS.EVENT_END_TIME,
       FIELD_IDS.FOODWERX_ARRIVAL,
       FIELD_IDS.VENUE_ARRIVAL_TIME,
     ]);

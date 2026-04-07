@@ -28,9 +28,11 @@ const DELIVERY_PAPER_JUMP: JumpSection = {
 /** Delivery/pickup: same nav order as full service, but paper block instead of serviceware; no timeline/onsite notes pills. */
 function jumpSectionsForMode(isDelivery: boolean): JumpSection[] {
   if (!isDelivery) return SECTIONS;
-  return SECTIONS.filter((s) => s.id !== "beo-section-timeline" && s.id !== "beo-section-notes").map((s) =>
-    s.id === "beo-section-serviceware" ? DELIVERY_PAPER_JUMP : s
-  );
+  return SECTIONS.filter((s) => s.id !== "beo-section-timeline" && s.id !== "beo-section-notes").map((s) => {
+    if (s.id === "beo-section-serviceware") return DELIVERY_PAPER_JUMP;
+    if (s.id === "beo-section-header") return { ...s, hint: "Client, address, date, guests, delivery window & dispatch" };
+    return s;
+  });
 }
 
 /** Shared jump logic: expand section, scroll, flash. Used by nav and by ?section= on BEO Intake. */

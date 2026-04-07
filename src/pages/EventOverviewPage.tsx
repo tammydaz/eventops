@@ -1,9 +1,9 @@
 import React, { useEffect, useRef, useState, useCallback } from "react";
-import { useParams, Link, useNavigate } from "react-router-dom";
+import { useParams, Link, useNavigate, useLocation } from "react-router-dom";
 import "./EventOverviewPage.css";
 import { useEventStore } from "../state/eventStore";
 import { FIELD_IDS, uploadAttachment, createEvent } from "../services/airtable/events";
-import { asString, asSingleSelectName, asAttachments, asBoolean, isErrorResult } from "../services/airtable/selectors";
+import { asString, asSingleSelectName, asAttachments, asBoolean, isErrorResult, asLinkedRecordIds } from "../services/airtable/selectors";
 import type { AttachmentItem } from "../services/airtable/events";
 import {
   loadTasksForEvent,
@@ -20,6 +20,7 @@ function addDays(date: Date, days: number): string {
 }
 import { FollowUpModal, type FollowUpResult } from "../components/FollowUpModal";
 import { DASHBOARD_CALENDAR_TO } from "../lib/dashboardRoutes";
+import { loadClientIntakeRecord } from "../services/airtable/clientIntake";
 
 const SECTION_COLORS = {
   summary: { accent: "#ff6b6b", border: "rgba(204,0,0,0.35)", bg: "rgba(204,0,0,0.06)", btnBg: "rgba(204,0,0,0.12)" },
@@ -40,10 +41,19 @@ const NEW_EVENT_TYPES = [
 ] as const;
 
 /** Minimal form to create an event. No Individual/Business/Contact here — that’s all in the Header section on BEO intake. */
-function NewEventForm({ onCreated, onBack }: { onCreated: (eventId: string) => void; onBack: () => void }) {
+function NewEventForm({
+  onCreated,
+  onBack,
+  defaultEventTypeId,
+}: {
+  onCreated: (eventId: string) => void;
+  onBack: () => void;
+  /** Preselect event type pill when starting from delivery intake (`Delivery`, `Pickup`, etc.) */
+  defaultEventTypeId?: string;
+}) {
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
-  const [eventTypeId, setEventTypeId] = useState("");
+  const [eventTypeId, setEventTypeId] = useState(() => defaultEventTypeId ?? "");
   const [eventDate, setEventDate] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -84,6 +94,11 @@ function NewEventForm({ onCreated, onBack }: { onCreated: (eventId: string) => v
         <p style={{ fontSize: 14, color: "rgba(255,255,255,0.7)", marginBottom: 20 }}>
           Add the minimum to create the event. Then open <strong>Event Overview</strong> and use <strong>Header</strong> (or BEO Intake) to fill client type, venue, date, guests, times, and staff in one place.
         </p>
+        {defaultEventTypeId === "Delivery" ? (
+          <p style={{ fontSize: 13, color: "rgba(234,179,8,0.95)", marginBottom: 20, lineHeight: 1.45 }}>
+            Delivery intake: this event starts with an <strong>empty menu</strong>. Link the Client Intake record on the event when you have it, so repeat visits stay consistent.
+          </p>
+        ) : null}
         <div style={{ background: "rgba(0,0,0,0.2)", border: `1px solid ${accent}44`, borderRadius: 10, padding: 24 }}>
           <form onSubmit={handleSubmit}>
             {error && (
@@ -341,6 +356,10 @@ function formatNoteTimestamp(): string {
 const EventOverviewPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
+  const deliveryFlow =
+    (location.state as { deliveryFlow?: boolean } | null)?.deliveryFlow === true ||
+    new URLSearchParams(location.search).get("delivery") === "1";
   const { selectEvent, selectedEventId, selectedEventData, eventDataLoading, setFields, loadEventData, loadEvents } = useEventStore();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
@@ -349,6 +368,12 @@ const EventOverviewPage: React.FC = () => {
   const [tasksLoading, setTasksLoading] = useState(false);
   const [followUpTask, setFollowUpTask] = useState<Task | null>(null);
   const [noteDraft, setNoteDraft] = useState("");
+  /** After event load: if this id is a Client Intake row (wrong URL), redirect once — avoids "Event not found" for `/event/recClientId`. */
+  const clientIntakeFallbackAttemptedRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    clientIntakeFallbackAttemptedRef.current = null;
+  }, [id]);
 
   useEffect(() => {
     if (id && id !== "new") selectEvent(id);
@@ -407,6 +432,27 @@ const EventOverviewPage: React.FC = () => {
   const isLoading = eventDataLoading || (id && !isCorrectEvent);
   const hasData = isCorrectEvent && selectedEventData && Object.keys(selectedEventData).length > 0;
 
+  useEffect(() => {
+    if (!id || id === "new") return;
+    if (!id.startsWith("rec")) return;
+    if (isLoading) return;
+    if (hasData) return;
+    if (clientIntakeFallbackAttemptedRef.current === id) return;
+    let cancelled = false;
+    void (async () => {
+      const clientRes = await loadClientIntakeRecord(id);
+      if (cancelled) return;
+      clientIntakeFallbackAttemptedRef.current = id;
+      if (!isErrorResult(clientRes)) {
+        const q = deliveryFlow ? "?flow=delivery" : "";
+        navigate(`/client/${id}${q}`, { replace: true });
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [id, isLoading, hasData, navigate, deliveryFlow]);
+
   if (!id) {
     return (
       <div style={styles.container}>
@@ -422,11 +468,12 @@ const EventOverviewPage: React.FC = () => {
   if (id === "new") {
     return (
       <NewEventForm
+        defaultEventTypeId={deliveryFlow ? "Delivery" : undefined}
         onCreated={(eventId) => {
           loadEvents();
           navigate(`/event/${eventId}`);
         }}
-        onBack={() => navigate(DASHBOARD_CALENDAR_TO)}
+        onBack={() => navigate(deliveryFlow ? "/delivery/intake" : DASHBOARD_CALENDAR_TO)}
       />
     );
   }
@@ -447,7 +494,18 @@ const EventOverviewPage: React.FC = () => {
     return (
       <div style={styles.container}>
         <div style={styles.card}>
-          <div style={styles.notFound}>Event not found.</div>
+          <div style={styles.notFound}>
+            Event not found.
+            {id?.startsWith("rec") ? (
+              <p style={{ marginTop: 16, fontSize: 14, fontWeight: 400, color: "rgba(255,255,255,0.65)", maxWidth: 420, marginLeft: "auto", marginRight: "auto", lineHeight: 1.5 }}>
+                If this is a <strong>Client Intake</strong> id, open{" "}
+                <Link to={`/client/${id}${deliveryFlow ? "?flow=delivery" : ""}`} style={{ color: "#93c5fd" }}>
+                  Client overview
+                </Link>{" "}
+                instead of Event overview.
+              </p>
+            ) : null}
+          </div>
           <Link to={DASHBOARD_CALENDAR_TO} className="ev-overview-back" style={styles.backLink}>← Back to Dashboard</Link>
         </div>
       </div>
@@ -462,6 +520,7 @@ const EventOverviewPage: React.FC = () => {
     ? eventData[FIELD_IDS.GUEST_COUNT]
     : Number(eventData[FIELD_IDS.GUEST_COUNT]) || 0;
   const eventName = asString(eventData[FIELD_IDS.EVENT_NAME]) || "Untitled Event";
+  const linkedClientRecordId = asLinkedRecordIds(eventData[FIELD_IDS.CLIENT])[0]?.trim() || "";
 
   // Derive FOH status from lockout fields if available
   const fohStatus = "Awaiting Questionnaire"; // Placeholder — wire to real status when available
@@ -549,6 +608,60 @@ const EventOverviewPage: React.FC = () => {
               <span style={{ ...styles.statusDot, ...getStatusStyle() }} />
               {fohStatus}
             </div>
+            {linkedClientRecordId ? (
+              <div
+                style={{
+                  marginTop: 20,
+                  paddingTop: 16,
+                  borderTop: `1px solid ${s.summary.border}`,
+                }}
+              >
+                <div style={{ fontSize: 12, fontWeight: 700, color: s.summary.accent, marginBottom: 8, textTransform: "uppercase" as const, letterSpacing: "0.04em" }}>
+                  Same client — new job
+                </div>
+                <p style={{ fontSize: 12, color: "rgba(255,255,255,0.55)", lineHeight: 1.45, margin: "0 0 12px" }}>
+                  Opens the <strong>client hub</strong> (Delivery intake). There you can start a <strong>new delivery</strong> or a{" "}
+                  <strong>new full service</strong> event—each with an empty menu and Client Intake defaults—not from this event’s
+                  menu.
+                </p>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center" }}>
+                  <Link
+                    to={`/client/${linkedClientRecordId}?flow=delivery`}
+                    state={{ autoCreate: "delivery" as const }}
+                    style={{
+                      display: "inline-block",
+                      padding: "10px 16px",
+                      borderRadius: 8,
+                      border: "1px solid rgba(234,179,8,0.5)",
+                      background: "rgba(234,179,8,0.15)",
+                      color: "#fde047",
+                      fontWeight: 700,
+                      fontSize: 13,
+                      textDecoration: "none",
+                    }}
+                  >
+                    New delivery order
+                  </Link>
+                  <Link
+                    to={`/client/${linkedClientRecordId}?flow=delivery`}
+                    state={{ autoCreate: "fullservice" as const }}
+                    style={{
+                      display: "inline-block",
+                      padding: "10px 16px",
+                      borderRadius: 8,
+                      border: "1px solid rgba(0,188,212,0.45)",
+                      background: "rgba(0,188,212,0.12)",
+                      color: "#67e8f9",
+                      fontWeight: 700,
+                      fontSize: 13,
+                      textDecoration: "none",
+                    }}
+                  >
+                    New full service order
+                  </Link>
+                </div>
+              </div>
+            ) : null}
           </div>
 
           {/* Booking steps — driven by Airtable so nothing falls through */}

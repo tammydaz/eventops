@@ -3,7 +3,8 @@
  * V2 payload: single JSON blob in orderName (FWX_BOXED_V2:...) — sandwich counts + box type only.
  */
 
-import { airtableFetch, getBaseId, getApiKey, type AirtableListResponse, type AirtableErrorResult } from "./client";
+import { airtableFetch, getBaseId, getApiKey, getMenuItemsTable, type AirtableListResponse, type AirtableErrorResult } from "./client";
+import { getMenuCatalogFieldIds } from "./menuCatalogConfig";
 import { isErrorResult, asString, asLinkedRecordIds } from "./selectors";
 import type { BoxedLunchBoxSnapshot, BoxedLunchV2Payload } from "../../config/boxedLunchBeo";
 
@@ -35,9 +36,6 @@ export const BOX_CUSTOMIZATIONS_FIELD_IDS = {
   swappedItem: "fldx7BTghnsdGJFbP",
   specialRequests: "fld7eYwx4pMNttLJ8",
 } as const;
-
-const MENU_ITEMS_TABLE = "tbl0aN33DGG6R1sPZ";
-const MENU_ITEM_NAME_FIELD_ID = "fldW5gfSlHRTl01v1";
 
 /** Prefix for V2 JSON in orderName — no per-box rows in Airtable. */
 export const BOXED_LUNCH_V2_ORDER_NAME_PREFIX = "FWX_BOXED_V2:";
@@ -207,15 +205,18 @@ export async function loadBoxedLunchOrdersByEventId(
 
       let boxedLunchTypeName = menuItemCache[boxedLunchTypeId];
       if (!boxedLunchTypeName && boxedLunchTypeId) {
+        const cat = getMenuCatalogFieldIds();
+        const menuTable = getMenuItemsTable() || "tbl0aN33DGG6R1sPZ";
+        const nameField = cat.itemNameFieldId;
         const menuParams = new URLSearchParams();
         menuParams.set("filterByFormula", `RECORD_ID()='${boxedLunchTypeId}'`);
         menuParams.set("returnFieldsByFieldId", "true");
-        menuParams.append("fields[]", MENU_ITEM_NAME_FIELD_ID);
+        menuParams.append("fields[]", nameField);
         const menuData = await airtableFetch<AirtableListResponse<Record<string, unknown>>>(
-          `/${MENU_ITEMS_TABLE}?${menuParams.toString()}`
+          `/${menuTable}?${menuParams.toString()}`
         );
         if (!isErrorResult(menuData) && menuData.records[0]) {
-          const nameRaw = (menuData.records[0].fields as Record<string, unknown>)[MENU_ITEM_NAME_FIELD_ID];
+          const nameRaw = (menuData.records[0].fields as Record<string, unknown>)[nameField];
           boxedLunchTypeName = typeof nameRaw === "string" ? nameRaw : "Boxed Lunch";
           menuItemCache[boxedLunchTypeId] = boxedLunchTypeName;
         } else {
@@ -321,6 +322,9 @@ export async function createBoxedLunchOrderFromRows(
     return baseIdResult as AirtableErrorResult;
   }
 
+  const cat = getMenuCatalogFieldIds();
+  const menuTable = getMenuItemsTable() || "tbl0aN33DGG6R1sPZ";
+  const nameField = cat.itemNameFieldId;
   const typeNames = [...new Set(rows.map((r) => r.boxedLunchType))];
   const nameToId: Record<string, string> = {};
   for (const name of typeNames) {
@@ -328,9 +332,9 @@ export async function createBoxedLunchOrderFromRows(
     const params = new URLSearchParams();
     params.set("filterByFormula", formula);
     params.set("returnFieldsByFieldId", "true");
-    params.append("fields[]", MENU_ITEM_NAME_FIELD_ID);
+    params.append("fields[]", nameField);
     const data = await airtableFetch<AirtableListResponse<Record<string, unknown>>>(
-      `/${MENU_ITEMS_TABLE}?${params.toString()}`
+      `/${menuTable}?${params.toString()}`
     );
     if (!isErrorResult(data) && data.records[0]) {
       nameToId[name] = data.records[0].id;

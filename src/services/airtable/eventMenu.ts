@@ -13,8 +13,9 @@ import {
   type AirtableListResponse,
   type AirtableErrorResult,
 } from "./client";
-import { asLinkedRecordIds, isErrorResult } from "./selectors";
-import { updateEventMultiple, FIELD_IDS } from "./events";
+import { asLinkedRecordIds, asSingleSelectName, asString, isErrorResult } from "./selectors";
+import { updateEventMultiple, FIELD_IDS, loadEvent } from "./events";
+import { isDeliveryOrPickup } from "../../lib/deliveryHelpers";
 
 /** Maps picker targetField to Event Menu Section value (exact Airtable values). */
 export function targetFieldToSection(targetField: string): string | null {
@@ -350,6 +351,21 @@ const SECTION_TO_EVENT_FIELD: Record<string, string> = {
   "Room Temp / Display": FIELD_IDS.ROOM_TEMP_DISPLAY,
 };
 
+/** Deli shadow section → correct Events linked field (delivery/pickup use Deli delivery field). */
+async function getSectionToEventFieldMap(
+  eventId: string
+): Promise<Record<string, string> | AirtableErrorResult> {
+  const ev = await loadEvent(eventId);
+  if (isErrorResult(ev)) return ev;
+  const eventType =
+    asSingleSelectName(ev.fields[FIELD_IDS.EVENT_TYPE]) || asString(ev.fields[FIELD_IDS.EVENT_TYPE]);
+  const deliField = isDeliveryOrPickup(eventType) ? FIELD_IDS.DELIVERY_DELI : FIELD_IDS.FULL_SERVICE_DELI;
+  return {
+    ...SECTION_TO_EVENT_FIELD,
+    Deli: deliField,
+  };
+}
+
 /** Optional rows to merge in before sync (avoids race when createEventMenuRow just succeeded and loadEventMenuRows hasn't propagated yet). */
 export type SyncShadowInjectedRow = { section: string; catalogItemId: string };
 
@@ -371,6 +387,9 @@ export async function syncShadowToEvent(
   eventId: string,
   options?: { injectedRows?: SyncShadowInjectedRow[] }
 ): Promise<{ success: true } | AirtableErrorResult> {
+  const sectionToField = await getSectionToEventFieldMap(eventId);
+  if (isErrorResult(sectionToField)) return sectionToField;
+
   const rows = await loadEventMenuRows(eventId);
   if (isErrorResult(rows)) return rows;
 
@@ -395,7 +414,7 @@ export async function syncShadowToEvent(
     }
   }
 
-  const validSections = new Set(Object.keys(SECTION_TO_EVENT_FIELD));
+  const validSections = new Set(Object.keys(sectionToField));
   const topLevelRows = allRows.filter((row) => {
     if (!validSections.has(row.section)) return false;
     if (row.parentItemId != null) return false;
@@ -416,13 +435,13 @@ export async function syncShadowToEvent(
 
   const updates: Record<string, string[]> = {};
   for (const [section, ids] of Object.entries(bySection)) {
-    const fieldId = SECTION_TO_EVENT_FIELD[section];
+    const fieldId = sectionToField[section];
     if (!fieldId || ids.length === 0) continue;
     const unique = [...new Set(ids)];
     updates[fieldId] = unique;
   }
 
-  for (const fieldId of Object.values(SECTION_TO_EVENT_FIELD)) {
+  for (const fieldId of new Set(Object.values(sectionToField))) {
     if (!(fieldId in updates)) {
       updates[fieldId] = [];
     }
