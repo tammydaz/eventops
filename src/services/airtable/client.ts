@@ -31,6 +31,7 @@ const _getLeadsTable = () => (import.meta.env.VITE_AIRTABLE_LEADS_TABLE as strin
 const _getTasksTable = () => (import.meta.env.VITE_AIRTABLE_TASKS_TABLE as string | undefined)?.trim();
 const _getEventMenuTable = () => (import.meta.env.VITE_AIRTABLE_EVENT_MENU_TABLE as string | undefined)?.trim();
 const _getEventMenuShadowTable = () => (import.meta.env.VITE_AIRTABLE_EVENT_MENU_SHADOW_TABLE as string | undefined)?.trim();
+const _getMenuLabTable = () => (import.meta.env.VITE_AIRTABLE_MENU_LAB_TABLE as string | undefined)?.trim();
 
 const getEnvValue = (value: string | undefined, name: string): string | AirtableErrorResult => {
   if (!value) {
@@ -75,6 +76,10 @@ export const getEventMenuTable = (): string =>
 /** Event Menu (SHADOW SYSTEM) table. Use table ID (tbl...) to avoid encoding: set VITE_AIRTABLE_EVENT_MENU_SHADOW_TABLE=tblYourId in .env */
 export const getEventMenuShadowTable = (): string =>
   _getEventMenuShadowTable() || "Event Menu (SHADOW SYSTEM)";
+
+/** Menu_Lab table — source catalog for delivery section pickers. Set VITE_AIRTABLE_MENU_LAB_TABLE to override. */
+export const getMenuLabTable = (): string =>
+  _getMenuLabTable() || "tbl6gXRT2FPpTdf0J";
 
 export const getBaseId = (): string | AirtableErrorResult =>
   getEnvValue(_getBaseId(), "VITE_AIRTABLE_BASE_ID");

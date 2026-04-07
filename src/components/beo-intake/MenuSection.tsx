@@ -22,6 +22,7 @@ import { loadStationPresets, loadStationComponentNamesByIds } from "../../servic
 import { StationComponentsConfigModal } from "./StationComponentsConfigModal";
 import { BoxedLunchSection } from "./BoxedLunchSection";
 import { SandwichPlatterConfigModal } from "./SandwichPlatterConfigModal";
+import { DeliverySectionPicker } from "./DeliverySectionPicker";
 import { SALAD_BAR } from "../../config/stationPresets";
 import { getPlatterOrdersByEventId, setPlatterOrdersForEvent } from "../../state/platterOrdersStore";
 import { asLinkedRecordIds, asSingleSelectName, asString, isErrorResult } from "../../services/airtable/selectors";
@@ -1911,23 +1912,42 @@ export const MenuSection = ({ embedded = false, isDelivery = false }: MenuSectio
 
       {isDelivery ? (
         <>
-          {/* Delivery sections are derived from Execution Type (fldnP7tCisqdDkaOI) in Menu_Lab.
-              Items are managed via the Event Menu shadow table — section values match executionType.
-              Field ID-based pickers have been removed. A new Execution Type-aware picker will be
-              wired in a subsequent task. */}
           {DELIVERY_SECTION_CONFIG.map((config, sectionIdx) => {
             const icons = ["🔥", "🍱", "🥗", "📦", "🥣", "🍰"] as const;
             const icon = icons[sectionIdx] ?? "📋";
             return (
               <CollapsibleSubsection key={config.title} title={config.title} icon={icon} defaultOpen isDelivery>
-                <div style={{ gridColumn: "1 / -1" }}>
-                  <p style={{ color: "#888", fontSize: 13, margin: "8px 0" }}>
-                    Items for <strong>{config.executionType}</strong> are managed via the Event Menu (shadow table).
-                  </p>
-                </div>
+                <DeliverySectionPicker section={config} eventId={selectedEventId} canEdit={canEdit} />
               </CollapsibleSubsection>
             );
           })}
+
+          <CollapsibleSubsection title="BOX LUNCHES" icon="🥡" defaultOpen={false} isDelivery>
+            <BoxedLunchSection eventId={selectedEventId} canEdit={canEdit} />
+          </CollapsibleSubsection>
+
+          <CollapsibleSubsection title="SANDWICH PLATTERS" icon="🥪" defaultOpen={false} isDelivery>
+            <button
+              type="button"
+              onClick={() => setPlatterModalOpen((v) => !v)}
+              style={{ ...buttonStyle, borderColor: "#f97316", color: "#f97316", background: "rgba(249,115,22,0.1)" }}
+            >
+              {platterModalOpen ? "− Hide Platter Config" : "+ Configure Sandwich Platters"}
+            </button>
+            {platterModalOpen && (
+              <SandwichPlatterConfigModal
+                open
+                inline
+                onClose={() => setPlatterModalOpen(false)}
+                onConfirm={(rows) => {
+                  if (!selectedEventId) { setError("Select an event first"); return; }
+                  setPlatterOrdersForEvent(selectedEventId, rows);
+                  setPlatterModalOpen(false);
+                }}
+                initialRows={selectedEventId ? getPlatterOrdersByEventId(selectedEventId) : []}
+              />
+            )}
+          </CollapsibleSubsection>
         </>
       ) : (
         /* ── FULL SERVICE: Passed → Presented → Buffet Metal → China → Deli → Desserts → Platters → Stations ── */

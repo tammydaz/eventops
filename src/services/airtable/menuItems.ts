@@ -1,4 +1,4 @@
-import { airtableFetch, getMenuItemsTable } from "./client";
+import { airtableFetch, getMenuItemsTable, getMenuLabTable } from "./client";
 import { isErrorResult, asLinkedRecordIds } from "./selectors";
 import { cleanDisplayName } from "../../utils/displayName";
 import { CATEGORY_MAP } from "../../constants/menuCategories";
@@ -315,4 +315,64 @@ export async function updateMenuItemVesselType(
     return data;
   }
   return { success: true };
+}
+
+/** One catalog item from Menu_Lab (used in delivery section pickers). */
+export interface MenuLabItem {
+  id: string;
+  name: string;
+}
+
+/** Valid Execution Type values in Menu_Lab (multiple-select field fldnP7tCisqdDkaOI). */
+const MENU_LAB_VALID_EXECUTION_TYPES: readonly string[] = [
+  "CHAFER HOT",
+  "CHAFER READY",
+  "COLD DISPLAY",
+  "INDIVIDUAL PACKS",
+  "BULK SIDES",
+  "DESSERTS",
+  "STATIONS",
+  "ROOM TEMP",
+];
+
+/**
+ * Fetch catalog items from Menu_Lab whose Execution Type includes the given value.
+ * Used by DeliverySectionPicker to populate each delivery section.
+ */
+export async function fetchMenuItemsByExecutionType(
+  executionType: string
+): Promise<MenuLabItem[]> {
+  if (!MENU_LAB_VALID_EXECUTION_TYPES.includes(executionType)) {
+    console.warn(`fetchMenuItemsByExecutionType: unexpected value "${executionType}" — skipping fetch`);
+    return [];
+  }
+  const tableId = getMenuLabTable();
+  const escaped = executionType.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+  const filterByFormula = `FIND("${escaped}", ARRAYJOIN({Execution Type})) > 0`;
+
+  const allRecords: Array<{ id: string; fields: Record<string, unknown> }> = [];
+  let offset: string | undefined;
+
+  do {
+    const params = new URLSearchParams();
+    params.set("filterByFormula", filterByFormula);
+    params.set("pageSize", "100");
+    params.append("fields[]", "Item Name");
+    if (offset) params.set("offset", offset);
+
+    const data = await airtableFetch<{
+      records?: Array<{ id: string; fields: Record<string, unknown> }>;
+      offset?: string;
+      error?: { message?: string };
+    }>(`/${tableId}?${params.toString()}`);
+
+    if (isErrorResult(data) || !data?.records) break;
+    allRecords.push(...data.records);
+    offset = (data as { offset?: string }).offset;
+  } while (offset);
+
+  return allRecords.map((rec) => ({
+    id: rec.id,
+    name: typeof rec.fields["Item Name"] === "string" ? rec.fields["Item Name"] : rec.id,
+  }));
 }
