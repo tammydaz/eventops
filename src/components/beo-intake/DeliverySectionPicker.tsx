@@ -118,7 +118,7 @@ export function DeliverySectionPicker({ section, eventId, canEdit = true }: Prop
   }
 
   const addedCatalogIds = new Set(
-    addedRows.map((r) => r.catalogItemId).filter(Boolean) as string[]
+    addedRows.map((r) => r.catalogItemId).filter((id): id is string => id !== null && id !== undefined)
   );
   const available = catalogItems.filter((item) => !addedCatalogIds.has(item.id));
 

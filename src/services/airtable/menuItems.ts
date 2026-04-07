@@ -343,7 +343,7 @@ export async function fetchMenuItemsByExecutionType(
   executionType: string
 ): Promise<MenuLabItem[]> {
   if (!MENU_LAB_VALID_EXECUTION_TYPES.includes(executionType)) {
-    console.warn(`fetchMenuItemsByExecutionType: unexpected value "${executionType}" — skipping fetch`);
+    console.warn(`fetchMenuItemsByExecutionType: unexpected value "${executionType}". Valid values: ${MENU_LAB_VALID_EXECUTION_TYPES.join(", ")}`);
     return [];
   }
   const tableId = getMenuLabTable();
