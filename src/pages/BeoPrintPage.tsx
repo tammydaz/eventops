@@ -3184,13 +3184,14 @@ const BeoPrintPage: React.FC = () => {
       rows.push({ lineName: parentName, isChild: false, itemId: item.id });
       if (emRow?.components && emRow.components.length > 0) {
         emRow.components.forEach((c, i) => {
-          const prefix = c.isAdded ? " • + " : " • ✓ ";
-          rows.push({ lineName: `${prefix}${c.name}`, isChild: true, itemId: `${item.id}-emc${i}` });
+          // Delivery: flat rows with no bullet prefix; full-service: " • ✓ " / " • + "
+          const prefix = isDelivery ? "" : (c.isAdded ? " • + " : " • ✓ ");
+          rows.push({ lineName: `${prefix}${c.name}`.trim(), isChild: !isDelivery, itemId: `${item.id}-emc${i}` });
         });
       } else {
-        if (nameSuffixChild) rows.push({ lineName: ` • ✓ ${nameSuffixChild}`, isChild: true, itemId: `${item.id}-namesuffix` });
+        if (nameSuffixChild) rows.push({ lineName: isDelivery ? nameSuffixChild : ` • ✓ ${nameSuffixChild}`, isChild: !isDelivery, itemId: `${item.id}-namesuffix` });
         const effectiveSauce = getEffectiveSauce(item.id);
-        if (effectiveSauce && effectiveSauce !== nameSuffixChild) rows.push({ lineName: ` • ✓ ${effectiveSauce}`, isChild: true, itemId: `${item.id}-sauce` });
+        if (effectiveSauce && effectiveSauce !== nameSuffixChild) rows.push({ lineName: isDelivery ? effectiveSauce : ` • ✓ ${effectiveSauce}`, isChild: !isDelivery, itemId: `${item.id}-sauce` });
         const desc = buffetMenuEdits[item.id] ?? data?.description;
         const parentLabel = [parentName, desc, effectiveSauce, nameSuffixChild].filter(Boolean).join(" ").toLowerCase();
         if (data?.childIds?.length) {
@@ -3200,12 +3201,15 @@ const BeoPrintPage: React.FC = () => {
           });
           childIdsToShow.forEach((childId) => {
             const childName = menuItemData[childId]?.name || "Loading...";
-            rows.push({ lineName: ` • ✓ ${childName}`, isChild: true, itemId: childId });
+            rows.push({ lineName: isDelivery ? childName : ` • ✓ ${childName}`, isChild: !isDelivery, itemId: childId });
           });
         }
       }
     }
-    rows.push({ lineName: "", isChild: false, itemId: `${item.id}-blank` });
+    // Delivery: skip blank separator row — items flow flat like the physical Excel BEO
+    if (!isDelivery) {
+      rows.push({ lineName: "", isChild: false, itemId: `${item.id}-blank` });
+    }
     return rows;
   };
 
@@ -3810,8 +3814,8 @@ const BeoPrintPage: React.FC = () => {
                   {row.lineName}
                 </div>
 
-                {/* SPEC VIEW: Override input (right) — to override the spec on the left */}
-                {leftCheck === "spec" && (
+                {/* SPEC VIEW: Override input (right) — type here to override the spec shown on the left; skip blank spacer rows */}
+                {leftCheck === "spec" && row.lineName !== "" && (
                   <div className="beo-spec-col" style={{ ...styles.specCol, display: "flex", flexDirection: "column", gap: 2 }} onClick={(e) => { e.stopPropagation(); if (document.activeElement instanceof HTMLButtonElement) document.activeElement.blur(); }}>
                     <input
                       type="text"
@@ -3902,7 +3906,7 @@ const BeoPrintPage: React.FC = () => {
                   </div>
                 )}
                 <div className="beo-item-col" style={{ ...styles.itemCol, lineHeight: 1.25, ...getItemRowNameStyle(row.isChild, rows.some(r => r.isChild)) }}>{row.lineName}</div>
-                {leftCheck === "spec" && (
+                {leftCheck === "spec" && row.lineName !== "" && (
                   <div className="beo-spec-col" style={{ ...styles.specCol, display: "flex", flexDirection: "column", gap: 2 }} onClick={(e) => { e.stopPropagation(); if (document.activeElement instanceof HTMLButtonElement) document.activeElement.blur(); }}>
                     <input type="text" placeholder="spec..." value={specOverrides[overrideKey] ?? (rowIdx === 0 ? specOverrides[overrideKeyLegacy] : undefined) ?? (rowIdx === 0 ? item.specQty : undefined) ?? ""} onChange={(e) => { setSpecOverrides((prev) => ({ ...prev, [overrideKey]: e.target.value })); }} style={{ width: "100%", padding: "2px 6px", fontSize: 11, lineHeight: 1, background: "#f9f9f9", border: "1px solid #ddd", borderRadius: 2 }} className="no-print" />
                   </div>
