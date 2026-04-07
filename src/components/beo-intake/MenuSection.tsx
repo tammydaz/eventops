@@ -2600,6 +2600,43 @@ export const MenuSection = ({
                 </FoodListCollapsible>
               );
             })}</>)}
+
+            {/* ── Boxed Lunches + Sandwich Platters (always visible for delivery) ── */}
+            <div style={{ maxWidth: 640, width: "100%", margin: "0 auto" }}>
+              <BoxedLunchSection eventId={selectedEventId} canEdit={canEdit} />
+              <div style={{ marginTop: 12 }}>
+                <button
+                  type="button"
+                  onClick={() => setPlatterModalOpen((v) => !v)}
+                  style={{
+                    padding: "8px 16px",
+                    fontSize: 13,
+                    fontWeight: 600,
+                    borderRadius: 8,
+                    border: "1px solid rgba(249,115,22,0.5)",
+                    background: "rgba(249,115,22,0.1)",
+                    color: "#f97316",
+                    cursor: "pointer",
+                    marginBottom: 8,
+                  }}
+                >
+                  {platterModalOpen ? "− Hide Sandwich Platters" : "+ Sandwich Platters"}
+                </button>
+                {platterModalOpen && (
+                  <SandwichPlatterConfigModal
+                    open
+                    inline
+                    onClose={() => setPlatterModalOpen(false)}
+                    onConfirm={(rows) => {
+                      if (!selectedEventId) { setError("Select an event first"); return; }
+                      setPlatterOrdersForEvent(selectedEventId, rows);
+                      setPlatterModalOpen(false);
+                    }}
+                    initialRows={selectedEventId ? getPlatterOrdersByEventId(selectedEventId) : []}
+                  />
+                )}
+              </div>
+            </div>
           </div>
         </div>
       ) : (
