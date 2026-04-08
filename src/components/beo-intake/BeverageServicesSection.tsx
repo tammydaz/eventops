@@ -16,7 +16,9 @@ import {
 } from "../../constants/fullBarPackage";
 
 const BAR_SERVICE_FALLBACK_OPTIONS = ["N/A", "Full Bar Package", "Mimosa Bar", "FoodWerx Bartender Only", "FoodWerx Mixers Only"];
-const ICE_PROVIDED_BY_FALLBACK_OPTIONS = ["Client", "Foodwerx", "Venue"];
+/** Always offer these in the UI; merged with Airtable single-select options (deduped case-insensitively). */
+/** Include common spellings; Airtable may use "FoodWerx" — dedupe merges case-insensitively. */
+const ICE_PROVIDED_BY_FALLBACK_OPTIONS = ["Client", "Foodwerx", "FoodWerx", "Venue"];
 
 type BeverageServicesSectionProps = { embedded?: boolean };
 
@@ -49,7 +51,7 @@ export const BeverageServicesSection = ({ embedded = false }: BeverageServicesSe
 
   // Ice
   const [iceProvidedBy, setIceProvidedBy] = useState("");
-  const [iceOptions, setIceOptions] = useState<string[]>([]);
+  const [iceOptions, setIceOptions] = useState<string[]>(() => [...ICE_PROVIDED_BY_FALLBACK_OPTIONS]);
 
   /** Bar speck overrides by row index. When set, left column shows override instead of auto speck. Speck engine persistence TBD. */
   const [barSpeckOverrides, setBarSpeckOverrides] = useState<Record<number, string>>({});
@@ -90,12 +92,28 @@ export const BeverageServicesSection = ({ embedded = false }: BeverageServicesSe
         });
       }
     });
-    loadSingleSelectOptions([FIELD_IDS.ICE_PROVIDED_BY]).then((result) => {
-      if (cancelled || "error" in result) return;
-      const opts = result[FIELD_IDS.ICE_PROVIDED_BY] ?? [];
-      const names = opts.length > 0 ? opts.map((o: SingleSelectOption) => o.name) : ICE_PROVIDED_BY_FALLBACK_OPTIONS;
-      setIceOptions(names);
-    });
+    loadSingleSelectOptions([FIELD_IDS.ICE_PROVIDED_BY])
+      .then((result) => {
+        if (cancelled) return;
+        if ("error" in result) {
+          setIceOptions([...ICE_PROVIDED_BY_FALLBACK_OPTIONS]);
+          return;
+        }
+        const opts = result[FIELD_IDS.ICE_PROVIDED_BY] ?? [];
+        const fromAirtable = opts.map((o: SingleSelectOption) => o.name).filter(Boolean);
+        const seen = new Set<string>();
+        /** Airtable first so PATCH uses the base’s exact single-select string (e.g. FoodWerx). */
+        const merged = [...fromAirtable, ...ICE_PROVIDED_BY_FALLBACK_OPTIONS].filter((o) => {
+          const key = o.trim().toLowerCase();
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        });
+        setIceOptions(merged.length > 0 ? merged : [...ICE_PROVIDED_BY_FALLBACK_OPTIONS]);
+      })
+      .catch(() => {
+        if (!cancelled) setIceOptions([...ICE_PROVIDED_BY_FALLBACK_OPTIONS]);
+      });
     return () => { cancelled = true; };
   }, []);
 
@@ -188,12 +206,7 @@ export const BeverageServicesSection = ({ embedded = false }: BeverageServicesSe
     prevCompleteRef.current = signatureDrinkComplete;
   }, [signatureDrinkComplete, openBarPill]);
 
-  const hydrationComplete = hydrationProvided === "Yes" && (hydrationDrinkOptions.length > 0 || (hydrationNotes != null && String(hydrationNotes).trim() !== ""));
-  const hydrationPrevCompleteRef = useRef(false);
-  useEffect(() => {
-    if (hydrationComplete && !hydrationPrevCompleteRef.current && openBeveragePill === "hydration") setOpenBeveragePill(null);
-    hydrationPrevCompleteRef.current = hydrationComplete;
-  }, [hydrationComplete, openBeveragePill]);
+  /** Do not auto-collapse the Hydration pill when options are selected — portaled modal clicks were collapsing the whole BEO section, and users expect to stay in Beverage until they click away. */
 
   const handleWhoSuppliesChange = async (value: string) => {
     setBar((p) => ({ ...p, signatureDrinkMixersSupplier: value }));

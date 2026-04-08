@@ -185,10 +185,6 @@ export const MenuPickerModal: React.FC<MenuPickerModalProps> = ({ onAdd, onRemov
                           ...(item.routeTargetField ? { routeTargetField: item.routeTargetField } : {}),
                           hasChildren: (item.childItems?.length ?? 0) > 0,
                         });
-                        closePicker();
-                        requestAnimationFrame(() => {
-                          document.querySelector(".beo-menu-add-buttons")?.scrollIntoView({ behavior: "smooth", block: "nearest" });
-                        });
                       }
                     }}
                   >

@@ -402,59 +402,55 @@ export const FormSection = ({
         )}
       </button>
 
-      {/* Section Content with Grid */}
-      {isOpen && (
-        <>
-          <div
+      {/* Section content: keep mounted when collapsed so portaled modals (Hydration Station, etc.) are not unmounted mid-click. */}
+      <div
+        style={{
+          display: isOpen ? "grid" : "none",
+          gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+          gap: "12px",
+        }}
+      >
+        {children}
+      </div>
+      {selectedEventId && isOpen && (
+        <div style={{ marginTop: 12, paddingTop: 10, borderTop: "1px solid rgba(255,255,255,0.08)" }}>
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={isSaving}
             style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
-              gap: "12px",
+              padding: "6px 14px",
+              fontSize: `${LABEL_FONT_SIZE}px`,
+              fontWeight: 600,
+              textTransform: "none",
+              letterSpacing: "0.2px",
+              borderRadius: "6px",
+              border: `1px solid ${
+                isDelivery
+                  ? "rgba(234,179,8,0.55)"
+                  : isBeoPillChrome
+                    ? hexToRgba(BEO_SECTION_PILL_ACCENT, 0.55)
+                    : accent
+                      ? hexToRgba(accent, 0.45)
+                      : "rgba(255,107,107,0.5)"
+              }`,
+              background: isSaving
+                ? "rgba(255,255,255,0.04)"
+                : isDelivery
+                  ? "rgba(234,179,8,0.14)"
+                  : isBeoPillChrome
+                    ? hexToRgba(BEO_SECTION_PILL_ACCENT, 0.1)
+                    : accent
+                      ? hexToRgba(accent, 0.12)
+                      : "rgba(255,107,107,0.15)",
+              color: isDelivery ? "#fef08a" : isBeoPillChrome ? "#fff" : accent ? titleAccent : "#ff6b6b",
+              cursor: isSaving ? "not-allowed" : "pointer",
+              opacity: isSaving ? 0.7 : 1,
             }}
           >
-            {children}
-          </div>
-          {selectedEventId && (
-            <div style={{ marginTop: 12, paddingTop: 10, borderTop: "1px solid rgba(255,255,255,0.08)" }}>
-              <button
-                type="button"
-                onClick={handleSave}
-                disabled={isSaving}
-                style={{
-                  padding: "6px 14px",
-                  fontSize: `${LABEL_FONT_SIZE}px`,
-                  fontWeight: 600,
-                  textTransform: "none",
-                  letterSpacing: "0.2px",
-                  borderRadius: "6px",
-                  border: `1px solid ${
-                    isDelivery
-                      ? "rgba(234,179,8,0.55)"
-                      : isBeoPillChrome
-                        ? hexToRgba(BEO_SECTION_PILL_ACCENT, 0.55)
-                        : accent
-                          ? hexToRgba(accent, 0.45)
-                          : "rgba(255,107,107,0.5)"
-                  }`,
-                  background: isSaving
-                    ? "rgba(255,255,255,0.04)"
-                    : isDelivery
-                      ? "rgba(234,179,8,0.14)"
-                      : isBeoPillChrome
-                        ? hexToRgba(BEO_SECTION_PILL_ACCENT, 0.1)
-                        : accent
-                          ? hexToRgba(accent, 0.12)
-                          : "rgba(255,107,107,0.15)",
-                  color: isDelivery ? "#fef08a" : isBeoPillChrome ? "#fff" : accent ? titleAccent : "#ff6b6b",
-                  cursor: isSaving ? "not-allowed" : "pointer",
-                  opacity: isSaving ? 0.7 : 1,
-                }}
-              >
-                {showSaved ? "Saved ✓" : isSaving ? "Saving…" : "Save"}
-              </button>
-            </div>
-          )}
-        </>
+            {showSaved ? "Saved ✓" : isSaving ? "Saving…" : "Save"}
+          </button>
+        </div>
       )}
     </div>
   );

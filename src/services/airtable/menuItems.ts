@@ -24,12 +24,77 @@ export interface MenuItemRecord {
   childItems?: string[];
 }
 
-/** Boxed-lunch *box templates*: legacy uses Category + Item Name; Menu_Lab uses Item Name only. */
-function boxedLunchBoxFilterFormula(): string {
-  if (isMenuLabCatalog()) {
-    return 'FIND("Boxed Lunch", {Item Name}&"")';
+/** Legacy boxed-lunch box templates: Deli category + "Boxed Lunch" in item name. */
+const LEGACY_BOXED_LUNCH_BOX_FORMULA =
+  'AND(FIND("Deli/Sandwhiches", {Category}&""), FIND("Boxed Lunch", {Item Name}&""))';
+
+const LEGACY_MENU_NAME_FIELD = "fldW5gfSlHRTl01v1";
+const LEGACY_MENU_CHILD_FIELD = "fldIu6qmlUwAEn2W9";
+
+/**
+ * Always reads **legacy** Menu Items — same table the shadow "Catalog Item" and boxed-lunch orders use.
+ * Use for category pickers, boxed-lunch sandwiches, and box templates regardless of VITE_AIRTABLE_MENU_ITEMS_TABLE.
+ */
+async function fetchLegacyMenuItemsByFilterFormula(filterByFormula: string): Promise<MenuItemRecord[]> {
+  const tableId = MENU_ITEMS_TABLE_ID_DEFAULT;
+  const allRecords: Array<{ id: string; fields: Record<string, unknown> }> = [];
+  let offset: string | undefined;
+  do {
+    const params = new URLSearchParams();
+    params.set("filterByFormula", filterByFormula);
+    params.set("pageSize", "100");
+    params.set("returnFieldsByFieldId", "true");
+    params.append("fields[]", LEGACY_MENU_NAME_FIELD);
+    params.append("fields[]", LEGACY_MENU_CHILD_FIELD);
+    if (offset) params.set("offset", offset);
+    const data = await airtableFetch<{
+      records?: Array<{ id: string; fields: Record<string, unknown> }>;
+      offset?: string;
+    }>(`/${tableId}?${params.toString()}`);
+    if (isErrorResult(data) || !data?.records) break;
+    allRecords.push(...data.records);
+    offset = data.offset;
+  } while (offset);
+
+  const idToName: Record<string, string> = {};
+  for (const rec of allRecords) {
+    const raw = rec.fields[LEGACY_MENU_NAME_FIELD];
+    idToName[rec.id] = cleanDisplayName(typeof raw === "string" ? raw : "") || rec.id;
   }
-  return 'AND(FIND("Deli/Sandwhiches", {Category}&""), FIND("Boxed Lunch", {Item Name}&""))';
+
+  const childIdsToFetch = new Set<string>();
+  for (const rec of allRecords) {
+    for (const cid of asLinkedRecordIds(rec.fields[LEGACY_MENU_CHILD_FIELD]).filter((id) => id.startsWith("rec"))) {
+      if (!idToName[cid]) childIdsToFetch.add(cid);
+    }
+  }
+  if (childIdsToFetch.size > 0) {
+    const arr = [...childIdsToFetch];
+    for (let i = 0; i < arr.length; i += 10) {
+      const chunk = arr.slice(i, i + 10);
+      const f = `OR(${chunk.map((id) => `RECORD_ID()='${id}'`).join(",")})`;
+      const p = new URLSearchParams();
+      p.set("filterByFormula", f);
+      p.set("returnFieldsByFieldId", "true");
+      p.append("fields[]", LEGACY_MENU_NAME_FIELD);
+      const d = await airtableFetch<{ records?: Array<{ id: string; fields: Record<string, unknown> }> }>(
+        `/${tableId}?${p.toString()}`
+      );
+      if (!isErrorResult(d) && d?.records) {
+        for (const crec of d.records) {
+          const raw = crec.fields[LEGACY_MENU_NAME_FIELD];
+          idToName[crec.id] = cleanDisplayName(typeof raw === "string" ? raw : "") || crec.id;
+        }
+      }
+    }
+  }
+
+  return allRecords.map((rec) => {
+    const name = idToName[rec.id] ?? rec.id;
+    const childIds = asLinkedRecordIds(rec.fields[LEGACY_MENU_CHILD_FIELD]).filter((id) => id.startsWith("rec"));
+    const childItems = childIds.map((cid) => idToName[cid]).filter(Boolean);
+    return { id: rec.id, name, childItems: childItems.length > 0 ? childItems : undefined };
+  });
 }
 
 /** Loads rows from `getMenuItemsTable()` matching `filterByFormula`. Menu_Lab: no Test Status filter. */
@@ -130,17 +195,18 @@ async function fetchMenuItemsByFilterFormula(filterByFormula: string): Promise<M
   });
 }
 
-/** Fetch boxed-lunch box types from Menu Items (Airtable templates linked from legacy order items). */
+/** Fetch boxed-lunch box types from **legacy** Menu Items (Deli + name contains Boxed Lunch). */
 export async function fetchBoxedLunchBoxMenuItems(): Promise<MenuItemRecord[]> {
-  return fetchMenuItemsByFilterFormula(boxedLunchBoxFilterFormula());
+  return fetchLegacyMenuItemsByFilterFormula(LEGACY_BOXED_LUNCH_BOX_FORMULA);
 }
 
 /** Valid values for the {Box Lunch Type} single-select on Menu Items (fld3QYpCSZaLTU2rg). */
 export type BoxLunchTypeValue = "Classic Sandwich" | "Gourmet Sandwich" | "Wrap";
 
 /**
- * Fetch individual sandwich / wrap records tagged with a specific Box Lunch Type.
- * Legacy: {Box Lunch Type} single-select. Menu_Lab: no Box Lunch Type — match text in {Item Name}.
+ * Fetch sandwich / wrap rows for the boxed-lunch picker.
+ * Always uses **legacy** `{Box Lunch Type}` (Classic Sandwich | Gourmet Sandwich | Wrap).
+ * Menu_Lab name-guessing is not used — it mixed wrong items when the catalog pointed at Menu_Lab.
  */
 export async function fetchMenuItemsByBoxLunchType(
   boxLunchType: BoxLunchTypeValue
@@ -151,12 +217,8 @@ export async function fetchMenuItemsByBoxLunchType(
     return [];
   }
   const escaped = String(boxLunchType).replace(/\\/g, "\\\\").replace(/"/g, '\\"');
-  if (isMenuLabCatalog()) {
-    const filterByFormula = `AND(FIND("Boxed Lunch", {Item Name}&""), FIND("${escaped}", {Item Name}&""))`;
-    return fetchMenuItemsByFilterFormula(filterByFormula);
-  }
   const filterByFormula = `{Box Lunch Type} = "${escaped}"`;
-  return fetchMenuItemsByFilterFormula(filterByFormula);
+  return fetchLegacyMenuItemsByFilterFormula(filterByFormula);
 }
 
 /** Sentinel: cold display picker — each item carries `routeTargetField` (buffetChina | roomTempDisplay | desserts). */
@@ -525,23 +587,23 @@ export async function fetchDeliveryIntakeItems(
       }
     }
 
-    return parentOnly
-      .map((rec) => {
-        const menuLabName = idToName[rec.id] ?? "";
-        const legacyId = nameToLegacyId[menuLabName.toLowerCase()];
-        if (!legacyId) return null;
-        const execTokens = parseExecutionTokensFromCatalogFields(rec.fields ?? {}, ids);
-        const route = routeTargetFieldFromExecutionTokens(execTokens);
-        const legChildIds = legacyChildNames[legacyId] ?? [];
-        const childItems = legChildIds.map((cid) => legacyIdToName[cid]).filter(Boolean);
-        return {
-          id: legacyId,
-          name: menuLabName,
-          childItems: childItems.length > 0 ? childItems : undefined,
-          routeTargetField: route,
-        };
-      })
-      .filter((x): x is MenuItemRecordWithTargetField => x != null);
+    const result: MenuItemRecordWithTargetField[] = [];
+    for (const rec of parentOnly) {
+      const menuLabName = idToName[rec.id] ?? "";
+      const legacyId = nameToLegacyId[menuLabName.toLowerCase()];
+      if (!legacyId) continue;
+      const execTokens = parseExecutionTokensFromCatalogFields(rec.fields ?? {}, ids);
+      const route = routeTargetFieldFromExecutionTokens(execTokens);
+      const legChildIds = legacyChildNames[legacyId] ?? [];
+      const childItems = legChildIds.map((cid) => legacyIdToName[cid]).filter(Boolean);
+      result.push({
+        id: legacyId,
+        name: menuLabName,
+        childItems: childItems.length > 0 ? childItems : undefined,
+        routeTargetField: route,
+      });
+    }
+    return result;
   }
 
   return parentOnly.map((rec) => {
@@ -642,12 +704,12 @@ export async function fetchExecutionTokensByMenuItemIds(ids: string[]): Promise<
 }
 
 /** Full-service picker: legacy Category or Menu_Lab display+execution (see MENU_LAB_PICKER_TAGS). */
+/**
+ * Full-service picker: always queries the LEGACY table by Category field.
+ * The shadow table's "Catalog Item" linked field points to the legacy table,
+ * so pickers must return legacy record IDs — never Menu_Lab IDs.
+ */
 export async function fetchMenuItemsByCategory(categoryKey: string): Promise<MenuItemRecord[]> {
-  if (isMenuLabCatalog()) {
-    const filterByFormula = buildMenuLabCategoryFormula(categoryKey);
-    if (!filterByFormula) return [];
-    return fetchMenuItemsByFilterFormula(filterByFormula);
-  }
   const allowedCategories = CATEGORY_MAP[categoryKey as keyof typeof CATEGORY_MAP];
   if (!allowedCategories?.length) {
     return [];
@@ -658,7 +720,7 @@ export async function fetchMenuItemsByCategory(categoryKey: string): Promise<Men
     return `FIND("${escaped}", {Category})`;
   });
   const filterByFormula = `OR(${orParts.join(",")})`;
-  return fetchMenuItemsByFilterFormula(filterByFormula);
+  return fetchLegacyMenuItemsByFilterFormula(filterByFormula);
 }
 
 /** Fetch menu item display names by record IDs. Returns id -> name. Tries configured table first, then legacy fallback. */
@@ -719,17 +781,33 @@ export async function fetchMenuItemChildren(
   const configuredTable = getMenuItemsTable() || MENU_ITEMS_TABLE_ID_DEFAULT;
   const ids = getMenuCatalogFieldIds();
   const legacyIds = { displayLabelFieldId: "fldW5gfSlHRTl01v1", childItemsFieldId: "fldIu6qmlUwAEn2W9" };
+  const legacyFieldBundle = { ...ids, displayLabelFieldId: legacyIds.displayLabelFieldId, childItemsFieldId: legacyIds.childItemsFieldId };
 
-  // Try configured table first, then fall back to legacy if not found
-  const tablesToTry = configuredTable !== MENU_ITEMS_TABLE_ID_DEFAULT
-    ? [{ tableId: configuredTable, fields: ids }, { tableId: MENU_ITEMS_TABLE_ID_DEFAULT, fields: { ...ids, displayLabelFieldId: legacyIds.displayLabelFieldId, childItemsFieldId: legacyIds.childItemsFieldId } }]
-    : [{ tableId: configuredTable, fields: ids }];
+  /**
+   * Event Menu "Catalog Item" links to **legacy** rows. Child Items (sauces, dessert components) are authored on legacy.
+   * Menu_Lab copies often have empty Child Items — querying Menu_Lab first returned [] and hid children (e.g. dessert displays).
+   * Order: legacy first when both exist; if a row has no linked children, try the next table.
+   */
+  const tablesToTry =
+    configuredTable !== MENU_ITEMS_TABLE_ID_DEFAULT
+      ? [
+          { tableId: MENU_ITEMS_TABLE_ID_DEFAULT, fields: legacyFieldBundle },
+          { tableId: configuredTable, fields: ids },
+        ]
+      : [{ tableId: configuredTable, fields: legacyFieldBundle }];
 
   let catalogRecId: string | null = catalogItemId.startsWith("rec") ? catalogItemId : null;
   let foundFields: Record<string, unknown> | null = null;
   let foundFieldConfig = ids;
 
-  for (const { tableId, fields } of tablesToTry) {
+  function childFieldHasLinks(fields: Record<string, unknown>, childFieldId: string): boolean {
+    const raw = fields[childFieldId];
+    if (Array.isArray(raw)) return raw.length > 0;
+    return raw != null && raw !== "";
+  }
+
+  for (let ti = 0; ti < tablesToTry.length; ti++) {
+    const { tableId, fields } = tablesToTry[ti];
     let recId = catalogRecId;
     if (!recId) {
       const escaped = String(catalogItemId).replace(/"/g, '\\"');
@@ -754,9 +832,11 @@ export async function fetchMenuItemChildren(
       records?: Array<{ id: string; fields: Record<string, unknown> }>;
     }>(`/${tableId}?${listParams.toString()}`);
     if (!isErrorResult(data) && data?.records?.[0]) {
-      foundFields = data.records[0].fields;
+      const candidate = data.records[0].fields;
+      const hasLinks = childFieldHasLinks(candidate, fields.childItemsFieldId);
+      foundFields = candidate;
       foundFieldConfig = fields;
-      break;
+      if (hasLinks || ti === tablesToTry.length - 1) break;
     }
   }
 

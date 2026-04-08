@@ -284,10 +284,19 @@ export const BeoIntakePage = () => {
       if (loadStale()) return;
       const uniqueCatalogIds = [...new Set(catalogIds)];
       const childrenMap: Record<string, { id: string; name: string }[]> = {};
-      for (const id of uniqueCatalogIds) {
-        const children = await fetchMenuItemChildren(id);
-        childrenMap[id] = Array.isArray(children) ? children : [];
-      }
+      await Promise.all(
+        uniqueCatalogIds.map(async (id) => {
+          try {
+            const children = await fetchMenuItemChildren(id);
+            const arr = Array.isArray(children) ? children : [];
+            console.log("[loadShadowMenu] fetchMenuItemChildren", { catalogId: id, childCount: arr.length, children: arr.map(c => c.name) });
+            childrenMap[id] = arr;
+          } catch (err) {
+            console.warn("[loadShadowMenu] fetchMenuItemChildren failed for", id, err);
+            childrenMap[id] = [];
+          }
+        })
+      );
       if (loadStale()) return;
       const rowsWithComponents = res.map((r) => {
         const defaultChildren = (r.catalogItemId && childrenMap[r.catalogItemId]) || [];
@@ -509,12 +518,31 @@ export const BeoIntakePage = () => {
         storeTarget === DELIVERY_COLD_DISPLAY_TARGET_FIELD || storeTarget === DELIVERY_INTAKE_TARGET_FIELD
           ? item.routeTargetField ?? null
           : item.routeTargetField ?? storeTarget;
-      if (!selectedEventId || !targetField) return;
+      console.log("[handlePickerAdd]", { itemId: item.id, name: item.name, storeTarget, routeTargetField: item.routeTargetField, resolvedTargetField: targetField });
+      if (!selectedEventId || !targetField) {
+        console.warn("[handlePickerAdd] Skipped: no selectedEventId or targetField", { selectedEventId, targetField });
+        return;
+      }
       const mappedSection = targetFieldToSection(targetField);
-      if (!mappedSection) return;
+      if (!mappedSection) {
+        console.warn("[handlePickerAdd] Skipped: targetFieldToSection returned null for", targetField);
+        return;
+      }
+
+      // Prevent duplicate shadow rows
+      const alreadyExists = shadowMenuRows.some(
+        (r) => r.catalogItemId === item.id || (r.catalogItemName ?? "").toLowerCase() === item.name.toLowerCase()
+      );
+      if (alreadyExists) {
+        console.log("[handlePickerAdd] Item already in shadow menu, skipping create", { itemId: item.id, name: item.name });
+        return;
+      }
 
       const createResult = await createEventMenuRow(selectedEventId, mappedSection, item.id);
-      if (createResult && "error" in createResult) return;
+      if (createResult && "error" in createResult) {
+        console.error("[handlePickerAdd] createEventMenuRow failed:", createResult);
+        return;
+      }
 
       const newRowId = (createResult as { id: string }).id;
       const newRow: EventMenuRow & { catalogItemName: string; components?: EventMenuRowComponent[] } = {
@@ -539,20 +567,7 @@ export const BeoIntakePage = () => {
       await loadShadowMenu({ retryIfEmpty: true });
       await loadEventData(selectedEventId);
 
-      // Auto-open edit modal for packages with children so user can configure them
-      if (item.hasChildren) {
-        setTimeout(() => {
-          setShadowMenuRows((current) => {
-            const row = current.find((r) => r.catalogItemId === item.id);
-            if (row) {
-              setEditingShadowRow(row);
-              setEditDraft({ customText: row.customText ?? "", packOutNotes: row.packOutNotes ?? "" });
-              setEditDisplayNameEditing(false);
-            }
-            return current;
-          });
-        }, 300);
-      }
+      // Edit modal is opened manually via the Edit button on each item
 
       const vesselTypeMap: Record<string, string> = {
         buffetMetal: VESSEL_TYPE_VALUES.METAL_HOT,
@@ -576,10 +591,16 @@ export const BeoIntakePage = () => {
         const nameLower = itemName.toLowerCase();
         row = shadowMenuRows.find(
           (r) => (r.catalogItemName ?? "").toLowerCase() === nameLower ||
-                 (r.customText ?? "").toLowerCase() === nameLower
+                 (r.customText ?? "").toLowerCase() === nameLower ||
+                 (r.displayName ?? "").toLowerCase() === nameLower
         );
       }
-      if (!row) return;
+      if (!row) {
+        console.warn("[handlePickerRemove] No matching row found for", { catalogItemId, itemName, rowCount: shadowMenuRows.length });
+        return;
+      }
+      console.log("[handlePickerRemove] Deleting row", { rowId: row.id, catalogItemId: row.catalogItemId, name: row.catalogItemName });
+      setShadowMenuRows((prev) => prev.filter((r) => r.id !== row!.id));
       await deleteEventMenuRow(row.id);
       await syncShadowToEvent(selectedEventId);
       await loadShadowMenu();
@@ -639,7 +660,18 @@ export const BeoIntakePage = () => {
       if (usePickerStore.getState().isOpen) return;
       if (usePickerStore.getState().isWithinCloseGrace()) return;
       const target = e.target as HTMLElement;
-      if (target.closest(".picker-modal-backdrop") || target.closest(".picker-modal") || target.closest(".picker-done-button") || target.closest(".station-config-modal") || target.closest(".station-picker-modal") || target.closest("[role='dialog']")) return;
+      if (
+        target.closest(".picker-modal-backdrop") ||
+        target.closest(".picker-modal") ||
+        target.closest(".picker-done-button") ||
+        target.closest(".station-config-modal") ||
+        target.closest(".station-picker-modal") ||
+        target.closest("[role='dialog']") ||
+        target.closest(".beo-edit-modal-backdrop") ||
+        target.closest(".beo-edit-modal") ||
+        target.closest("[data-beo-portal-modal]")
+      )
+        return;
       if (!target.closest(".beo-pill")) {
         window.dispatchEvent(new CustomEvent("beo-collapse-all-pills"));
       }
@@ -1006,7 +1038,7 @@ export const BeoIntakePage = () => {
                                                 <td style={{ padding: "2px 8px 0 8px", paddingBottom: 12, paddingLeft: 0, verticalAlign: "top", textAlign: "center" }}>
                                                   <span style={{ display: "inline-flex", gap: 4 }}>
                                                     <button type="button" disabled={isLocked} onClick={() => { setEditingShadowRow(row); setEditDraft({ customText: row.customText ?? "", packOutNotes: row.packOutNotes ?? "" }); setEditDisplayNameEditing(false); }} style={btnStyle} title="Edit">Edit</button>
-                                                    <button type="button" disabled={isLocked} onClick={async () => { await deleteEventMenuRow(row.id); await syncShadowToEvent(selectedEventId!); await loadShadowMenu(); }} style={btnStyle} title="Remove">Remove</button>
+                                                    <button type="button" disabled={isLocked} onClick={async () => { setShadowMenuRows((prev) => prev.filter((r) => r.id !== row.id)); await deleteEventMenuRow(row.id); await syncShadowToEvent(selectedEventId!); await loadShadowMenu(); }} style={btnStyle} title="Remove">Remove</button>
                                                   </span>
                                                 </td>
                                                 <td style={{ width: 140, minWidth: 140, padding: "2px 0 0", paddingBottom: 12, verticalAlign: "top" }} />
@@ -1112,9 +1144,16 @@ export const BeoIntakePage = () => {
             onCancel={() => setPendingEventId(null)}
           />
           {editingShadowRow && (
-            <div className="beo-edit-modal-backdrop" style={{ position: "fixed", inset: 0, zIndex: 2147483646, background: "rgba(0,0,0,0.7)", display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }} onClick={(e) => e.target === e.currentTarget && setEditingShadowRow(null)}>
+            <div
+              className="beo-edit-modal-backdrop"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="beo-edit-modal-title"
+              style={{ position: "fixed", inset: 0, zIndex: 2147483646, background: "rgba(0,0,0,0.7)", display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}
+              onClick={(e) => e.target === e.currentTarget && setEditingShadowRow(null)}
+            >
               <div className="beo-edit-modal" style={{ background: "#1a1a1a", borderRadius: 12, border: "1px solid rgba(255,255,255,0.2)", padding: 20, maxWidth: 420, width: "100%", maxHeight: "90vh", overflowY: "auto" }} onClick={(e) => e.stopPropagation()}>
-                <div style={{ fontSize: 16, fontWeight: 600, color: "#fff", marginBottom: 16 }}>Edit: {editingShadowRow.catalogItemName}</div>
+                <div id="beo-edit-modal-title" style={{ fontSize: 16, fontWeight: 600, color: "#fff", marginBottom: 16 }}>Edit: {editingShadowRow.catalogItemName}</div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 16 }}>
                   <div>
                     <label style={{ fontSize: 12, color: "rgba(255,255,255,0.7)" }}>Display name</label>

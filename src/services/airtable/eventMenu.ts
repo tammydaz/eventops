@@ -455,8 +455,14 @@ export async function syncShadowToEvent(
     return true;
   });
 
-  if (topLevelRows.length === 0) {
-    return { success: true };
+  if (topLevelRows.length === 0 && !(options?.injectedRows?.length)) {
+    // No rows at all and no injected rows — clear all Events menu fields
+    const clearUpdates: Record<string, string[]> = {};
+    for (const fieldId of new Set(Object.values(sectionToField))) {
+      clearUpdates[fieldId] = [];
+    }
+    if (Object.keys(clearUpdates).length === 0) return { success: true };
+    return updateEventMultiple(eventId, clearUpdates);
   }
 
   const bySection: Record<string, string[]> = {};

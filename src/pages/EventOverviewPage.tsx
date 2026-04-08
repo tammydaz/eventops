@@ -25,7 +25,6 @@ import { loadClientIntakeRecord } from "../services/airtable/clientIntake";
 const SECTION_COLORS = {
   summary: { accent: "#ff6b6b", border: "rgba(204,0,0,0.35)", bg: "rgba(204,0,0,0.06)", btnBg: "rgba(204,0,0,0.12)" },
   steps: { accent: "#3b82f6", border: "rgba(59,130,246,0.35)", bg: "rgba(59,130,246,0.06)", btnBg: "rgba(59,130,246,0.12)" },
-  call: { accent: "#f97316", border: "rgba(249,115,22,0.35)", bg: "rgba(249,115,22,0.06)", btnBg: "rgba(249,115,22,0.12)" },
   actions: { accent: "#22c55e", border: "rgba(34,197,94,0.35)", bg: "rgba(34,197,94,0.06)", btnBg: "rgba(34,197,94,0.12)" },
   documents: { accent: "#00bcd4", border: "rgba(0,188,212,0.35)", bg: "rgba(0,188,212,0.06)", btnBg: "rgba(0,188,212,0.12)" },
   tasks: { accent: "#eab308", border: "rgba(234,179,8,0.35)", bg: "rgba(234,179,8,0.06)", btnBg: "rgba(234,179,8,0.12)" },
@@ -185,16 +184,6 @@ function NewEventForm({
     </div>
   );
 }
-
-/** BEO sections for "During the call" — same order as jump nav; param value matches BeoIntakePage ?section= */
-const BEO_CALL_SECTIONS: { param: string; label: string }[] = [
-  { param: "header", label: "Header" },
-  { param: "menu", label: "Menu & Beverages" },
-  { param: "bar", label: "Bar Service" },
-  { param: "serviceware", label: "Plates / Serviceware" },
-  { param: "timeline", label: "Timeline" },
-  { param: "notes", label: "Notes / Logistics" },
-];
 
 const styles: Record<string, React.CSSProperties> = {
   container: {
@@ -697,42 +686,6 @@ const EventOverviewPage: React.FC = () => {
                 )}
               </div>
             ))}
-          </div>
-
-          {/* During the call — jump to BEO section so staff can open the part they're discussing */}
-          <div style={{ ...styles.section, borderColor: s.call.border, background: s.call.bg }}>
-            <h2 style={{ ...styles.sectionTitle, color: s.call.accent }}>During the call</h2>
-            <p style={{ fontSize: 11, color: "rgba(255,255,255,0.5)", marginBottom: 12 }}>Click a section to open BEO Intake with that part ready.</p>
-            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              {BEO_CALL_SECTIONS.map(({ param, label }) => (
-                <Link
-                  key={param}
-                  to={`/beo-intake/${id}?section=${param}`}
-                  style={{
-                    display: "block",
-                    padding: "8px 12px",
-                    borderRadius: 6,
-                    background: "rgba(30,30,30,0.5)",
-                    border: "1px solid rgba(249,115,22,0.2)",
-                    color: s.call.accent,
-                    fontSize: 13,
-                    fontWeight: 500,
-                    textDecoration: "none",
-                    transition: "background 0.15s, border-color 0.15s",
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.background = "rgba(249,115,22,0.12)";
-                    e.currentTarget.style.borderColor = "rgba(249,115,22,0.4)";
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.background = "rgba(30,30,30,0.5)";
-                    e.currentTarget.style.borderColor = "rgba(249,115,22,0.2)";
-                  }}
-                >
-                  {label}
-                </Link>
-              ))}
-            </div>
           </div>
 
           {/* Actions */}

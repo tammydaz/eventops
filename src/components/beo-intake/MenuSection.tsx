@@ -53,6 +53,11 @@ function laneUsesSauceOnFirstChild(lane: string): boolean {
   return lane === "passedAppetizers" || lane === "presentedAppetizers";
 }
 
+/** Match Menu_Lab vs legacy Item Name despite extra spaces / case. */
+function normMenuNameForMatch(s: string): string {
+  return s.trim().toLowerCase().replace(/\s+/g, " ");
+}
+
 /** Delivery “Food List”: teal header, collapsible — matches full-service speck table layout. */
 function FoodListCollapsible(props: { title: string; defaultOpen?: boolean; children: ReactNode }) {
   const { title, defaultOpen = false, children } = props;
@@ -1529,6 +1534,142 @@ export const MenuSection = ({
         if (firstChildId) {
           recordsNeedingChild.push({ recId: rec.id, firstChildId });
           if (!allNames[firstChildId]) childIdsToFetch.add(firstChildId);
+        }
+      }
+    }
+
+    /**
+     * Events may link to Menu_Lab IDs while Child Items are only linked on the legacy row (e.g. Decadent Dessert Display).
+     * We already have the display name from Menu_Lab; legacy fallback by RECORD_ID skipped those IDs. Pull children from legacy by exact Item Name.
+     */
+    if (MENU_TABLE_ID !== LEGACY_MENU_ITEMS_TABLE_ID && uniqueIds.length > 0) {
+      const legacyLabel = "fldW5gfSlHRTl01v1";
+      const legacyChildren = "fldIu6qmlUwAEn2W9";
+      const parentsMissingChildren = uniqueIds.filter((id) => !(childIdsByParent[id]?.length));
+      if (parentsMissingChildren.length > 0) {
+        const parentIdsByNormName = new Map<string, string[]>();
+        const displayNamesUnique: string[] = [];
+        const seenNorm = new Set<string>();
+        for (const pid of parentsMissingChildren) {
+          const nm = (allNames[pid] ?? "").trim();
+          if (!nm) continue;
+          const k = normMenuNameForMatch(nm);
+          const arr = parentIdsByNormName.get(k) ?? [];
+          arr.push(pid);
+          parentIdsByNormName.set(k, arr);
+          if (!seenNorm.has(k)) {
+            seenNorm.add(k);
+            displayNamesUnique.push(nm);
+          }
+        }
+        const legacyNameVariantsForFormula = (raw: string): string[] => {
+          const t = raw.trim();
+          const out = new Set<string>([t]);
+          const trimmedEndDash = t.replace(/\s*[–—-]\s*$/u, "").trim();
+          if (trimmedEndDash && trimmedEndDash !== t) out.add(trimmedEndDash);
+          if (t.length > 0 && !/\s[–—-]\s*$/u.test(t)) {
+            out.add(`${t} –`);
+            out.add(`${t} -`);
+          }
+          return [...out];
+        };
+
+        const lowerEqClause = (name: string) => {
+          const escaped = String(name).replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+          return `LOWER({Item Name}) = LOWER("${escaped}")`;
+        };
+
+        for (let ni = 0; ni < displayNamesUnique.length; ni += 10) {
+          if (eventId && useEventStore.getState().selectedEventId !== eventId) return;
+          const nameChunk = displayNamesUnique.slice(ni, ni + 10);
+          const orParts: string[] = [];
+          for (const n of nameChunk) {
+            for (const variant of legacyNameVariantsForFormula(n)) {
+              orParts.push(lowerEqClause(variant));
+            }
+          }
+          const formula = `OR(${orParts.join(",")})`;
+          const params = new URLSearchParams();
+          params.set("filterByFormula", formula);
+          params.set("pageSize", "100");
+          params.set("returnFieldsByFieldId", "true");
+          params.append("fields[]", legacyLabel);
+          params.append("fields[]", legacyChildren);
+          try {
+            const data = await airtableFetch<{ records?: Array<{ id: string; fields: Record<string, unknown> }> }>(
+              `/${LEGACY_MENU_ITEMS_TABLE_ID}?${params.toString()}`
+            );
+            if (!isErrorResult(data) && data?.records) {
+              const scored = data.records
+                .map((rec) => {
+                  const nameRaw = rec.fields[legacyLabel];
+                  const rowName = typeof nameRaw === "string" ? nameRaw.trim() : "";
+                  const cids = asLinkedRecordIds(rec.fields[legacyChildren]).filter((id) => id.startsWith("rec"));
+                  return { rowName, cids };
+                })
+                .filter((x) => x.rowName)
+                .sort((a, b) => b.cids.length - a.cids.length);
+              for (const { rowName, cids } of scored) {
+                if (!cids.length) continue;
+                const pids = parentIdsByNormName.get(normMenuNameForMatch(rowName));
+                if (!pids?.length) continue;
+                for (const pid of pids) {
+                  if (!(childIdsByParent[pid]?.length)) {
+                    childIdsByParent[pid] = cids;
+                  }
+                }
+              }
+            }
+          } catch (err) {
+            console.error("Legacy hydrate: child items by menu item name failed:", err);
+          }
+        }
+
+        /** If still no children (typo / punctuation / duplicate rows), try FIND on a long enough substring. */
+        const stillMissing = parentsMissingChildren.filter((pid) => !(childIdsByParent[pid]?.length));
+        for (const pid of stillMissing) {
+          if (eventId && useEventStore.getState().selectedEventId !== eventId) return;
+          const nm = (allNames[pid] ?? "").trim();
+          if (nm.length < 8) continue;
+          const needle = nm.slice(0, Math.min(40, nm.length)).replace(/"/g, '\\"');
+          const formula = `AND(FIND(LOWER("${needle.toLowerCase()}"), LOWER({Item Name}&"")), LEN({Item Name}) > 5)`;
+          const params = new URLSearchParams();
+          params.set("filterByFormula", formula);
+          params.set("pageSize", "20");
+          params.set("returnFieldsByFieldId", "true");
+          params.append("fields[]", legacyLabel);
+          params.append("fields[]", legacyChildren);
+          try {
+            const data = await airtableFetch<{ records?: Array<{ id: string; fields: Record<string, unknown> }> }>(
+              `/${LEGACY_MENU_ITEMS_TABLE_ID}?${params.toString()}`
+            );
+            if (isErrorResult(data) || !data?.records?.length) continue;
+            const best = [...data.records]
+              .map((rec) => {
+                const nameRaw = rec.fields[legacyLabel];
+                const rowName = typeof nameRaw === "string" ? nameRaw.trim() : "";
+                const cids = asLinkedRecordIds(rec.fields[legacyChildren]).filter((id) => id.startsWith("rec"));
+                return { rowName, cids };
+              })
+              .filter((x) => x.rowName && x.cids.length > 0)
+              .sort((a, b) => b.cids.length - a.cids.length)[0];
+            if (best && normMenuNameForMatch(best.rowName) === normMenuNameForMatch(nm)) {
+              childIdsByParent[pid] = best.cids;
+            }
+          } catch (err) {
+            console.error("Legacy hydrate FIND fallback failed:", err);
+          }
+        }
+        // Infer "sauce" line from first child name when still using child-as-sauce heuristic
+        for (const pid of parentsMissingChildren) {
+          const cids = childIdsByParent[pid];
+          const firstChildId = cids?.[0];
+          if (firstChildId && !allNames[firstChildId]) {
+            childIdsToFetch.add(firstChildId);
+          }
+          if (firstChildId && !allSauce[pid]) {
+            recordsNeedingChild.push({ recId: pid, firstChildId });
+          }
         }
       }
     }
