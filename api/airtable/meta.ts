@@ -25,7 +25,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const apiKey = process.env.AIRTABLE_API_KEY?.trim();
   const baseId = process.env.AIRTABLE_BASE_ID?.trim();
-  const path = (req.query.path as string)?.trim() || "";
+  const path = (req.query.path as string)?.trim() || "/tables";
 
   if (!baseId) {
     return res.status(500).json({
