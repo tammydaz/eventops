@@ -59,7 +59,7 @@ async function getTaskFieldIds(): Promise<Record<string, string> | null> {
     return null;
   }
   const data = await airtableMetaFetch<AirtableTablesResponse>("");
-  if (isErrorResult(data) || !Array.isArray(data.tables)) {
+  if (isErrorResult(data) || !Array.isArray(data?.tables)) {
     cachedTaskFieldIds = null;
     return null;
   }
@@ -68,7 +68,7 @@ async function getTaskFieldIds(): Promise<Record<string, string> | null> {
     cachedTaskFieldIds = null;
     return null;
   }
-  const byName = Object.fromEntries(table.fields.map((f) => [f.name, f.id]));
+  const byName = Object.fromEntries((table.fields ?? []).map((f) => [f.name, f.id]));
   const ids: Record<string, string> = {};
   for (const name of TASK_FIELD_NAMES) {
     if (byName[name]) ids[name] = byName[name];

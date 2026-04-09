@@ -29,34 +29,40 @@ let cachedStationsFieldIds: StationsFieldIds | null | undefined = undefined;
 async function getStationsFieldIds(): Promise<StationsFieldIds | null> {
   if (cachedStationsFieldIds) return cachedStationsFieldIds;
   const tableId = getStationsTable();
-  const data = await airtableMetaFetch<{ tables: Array<{ id: string; name: string; fields: Array<{ id: string; name: string; type: string }> }> }>("");
-  if (isErrorResult(data) || !Array.isArray(data.tables)) {
+  try {
+    const data = await airtableMetaFetch<{ tables: Array<{ id: string; name: string; fields: Array<{ id: string; name: string; type: string }> }> }>("");
+    if (isErrorResult(data) || !Array.isArray(data?.tables)) {
+      cachedStationsFieldIds = null;
+      return null;
+    }
+    const table = data.tables.find((t) => t.id === tableId || t.name === tableId);
+    if (!table) {
+      cachedStationsFieldIds = null;
+      return null;
+    }
+    const fields = table.fields ?? [];
+    const byName = (name: string) => fields.find((f) => f.name === name)?.id ?? "";
+    const eventField = fields.find((f) => f.id === STATION_EVENT_FIELD_ID || f.name === "Event");
+    const stationTypeId = byName("Station Type") || STATION_TYPE_FIELD_ID;
+    const stationTypeField = fields.find((f) => f.id === stationTypeId || f.name === "Station Type");
+    cachedStationsFieldIds = {
+      stationType: stationTypeId,
+      stationItems: byName("Station Items") || STATION_ITEMS_FIELD_ID,
+      event: byName("Event") || STATION_EVENT_FIELD_ID,
+      eventFieldName: eventField?.name ?? "Event",
+      stationNotes: byName("Station Notes") || STATION_NOTES_FIELD_ID,
+      stationTypeFieldName: stationTypeField?.name ?? "Station Type",
+      stationPreset: byName("Station Preset") || byName("Station Presets") || undefined,
+      stationComponents: byName("Station Components") || undefined,
+      customComponents: byName("Custom Components") || undefined,
+      customItems: byName("Custom Items") || byName("Additional Components") || byName("Station Options") || byName("Components") || undefined,
+      beoPlacement: byName("BEO Placement") || byName("Placement") || byName("BEO Section") || undefined,
+    };
+    return cachedStationsFieldIds;
+  } catch {
     cachedStationsFieldIds = null;
     return null;
   }
-  const table = data.tables.find((t) => t.id === tableId || t.name === tableId);
-  if (!table) {
-    cachedStationsFieldIds = null;
-    return null;
-  }
-  const byName = (name: string) => table.fields.find((f) => f.name === name)?.id ?? "";
-  const eventField = table.fields.find((f) => f.id === STATION_EVENT_FIELD_ID || f.name === "Event");
-  const stationTypeId = byName("Station Type") || STATION_TYPE_FIELD_ID;
-  const stationTypeField = table.fields.find((f) => f.id === stationTypeId || f.name === "Station Type");
-  cachedStationsFieldIds = {
-    stationType: stationTypeId,
-    stationItems: byName("Station Items") || STATION_ITEMS_FIELD_ID,
-    event: byName("Event") || STATION_EVENT_FIELD_ID,
-    eventFieldName: eventField?.name ?? "Event",
-    stationNotes: byName("Station Notes") || STATION_NOTES_FIELD_ID,
-    stationTypeFieldName: stationTypeField?.name ?? "Station Type",
-    stationPreset: byName("Station Preset") || byName("Station Presets") || undefined,
-    stationComponents: byName("Station Components") || undefined,
-    customComponents: byName("Custom Components") || undefined,
-    customItems: byName("Custom Items") || byName("Additional Components") || byName("Station Options") || byName("Components") || undefined,
-    beoPlacement: byName("BEO Placement") || byName("Placement") || byName("BEO Section") || undefined,
-  };
-  return cachedStationsFieldIds;
 }
 
 /** Fetch Station Type single-select options from Stations table (cached). */
@@ -64,9 +70,9 @@ export async function getStationTypeOptions(): Promise<string[]> {
   const fieldIds = await getStationsFieldIds();
   if (!fieldIds?.stationType) return [];
   const data = await airtableMetaFetch<{ tables: Array<{ id: string; name: string; fields: Array<{ id: string; name: string; type: string; options?: { choices?: Array<{ id: string; name: string }> } }> }> }>("");
-  if (isErrorResult(data) || !Array.isArray(data.tables)) return [];
+  if (isErrorResult(data) || !Array.isArray(data?.tables)) return [];
   const table = data.tables.find((t) => t.id === getStationsTable() || t.name === getStationsTable());
-  const field = table?.fields.find((f) => f.id === fieldIds.stationType);
+  const field = table?.fields?.find((f) => f.id === fieldIds.stationType);
   if (field?.type === "singleSelect" && field.options?.choices?.length) {
     return field.options.choices.map((c) => c.name);
   }
@@ -353,11 +359,11 @@ export const loadMenuItemsByStationType = async (
     // 2. Fallback: Menu Items.Station Type filter (field name from schema)
     const metaData = await airtableMetaFetch<{ tables: Array<{ id: string; name?: string; fields: Array<{ id: string; name: string }> }> }>("");
     let menuStationTypeFieldName = "Station Type";
-    if (!isErrorResult(metaData) && Array.isArray(metaData.tables)) {
+    if (!isErrorResult(metaData) && Array.isArray(metaData?.tables)) {
       const menuTable = metaData.tables.find(
         (t) => t.id === tableId || t.name === "Menu Items" || t.id === MENU_LAB_TABLE_ID || t.name === "Menu_Lab"
       );
-      const stationTypeField = menuTable?.fields.find((f) => f.id === MENU_ITEMS_STATION_TYPE_FIELD_ID || f.name === "Station Type");
+      const stationTypeField = menuTable?.fields?.find((f) => f.id === MENU_ITEMS_STATION_TYPE_FIELD_ID || f.name === "Station Type");
       if (stationTypeField?.name) menuStationTypeFieldName = stationTypeField.name;
     }
 
