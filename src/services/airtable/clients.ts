@@ -28,12 +28,13 @@ export const CLIENT_FIELD_IDS = {
   RELATIONSHIP_MANAGER: "fldauL1pc8b9ZLFoS",  // Single line text
   CLIENT_TYPE: "fldXsSsO5cRcpzIsd",           // Single select: Corporate, Individual, Venue Partner, Other
   TOTAL_EVENT_COUNT: "fldnsZEyULP37ZH2q",      // Count — READ ONLY
-  LAST_EVENT_DATE: "fldXDogeJmlokBLyX",        // Date — may be computed
+  LAST_EVENT_DATE: "fldXDogeJmlokBLyX",        // Rollup/computed — READ ONLY
 } as const;
 
 // ── Computed / read-only fields — never write to these ──
 const READ_ONLY_FIELDS = new Set<string>([
   CLIENT_FIELD_IDS.TOTAL_EVENT_COUNT,
+  CLIENT_FIELD_IDS.LAST_EVENT_DATE,
 ]);
 
 // ── Types ──
