@@ -63,12 +63,12 @@ async function getTaskFieldIds(): Promise<Record<string, string> | null> {
     cachedTaskFieldIds = null;
     return null;
   }
-  const table = data.tables.find((t) => t.id === tableId || t.name === tableId);
+  const table = data.tables?.find((t) => t.id === tableId || t.name === tableId);
   if (!table) {
     cachedTaskFieldIds = null;
     return null;
   }
-  const byName = Object.fromEntries(table.fields.map((f) => [f.name, f.id]));
+  const byName = Object.fromEntries((table.fields ?? []).map((f) => [f.name, f.id]));
   const ids: Record<string, string> = {};
   for (const name of TASK_FIELD_NAMES) {
     if (byName[name]) ids[name] = byName[name];

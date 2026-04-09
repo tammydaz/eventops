@@ -34,15 +34,15 @@ async function getStationsFieldIds(): Promise<StationsFieldIds | null> {
     cachedStationsFieldIds = null;
     return null;
   }
-  const table = data.tables.find((t) => t.id === tableId || t.name === tableId);
+  const table = data.tables?.find((t) => t.id === tableId || t.name === tableId);
   if (!table) {
     cachedStationsFieldIds = null;
     return null;
   }
-  const byName = (name: string) => table.fields.find((f) => f.name === name)?.id ?? "";
-  const eventField = table.fields.find((f) => f.id === STATION_EVENT_FIELD_ID || f.name === "Event");
+  const byName = (name: string) => (table.fields ?? []).find((f) => f.name === name)?.id ?? "";
+  const eventField = (table.fields ?? []).find((f) => f.id === STATION_EVENT_FIELD_ID || f.name === "Event");
   const stationTypeId = byName("Station Type") || STATION_TYPE_FIELD_ID;
-  const stationTypeField = table.fields.find((f) => f.id === stationTypeId || f.name === "Station Type");
+  const stationTypeField = (table.fields ?? []).find((f) => f.id === stationTypeId || f.name === "Station Type");
   cachedStationsFieldIds = {
     stationType: stationTypeId,
     stationItems: byName("Station Items") || STATION_ITEMS_FIELD_ID,
@@ -65,8 +65,8 @@ export async function getStationTypeOptions(): Promise<string[]> {
   if (!fieldIds?.stationType) return [];
   const data = await airtableMetaFetch<{ tables: Array<{ id: string; name: string; fields: Array<{ id: string; name: string; type: string; options?: { choices?: Array<{ id: string; name: string }> } }> }> }>("");
   if (isErrorResult(data)) return [];
-  const table = data.tables.find((t) => t.id === getStationsTable() || t.name === getStationsTable());
-  const field = table?.fields.find((f) => f.id === fieldIds.stationType);
+  const table = data.tables?.find((t) => t.id === getStationsTable() || t.name === getStationsTable());
+  const field = (table?.fields ?? []).find((f) => f.id === fieldIds.stationType);
   if (field?.type === "singleSelect" && field.options?.choices?.length) {
     return field.options.choices.map((c) => c.name);
   }
