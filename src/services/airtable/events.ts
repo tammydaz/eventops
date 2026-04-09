@@ -1255,7 +1255,8 @@ export const loadSingleSelectOptions = async (
   if (typeof tableKey !== "string") return tableKey;
 
   const data = await airtableMetaFetch<AirtableTablesResponse>("");
-  if (isErrorResult(data) || !Array.isArray(data.tables)) return isErrorResult(data) ? data : { error: true, message: "Meta API returned no tables array." };
+  if (isErrorResult(data)) return data;
+  if (!Array.isArray(data.tables)) return { error: true, message: "Meta API returned no tables array." };
 
   const table = data.tables.find((item) => item.id === tableKey || item.name === tableKey);
   if (!table) {
