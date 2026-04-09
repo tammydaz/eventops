@@ -28,7 +28,6 @@ function App() {
   const isIntakeFOH = pathname.startsWith("/intake-foh");
   const isEventOverview = pathname.startsWith("/event/");
   const isClientOverview = pathname.startsWith("/client/");
-  const isClients = pathname.startsWith("/clients");
   const isDeliveryIntake = pathname === "/delivery/intake";
   const isEarlyEventSections = pathname.startsWith("/early-event-sections");
 
@@ -50,7 +49,7 @@ function App() {
     }
   }, [pathname, selectEvent]);
 
-  if (isPrintTest || isHome || isQuickIntake || isWatchtower || isPapaChulo || isFOH || isDashboardOld || isBeoIntake || isBeoPrint || isSeedDemo || isInvoiceIntake || isFeedbackIssues || isAdmin || isKitchen || isFlair || isDeliveryCommand || isIntakeFOH || isEventOverview || isClientOverview || isClients || isDeliveryIntake || isEarlyEventSections) {
+  if (isPrintTest || isHome || isQuickIntake || isWatchtower || isPapaChulo || isFOH || isDashboardOld || isBeoIntake || isBeoPrint || isSeedDemo || isInvoiceIntake || isFeedbackIssues || isAdmin || isKitchen || isFlair || isDeliveryCommand || isIntakeFOH || isEventOverview || isClientOverview || isDeliveryIntake || isEarlyEventSections) {
     return (
       <AuthGuard>
         <Router selectedEventId={selectedEventId} />

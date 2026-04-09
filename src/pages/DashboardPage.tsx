@@ -201,7 +201,6 @@ const NAV: NavItem[] = [
   { label: "Open Event", href: "/beo-intake" },
   { label: "Departments", href: "#departments", expandable: true },
   { label: "Today's tasks", href: "/watchtower", subtitle: "Task list" },
-  { label: "Clients", href: "/clients" },
   { label: "Ops Chief", href: "/ops-chief" },
   { label: "Admin", href: "/admin" },
   { label: "Development Hub", href: "/feedback-issues" },

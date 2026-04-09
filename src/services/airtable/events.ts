@@ -387,20 +387,15 @@ async function getCreatedTimeFieldId(): Promise<string | null> {
     cachedCreatedTimeFieldId = null;
     return null;
   }
-  try {
-    const data = await airtableMetaFetch<AirtableTablesResponse>("");
-    if (isErrorResult(data) || !Array.isArray(data?.tables)) {
-      cachedCreatedTimeFieldId = null;
-      return null;
-    }
-    const table = data.tables.find((t) => t.id === tableId || t.name === tableId);
-    const createdField = table?.fields.find((f) => f.type === "createdTime");
-    cachedCreatedTimeFieldId = createdField?.id ?? null;
-    return cachedCreatedTimeFieldId;
-  } catch {
+  const data = await airtableMetaFetch<AirtableTablesResponse>("");
+  if (isErrorResult(data)) {
     cachedCreatedTimeFieldId = null;
     return null;
   }
+  const table = data.tables.find((t) => t.id === tableId || t.name === tableId);
+  const createdField = table?.fields.find((f) => f.type === "createdTime");
+  cachedCreatedTimeFieldId = createdField?.id ?? null;
+  return cachedCreatedTimeFieldId;
 }
 
 let cachedFoodwerxArrivalFieldId: string | null | undefined = undefined;
@@ -413,29 +408,24 @@ export async function getFoodwerxArrivalFieldId(): Promise<string | null> {
     cachedFoodwerxArrivalFieldId = null;
     return null;
   }
-  try {
-    const data = await airtableMetaFetch<AirtableTablesResponse>("");
-    if (isErrorResult(data) || !Array.isArray(data?.tables)) {
-      cachedFoodwerxArrivalFieldId = null;
-      return null;
-    }
-    const table = data.tables.find((t) => t.id === tableKey || t.name === tableKey);
-    const arrivalFields = table?.fields?.filter(
-      (f) => /foodwerx|fw\s*arrival|staff\s*arrival/i.test(f.name) && (f.type === "dateTime" || f.type === "date")
-    ) ?? [];
-    const field = arrivalFields.find((f) => /arrival/i.test(f.name)) ?? arrivalFields[0];
-    cachedFoodwerxArrivalFieldId = field?.id ?? null;
-    if (cachedFoodwerxArrivalFieldId) {
-      additionalAllowedFieldIds.add(cachedFoodwerxArrivalFieldId);
-      console.log("✅ FoodWerx Arrival field resolved:", cachedFoodwerxArrivalFieldId, field?.name);
-    } else {
-      console.warn("⚠️ FoodWerx Staff Arrival field not found. Run logEventsTableFieldsForTimeline() in console to find the correct field ID.");
-    }
-    return cachedFoodwerxArrivalFieldId;
-  } catch {
+  const data = await airtableMetaFetch<AirtableTablesResponse>("");
+  if (isErrorResult(data)) {
     cachedFoodwerxArrivalFieldId = null;
     return null;
   }
+  const table = data.tables.find((t) => t.id === tableKey || t.name === tableKey);
+  const arrivalFields = table?.fields.filter(
+    (f) => /foodwerx|fw\s*arrival|staff\s*arrival/i.test(f.name) && (f.type === "dateTime" || f.type === "date")
+  ) ?? [];
+  const field = arrivalFields.find((f) => /arrival/i.test(f.name)) ?? arrivalFields[0];
+  cachedFoodwerxArrivalFieldId = field?.id ?? null;
+  if (cachedFoodwerxArrivalFieldId) {
+    additionalAllowedFieldIds.add(cachedFoodwerxArrivalFieldId);
+    console.log("✅ FoodWerx Arrival field resolved:", cachedFoodwerxArrivalFieldId, field?.name);
+  } else {
+    console.warn("⚠️ FoodWerx Staff Arrival field not found. Run logEventsTableFieldsForTimeline() in console to find the correct field ID.");
+  }
+  return cachedFoodwerxArrivalFieldId;
 }
 
 let cachedBarServiceFieldId: string | null | undefined = undefined;
@@ -448,32 +438,27 @@ export async function getBarServiceFieldId(): Promise<string | null> {
     cachedBarServiceFieldId = null;
     return null;
   }
-  try {
-    const data = await airtableMetaFetch<AirtableTablesResponse>("");
-    if (isErrorResult(data) || !Array.isArray(data?.tables)) {
-      cachedBarServiceFieldId = null;
-      return null;
-    }
-    const table = data.tables.find((t) => t.id === tableKey || t.name === tableKey);
-    const barServiceFields = table?.fields?.filter(
-      (f) => (f.type === "singleSelect" || f.type === "multipleSelects") && /bar\s*service/i.test(f.name)
-    ) ?? [];
-    const field = barServiceFields.find((f) => /needed/i.test(f.name)) ?? barServiceFields[0];
-    // Fall back to the confirmed field ID if Meta API doesn't return a match
-    cachedBarServiceFieldId = field?.id ?? "fldXm91QjyvVKbiyO";
-    additionalAllowedFieldIds.add(cachedBarServiceFieldId);
-    // ⚠️ Do NOT add to SINGLE_SELECT_FIELD_IDS — this base rejects { name } format for this field.
-    // Plain string or null is the correct payload format for Bar Service Needed.
-    if (field?.id) {
-      console.log("✅ Bar Service field resolved via Meta API:", cachedBarServiceFieldId, field?.name);
-    } else {
-      console.log("✅ Bar Service field using confirmed fallback ID:", cachedBarServiceFieldId);
-    }
-    return cachedBarServiceFieldId;
-  } catch {
+  const data = await airtableMetaFetch<AirtableTablesResponse>("");
+  if (isErrorResult(data)) {
     cachedBarServiceFieldId = null;
     return null;
   }
+  const table = data.tables.find((t) => t.id === tableKey || t.name === tableKey);
+  const barServiceFields = table?.fields.filter(
+    (f) => (f.type === "singleSelect" || f.type === "multipleSelects") && /bar\s*service/i.test(f.name)
+  ) ?? [];
+  const field = barServiceFields.find((f) => /needed/i.test(f.name)) ?? barServiceFields[0];
+  // Fall back to the confirmed field ID if Meta API doesn't return a match
+  cachedBarServiceFieldId = field?.id ?? "fldXm91QjyvVKbiyO";
+  additionalAllowedFieldIds.add(cachedBarServiceFieldId);
+  // ⚠️ Do NOT add to SINGLE_SELECT_FIELD_IDS — this base rejects { name } format for this field.
+  // Plain string or null is the correct payload format for Bar Service Needed.
+  if (field?.id) {
+    console.log("✅ Bar Service field resolved via Meta API:", cachedBarServiceFieldId, field?.name);
+  } else {
+    console.log("✅ Bar Service field using confirmed fallback ID:", cachedBarServiceFieldId);
+  }
+  return cachedBarServiceFieldId;
 }
 
 /** Lockout field names (exact match in Airtable Events table) */
@@ -525,52 +510,47 @@ export async function getLockoutFieldIds(): Promise<LockoutFieldIds | null> {
     cachedLockoutFieldIds = null;
     return null;
   }
-  try {
-    const data = await airtableMetaFetch<AirtableTablesResponse>("");
-    if (isErrorResult(data) || !Array.isArray(data?.tables)) {
-      cachedLockoutFieldIds = null;
-      return null;
-    }
-    const table = data.tables.find((t) => t.id === tableKey || t.name === tableKey);
-    if (!table) {
-      cachedLockoutFieldIds = null;
-      return null;
-    }
-    const byName = Object.fromEntries((table.fields ?? []).map((f) => [f.name, f.id]));
-    const ids: LockoutFieldIds = {
-      guestCountConfirmed: byName["Guest Count Confirmed"],
-      guestCountChangeRequested: byName["Guest Count Change Requested"],
-      guestCountChangeApprovedKitchen: byName["Guest Count Change Approved (Kitchen)"],
-      menuAcceptedByKitchen: byName["Menu Accepted by Kitchen"],
-      menuChangeRequested: byName["Menu Change Requested"],
-      menuChangeApprovedKitchen: byName["Menu Change Approved (Kitchen)"],
-      productionAccepted: byName["Production Accepted"] || undefined,
-      productionAcceptedFlair: byName["Production Accepted (Flair)"] || undefined,
-      productionAcceptedDelivery: byName["Production Accepted (Delivery)"] || undefined,
-      productionAcceptedOpsChief: byName["Production Accepted (Ops Chief)"] || undefined,
-    };
-    const requiredPresent = [
-      ids.guestCountConfirmed,
-      ids.guestCountChangeRequested,
-      ids.guestCountChangeApprovedKitchen,
-      ids.menuAcceptedByKitchen,
-      ids.menuChangeRequested,
-      ids.menuChangeApprovedKitchen,
-    ].every(Boolean);
-    if (requiredPresent) {
-      [ids.guestCountConfirmed, ids.guestCountChangeRequested, ids.guestCountChangeApprovedKitchen, ids.menuAcceptedByKitchen, ids.menuChangeRequested, ids.menuChangeApprovedKitchen].forEach((id) => id && additionalAllowedFieldIds.add(id));
-      [ids.productionAccepted, ids.productionAcceptedFlair, ids.productionAcceptedDelivery, ids.productionAcceptedOpsChief]
-        .filter(Boolean)
-        .forEach((id) => id && additionalAllowedFieldIds.add(id));
-      cachedLockoutFieldIds = ids;
-    } else {
-      cachedLockoutFieldIds = null;
-    }
-    return cachedLockoutFieldIds;
-  } catch {
+  const data = await airtableMetaFetch<AirtableTablesResponse>("");
+  if (isErrorResult(data)) {
     cachedLockoutFieldIds = null;
     return null;
   }
+  const table = data.tables.find((t) => t.id === tableKey || t.name === tableKey);
+  if (!table) {
+    cachedLockoutFieldIds = null;
+    return null;
+  }
+  const byName = Object.fromEntries(table.fields.map((f) => [f.name, f.id]));
+  const ids: LockoutFieldIds = {
+    guestCountConfirmed: byName["Guest Count Confirmed"],
+    guestCountChangeRequested: byName["Guest Count Change Requested"],
+    guestCountChangeApprovedKitchen: byName["Guest Count Change Approved (Kitchen)"],
+    menuAcceptedByKitchen: byName["Menu Accepted by Kitchen"],
+    menuChangeRequested: byName["Menu Change Requested"],
+    menuChangeApprovedKitchen: byName["Menu Change Approved (Kitchen)"],
+    productionAccepted: byName["Production Accepted"] || undefined,
+    productionAcceptedFlair: byName["Production Accepted (Flair)"] || undefined,
+    productionAcceptedDelivery: byName["Production Accepted (Delivery)"] || undefined,
+    productionAcceptedOpsChief: byName["Production Accepted (Ops Chief)"] || undefined,
+  };
+  const requiredPresent = [
+    ids.guestCountConfirmed,
+    ids.guestCountChangeRequested,
+    ids.guestCountChangeApprovedKitchen,
+    ids.menuAcceptedByKitchen,
+    ids.menuChangeRequested,
+    ids.menuChangeApprovedKitchen,
+  ].every(Boolean);
+  if (requiredPresent) {
+    [ids.guestCountConfirmed, ids.guestCountChangeRequested, ids.guestCountChangeApprovedKitchen, ids.menuAcceptedByKitchen, ids.menuChangeRequested, ids.menuChangeApprovedKitchen].forEach((id) => id && additionalAllowedFieldIds.add(id));
+    [ids.productionAccepted, ids.productionAcceptedFlair, ids.productionAcceptedDelivery, ids.productionAcceptedOpsChief]
+      .filter(Boolean)
+      .forEach((id) => id && additionalAllowedFieldIds.add(id));
+    cachedLockoutFieldIds = ids;
+  } else {
+    cachedLockoutFieldIds = null;
+  }
+  return cachedLockoutFieldIds;
 }
 
 /** Resolve BOH production field IDs from Airtable Meta API by name (cached). */
@@ -581,39 +561,34 @@ export async function getBOHProductionFieldIds(): Promise<BOHProductionFieldIds 
     cachedBOHProductionFieldIds = null;
     return null;
   }
-  try {
-    const data = await airtableMetaFetch<AirtableTablesResponse>("");
-    if (isErrorResult(data) || !Array.isArray(data?.tables)) {
-      cachedBOHProductionFieldIds = null;
-      return null;
-    }
-    const table = data.tables.find((t) => t.id === tableKey || t.name === tableKey);
-    if (!table) {
-      cachedBOHProductionFieldIds = null;
-      return null;
-    }
-    const byName = Object.fromEntries((table.fields ?? []).map((f) => [f.name, f.id]));
-    const findField = (...names: string[]): string | undefined =>
-      names.map((n) => byName[n]).find(Boolean) as string | undefined;
-    const ids: BOHProductionFieldIds = {
-      beoSentToBOH: findField("BEO Sent to BOH", "beoSentToBOH") ?? undefined,
-      productionColor: findField("Production Color", "productionColor") ?? undefined,
-      kitchenBlink: findField("Kitchen Blink", "KitchenBlink") ?? undefined,
-      flairBlink: findField("Flair Blink", "FlairBlink") ?? undefined,
-      deliveryBlink: findField("Delivery Blink", "DeliveryBlink") ?? undefined,
-      opsChiefBlink: findField("Ops Chief Blink", "OpsChiefBlink") ?? undefined,
-      eventChangeRequested: findField("Event Change Requested", "eventChangeRequested") ?? undefined,
-      changeConfirmedByBOH: findField("Change Confirmed by BOH", "changeConfirmedByBOH") ?? undefined,
-      productionFrozen: findField("Production Frozen", "productionFrozen") ?? undefined,
-    };
-    if (ids.beoSentToBOH) additionalAllowedFieldIds.add(ids.beoSentToBOH);
-    [ids.eventChangeRequested, ids.changeConfirmedByBOH].filter(Boolean).forEach((id) => id && additionalAllowedFieldIds.add(id));
-    cachedBOHProductionFieldIds = ids;
-    return ids;
-  } catch {
+  const data = await airtableMetaFetch<AirtableTablesResponse>("");
+  if (isErrorResult(data)) {
     cachedBOHProductionFieldIds = null;
     return null;
   }
+  const table = data.tables.find((t) => t.id === tableKey || t.name === tableKey);
+  if (!table) {
+    cachedBOHProductionFieldIds = null;
+    return null;
+  }
+  const byName = Object.fromEntries(table.fields.map((f) => [f.name, f.id]));
+  const findField = (...names: string[]): string | undefined =>
+    names.map((n) => byName[n]).find(Boolean) as string | undefined;
+  const ids: BOHProductionFieldIds = {
+    beoSentToBOH: findField("BEO Sent to BOH", "beoSentToBOH") ?? undefined,
+    productionColor: findField("Production Color", "productionColor") ?? undefined,
+    kitchenBlink: findField("Kitchen Blink", "KitchenBlink") ?? undefined,
+    flairBlink: findField("Flair Blink", "FlairBlink") ?? undefined,
+    deliveryBlink: findField("Delivery Blink", "DeliveryBlink") ?? undefined,
+    opsChiefBlink: findField("Ops Chief Blink", "OpsChiefBlink") ?? undefined,
+    eventChangeRequested: findField("Event Change Requested", "eventChangeRequested") ?? undefined,
+    changeConfirmedByBOH: findField("Change Confirmed by BOH", "changeConfirmedByBOH") ?? undefined,
+    productionFrozen: findField("Production Frozen", "productionFrozen") ?? undefined,
+  };
+  if (ids.beoSentToBOH) additionalAllowedFieldIds.add(ids.beoSentToBOH);
+  [ids.eventChangeRequested, ids.changeConfirmedByBOH].filter(Boolean).forEach((id) => id && additionalAllowedFieldIds.add(id));
+  cachedBOHProductionFieldIds = ids;
+  return ids;
 }
 
 /** Resolved field ID for FW Staff Summary (Long text). Override with VITE_AIRTABLE_FW_STAFF_SUMMARY_FIELD if your base uses a different ID. */
@@ -1279,30 +1254,25 @@ export const loadSingleSelectOptions = async (
   const tableKey = getEventsTable();
   if (typeof tableKey !== "string") return tableKey;
 
-  try {
-    const data = await airtableMetaFetch<AirtableTablesResponse>("");
-    if (isErrorResult(data)) return data;
-    if (!Array.isArray(data?.tables)) return { error: true, message: "Meta API returned no tables array." };
+  const data = await airtableMetaFetch<AirtableTablesResponse>("");
+  if (isErrorResult(data)) return data;
 
-    const table = data.tables.find((item) => item.id === tableKey || item.name === tableKey);
-    if (!table) {
-      return { error: true, message: "Events table not found in Airtable metadata." };
-    }
-
-    const optionsMap: Record<string, SingleSelectOption[]> = {};
-    fieldIds.forEach((fieldId) => {
-      const field = (table.fields ?? []).find((item) => item.id === fieldId);
-      if (field?.type === "singleSelect" || field?.type === "multipleSelects") {
-        optionsMap[fieldId] = field.options?.choices?.map((choice) => ({ id: choice.id, name: choice.name })) ?? [];
-      } else {
-        optionsMap[fieldId] = [];
-      }
-    });
-
-    return optionsMap;
-  } catch {
-    return { error: true, message: "Meta API call failed unexpectedly." };
+  const table = data.tables.find((item) => item.id === tableKey || item.name === tableKey);
+  if (!table) {
+    return { error: true, message: "Events table not found in Airtable metadata." };
   }
+
+  const optionsMap: Record<string, SingleSelectOption[]> = {};
+  fieldIds.forEach((fieldId) => {
+    const field = table.fields.find((item) => item.id === fieldId);
+    if (field?.type === "singleSelect" || field?.type === "multipleSelects") {
+      optionsMap[fieldId] = field.options?.choices?.map((choice) => ({ id: choice.id, name: choice.name })) ?? [];
+    } else {
+      optionsMap[fieldId] = [];
+    }
+  });
+
+  return optionsMap;
 };
 
 /** Call from browser console to find FoodWerx Arrival / timeline field IDs */
@@ -1313,7 +1283,7 @@ export async function logEventsTableFieldsForTimeline(): Promise<void> {
     return;
   }
   const data = await airtableMetaFetch<AirtableTablesResponse>("");
-  if (isErrorResult(data) || !Array.isArray(data?.tables)) {
+  if (isErrorResult(data)) {
     console.error("Failed to fetch schema:", data);
     return;
   }
@@ -1322,7 +1292,7 @@ export async function logEventsTableFieldsForTimeline(): Promise<void> {
     console.error("Events table not found. Tables:", data.tables.map((t) => ({ id: t.id, name: t.name })));
     return;
   }
-  const timelineFields = (table.fields ?? []).filter(
+  const timelineFields = table.fields.filter(
     (f) => /arrival|dispatch|timeline|foodwerx|staff|fw/i.test(f.name)
   );
   console.log("📋 Timeline/arrival fields (use 'id' for FOODWERX_ARRIVAL):", timelineFields.map((f) => ({ id: f.id, name: f.name, type: f.type })));
@@ -1336,7 +1306,7 @@ export async function logEventsTableFieldsForBarService(): Promise<void> {
     return;
   }
   const data = await airtableMetaFetch<AirtableTablesResponse>("");
-  if (isErrorResult(data) || !Array.isArray(data?.tables)) {
+  if (isErrorResult(data)) {
     console.error("Failed to fetch schema:", data);
     return;
   }
@@ -1345,12 +1315,12 @@ export async function logEventsTableFieldsForBarService(): Promise<void> {
     console.error("Events table not found. Tables:", data.tables.map((t) => ({ id: t.id, name: t.name })));
     return;
   }
-  const barRelated = (table.fields ?? []).filter(
+  const barRelated = table.fields.filter(
     (f) => /bar|beverage|drink|mixer|garnish|signature/i.test(f.name)
   );
   console.log("📋 Bar-related fields in Events table (use the 'id' for BAR_SERVICE):", barRelated.map((f) => ({ id: f.id, name: f.name, type: f.type })));
   if (barRelated.length === 0) {
-    console.log("All fields:", (table.fields ?? []).map((f) => ({ id: f.id, name: f.name })));
+    console.log("All fields:", table.fields.map((f) => ({ id: f.id, name: f.name })));
   }
 }
 

@@ -38,7 +38,6 @@ import FeedbackIssuesPage from "./pages/FeedbackIssuesPage";
 
 const InvoiceIntakePage = lazy(() => import("./pages/InvoiceIntakePage").then((m) => ({ default: m.default })));
 import AdminPage from "./pages/AdminPage";
-import ClientsPage from "./pages/ClientsPage";
 import EventOverviewPage from "./pages/EventOverviewPage";
 import FOHLeadOverview from "./pages/FOHLeadOverview";
 import EarlyEventSections from "./pages/EarlyEventSections";
@@ -275,10 +274,6 @@ function RouterContent({ pathname, selectedEventId }: { pathname: string; select
 
   if (pathname.startsWith("/admin")) {
     return <AdminPage />;
-  }
-
-  if (pathname.startsWith("/clients")) {
-    return <ClientsPage />;
   }
 
 	return <DashboardPage />;
