@@ -145,7 +145,7 @@ async function getLeadFieldIds(): Promise<Record<string, string> | null> {
     return null;
   }
   const data = await airtableMetaFetch<AirtableTablesResponse>("");
-  if (isErrorResult(data)) {
+  if (isErrorResult(data) || !Array.isArray(data.tables)) {
     cachedFieldIds = null;
     return null;
   }

@@ -30,7 +30,7 @@ async function getStationsFieldIds(): Promise<StationsFieldIds | null> {
   if (cachedStationsFieldIds) return cachedStationsFieldIds;
   const tableId = getStationsTable();
   const data = await airtableMetaFetch<{ tables: Array<{ id: string; name: string; fields: Array<{ id: string; name: string; type: string }> }> }>("");
-  if (isErrorResult(data)) {
+  if (isErrorResult(data) || !Array.isArray(data.tables)) {
     cachedStationsFieldIds = null;
     return null;
   }
@@ -64,7 +64,7 @@ export async function getStationTypeOptions(): Promise<string[]> {
   const fieldIds = await getStationsFieldIds();
   if (!fieldIds?.stationType) return [];
   const data = await airtableMetaFetch<{ tables: Array<{ id: string; name: string; fields: Array<{ id: string; name: string; type: string; options?: { choices?: Array<{ id: string; name: string }> } }> }> }>("");
-  if (isErrorResult(data)) return [];
+  if (isErrorResult(data) || !Array.isArray(data.tables)) return [];
   const table = data.tables.find((t) => t.id === getStationsTable() || t.name === getStationsTable());
   const field = table?.fields.find((f) => f.id === fieldIds.stationType);
   if (field?.type === "singleSelect" && field.options?.choices?.length) {
@@ -353,7 +353,7 @@ export const loadMenuItemsByStationType = async (
     // 2. Fallback: Menu Items.Station Type filter (field name from schema)
     const metaData = await airtableMetaFetch<{ tables: Array<{ id: string; name?: string; fields: Array<{ id: string; name: string }> }> }>("");
     let menuStationTypeFieldName = "Station Type";
-    if (!isErrorResult(metaData)) {
+    if (!isErrorResult(metaData) && Array.isArray(metaData.tables)) {
       const menuTable = metaData.tables.find(
         (t) => t.id === tableId || t.name === "Menu Items" || t.id === MENU_LAB_TABLE_ID || t.name === "Menu_Lab"
       );

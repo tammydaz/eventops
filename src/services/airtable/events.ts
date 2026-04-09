@@ -388,7 +388,7 @@ async function getCreatedTimeFieldId(): Promise<string | null> {
     return null;
   }
   const data = await airtableMetaFetch<AirtableTablesResponse>("");
-  if (isErrorResult(data)) {
+  if (isErrorResult(data) || !Array.isArray(data.tables)) {
     cachedCreatedTimeFieldId = null;
     return null;
   }
@@ -409,7 +409,7 @@ export async function getFoodwerxArrivalFieldId(): Promise<string | null> {
     return null;
   }
   const data = await airtableMetaFetch<AirtableTablesResponse>("");
-  if (isErrorResult(data)) {
+  if (isErrorResult(data) || !Array.isArray(data.tables)) {
     cachedFoodwerxArrivalFieldId = null;
     return null;
   }
@@ -439,7 +439,7 @@ export async function getBarServiceFieldId(): Promise<string | null> {
     return null;
   }
   const data = await airtableMetaFetch<AirtableTablesResponse>("");
-  if (isErrorResult(data)) {
+  if (isErrorResult(data) || !Array.isArray(data.tables)) {
     cachedBarServiceFieldId = null;
     return null;
   }
@@ -511,7 +511,7 @@ export async function getLockoutFieldIds(): Promise<LockoutFieldIds | null> {
     return null;
   }
   const data = await airtableMetaFetch<AirtableTablesResponse>("");
-  if (isErrorResult(data)) {
+  if (isErrorResult(data) || !Array.isArray(data.tables)) {
     cachedLockoutFieldIds = null;
     return null;
   }
@@ -562,7 +562,7 @@ export async function getBOHProductionFieldIds(): Promise<BOHProductionFieldIds 
     return null;
   }
   const data = await airtableMetaFetch<AirtableTablesResponse>("");
-  if (isErrorResult(data)) {
+  if (isErrorResult(data) || !Array.isArray(data.tables)) {
     cachedBOHProductionFieldIds = null;
     return null;
   }
@@ -1255,7 +1255,7 @@ export const loadSingleSelectOptions = async (
   if (typeof tableKey !== "string") return tableKey;
 
   const data = await airtableMetaFetch<AirtableTablesResponse>("");
-  if (isErrorResult(data)) return data;
+  if (isErrorResult(data) || !Array.isArray(data.tables)) return isErrorResult(data) ? data : { error: true, message: "Meta API returned no tables array." };
 
   const table = data.tables.find((item) => item.id === tableKey || item.name === tableKey);
   if (!table) {
@@ -1283,7 +1283,7 @@ export async function logEventsTableFieldsForTimeline(): Promise<void> {
     return;
   }
   const data = await airtableMetaFetch<AirtableTablesResponse>("");
-  if (isErrorResult(data)) {
+  if (isErrorResult(data) || !Array.isArray(data.tables)) {
     console.error("Failed to fetch schema:", data);
     return;
   }
@@ -1306,7 +1306,7 @@ export async function logEventsTableFieldsForBarService(): Promise<void> {
     return;
   }
   const data = await airtableMetaFetch<AirtableTablesResponse>("");
-  if (isErrorResult(data)) {
+  if (isErrorResult(data) || !Array.isArray(data.tables)) {
     console.error("Failed to fetch schema:", data);
     return;
   }
