@@ -4,7 +4,7 @@
  * TODO: Migrate to Airtable (Platter Orders table) when Omni creates it.
  */
 
-import { normalizePlatterRow, type PlatterRow } from "../config/sandwichPlatterConfig";
+import { hasPlatterPicks, normalizePlatterRow, type PlatterRow } from "../config/sandwichPlatterConfig";
 
 const STORAGE_KEY = "eventops-platter-orders";
 
@@ -29,6 +29,14 @@ export function getPlatterOrdersByEventId(eventId: string): PlatterRow[] {
   const data = getStorage();
   const rows = data[eventId] ?? [];
   return rows.map((row) => normalizePlatterRow(row as PlatterRow & Record<string, unknown>));
+}
+
+/** Saved platter rows that would pass “Done” (platter qty + at least one named pick). */
+export function platterOrdersHaveContent(eventId: string | null | undefined): boolean {
+  if (!eventId) return false;
+  return getPlatterOrdersByEventId(eventId).some(
+    (r) => r.quantity > 0 && r.platterType.trim() !== "" && hasPlatterPicks(r)
+  );
 }
 
 export function setPlatterOrdersForEvent(eventId: string, rows: PlatterRow[]) {

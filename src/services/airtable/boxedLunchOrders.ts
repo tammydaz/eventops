@@ -6,7 +6,22 @@
 import { airtableFetch, getBaseId, getApiKey, getMenuItemsTable, type AirtableListResponse, type AirtableErrorResult } from "./client";
 import { getMenuCatalogFieldIds } from "./menuCatalogConfig";
 import { isErrorResult, asString, asLinkedRecordIds } from "./selectors";
-import type { BoxedLunchBoxSnapshot, BoxedLunchV2Payload } from "../../config/boxedLunchBeo";
+import {
+  isSaladBoxedLunchBox,
+  v2BoxedPayloadHasSavedSandwiches,
+  type BoxedLunchBoxSnapshot,
+  type BoxedLunchSandwichLine,
+  type BoxedLunchV2Payload,
+} from "../../config/boxedLunchBeo";
+import {
+  cheeseOptionLabelForAirtable,
+  decodeCustomizationFromSpecialRequests,
+  encodeCustomizationForSpecialRequests,
+  mergeCustomizationPayloads,
+  partialCustomizationFromAirtableFields,
+  sanitizeAdditionalSpreads,
+} from "../../config/boxedLunchCustomization";
+import { sanitizeRemovalKeys } from "../../config/boxedLunchCorporateCatering";
 
 // ── Table IDs ──
 export const BOXED_LUNCH_ORDERS_TABLE = "tbldRHfhjCY4x2Hyy";
@@ -35,6 +50,12 @@ export const BOX_CUSTOMIZATIONS_FIELD_IDS = {
   boxNumber: "fldPzCQ0NlObQgpGI",
   swappedItem: "fldx7BTghnsdGJFbP",
   specialRequests: "fld7eYwx4pMNttLJ8",
+  /** Structured corporate fields (IDs only — do not use display names in API payloads). */
+  breadType: "fldn13vheKToKrRo7",
+  spreads: "fldc9VmAftI0jVsJN",
+  cheeseOption: "fldZPc1qjiKwT7Y94",
+  removedItems: "fldyDr3U3wCHuRBYJ",
+  customNotes: "fldQpeZEjAG4ujmYt",
 } as const;
 
 /** Prefix for V2 JSON in orderName — no per-box rows in Airtable. */
@@ -85,6 +106,11 @@ export function normalizeBoxedLunchV2Payload(raw: unknown): BoxedLunchV2Payload 
     }
     return 0;
   };
+  const parseCheese = (v: unknown): BoxedLunchSandwichLine["cheeseOption"] => {
+    if (v === "none" || v === "special") return v;
+    return "default";
+  };
+
   const sandwiches = sandwichRows.map((row) => {
     if (!row || typeof row !== "object" || Array.isArray(row)) return { name: "", qty: 0 };
     const r = row as Record<string, unknown>;
@@ -96,9 +122,49 @@ export function normalizeBoxedLunchV2Payload(raw: unknown): BoxedLunchV2Payload 
           ? String(rawName).trim()
           : "";
     const qty = parseQty(r.qty !== undefined ? r.qty : r.quantity);
-    return { name, qty };
+    const menuItemId =
+      typeof r.menuItemId === "string" && r.menuItemId.startsWith("rec") ? r.menuItemId.trim() : undefined;
+    const breadType =
+      typeof r.breadType === "string" && r.breadType.trim() ? r.breadType.trim() : undefined;
+    let spreads: string[] | undefined;
+    if (Array.isArray(r.spreads)) {
+      const arr = sanitizeAdditionalSpreads(
+        r.spreads.map((x) => (typeof x === "string" ? x : String(x)))
+      );
+      spreads = arr.length > 0 ? arr : undefined;
+    }
+    const cheeseOption = parseCheese(r.cheeseOption);
+    const customNotes =
+      typeof r.customNotes === "string" && r.customNotes.trim() ? r.customNotes.trim() : undefined;
+    let removedItems: string[] | undefined;
+    if (Array.isArray(r.removedItems)) {
+      const arr = sanitizeRemovalKeys(
+        r.removedItems.map((x) => (typeof x === "string" ? x : String(x)))
+      );
+      removedItems = arr.length > 0 ? arr : undefined;
+    }
+    const line: BoxedLunchSandwichLine = { name, qty, cheeseOption };
+    if (menuItemId) line.menuItemId = menuItemId;
+    if (breadType) line.breadType = breadType;
+    if (spreads) line.spreads = spreads;
+    if (customNotes) line.customNotes = customNotes;
+    if (removedItems) line.removedItems = removedItems;
+    return line;
   });
-  return { boxTypeId, sandwiches };
+  const result: BoxedLunchV2Payload = { boxTypeId, sandwiches };
+  const snapRaw = o.boxSnapshot;
+  if (snapRaw && typeof snapRaw === "object" && !Array.isArray(snapRaw)) {
+    const s = snapRaw as Record<string, unknown>;
+    const n = typeof s.name === "string" ? s.name.trim() : "";
+    const d = typeof s.dessert === "string" ? s.dessert.trim() : "";
+    const sidesArr = Array.isArray(s.sides)
+      ? s.sides.map((x) => (typeof x === "string" ? x : String(x))).filter(Boolean)
+      : [];
+    if (n || sidesArr.length || d) {
+      result.boxSnapshot = { name: n || "Boxed lunch", sides: sidesArr, dessert: d || "—" };
+    }
+  }
+  return result;
 }
 
 export function parseBoxedLunchV2FromOrderName(orderName: string): BoxedLunchV2Payload | null {
@@ -112,10 +178,39 @@ export function parseBoxedLunchV2FromOrderName(orderName: string): BoxedLunchV2P
   }
 }
 
+/** True if any order has legacy line qty or V2 lines with a real sandwich name + qty (not blank rows with default qty). */
+export function boxedLunchOrdersHaveContent(orders: BoxedLunchOrder[]): boolean {
+  for (const o of orders) {
+    if (o.items.some((i) => Math.max(0, Math.floor(Number(i.quantity) || 0)) > 0)) return true;
+    if (o.v2 && v2BoxedPayloadHasSavedSandwiches(o.v2)) return true;
+  }
+  return false;
+}
+
 /**
  * Load boxed lunch orders for an event.
  * V2 orders expose `v2` and typically have `items: []`.
  */
+/**
+ * Extract all event record IDs from a Boxed Lunch Orders record's Client/Event field.
+ * Works whether Airtable returns linked fields as string IDs or { id, name } objects.
+ * Used as a client-side guard after the server formula (which compares primary-field
+ * values, not record IDs, so can return 0 or imprecise results).
+ */
+function extractLinkedEventIds(val: unknown): string[] {
+  const out: string[] = [];
+  const pushIdIf = (x: unknown) => {
+    if (typeof x === "string" && x.startsWith("rec")) out.push(x);
+    if (x && typeof x === "object") {
+      const id = (x as { id?: unknown }).id;
+      if (typeof id === "string" && id.startsWith("rec")) out.push(id);
+    }
+  };
+  if (Array.isArray(val)) val.forEach(pushIdIf);
+  else pushIdIf(val);
+  return out;
+}
+
 export async function loadBoxedLunchOrdersByEventId(
   eventId: string
 ): Promise<BoxedLunchOrder[] | AirtableErrorResult> {
@@ -125,8 +220,9 @@ export async function loadBoxedLunchOrdersByEventId(
     return baseIdResult as AirtableErrorResult;
   }
 
-  // Linked Events field: ARRAYJOIN() joins *primary field values*, not record IDs — FIND('rec…') alone
-  // often returns no rows. Match eventMenu.ts: OR(direct link = recId, FIND in ARRAYJOIN fallback).
+  // The formula is a best-effort server-side pre-filter.  Airtable evaluates {Client/Event}
+  // against the linked Event's primary-field value (not the record ID), so the OR/FIND
+  // may return 0 rows even when records exist.  The client-side filter below is the real guard.
   const clientEventFieldName = "Client/Event";
   const escapedEventId = eventId.replace(/'/g, "\\'");
   const formula = `OR({${clientEventFieldName}}='${escapedEventId}', FIND('${escapedEventId}', ARRAYJOIN({${clientEventFieldName}})) > 0)`;
@@ -140,12 +236,34 @@ export async function loadBoxedLunchOrdersByEventId(
 
   if (isErrorResult(ordersData)) return ordersData;
 
-  if (ordersData.records.length === 0) return [];
+  // If the server formula returned 0 (common when primary-field != record ID), fall back
+  // to fetching all recent orders and filtering client-side.
+  let candidates = ordersData.records;
+  if (candidates.length === 0) {
+    const allParams = new URLSearchParams();
+    allParams.set("returnFieldsByFieldId", "true");
+    allParams.set("pageSize", "100");
+    allParams.append("fields[]", BOXED_LUNCH_ORDERS_FIELD_IDS.clientEvent);
+    allParams.append("fields[]", BOXED_LUNCH_ORDERS_FIELD_IDS.orderName);
+    allParams.append("fields[]", BOXED_LUNCH_ORDERS_FIELD_IDS.orderDate);
+    allParams.append("fields[]", BOXED_LUNCH_ORDERS_FIELD_IDS.boxedLunchSelections);
+    const allData = await airtableFetch<AirtableListResponse<Record<string, unknown>>>(
+      `/${BOXED_LUNCH_ORDERS_TABLE}?${allParams.toString()}`
+    );
+    if (!isErrorResult(allData)) candidates = allData.records;
+  }
+
+  // Client-side filter: keep only records actually linked to this event.
+  const matchingRecords = candidates.filter((rec) =>
+    extractLinkedEventIds((rec.fields ?? {})[BOXED_LUNCH_ORDERS_FIELD_IDS.clientEvent]).includes(eventId)
+  );
+
+  if (matchingRecords.length === 0) return [];
 
   const orders: BoxedLunchOrder[] = [];
   const menuItemCache: Record<string, string> = {};
 
-  for (const rec of ordersData.records) {
+  for (const rec of matchingRecords) {
     const fields = rec.fields as Record<string, unknown>;
     const orderId = rec.id;
     const orderName = asString(fields[BOXED_LUNCH_ORDERS_FIELD_IDS.orderName]) || "";
@@ -187,22 +305,7 @@ export async function loadBoxedLunchOrdersByEventId(
           ? (itemFields[BOXED_LUNCH_ORDER_ITEMS_FIELD_IDS.quantity] as number)
           : 0;
 
-      const customIds = asLinkedRecordIds(itemFields[BOXED_LUNCH_ORDER_ITEMS_FIELD_IDS.customizations]);
-      let specialRequests = "";
-      if (customIds.length > 0) {
-        const customFormula = `RECORD_ID()='${customIds[0]}'`;
-        const customParams = new URLSearchParams();
-        customParams.set("filterByFormula", customFormula);
-        customParams.set("returnFieldsByFieldId", "true");
-        const customData = await airtableFetch<AirtableListResponse<Record<string, unknown>>>(
-          `/${BOX_CUSTOMIZATIONS_TABLE}?${customParams.toString()}`
-        );
-        if (!isErrorResult(customData) && customData.records[0]) {
-          const cf = customData.records[0].fields as Record<string, unknown>;
-          specialRequests = asString(cf[BOX_CUSTOMIZATIONS_FIELD_IDS.specialRequests]) || "";
-        }
-      }
-
+      // Resolve type name BEFORE building customization payload (which needs the name)
       let boxedLunchTypeName = menuItemCache[boxedLunchTypeId];
       if (!boxedLunchTypeName && boxedLunchTypeId) {
         const cat = getMenuCatalogFieldIds();
@@ -226,6 +329,46 @@ export async function loadBoxedLunchOrdersByEventId(
         boxedLunchTypeName = "Boxed Lunch";
       }
 
+      const customIds = asLinkedRecordIds(itemFields[BOXED_LUNCH_ORDER_ITEMS_FIELD_IDS.customizations]);
+      let specialRequests = "";
+      if (customIds.length > 0) {
+        const customFormula = `RECORD_ID()='${customIds[0]}'`;
+        const customParams = new URLSearchParams();
+        customParams.set("filterByFormula", customFormula);
+        customParams.set("returnFieldsByFieldId", "true");
+        const customData = await airtableFetch<AirtableListResponse<Record<string, unknown>>>(
+          `/${BOX_CUSTOMIZATIONS_TABLE}?${customParams.toString()}`
+        );
+        if (!isErrorResult(customData) && customData.records[0]) {
+          const cf = customData.records[0].fields as Record<string, unknown>;
+          const sr = asString(cf[BOX_CUSTOMIZATIONS_FIELD_IDS.specialRequests]) || "";
+          const partial = partialCustomizationFromAirtableFields(cf, {
+            breadType: BOX_CUSTOMIZATIONS_FIELD_IDS.breadType,
+            spreads: BOX_CUSTOMIZATIONS_FIELD_IDS.spreads,
+            cheeseOption: BOX_CUSTOMIZATIONS_FIELD_IDS.cheeseOption,
+            removedItems: BOX_CUSTOMIZATIONS_FIELD_IDS.removedItems,
+            customNotes: BOX_CUSTOMIZATIONS_FIELD_IDS.customNotes,
+          });
+          const fromJson = sr.trim().length > 0 ? decodeCustomizationFromSpecialRequests(sr) : null;
+          const merged =
+            Object.keys(partial).length > 0 ? mergeCustomizationPayloads(fromJson, partial) : fromJson;
+          if (merged) {
+            specialRequests = encodeCustomizationForSpecialRequests({
+              name: boxedLunchTypeName,
+              qty: quantity,
+              menuItemId: boxedLunchTypeId,
+              breadType: merged.breadType,
+              spreads: merged.spreads?.length ? merged.spreads : undefined,
+              cheeseOption: merged.cheeseOption,
+              customNotes: merged.customNotes?.trim() || undefined,
+              removedItems: merged.removedItems?.length ? merged.removedItems : undefined,
+            });
+          } else {
+            specialRequests = sr;
+          }
+        }
+      }
+
       items.push({
         id: itemId,
         boxedLunchTypeId,
@@ -246,9 +389,129 @@ export async function loadBoxedLunchOrdersByEventId(
   return orders;
 }
 
+async function fetchBoxedLunchOrderSelectionIds(orderId: string): Promise<string[]> {
+  const data = await airtableFetch<{ fields?: Record<string, unknown> }>(
+    `/${BOXED_LUNCH_ORDERS_TABLE}/${orderId}?returnFieldsByFieldId=true`
+  );
+  if (isErrorResult(data) || !data.fields) return [];
+  return asLinkedRecordIds(data.fields[BOXED_LUNCH_ORDERS_FIELD_IDS.boxedLunchSelections]);
+}
+
+async function deleteBoxedLunchOrderItemAndCustomizations(itemId: string): Promise<void | AirtableErrorResult> {
+  const itemData = await airtableFetch<{ fields?: Record<string, unknown> }>(
+    `/${BOXED_LUNCH_ORDER_ITEMS_TABLE}/${itemId}?returnFieldsByFieldId=true`
+  );
+  if (isErrorResult(itemData)) return itemData;
+  const customIds = asLinkedRecordIds(itemData.fields?.[BOXED_LUNCH_ORDER_ITEMS_FIELD_IDS.customizations]);
+  for (const cid of customIds) {
+    const delC = await airtableFetch(`/${BOX_CUSTOMIZATIONS_TABLE}/${cid}`, { method: "DELETE" });
+    if (isErrorResult(delC)) return delC;
+  }
+  const delI = await airtableFetch(`/${BOXED_LUNCH_ORDER_ITEMS_TABLE}/${itemId}`, { method: "DELETE" });
+  if (isErrorResult(delI)) return delI;
+  return;
+}
+
+/**
+ * Replace linked Boxed Lunch Order Items + Box Customizations from V2 sandwich lines.
+ * Salad / entrée boxed products: only clear links (no sandwich Menu Item rows).
+ * Lines without `menuItemId` are JSON-only (no Airtable line item).
+ */
+export async function syncBoxedLunchOrderLinkedItems(
+  orderId: string,
+  payload: BoxedLunchV2Payload
+): Promise<void | AirtableErrorResult> {
+  const existingItemIds = await fetchBoxedLunchOrderSelectionIds(orderId);
+
+  const clearPatch = await airtableFetch(`/${BOXED_LUNCH_ORDERS_TABLE}/${orderId}`, {
+    method: "PATCH",
+    body: JSON.stringify({
+      fields: { [BOXED_LUNCH_ORDERS_FIELD_IDS.boxedLunchSelections]: [] },
+    }),
+  });
+  if (isErrorResult(clearPatch)) return clearPatch;
+
+  for (const itemId of existingItemIds) {
+    const del = await deleteBoxedLunchOrderItemAndCustomizations(itemId);
+    if (isErrorResult(del)) return del;
+  }
+
+  if (isSaladBoxedLunchBox(payload.boxTypeId)) {
+    return;
+  }
+
+  const newItemIds: string[] = [];
+  for (const line of payload.sandwiches) {
+    const qty = Math.max(0, Math.floor(Number(line.qty) || 0));
+    const name = String(line.name ?? "").trim();
+    const menuId = typeof line.menuItemId === "string" && line.menuItemId.startsWith("rec") ? line.menuItemId : "";
+    const bread = (line.breadType ?? "").trim();
+    if (qty <= 0 || !name || !menuId || !bread) continue;
+
+    const itemFields: Record<string, unknown> = {
+      [BOXED_LUNCH_ORDER_ITEMS_FIELD_IDS.order]: [orderId],
+      [BOXED_LUNCH_ORDER_ITEMS_FIELD_IDS.boxedLunchType]: [menuId],
+      [BOXED_LUNCH_ORDER_ITEMS_FIELD_IDS.quantity]: qty,
+      [BOXED_LUNCH_ORDER_ITEMS_FIELD_IDS.customizations]: [],
+    };
+    const itemRes = await airtableFetch<{ records?: Array<{ id: string }> }>(
+      `/${BOXED_LUNCH_ORDER_ITEMS_TABLE}`,
+      { method: "POST", body: JSON.stringify({ records: [{ fields: itemFields }] }) }
+    );
+    if (isErrorResult(itemRes) || !itemRes.records?.[0]?.id) {
+      return { error: true, message: itemRes.message ?? "Failed to create boxed lunch order item" };
+    }
+    const newItemId = itemRes.records[0].id;
+
+    const specialRequests = encodeCustomizationForSpecialRequests(line);
+    const spreads = sanitizeAdditionalSpreads(line.spreads ?? []);
+    const removedSorted = [...sanitizeRemovalKeys(line.removedItems ?? [])].sort();
+    const notes = (line.customNotes ?? "").trim();
+    const customFields: Record<string, unknown> = {
+      [BOX_CUSTOMIZATIONS_FIELD_IDS.orderItem]: [newItemId],
+      [BOX_CUSTOMIZATIONS_FIELD_IDS.specialRequests]: specialRequests,
+      [BOX_CUSTOMIZATIONS_FIELD_IDS.breadType]: bread,
+      [BOX_CUSTOMIZATIONS_FIELD_IDS.spreads]: spreads,
+      [BOX_CUSTOMIZATIONS_FIELD_IDS.cheeseOption]: cheeseOptionLabelForAirtable(line.cheeseOption),
+      [BOX_CUSTOMIZATIONS_FIELD_IDS.removedItems]: removedSorted,
+      [BOX_CUSTOMIZATIONS_FIELD_IDS.customNotes]: notes,
+    };
+    const customRes = await airtableFetch<{ records?: Array<{ id: string }> }>(
+      `/${BOX_CUSTOMIZATIONS_TABLE}`,
+      { method: "POST", body: JSON.stringify({ records: [{ fields: customFields }] }) }
+    );
+    if (isErrorResult(customRes) || !customRes.records?.[0]?.id) {
+      return { error: true, message: customRes.message ?? "Failed to create box customization" };
+    }
+    const customId = customRes.records[0].id;
+
+    const linkRes = await airtableFetch(`/${BOXED_LUNCH_ORDER_ITEMS_TABLE}/${newItemId}`, {
+      method: "PATCH",
+      body: JSON.stringify({
+        fields: { [BOXED_LUNCH_ORDER_ITEMS_FIELD_IDS.customizations]: [customId] },
+      }),
+    });
+    if (isErrorResult(linkRes)) return linkRes;
+
+    newItemIds.push(newItemId);
+  }
+
+  if (newItemIds.length > 0) {
+    const linkOrder = await airtableFetch(`/${BOXED_LUNCH_ORDERS_TABLE}/${orderId}`, {
+      method: "PATCH",
+      body: JSON.stringify({
+        fields: { [BOXED_LUNCH_ORDERS_FIELD_IDS.boxedLunchSelections]: newItemIds },
+      }),
+    });
+    if (isErrorResult(linkOrder)) return linkOrder;
+  }
+
+  return;
+}
+
 /**
  * Create or update the single boxed-lunch V2 record for an event.
- * Stores JSON in `orderName`; clears linked order items.
+ * Stores JSON in `orderName`; syncs Boxed Lunch Order Items + Box Customizations when applicable.
  */
 export async function upsertBoxedLunchOrderV2(
   eventId: string,
@@ -271,7 +534,6 @@ export async function upsertBoxedLunchOrderV2(
 
   const patchFields: Record<string, unknown> = {
     [BOXED_LUNCH_ORDERS_FIELD_IDS.orderName]: orderName,
-    [BOXED_LUNCH_ORDERS_FIELD_IDS.boxedLunchSelections]: [],
   };
 
   if (existing.length > 0) {
@@ -293,7 +555,19 @@ export async function upsertBoxedLunchOrderV2(
         return { error: true, message: patchRes.message ?? "Failed to update boxed lunch order" };
       }
     }
-    return { orderId: sorted[0].id };
+    const orderId = sorted[0].id;
+    const syncRes = await syncBoxedLunchOrderLinkedItems(orderId, payload);
+    if (isErrorResult(syncRes)) return syncRes;
+    const emptyPayload: BoxedLunchV2Payload = {
+      boxTypeId: payload.boxTypeId,
+      sandwiches: [],
+      ...(payload.boxSnapshot ? { boxSnapshot: payload.boxSnapshot } : {}),
+    };
+    for (const row of sorted.slice(1)) {
+      const extra = await syncBoxedLunchOrderLinkedItems(row.id, emptyPayload);
+      if (isErrorResult(extra)) return extra;
+    }
+    return { orderId };
   }
 
   const createFields: Record<string, unknown> = {
@@ -307,7 +581,10 @@ export async function upsertBoxedLunchOrderV2(
   if (isErrorResult(orderRes) || !orderRes.records?.[0]) {
     return { error: true, message: "Failed to create boxed lunch order" };
   }
-  return { orderId: orderRes.records[0].id };
+  const orderId = orderRes.records[0].id;
+  const syncRes = await syncBoxedLunchOrderLinkedItems(orderId, payload);
+  if (isErrorResult(syncRes)) return syncRes;
+  return { orderId };
 }
 
 /**

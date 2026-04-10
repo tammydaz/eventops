@@ -1,3 +1,6 @@
+import { TASKS_TABLE_ID_DEFAULT } from "./tasksSchema";
+import { LEADS_TABLE_ID_DEFAULT } from "./leadsSchema";
+
 export type AirtableRecord<TFields> = {
   id: string;
   fields: TFields;
@@ -11,6 +14,16 @@ export type AirtableErrorResult = {
   error: true;
   message?: string;
 };
+
+/**
+ * Meta API "list tables" shape — `tables` is often present but may be missing on malformed or wrapped JSON.
+ * Never call `.find` / `.map` on `data.tables` without guarding.
+ */
+export function airtableMetaTables<T extends { id?: string; name?: string }>(data: unknown): T[] {
+  if (!data || typeof data !== "object") return [];
+  const raw = (data as { tables?: unknown }).tables;
+  return Array.isArray(raw) ? (raw as T[]) : [];
+}
 
 type AirtableApiError = {
   error?: {
@@ -60,13 +73,13 @@ export const getMasterMenuSpecsTable = (): string =>
 export const getMenuItemsTable = (): string =>
   _getMenuItemsTable() || "tbl0aN33DGG6R1sPZ";
 
-/** Leads table for FOH lead pipeline. When unset, leads service returns demo data. */
+/** Leads table for FOH lead pipeline. Defaults to FoodWerx Leads table id; override with VITE_AIRTABLE_LEADS_TABLE. */
 export const getLeadsTable = (): string | undefined =>
-  _getLeadsTable() || undefined;
+  _getLeadsTable() || LEADS_TABLE_ID_DEFAULT;
 
-/** Tasks table for FOH task management. Fields: Task Name, Event, Task Type, Due Date, Status, Notes, Created At, Updated At. */
+/** Tasks table for FOH task management. Override with VITE_AIRTABLE_TASKS_TABLE; defaults to FoodWerx Tasks table id. */
 export const getTasksTable = (): string | undefined =>
-  _getTasksTable() || undefined;
+  _getTasksTable() || TASKS_TABLE_ID_DEFAULT;
 
 /** Event Menu table (shadow system). When unset, defaults to "Event Menu". Set VITE_AIRTABLE_EVENT_MENU_TABLE to table ID if needed. */
 export const getEventMenuTable = (): string =>

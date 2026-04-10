@@ -3,6 +3,7 @@ import { FIELD_IDS, type StatusDetails } from "../../services/airtable/events";
 import { asBoolean, asSingleSelectName } from "../../services/airtable/selectors";
 import { useEventStore } from "../../state/eventStore";
 import { createTask } from "../../services/airtable/tasks";
+import { TASK_TYPE_OPTION } from "../../services/airtable/tasksSchema";
 
 function addDays(date: Date, days: number): string {
   const d = new Date(date);
@@ -213,7 +214,7 @@ export const StatusPanel = () => {
                 createTask({
                   eventId: selectedEventId,
                   taskName: "Follow up on proposal",
-                  taskType: "Follow-up",
+                  taskType: TASK_TYPE_OPTION.proposalFollowUp,
                   dueDate: addDays(new Date(), 2),
                   status: "Pending",
                 });
@@ -255,7 +256,7 @@ export const StatusPanel = () => {
                 createTask({
                   eventId: selectedEventId,
                   taskName: "Follow up on invoice",
-                  taskType: "Follow-up",
+                  taskType: TASK_TYPE_OPTION.invoiceFollowUp,
                   dueDate: addDays(new Date(), 2),
                   status: "Pending",
                 });

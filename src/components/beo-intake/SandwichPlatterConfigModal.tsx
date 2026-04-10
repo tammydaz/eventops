@@ -176,8 +176,9 @@ export function SandwichPlatterConfigModal({
       }))
       .filter((r) => r.picks.length > 0);
     onConfirm(valid);
-    onClose();
-  }, [rows, onConfirm, onClose]);
+    // Inline (e.g. delivery collapsible): parent keeps the section open after save. Overlay modal still dismisses.
+    if (!inline) onClose();
+  }, [rows, onConfirm, onClose, inline]);
 
   const handleClearAll = useCallback(() => {
     setRows([{ id: generateId(), platterType: "Classic Sandwiches", picks: [], quantity: 1, customPicks: [] as PlatterPick[] }]);

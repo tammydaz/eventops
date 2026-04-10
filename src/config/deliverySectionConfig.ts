@@ -1,13 +1,12 @@
 /**
  * Delivery BEO — kitchen + driver facing sections.
  *
- * Two-part headers: TEMP / VESSEL
- *   HOT / TIN           → cook, pack hot in disposable chafer pan, serve immediately
- *   READY / TIN         → prep, pack cold in disposable chafer pan, client reheats
- *   READY / DISPLAY     → cold/room-temp presentation items (cheese boards, crudite, fruit)
- *   READY / BULK        → bulk cold sides in containers (pasta salad, fruit salad)
- *   INDIVIDUAL WRAPPED  → individually wrapped items (boxed lunches)
- *   SANDWICH TRAYS      → deli trays
+ *   DISPOSABLE HOT     → cook, pack hot in disposable chafer pan, goes out hot
+ *   DISPOSABLE READY   → prep, pack in disposable chafer pan, client reheats on site
+ *   DISPOSABLE DISPLAY → cold/room-temp presentation items (platters, cheese boards, crudite, fruit)
+ *   DISPOSABLE BULK    → bulk cold sides in large containers (pasta salad, fruit salad, salads)
+ *   INDIVIDUAL WRAPPED → individually wrapped items (boxed lunches)
+ *   SANDWICH TRAYS     → deli trays
  *
  * Intake, print, kitchen BEO, and shadow preview all derive from this config.
  */
@@ -54,11 +53,11 @@ export const DELIVERY_COURSE_BLOCK: Record<
   DeliverySectionId,
   { blockTitle: string; dotColor: string }
 > = {
-  chafer_hot: { blockTitle: "HOT / TIN", dotColor: "#ef4444" },
-  chafer_ready: { blockTitle: "READY / TIN", dotColor: "#f97316" },
-  ready_display: { blockTitle: "READY / DISPLAY", dotColor: "#8b5cf6" },
-  cold_display: { blockTitle: "READY / COLD", dotColor: "#06b6d4" },
-  bulk_sides: { blockTitle: "READY / BULK", dotColor: "#3b82f6" },
+  chafer_hot: { blockTitle: "DISPOSABLE HOT", dotColor: "#ef4444" },
+  chafer_ready: { blockTitle: "DISPOSABLE READY", dotColor: "#f97316" },
+  ready_display: { blockTitle: "DISPOSABLE DISPLAY", dotColor: "#3b82f6" },
+  cold_display: { blockTitle: "DISPOSABLE DISPLAY", dotColor: "#3b82f6" },
+  bulk_sides: { blockTitle: "DISPOSABLE BULK", dotColor: "#26a69a" },
   individual_wrapped: { blockTitle: "INDIVIDUAL WRAPPED", dotColor: "#eab308" },
   sandwich_trays: { blockTitle: "SANDWICH TRAYS", dotColor: "#d97706" },
 };

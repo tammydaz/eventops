@@ -25,10 +25,12 @@ const DELIVERY_PAPER_JUMP: JumpSection = {
   hint: "Printed BEO: PAPER PRODUCTS & BEVERAGES (replaces Plates/Serviceware)",
 };
 
-/** Delivery/pickup: same nav order as full service, but paper block instead of serviceware; no timeline/onsite notes pills. */
+/** Delivery/pickup: paper block instead of serviceware; no Beverage Services (full bar intake), timeline, or onsite notes pills. */
 function jumpSectionsForMode(isDelivery: boolean): JumpSection[] {
   if (!isDelivery) return SECTIONS;
-  return SECTIONS.filter((s) => s.id !== "beo-section-timeline" && s.id !== "beo-section-notes").map((s) => {
+  return SECTIONS.filter(
+    (s) => s.id !== "beo-section-timeline" && s.id !== "beo-section-notes" && s.id !== "beo-section-bar"
+  ).map((s) => {
     if (s.id === "beo-section-serviceware") return DELIVERY_PAPER_JUMP;
     if (s.id === "beo-section-header") return { ...s, hint: "Client, address, date, guests, delivery window & dispatch" };
     return s;

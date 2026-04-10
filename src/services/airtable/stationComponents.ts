@@ -3,7 +3,7 @@
  * Used by Stations UI for preset-based component selection.
  * Does NOT touch Menu Items, spec engine, or BEO rendering.
  */
-import { airtableFetch, getBaseId, getApiKey, airtableMetaFetch } from "./client";
+import { airtableFetch, getBaseId, getApiKey, airtableMetaFetch, airtableMetaTables } from "./client";
 import { isErrorResult, asString, asSingleSelectName, asLinkedRecordIds, asBoolean } from "./selectors";
 import type { AirtableListResponse, AirtableErrorResult } from "./client";
 
@@ -42,7 +42,7 @@ let cachedOptionsTableId: string | null | undefined = undefined;
 async function getTableId(tableName: string, envOverride?: string): Promise<string | null> {
   const data = await airtableMetaFetch<{ tables: Array<{ id: string; name: string }> }>(META_TABLES_PATH);
   if (isErrorResult(data)) return null;
-  const tables = "tables" in data ? data.tables : Array.isArray(data) ? data : [];
+  const tables = Array.isArray(data) ? data : airtableMetaTables<{ id: string; name: string }>(data);
   const table = tables.find((t) => t.id === envOverride || t.name === tableName);
   return table?.id ?? null;
 }
@@ -58,7 +58,7 @@ async function resolveTableIds(): Promise<{
   }
   const data = await airtableMetaFetch<{ tables?: Array<{ id: string; name: string }> } | Array<{ id: string; name: string }>>(META_TABLES_PATH);
   if (isErrorResult(data)) return { presets: null, components: null, options: null };
-  const tables = Array.isArray(data) ? data : data.tables ?? [];
+  const tables = Array.isArray(data) ? data : airtableMetaTables<{ id: string; name: string }>(data);
   const presets = tables.find((t) => t.id === STATION_PRESETS_TABLE || t.name === "Station Presets");
   const components = tables.find((t) => t.id === STATION_COMPONENTS_TABLE || t.name === "Station Components");
   const options = tables.find((t) => t.id === STATION_OPTIONS_TABLE || t.name === "Station Options");
@@ -76,7 +76,8 @@ async function resolveTableIds(): Promise<{
 async function getFieldId(tableId: string, fieldName: string): Promise<string | null> {
   const data = await airtableMetaFetch<{ tables?: Array<{ id: string; fields?: Array<{ id: string; name: string }> }> } | Array<{ id: string; fields?: Array<{ id: string; name: string }> }>>(META_TABLES_PATH);
   if (isErrorResult(data)) return null;
-  const tables = Array.isArray(data) ? data : data.tables ?? [];
+  type Tbl = { id: string; fields?: Array<{ id: string; name: string }> };
+  const tables = Array.isArray(data) ? (data as Tbl[]) : airtableMetaTables<Tbl>(data);
   const table = tables.find((t) => t.id === tableId);
   const field = table?.fields?.find((f) => f.name === fieldName);
   return field?.id ?? null;
@@ -109,8 +110,14 @@ export async function loadStationComponentsForPreset(
   const { presets, components } = await resolveTableIds();
   if (!components) return [];
 
-  const metaData = await airtableMetaFetch<{ tables?: Array<{ id: string; fields?: Array<{ id: string; name: string }> }> } | Array<{ id: string; fields?: Array<{ id: string; name: string }> }>>(META_TABLES_PATH);
-  const tables = metaData && !isErrorResult(metaData) ? (Array.isArray(metaData) ? metaData : metaData.tables ?? []) : [];
+  type MetaTbl = { id: string; fields?: Array<{ id: string; name: string }> };
+  const metaData = await airtableMetaFetch<{ tables?: MetaTbl[] } | MetaTbl[]>(META_TABLES_PATH);
+  const tables =
+    metaData && !isErrorResult(metaData)
+      ? Array.isArray(metaData)
+        ? metaData
+        : airtableMetaTables<MetaTbl>(metaData)
+      : [];
   const presetTable = tables.find((t) => t.id === presets);
   const compTable = tables.find((t) => t.id === components);
   const presetBy = (n: string) => presetTable?.fields?.find((f) => f.name === n)?.id ?? "";
@@ -178,8 +185,14 @@ export async function loadAllComponentsForPreset(presetId: string): Promise<Stat
 export async function loadAllStationComponents(): Promise<StationComponent[] | AirtableErrorResult> {
   const { components } = await resolveTableIds();
   if (!components) return [];
-  const metaData = await airtableMetaFetch<{ tables?: Array<{ id: string; fields?: Array<{ id: string; name: string }> }> } | Array<{ id: string; fields?: Array<{ id: string; name: string }> }>>(META_TABLES_PATH);
-  const tables = metaData && !isErrorResult(metaData) ? (Array.isArray(metaData) ? metaData : metaData.tables ?? []) : [];
+  type MetaTbl = { id: string; fields?: Array<{ id: string; name: string }> };
+  const metaData = await airtableMetaFetch<{ tables?: MetaTbl[] } | MetaTbl[]>(META_TABLES_PATH);
+  const tables =
+    metaData && !isErrorResult(metaData)
+      ? Array.isArray(metaData)
+        ? metaData
+        : airtableMetaTables<MetaTbl>(metaData)
+      : [];
   const compTable = tables.find((t) => t.id === components);
   const compBy = (n: string) => compTable?.fields?.find((f) => f.name === n)?.id ?? "";
   const nameFieldId = compBy("Component Name") || compBy("Name");
@@ -212,11 +225,12 @@ export async function loadStationComponentNamesByIds(
   if (!components || componentIds.length === 0) return {};
   const uniqueIds = [...new Set(componentIds)].filter((id) => id?.startsWith("rec"));
   if (uniqueIds.length === 0) return {};
-  const metaData = await airtableMetaFetch<{ tables?: Array<{ id: string; fields?: Array<{ id: string; name: string }> }> }>(META_TABLES_PATH);
+  type MetaTbl = { id: string; fields?: Array<{ id: string; name: string }> };
+  const metaData = await airtableMetaFetch<{ tables?: MetaTbl[] } | MetaTbl[]>(META_TABLES_PATH);
   if (isErrorResult(metaData)) return {};
-  const tables = Array.isArray(metaData) ? metaData : metaData.tables ?? [];
+  const tables = Array.isArray(metaData) ? metaData : airtableMetaTables<MetaTbl>(metaData);
   const table = tables.find((t) => t.id === components);
-  const nameFieldId = table?.fields.find((f) => f.name === "Component Name" || f.name === "Name")?.id ?? "";
+  const nameFieldId = table?.fields?.find((f) => f.name === "Component Name" || f.name === "Name")?.id ?? "";
   if (!nameFieldId) return {};
   const formula = `OR(${uniqueIds.map((id) => `RECORD_ID()='${id}'`).join(",")})`;
   const params = new URLSearchParams();
@@ -239,8 +253,14 @@ export async function loadStationOptionsForPreset(presetId: string): Promise<Sta
   const { presets, options } = await resolveTableIds();
   if (!options) return [];
 
-  const metaData = await airtableMetaFetch<{ tables?: Array<{ id: string; fields?: Array<{ id: string; name: string }> }> } | Array<{ id: string; fields?: Array<{ id: string; name: string }> }>>(META_TABLES_PATH);
-  const tables = metaData && !isErrorResult(metaData) ? (Array.isArray(metaData) ? metaData : metaData.tables ?? []) : [];
+  type MetaTbl = { id: string; fields?: Array<{ id: string; name: string }> };
+  const metaData = await airtableMetaFetch<{ tables?: MetaTbl[] } | MetaTbl[]>(META_TABLES_PATH);
+  const tables =
+    metaData && !isErrorResult(metaData)
+      ? Array.isArray(metaData)
+        ? metaData
+        : airtableMetaTables<MetaTbl>(metaData)
+      : [];
   const presetTable = tables.find((t) => t.id === presets);
   const optTable = tables.find((t) => t.id === options);
   const presetBy = (n: string) => presetTable?.fields?.find((f) => f.name === n)?.id ?? "";

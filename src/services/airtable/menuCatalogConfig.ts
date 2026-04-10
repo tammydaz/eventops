@@ -1,7 +1,11 @@
 /**
- * Menu catalog source: legacy "Menu Items" vs experimental "Menu_Lab" table.
+ * Menu catalog source: production-safe legacy "Menu Items" vs experimental "Menu_Lab" table.
  * Toggle with VITE_AIRTABLE_MENU_ITEMS_TABLE + optional VITE_AIRTABLE_MENU_CATALOG_SCHEMA=menu_lab,
  * or set MENU_ITEMS_TABLE to tbl6gXRT2FPpTdf0J (Menu_Lab) to auto-detect.
+ *
+ * Recovery note (Apr 2026): production event links, print paths, boxed lunches, and stations still
+ * resolve against legacy Menu Items IDs. Treat Menu_Lab as staging/editorial unless the legacy bridge
+ * is intentionally validated end-to-end.
  *
  * ── Menu_Lab intake pickers (BEO) ──
  * Picker queries use `filterByFormula` built from Display Type + Execution Type only
@@ -43,6 +47,27 @@ const LEGACY_DIETARY = "fldUSr1QgzP4nv9vs";
 const LEGACY_DESCRIPTION = "fldtN2hxy9TS559Rm";
 const LEGACY_VESSEL = "fldZCnfKzWijIDaeV";
 const LEGACY_SAUCES = "fldCUjK7oBckAuNNa";
+
+/** FoodWerx legacy Menu Items — single select Boxed Lunch Category (Classic, …). */
+export const LEGACY_MENU_ITEMS_BOXED_LUNCH_CATEGORY_DEFAULT_FIELD_ID = "fldrFw4Puy2WURVs3";
+
+/** FoodWerx legacy Menu Items — single select Box Lunch Type (Classic Sandwich, Gourmet, Wrap). */
+export const LEGACY_MENU_ITEMS_BOX_LUNCH_TYPE_FIELD_ID = "fld3QYpCSZaLTU2rg";
+
+/**
+ * Web API `filterByFormula` only accepts **field names** in `{…}`, not `fld…` ids (ids would match nothing).
+ * These must match your base’s column titles for the legacy Menu Items table.
+ */
+export const LEGACY_MENU_ITEMS_BOXED_LUNCH_CATEGORY_FILTER_NAME = "Boxed Lunch Category";
+export const LEGACY_MENU_ITEMS_BOX_LUNCH_TYPE_FILTER_NAME = "Box Lunch Type";
+
+/**
+ * Boxed Lunch Category field id — for `returnFieldsByFieldId` / typing; not for `filterByFormula`.
+ * Override with `VITE_AIRTABLE_MENU_ITEMS_BOXED_LUNCH_CATEGORY_FIELD_ID` if your base differs.
+ */
+export const LEGACY_MENU_ITEMS_BOXED_LUNCH_CATEGORY_FIELD_ID =
+  (import.meta.env.VITE_AIRTABLE_MENU_ITEMS_BOXED_LUNCH_CATEGORY_FIELD_ID as string | undefined)?.trim() ||
+  LEGACY_MENU_ITEMS_BOXED_LUNCH_CATEGORY_DEFAULT_FIELD_ID;
 
 export type MenuCatalogFieldIds = {
   schema: MenuCatalogSchema;
@@ -257,34 +282,60 @@ export function buildMenuSectionOrFormula(tags: readonly string[]): string | nul
 }
 
 /**
- * Client-facing delivery intake sections.  Each maps a user-friendly header to
- * the set of `Menu Section` multi-select tags it should include in the picker.
+ * Client-facing delivery intake sections — organized by how the kitchen packs the order.
+ * Each maps an operational container type to the `Menu Section` tags in Menu_Lab.
+ *
+ * DISPOSABLE HOT    — leaves the kitchen hot; goes in disposable chafer tins
+ * DISPOSABLE READY  — packed in disposable chafer tins, ready for client to heat on site
+ * DISPOSABLE BULK   — cold bulk sides/salads in large disposable bowls
+ * DISPOSABLE DISPLAY — platters/trays in display containers (sandwiches, desserts, etc.)
  */
 export type DeliveryIntakeSectionId =
-  | "breakfast"
-  | "lunch_sandwiches"
-  | "salads_sides"
-  | "hot_entrees"
-  | "desserts_snacks"
-  | "beverages";
+  | "disposable_hot"
+  | "disposable_ready"
+  | "disposable_bulk"
+  | "disposable_display";
 
 export interface DeliveryIntakeSection {
   id: DeliveryIntakeSectionId;
   title: string;
   icon: string;
+  /** Menu_Lab: Menu Section multi-select tags used to filter picker items */
   menuSectionTags: readonly string[];
+  /** Legacy: Category field values used to filter picker items */
+  legacyCategoryValues: readonly string[];
+  /** Legacy: routeTargetField to use when saving picked items to the event */
+  legacyRouteTarget: string;
 }
 
 export const DELIVERY_INTAKE_SECTIONS: readonly DeliveryIntakeSection[] = [
   {
-    id: "breakfast",
-    title: "BREAKFAST",
-    icon: "☀️",
-    menuSectionTags: ["Breakfast - Room Temp", "Breakfast - Hot", "Breakfast - Complements"],
+    id: "disposable_hot",
+    title: "DISPOSABLE HOT",
+    icon: "🔥",
+    menuSectionTags: ["Breakfast - Hot", "Hot Lunch"],
+    legacyCategoryValues: ["Hot Breakfast", "Hot Lunch Delivery"],
+    legacyRouteTarget: "buffetMetal",
   },
   {
-    id: "lunch_sandwiches",
-    title: "LUNCH / SANDWICHES",
+    id: "disposable_ready",
+    title: "DISPOSABLE READY",
+    icon: "🍽️",
+    menuSectionTags: ["Breakfast - Room Temp", "Breakfast - Complements"],
+    legacyCategoryValues: ["Breakfast Room Temp"],
+    legacyRouteTarget: "buffetMetal",
+  },
+  {
+    id: "disposable_bulk",
+    title: "DISPOSABLE BULK",
+    icon: "🥗",
+    menuSectionTags: ["Salads - Classic", "Salads - Signature"],
+    legacyCategoryValues: ["Salad", "Classic Salad", "Signature Salad"],
+    legacyRouteTarget: "buffetChina",
+  },
+  {
+    id: "disposable_display",
+    title: "DISPOSABLE DISPLAY",
     icon: "🥪",
     menuSectionTags: [
       "Lunch - Classic Sandwiches",
@@ -292,31 +343,25 @@ export const DELIVERY_INTAKE_SECTIONS: readonly DeliveryIntakeSection[] = [
       "Lunch - Wraps",
       "Lunch - Panini",
       "Lunch - Hoagies",
+      "Desserts",
+      "Breaks and Snacks",
+      "Ambient Displays",
     ],
-  },
-  {
-    id: "salads_sides",
-    title: "SALADS & SIDES",
-    icon: "🥗",
-    menuSectionTags: ["Salads - Classic", "Salads - Signature"],
-  },
-  {
-    id: "hot_entrees",
-    title: "HOT ENTREES",
-    icon: "🔥",
-    menuSectionTags: ["Hot Lunch"],
-  },
-  {
-    id: "desserts_snacks",
-    title: "DESSERTS & SNACKS",
-    icon: "🍰",
-    menuSectionTags: ["Desserts", "Breaks and Snacks", "Ambient Displays"],
-  },
-  {
-    id: "beverages",
-    title: "BEVERAGES",
-    icon: "☕",
-    menuSectionTags: ["Beverages"],
+    legacyCategoryValues: [
+      "Deli",
+      "Deli/Sandwhiches",
+      "Classic Sandwich",
+      "Gourmet Sandwich",
+      "Wrap",
+      "Panini",
+      "Hoagie",
+      "Dessert",
+      "Dessert (Display)",
+      "Dessert (Individual)",
+      "Display",
+      "Snack",
+    ],
+    legacyRouteTarget: "deliveryDeli",
   },
 ];
 

@@ -9,6 +9,7 @@
 import {
   airtableFetch,
   airtableMetaFetch,
+  airtableMetaTables,
   getEventsTable,
   type AirtableListResponse,
   type AirtableRecord,
@@ -392,8 +393,9 @@ async function getCreatedTimeFieldId(): Promise<string | null> {
     cachedCreatedTimeFieldId = null;
     return null;
   }
-  const table = data.tables.find((t) => t.id === tableId || t.name === tableId);
-  const createdField = table?.fields.find((f) => f.type === "createdTime");
+  const tables = airtableMetaTables<AirtableTableSchema>(data);
+  const table = tables.find((t) => t.id === tableId || t.name === tableId);
+  const createdField = table?.fields?.find((f) => f.type === "createdTime");
   cachedCreatedTimeFieldId = createdField?.id ?? null;
   return cachedCreatedTimeFieldId;
 }
@@ -413,8 +415,9 @@ export async function getFoodwerxArrivalFieldId(): Promise<string | null> {
     cachedFoodwerxArrivalFieldId = null;
     return null;
   }
-  const table = data.tables.find((t) => t.id === tableKey || t.name === tableKey);
-  const arrivalFields = table?.fields.filter(
+  const tables = airtableMetaTables<AirtableTableSchema>(data);
+  const table = tables.find((t) => t.id === tableKey || t.name === tableKey);
+  const arrivalFields = table?.fields?.filter(
     (f) => /foodwerx|fw\s*arrival|staff\s*arrival/i.test(f.name) && (f.type === "dateTime" || f.type === "date")
   ) ?? [];
   const field = arrivalFields.find((f) => /arrival/i.test(f.name)) ?? arrivalFields[0];
@@ -443,8 +446,9 @@ export async function getBarServiceFieldId(): Promise<string | null> {
     cachedBarServiceFieldId = null;
     return null;
   }
-  const table = data.tables.find((t) => t.id === tableKey || t.name === tableKey);
-  const barServiceFields = table?.fields.filter(
+  const tables = airtableMetaTables<AirtableTableSchema>(data);
+  const table = tables.find((t) => t.id === tableKey || t.name === tableKey);
+  const barServiceFields = table?.fields?.filter(
     (f) => (f.type === "singleSelect" || f.type === "multipleSelects") && /bar\s*service/i.test(f.name)
   ) ?? [];
   const field = barServiceFields.find((f) => /needed/i.test(f.name)) ?? barServiceFields[0];
@@ -515,12 +519,13 @@ export async function getLockoutFieldIds(): Promise<LockoutFieldIds | null> {
     cachedLockoutFieldIds = null;
     return null;
   }
-  const table = data.tables.find((t) => t.id === tableKey || t.name === tableKey);
+  const tables = airtableMetaTables<AirtableTableSchema>(data);
+  const table = tables.find((t) => t.id === tableKey || t.name === tableKey);
   if (!table) {
     cachedLockoutFieldIds = null;
     return null;
   }
-  const byName = Object.fromEntries(table.fields.map((f) => [f.name, f.id]));
+  const byName = Object.fromEntries((table.fields ?? []).map((f) => [f.name, f.id]));
   const ids: LockoutFieldIds = {
     guestCountConfirmed: byName["Guest Count Confirmed"],
     guestCountChangeRequested: byName["Guest Count Change Requested"],
@@ -566,12 +571,13 @@ export async function getBOHProductionFieldIds(): Promise<BOHProductionFieldIds 
     cachedBOHProductionFieldIds = null;
     return null;
   }
-  const table = data.tables.find((t) => t.id === tableKey || t.name === tableKey);
+  const tables = airtableMetaTables<AirtableTableSchema>(data);
+  const table = tables.find((t) => t.id === tableKey || t.name === tableKey);
   if (!table) {
     cachedBOHProductionFieldIds = null;
     return null;
   }
-  const byName = Object.fromEntries(table.fields.map((f) => [f.name, f.id]));
+  const byName = Object.fromEntries((table.fields ?? []).map((f) => [f.name, f.id]));
   const findField = (...names: string[]): string | undefined =>
     names.map((n) => byName[n]).find(Boolean) as string | undefined;
   const ids: BOHProductionFieldIds = {
@@ -1257,14 +1263,15 @@ export const loadSingleSelectOptions = async (
   const data = await airtableMetaFetch<AirtableTablesResponse>("");
   if (isErrorResult(data)) return data;
 
-  const table = data.tables.find((item) => item.id === tableKey || item.name === tableKey);
+  const tables = airtableMetaTables<AirtableTableSchema>(data);
+  const table = tables.find((item) => item.id === tableKey || item.name === tableKey);
   if (!table) {
     return { error: true, message: "Events table not found in Airtable metadata." };
   }
 
   const optionsMap: Record<string, SingleSelectOption[]> = {};
   fieldIds.forEach((fieldId) => {
-    const field = table.fields.find((item) => item.id === fieldId);
+    const field = (table.fields ?? []).find((item) => item.id === fieldId);
     if (field?.type === "singleSelect" || field?.type === "multipleSelects") {
       optionsMap[fieldId] = field.options?.choices?.map((choice) => ({ id: choice.id, name: choice.name })) ?? [];
     } else {
@@ -1287,12 +1294,13 @@ export async function logEventsTableFieldsForTimeline(): Promise<void> {
     console.error("Failed to fetch schema:", data);
     return;
   }
-  const table = data.tables.find((t) => t.id === tableKey || t.name === tableKey);
+  const tables = airtableMetaTables<AirtableTableSchema>(data);
+  const table = tables.find((t) => t.id === tableKey || t.name === tableKey);
   if (!table) {
-    console.error("Events table not found. Tables:", data.tables.map((t) => ({ id: t.id, name: t.name })));
+    console.error("Events table not found. Tables:", tables.map((t) => ({ id: t.id, name: t.name })));
     return;
   }
-  const timelineFields = table.fields.filter(
+  const timelineFields = (table.fields ?? []).filter(
     (f) => /arrival|dispatch|timeline|foodwerx|staff|fw/i.test(f.name)
   );
   console.log("📋 Timeline/arrival fields (use 'id' for FOODWERX_ARRIVAL):", timelineFields.map((f) => ({ id: f.id, name: f.name, type: f.type })));
@@ -1310,17 +1318,18 @@ export async function logEventsTableFieldsForBarService(): Promise<void> {
     console.error("Failed to fetch schema:", data);
     return;
   }
-  const table = data.tables.find((t) => t.id === tableKey || t.name === tableKey);
+  const tables = airtableMetaTables<AirtableTableSchema>(data);
+  const table = tables.find((t) => t.id === tableKey || t.name === tableKey);
   if (!table) {
-    console.error("Events table not found. Tables:", data.tables.map((t) => ({ id: t.id, name: t.name })));
+    console.error("Events table not found. Tables:", tables.map((t) => ({ id: t.id, name: t.name })));
     return;
   }
-  const barRelated = table.fields.filter(
+  const barRelated = (table.fields ?? []).filter(
     (f) => /bar|beverage|drink|mixer|garnish|signature/i.test(f.name)
   );
   console.log("📋 Bar-related fields in Events table (use the 'id' for BAR_SERVICE):", barRelated.map((f) => ({ id: f.id, name: f.name, type: f.type })));
   if (barRelated.length === 0) {
-    console.log("All fields:", table.fields.map((f) => ({ id: f.id, name: f.name })));
+    console.log("All fields:", (table.fields ?? []).map((f) => ({ id: f.id, name: f.name })));
   }
 }
 
@@ -1636,6 +1645,29 @@ export const updateEventMultiple = async (
     return { success: true };
   }
 
+  const CLIENT_IDENTITY_KEYS = new Set([
+    FIELD_IDS.CLIENT_FIRST_NAME,
+    FIELD_IDS.CLIENT_LAST_NAME,
+    FIELD_IDS.CLIENT_PHONE,
+    FIELD_IDS.PRIMARY_CONTACT_PHONE,
+    FIELD_IDS.PRIMARY_CONTACT_NAME,
+    FIELD_IDS.BUSINESS_NAME,
+  ]);
+  const touchesClientIdentity = Object.keys(filteredFields).some((k) => CLIENT_IDENTITY_KEYS.has(k));
+  const alreadySettingClient = Object.prototype.hasOwnProperty.call(filteredFields, FIELD_IDS.CLIENT);
+  if (touchesClientIdentity && !alreadySettingClient) {
+    const loaded = await loadEvent(recordId);
+    if (!isErrorResult(loaded)) {
+      const merged: Record<string, unknown> = { ...(loaded.fields ?? {}), ...filteredFields };
+      const existingClient = asLinkedRecordIds(merged[FIELD_IDS.CLIENT]);
+      if (existingClient.length === 0) {
+        const { resolveOrCreateClientIntakeIdForEventFields } = await import("./clientIntake");
+        const cid = await resolveOrCreateClientIntakeIdForEventFields(merged);
+        if (cid) filteredFields[FIELD_IDS.CLIENT] = [cid];
+      }
+    }
+  }
+
   console.log("✅ updateEventMultiple - AFTER filter:", JSON.stringify(filteredFields, null, 2));
 
   if (Object.keys(filteredFields).length === 0) {
@@ -1705,7 +1737,9 @@ export const createEvent = async (
   const table = getEventsTable();
   if (typeof table !== "string") return table;
 
-  const prepared = await prepareFieldsForCreate(fields);
+  let prepared = await prepareFieldsForCreate(fields);
+  const { withClientIntakeLinkForNewEvent } = await import("./clientIntake");
+  prepared = await withClientIntakeLinkForNewEvent(prepared);
   const params = getReturnFieldsParams();
   const data = await airtableFetch<AirtableListResponse<Record<string, unknown>>>(
     `/${table}?${params.toString()}`,

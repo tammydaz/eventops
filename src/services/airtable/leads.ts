@@ -1,7 +1,8 @@
 /**
  * Leads service for FOH lead pipeline.
- * Uses the Leads Airtable table. Set VITE_AIRTABLE_LEADS_TABLE to your table ID.
- * When unset or fetch fails, returns demo data for development.
+ * Uses the Leads Airtable table (`leadsSchema.ts` default id; override with VITE_AIRTABLE_LEADS_TABLE).
+ * Field IDs are merged: canonical map in `leadsSchema.ts` + Meta API names from LEAD_FIELD_NAMES when they match.
+ * When the table is unavailable or list fetch fails, returns demo data.
  *
  * Expected Leads table fields:
  * - Lead Name (single line)
@@ -18,11 +19,13 @@
 import {
   airtableFetch,
   airtableMetaFetch,
+  airtableMetaTables,
   getLeadsTable,
   type AirtableListResponse,
   type AirtableRecord,
   type AirtableErrorResult,
 } from "./client";
+import { LEADS_FIELD_IDS_BY_LABEL } from "./leadsSchema";
 import { asString, asSingleSelectName, isErrorResult } from "./selectors";
 
 export type FollowUpPriority = "Urgent" | "High" | "Medium" | "Low";
@@ -144,47 +147,76 @@ async function getLeadFieldIds(): Promise<Record<string, string> | null> {
     cachedFieldIds = null;
     return null;
   }
+  /** Start from canonical FoodWerx ids so Airtable titles like "Lead Notes" / "Proposal Sent?" still map. */
+  const ids: Record<string, string> = { ...LEADS_FIELD_IDS_BY_LABEL };
+
   const data = await airtableMetaFetch<AirtableTablesResponse>("");
-  if (isErrorResult(data)) {
+  if (!isErrorResult(data)) {
+    const tables = airtableMetaTables<AirtableTableSchema>(data);
+    const table = tables.find((t) => t.id === tableId || t.name === tableId);
+    if (table) {
+      const byName = Object.fromEntries((table.fields ?? []).map((f) => [f.name, f.id]));
+      for (const name of LEAD_FIELD_NAMES) {
+        if (byName[name]) ids[name] = byName[name];
+      }
+    }
+  }
+
+  if (!ids["Lead Name"]) {
     cachedFieldIds = null;
     return null;
   }
-  const table = data.tables.find((t) => t.id === tableId || t.name === tableId);
-  if (!table) {
-    cachedFieldIds = null;
-    return null;
-  }
-  const byName = Object.fromEntries(table.fields.map((f) => [f.name, f.id]));
-  const ids: Record<string, string> = {};
-  for (const name of LEAD_FIELD_NAMES) {
-    if (byName[name]) ids[name] = byName[name];
-  }
-  cachedFieldIds = Object.keys(ids).length > 0 ? ids : null;
+  cachedFieldIds = ids;
   return cachedFieldIds;
 }
 
 function recordToLeadItem(record: AirtableRecord<Record<string, unknown>>, ids: Record<string, string>): LeadListItem {
   const f = record.fields ?? {};
-  const proposalStatus = asSingleSelectName(f[ids["Proposal Status"]]) || asString(f[ids["Proposal Status"]]);
-  const proposalSentField = f[ids["Proposal Sent"]];
-  const proposalSent = typeof proposalSentField === "boolean"
-    ? proposalSentField
-    : proposalStatus?.toLowerCase() === "sent";
-  const followUpPriorityRaw = asSingleSelectName(f[ids["Follow-Up Priority"]]) || asString(f[ids["Follow-Up Priority"]]);
+  const proposalStatusFieldId = ids["Proposal Status"];
+  const proposalStatus = proposalStatusFieldId
+    ? asSingleSelectName(f[proposalStatusFieldId]) || asString(f[proposalStatusFieldId])
+    : "";
+  const proposalSentField = ids["Proposal Sent"] ? f[ids["Proposal Sent"]] : undefined;
+  const proposalSent =
+    typeof proposalSentField === "boolean"
+      ? proposalSentField
+      : proposalStatus?.toLowerCase() === "sent";
+  const followUpPriorityRaw = ids["Follow-Up Priority"]
+    ? asSingleSelectName(f[ids["Follow-Up Priority"]]) || asString(f[ids["Follow-Up Priority"]])
+    : "";
   const followUpPriority = followUpPriorityRaw && ["Urgent", "High", "Medium", "Low"].includes(followUpPriorityRaw)
     ? (followUpPriorityRaw as FollowUpPriority)
     : undefined;
+  const followUpBlock = ids["Follow-Up History"] ? asString(f[ids["Follow-Up History"]]) : "";
+  const contactFromField = ids["Contact Info"] ? asString(f[ids["Contact Info"]]) : "";
+  const contactComposed = [
+    [asString(ids["Client First Name"] ? f[ids["Client First Name"]] : ""), asString(ids["Client Last Name"] ? f[ids["Client Last Name"]] : "")]
+      .join(" ")
+      .trim(),
+    asString(ids["Phone"] ? f[ids["Phone"]] : ""),
+    asString(ids["Email"] ? f[ids["Email"]] : ""),
+  ]
+    .filter(Boolean)
+    .join("\n");
   return {
     id: record.id,
-    leadName: asString(f[ids["Lead Name"]]),
-    inquiryDate: typeof f[ids["Inquiry Date"]] === "string" ? (f[ids["Inquiry Date"]] as string).slice(0, 10) : undefined,
-    leadStatus: asSingleSelectName(f[ids["Lead Status"]]) || asString(f[ids["Lead Status"]]) || "—",
-    nextFollowUpDate: typeof f[ids["Next Follow-Up Date"]] === "string" ? (f[ids["Next Follow-Up Date"]] as string).slice(0, 10) : undefined,
-    contactInfo: asString(f[ids["Contact Info"]]),
-    followUpHistory: asString(f[ids["Follow-Up History"]]),
-    proposalStatus,
-    notes: asString(f[ids["Notes"]]),
-    fohNotes: asString(f[ids["FOH Notes"]]),
+    leadName: asString(ids["Lead Name"] ? f[ids["Lead Name"]] : ""),
+    inquiryDate:
+      ids["Inquiry Date"] && typeof f[ids["Inquiry Date"]] === "string"
+        ? (f[ids["Inquiry Date"]] as string).slice(0, 10)
+        : undefined,
+    leadStatus: ids["Lead Status"]
+      ? asSingleSelectName(f[ids["Lead Status"]]) || asString(f[ids["Lead Status"]]) || "—"
+      : "—",
+    nextFollowUpDate:
+      ids["Next Follow-Up Date"] && typeof f[ids["Next Follow-Up Date"]] === "string"
+        ? (f[ids["Next Follow-Up Date"]] as string).slice(0, 10)
+        : undefined,
+    contactInfo: contactFromField || contactComposed,
+    followUpHistory: followUpBlock,
+    proposalStatus: proposalStatus || undefined,
+    notes: ids["Notes"] ? asString(f[ids["Notes"]]) : "",
+    fohNotes: ids["FOH Notes"] ? asString(f[ids["FOH Notes"]]) : "",
     followUpPriority,
     proposalSent,
   };
@@ -220,7 +252,7 @@ export async function loadLeads(): Promise<LeadListItem[] | AirtableErrorResult>
   params.set("pageSize", "100");
   params.set("cellFormat", "json");
   params.set("returnFieldsByFieldId", "true");
-  Object.values(ids).forEach((id) => params.append("fields[]", id));
+  new Set(Object.values(ids)).forEach((id) => params.append("fields[]", id));
 
   const data = await airtableFetch<AirtableListResponse<Record<string, unknown>>>(`/${tableId}?${params.toString()}`);
   if (isErrorResult(data)) {
@@ -245,7 +277,7 @@ function leadItemToDetail(item: LeadListItem): LeadDetail {
     source: undefined,
     timesContacted: undefined,
     lastContact: undefined,
-    followUpNotes: item.fohNotes,
+    followUpNotes: item.followUpHistory ?? item.fohNotes ?? "",
     followUpPriority: item.followUpPriority,
     proposalSent: item.proposalSent,
   };

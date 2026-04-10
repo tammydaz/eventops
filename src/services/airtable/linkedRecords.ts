@@ -1,4 +1,14 @@
-import { airtableFetch, getBaseId, getApiKey, getStationsTable, getMenuItemsTable, airtableMetaFetch, type AirtableListResponse, type AirtableErrorResult } from "./client";
+import {
+  airtableFetch,
+  getBaseId,
+  getApiKey,
+  getStationsTable,
+  getMenuItemsTable,
+  airtableMetaFetch,
+  airtableMetaTables,
+  type AirtableListResponse,
+  type AirtableErrorResult,
+} from "./client";
 import {
   getMenuCatalogFieldIds,
   syntheticCategoryFromMenuLabFields,
@@ -34,15 +44,18 @@ async function getStationsFieldIds(): Promise<StationsFieldIds | null> {
     cachedStationsFieldIds = null;
     return null;
   }
-  const table = data.tables.find((t) => t.id === tableId || t.name === tableId);
+  type StationTableSchema = { id: string; name: string; fields: Array<{ id: string; name: string; type: string }> };
+  const tables = airtableMetaTables<StationTableSchema>(data);
+  const table = tables.find((t) => t.id === tableId || t.name === tableId);
   if (!table) {
     cachedStationsFieldIds = null;
     return null;
   }
-  const byName = (name: string) => table.fields.find((f) => f.name === name)?.id ?? "";
-  const eventField = table.fields.find((f) => f.id === STATION_EVENT_FIELD_ID || f.name === "Event");
+  const fields = table.fields ?? [];
+  const byName = (name: string) => fields.find((f) => f.name === name)?.id ?? "";
+  const eventField = fields.find((f) => f.id === STATION_EVENT_FIELD_ID || f.name === "Event");
   const stationTypeId = byName("Station Type") || STATION_TYPE_FIELD_ID;
-  const stationTypeField = table.fields.find((f) => f.id === stationTypeId || f.name === "Station Type");
+  const stationTypeField = fields.find((f) => f.id === stationTypeId || f.name === "Station Type");
   cachedStationsFieldIds = {
     stationType: stationTypeId,
     stationItems: byName("Station Items") || STATION_ITEMS_FIELD_ID,
@@ -65,8 +78,10 @@ export async function getStationTypeOptions(): Promise<string[]> {
   if (!fieldIds?.stationType) return [];
   const data = await airtableMetaFetch<{ tables: Array<{ id: string; name: string; fields: Array<{ id: string; name: string; type: string; options?: { choices?: Array<{ id: string; name: string }> } }> }> }>("");
   if (isErrorResult(data)) return [];
-  const table = data.tables.find((t) => t.id === getStationsTable() || t.name === getStationsTable());
-  const field = table?.fields.find((f) => f.id === fieldIds.stationType);
+  type OptTable = { id: string; name: string; fields: Array<{ id: string; name: string; type: string; options?: { choices?: Array<{ id: string; name: string }> } }> };
+  const tables = airtableMetaTables<OptTable>(data);
+  const table = tables.find((t) => t.id === getStationsTable() || t.name === getStationsTable());
+  const field = table?.fields?.find((f) => f.id === fieldIds.stationType);
   if (field?.type === "singleSelect" && field.options?.choices?.length) {
     return field.options.choices.map((c) => c.name);
   }
@@ -354,10 +369,12 @@ export const loadMenuItemsByStationType = async (
     const metaData = await airtableMetaFetch<{ tables: Array<{ id: string; name?: string; fields: Array<{ id: string; name: string }> }> }>("");
     let menuStationTypeFieldName = "Station Type";
     if (!isErrorResult(metaData)) {
-      const menuTable = metaData.tables.find(
+      type MenuMetaTable = { id: string; name?: string; fields: Array<{ id: string; name: string }> };
+      const metaTables = airtableMetaTables<MenuMetaTable>(metaData);
+      const menuTable = metaTables.find(
         (t) => t.id === tableId || t.name === "Menu Items" || t.id === MENU_LAB_TABLE_ID || t.name === "Menu_Lab"
       );
-      const stationTypeField = menuTable?.fields.find((f) => f.id === MENU_ITEMS_STATION_TYPE_FIELD_ID || f.name === "Station Type");
+      const stationTypeField = menuTable?.fields?.find((f) => f.id === MENU_ITEMS_STATION_TYPE_FIELD_ID || f.name === "Station Type");
       if (stationTypeField?.name) menuStationTypeFieldName = stationTypeField.name;
     }
 
@@ -698,10 +715,26 @@ export const createStationFromPreset = async (params: {
   }
   if (fieldIds.customItems && customText) fields[fieldIds.customItems] = customText;
   if (params.stationNotes?.trim()) fields[fieldIds.stationNotes] = params.stationNotes.trim();
-  const data = await airtableFetch<{ records?: Array<{ id: string }> }>(`/${tableId}`, {
+  let data = await airtableFetch<{ records?: Array<{ id: string }> }>(`/${tableId}`, {
     method: "POST",
     body: JSON.stringify({ records: [{ fields }] }),
   });
+
+  // Airtable rejects writes to a Single Select field when the value isn't an existing option
+  // and the token lacks permission to create new options. Retry without stationType — the
+  // linked stationPreset record is sufficient to identify the station in the app.
+  if (isErrorResult(data) && typeof (data as AirtableErrorResult).message === "string") {
+    const msg = ((data as AirtableErrorResult).message as string).toLowerCase();
+    if (msg.includes("insufficient permissions") && msg.includes("select option")) {
+      const fieldsWithoutType = { ...fields };
+      delete fieldsWithoutType[fieldIds.stationType];
+      data = await airtableFetch<{ records?: Array<{ id: string }> }>(`/${tableId}`, {
+        method: "POST",
+        body: JSON.stringify({ records: [{ fields: fieldsWithoutType }] }),
+      });
+    }
+  }
+
   if (isErrorResult(data)) return data;
   const rec = (data as { records?: Array<{ id: string }> }).records?.[0];
   return rec ? { id: rec.id } : { error: true, message: "No record returned" };

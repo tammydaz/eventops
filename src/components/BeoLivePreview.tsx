@@ -14,6 +14,9 @@ import { deliveryFoodListSectionKeys, rowsForDeliverySectionTitle, shadowSection
 import type { EventMenuRow, EventMenuRowComponent } from "../services/airtable/eventMenu";
 import { loadStationsByEventId } from "../services/airtable/linkedRecords";
 import { fetchMenuItemNamesByIds } from "../services/airtable/menuItems";
+import { loadBoxedLunchOrdersByEventId } from "../services/airtable/boxedLunchOrders";
+import { parseBoxedLunchFromOrders } from "../utils/boxedLunchPrint";
+import { getBoxTypeById, BOX_TYPES } from "../config/boxedLunchBeo";
 
 export type ShadowMenuRowForPreview = EventMenuRow & {
   catalogItemName: string;
@@ -51,9 +54,16 @@ const STATION_PREVIEW_GROUPS: Array<{ placement: "Presented Appetizer" | "Buffet
   { placement: "Buffet China", label: "Buffet – China" },
 ];
 
+type BoxedLunchPreview = {
+  boxName: string;
+  lines: Array<{ name: string; qty: number; bread?: string }>;
+  totalBoxes: number;
+};
+
 export function BeoLivePreview({ shadowMenuRows }: { shadowMenuRows: ShadowMenuRowForPreview[] }) {
-  const { selectedEventData, selectedEventId } = useEventStore();
+  const { selectedEventData, selectedEventId, boxedLunchSavedAt } = useEventStore();
   const [liveStations, setLiveStations] = useState<LiveStationPreview[]>([]);
+  const [boxedLunchPreview, setBoxedLunchPreview] = useState<BoxedLunchPreview | null>(null);
   const data = selectedEventData ?? {};
   const eventType = asSingleSelectName(data[FIELD_IDS.EVENT_TYPE]) || "";
   const isDelivery = isDeliveryOrPickup(eventType);
@@ -153,6 +163,38 @@ export function BeoLivePreview({ shadowMenuRows }: { shadowMenuRows: ShadowMenuR
       cancelled = true;
     };
   }, [selectedEventId, selectedEventData]);
+
+  // Load boxed lunch orders — refreshes when boxedLunchSavedAt changes (after a save)
+  useEffect(() => {
+    if (!selectedEventId) {
+      setBoxedLunchPreview(null);
+      return;
+    }
+    let cancelled = false;
+    loadBoxedLunchOrdersByEventId(selectedEventId).then((result) => {
+      if (cancelled) return;
+      if (isErrorResult(result) || result.length === 0) {
+        setBoxedLunchPreview(null);
+        return;
+      }
+      const parsed = parseBoxedLunchFromOrders(result.map((r) => ({ orderName: r.orderName })));
+      if (!parsed || parsed.sandwiches.length === 0) {
+        setBoxedLunchPreview(null);
+        return;
+      }
+      const box = getBoxTypeById(parsed.boxTypeId, BOX_TYPES);
+      const boxName = box?.name ?? parsed.boxSnapshot?.name ?? parsed.boxTypeId;
+      const totalBoxes = parsed.sandwiches.reduce((n, s) => n + s.qty, 0);
+      setBoxedLunchPreview({
+        boxName,
+        totalBoxes,
+        lines: parsed.sandwiches
+          .filter((s) => s.name && s.qty > 0)
+          .map((s) => ({ name: s.name, qty: s.qty, bread: s.breadType && s.breadType !== "fixed" ? s.breadType : undefined })),
+      });
+    });
+    return () => { cancelled = true; };
+  }, [selectedEventId, boxedLunchSavedAt]);
 
   const s = {
     doc: {
@@ -413,6 +455,18 @@ export function BeoLivePreview({ shadowMenuRows }: { shadowMenuRows: ShadowMenuR
         })()
       ) : (
         <div style={s.emptyMenu}>No menu items added yet</div>
+      )}
+
+      {boxedLunchPreview && (
+        <div style={{ marginTop: 8 }}>
+          <div style={s.sectionTitle}>Boxed Lunches</div>
+          <div style={{ ...s.subsectionLabel, marginBottom: 4 }}>{boxedLunchPreview.boxName} — {boxedLunchPreview.totalBoxes} box{boxedLunchPreview.totalBoxes === 1 ? "" : "es"}</div>
+          {boxedLunchPreview.lines.map((l, i) => (
+            <div key={i} style={s.menuItem}>
+              {l.qty}× {l.name}{l.bread ? ` — ${l.bread}` : ""}
+            </div>
+          ))}
+        </div>
       )}
 
       {beoTimeline && (

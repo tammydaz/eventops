@@ -12,6 +12,7 @@ import {
   createTask,
   type Task,
 } from "../services/airtable/tasks";
+import { TASK_TYPE_OPTION } from "../services/airtable/tasksSchema";
 
 function addDays(date: Date, days: number): string {
   const d = new Date(date);
@@ -20,7 +21,11 @@ function addDays(date: Date, days: number): string {
 }
 import { FollowUpModal, type FollowUpResult } from "../components/FollowUpModal";
 import { DASHBOARD_CALENDAR_TO } from "../lib/dashboardRoutes";
-import { loadClientIntakeRecord } from "../services/airtable/clientIntake";
+import {
+  loadClientIntakeRecord,
+  resolveClientIntakeIdFromEventHints,
+  ensureClientIntakeRecordForContact,
+} from "../services/airtable/clientIntake";
 
 const SECTION_COLORS = {
   summary: { accent: "#ff6b6b", border: "rgba(204,0,0,0.35)", bg: "rgba(204,0,0,0.06)", btnBg: "rgba(204,0,0,0.12)" },
@@ -356,9 +361,79 @@ const EventOverviewPage: React.FC = () => {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [tasksLoading, setTasksLoading] = useState(false);
   const [followUpTask, setFollowUpTask] = useState<Task | null>(null);
+  const [addReminderOpen, setAddReminderOpen] = useState(false);
+  const [reminderName, setReminderName] = useState("Reminder");
+  const [reminderDue, setReminderDue] = useState(() => addDays(new Date(), 3));
+  const [reminderNotes, setReminderNotes] = useState("");
+  const [reminderSaving, setReminderSaving] = useState(false);
+  const [reminderError, setReminderError] = useState<string | null>(null);
   const [noteDraft, setNoteDraft] = useState("");
+  const [clientHubBusy, setClientHubBusy] = useState(false);
+  const [clientHubError, setClientHubError] = useState<string | null>(null);
   /** After event load: if this id is a Client Intake row (wrong URL), redirect once — avoids "Event not found" for `/event/recClientId`. */
   const clientIntakeFallbackAttemptedRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    setClientHubError(null);
+  }, [id]);
+
+  /** Match/create Client Intake from this event, save Events → Client link, go to client hub (delivery vs full service + past menus). */
+  const handleOpenClientHub = useCallback(async () => {
+    if (!id || id === "new") return;
+    const data = useEventStore.getState().selectedEventData;
+    if (!data || Object.keys(data).length === 0) return;
+
+    setClientHubError(null);
+    setClientHubBusy(true);
+    try {
+      const clientFirst = asString(data[FIELD_IDS.CLIENT_FIRST_NAME]);
+      const clientLast = asString(data[FIELD_IDS.CLIENT_LAST_NAME]);
+      const eventName = asString(data[FIELD_IDS.EVENT_NAME]) || "";
+      const clientPhone = asString(data[FIELD_IDS.CLIENT_PHONE]).trim();
+      const primaryContactPhone = asString(data[FIELD_IDS.PRIMARY_CONTACT_PHONE]).trim();
+      const nameFromEvent = eventName.split(/\s*[–—-]\s*/)[0]?.trim() ?? "";
+      const clientNameHint =
+        [clientFirst, clientLast].filter(Boolean).join(" ").trim() ||
+        (nameFromEvent && nameFromEvent !== "—" ? nameFromEvent : undefined);
+
+      let cid = await resolveClientIntakeIdFromEventHints({
+        clientPhone: clientPhone || undefined,
+        primaryContactPhone: primaryContactPhone || undefined,
+        clientNameHint,
+      });
+
+      if (!cid) {
+        const phone = clientPhone || primaryContactPhone;
+        if (!phone || !/\d/.test(phone)) {
+          setClientHubError("Add a client phone or primary contact phone on this event (BEO Header), then tap again.");
+          return;
+        }
+        const created = await ensureClientIntakeRecordForContact({
+          firstName: clientFirst || nameFromEvent.split(/\s+/)[0] || "Client",
+          lastName: clientLast || nameFromEvent.split(/\s+/).slice(1).join(" ") || "",
+          phone,
+          email: asString(data[FIELD_IDS.CLIENT_EMAIL]).trim() || undefined,
+        });
+        if (isErrorResult(created)) {
+          setClientHubError(created.message ?? "Could not create client profile.");
+          return;
+        }
+        cid = created;
+      }
+
+      const ok = await useEventStore.getState().setFields(id, { [FIELD_IDS.CLIENT]: [cid] });
+      if (!ok) {
+        setClientHubError("Could not save client link. Try again.");
+        return;
+      }
+      await useEventStore.getState().loadEventData();
+      navigate(`/client/${cid}?flow=delivery`);
+    } catch (err) {
+      setClientHubError(err instanceof Error ? err.message : "Something went wrong.");
+    } finally {
+      setClientHubBusy(false);
+    }
+  }, [id, navigate]);
 
   useEffect(() => {
     clientIntakeFallbackAttemptedRef.current = null;
@@ -568,6 +643,57 @@ const EventOverviewPage: React.FC = () => {
           <span style={styles.taglineText}>— the engine behind the excellence</span>
         </div>
 
+        <div style={{ margin: "0 auto 24px", maxWidth: 1400, textAlign: "center" }}>
+          {linkedClientRecordId ? (
+            <Link
+              to={`/client/${linkedClientRecordId}?flow=delivery`}
+              style={{
+                display: "inline-block",
+                padding: "12px 22px",
+                borderRadius: 10,
+                border: "1px solid rgba(147,197,253,0.55)",
+                background: "linear-gradient(180deg, rgba(59,130,246,0.22) 0%, rgba(59,130,246,0.1) 100%)",
+                color: "#bfdbfe",
+                fontWeight: 700,
+                fontSize: 14,
+                textDecoration: "none",
+                letterSpacing: "0.02em",
+                boxShadow: "0 0 0 1px rgba(0,0,0,0.2)",
+              }}
+            >
+              Client hub — past menus & new booking
+            </Link>
+          ) : (
+            <button
+              type="button"
+              disabled={clientHubBusy}
+              onClick={() => void handleOpenClientHub()}
+              style={{
+                display: "inline-block",
+                padding: "12px 22px",
+                borderRadius: 10,
+                border: "1px solid rgba(34,197,94,0.55)",
+                background: clientHubBusy
+                  ? "rgba(34,197,94,0.08)"
+                  : "linear-gradient(180deg, rgba(34,197,94,0.28) 0%, rgba(34,197,94,0.12) 100%)",
+                color: "#bbf7d0",
+                fontWeight: 700,
+                fontSize: 14,
+                letterSpacing: "0.02em",
+                cursor: clientHubBusy ? "wait" : "pointer",
+                fontFamily: "inherit",
+              }}
+            >
+              {clientHubBusy ? "Opening client hub…" : "Open client hub — past menus & new booking"}
+            </button>
+          )}
+          {clientHubError ? (
+            <p style={{ fontSize: 13, color: "#fca5a5", marginTop: 12, marginBottom: 0, maxWidth: 440, marginLeft: "auto", marginRight: "auto", lineHeight: 1.45 }}>
+              {clientHubError}
+            </p>
+          ) : null}
+        </div>
+
         <div style={{ display: "flex", flexWrap: "wrap", gap: 20 }}>
           {/* Event Summary */}
           <div style={{ ...styles.section, borderColor: s.summary.border, background: s.summary.bg }}>
@@ -614,6 +740,22 @@ const EventOverviewPage: React.FC = () => {
                   menu.
                 </p>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center" }}>
+                  <Link
+                    to={`/client/${linkedClientRecordId}?flow=delivery`}
+                    style={{
+                      display: "inline-block",
+                      padding: "10px 16px",
+                      borderRadius: 8,
+                      border: "1px solid rgba(147,197,253,0.45)",
+                      background: "rgba(59,130,246,0.12)",
+                      color: "#93c5fd",
+                      fontWeight: 700,
+                      fontSize: 13,
+                      textDecoration: "none",
+                    }}
+                  >
+                    Open client hub
+                  </Link>
                   <Link
                     to={`/client/${linkedClientRecordId}?flow=delivery`}
                     state={{ autoCreate: "delivery" as const }}
@@ -701,7 +843,7 @@ const EventOverviewPage: React.FC = () => {
                     await createTask({
                       eventId: id,
                       taskName: "Follow up on questionnaire",
-                      taskType: "Follow-up",
+                      taskType: TASK_TYPE_OPTION.questionnaireFollowUp,
                       dueDate: addDays(new Date(), 3),
                       status: "Pending",
                     });
@@ -712,7 +854,18 @@ const EventOverviewPage: React.FC = () => {
               >
                 Send Questionnaire
               </button>
-              <button type="button" className="ev-overview-btn ev-overview-btn-green" style={styles.button(s.actions.btnBg, s.actions.accent, s.actions.border)}>
+              <button
+                type="button"
+                className="ev-overview-btn ev-overview-btn-green"
+                style={styles.button(s.actions.btnBg, s.actions.accent, s.actions.border)}
+                onClick={() => {
+                  setReminderName("Reminder");
+                  setReminderDue(addDays(new Date(), 3));
+                  setReminderNotes("");
+                  setReminderError(null);
+                  setAddReminderOpen(true);
+                }}
+              >
                 Add Reminder
               </button>
               <button type="button" className="ev-overview-btn ev-overview-btn-green" style={styles.button(s.actions.btnBg, s.actions.accent, s.actions.border)}>
@@ -823,6 +976,190 @@ const EventOverviewPage: React.FC = () => {
               </div>
             ))}
         </div>
+
+        {addReminderOpen ? (
+          <div
+            data-beo-portal-modal
+            className="follow-up-overlay"
+            style={{
+              position: "fixed",
+              inset: 0,
+              zIndex: 10000,
+              background: "rgba(0,0,0,0.75)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              padding: 16,
+            }}
+            onClick={() => !reminderSaving && setAddReminderOpen(false)}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="add-reminder-title"
+          >
+            <div
+              className="follow-up-modal"
+              style={{
+                width: "100%",
+                maxWidth: 420,
+                background: "#141414",
+                border: "1px solid rgba(34,197,94,0.35)",
+                borderRadius: 12,
+                padding: "22px 20px",
+                color: "#e5e5e5",
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <h2 id="add-reminder-title" style={{ margin: "0 0 6px", fontSize: 18, color: "#86efac" }}>
+                Add reminder
+              </h2>
+              <p style={{ margin: "0 0 16px", fontSize: 12, color: "rgba(255,255,255,0.5)", lineHeight: 1.45 }}>
+                If your Tasks table is connected, this creates a real task. If not, the same reminder is appended to{" "}
+                <strong style={{ color: "rgba(255,255,255,0.7)" }}>Event Notes</strong> (BEO notes) so nothing is lost.
+              </p>
+              <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: "rgba(255,255,255,0.55)", marginBottom: 4 }}>What to remember</label>
+              <input
+                value={reminderName}
+                onChange={(e) => setReminderName(e.target.value)}
+                disabled={reminderSaving}
+                style={{
+                  width: "100%",
+                  boxSizing: "border-box",
+                  marginBottom: 12,
+                  padding: "8px 10px",
+                  borderRadius: 8,
+                  border: "1px solid rgba(255,255,255,0.15)",
+                  background: "rgba(0,0,0,0.35)",
+                  color: "#fff",
+                  fontSize: 14,
+                }}
+              />
+              <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: "rgba(255,255,255,0.55)", marginBottom: 4 }}>Due date</label>
+              <input
+                type="date"
+                value={reminderDue}
+                onChange={(e) => setReminderDue(e.target.value)}
+                disabled={reminderSaving}
+                style={{
+                  width: "100%",
+                  boxSizing: "border-box",
+                  marginBottom: 12,
+                  padding: "8px 10px",
+                  borderRadius: 8,
+                  border: "1px solid rgba(255,255,255,0.15)",
+                  background: "rgba(0,0,0,0.35)",
+                  color: "#fff",
+                  fontSize: 14,
+                }}
+              />
+              <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: "rgba(255,255,255,0.55)", marginBottom: 4 }}>Notes (optional)</label>
+              <textarea
+                value={reminderNotes}
+                onChange={(e) => setReminderNotes(e.target.value)}
+                disabled={reminderSaving}
+                rows={3}
+                placeholder="Optional details…"
+                style={{
+                  width: "100%",
+                  boxSizing: "border-box",
+                  marginBottom: 12,
+                  padding: "8px 10px",
+                  borderRadius: 8,
+                  border: "1px solid rgba(255,255,255,0.15)",
+                  background: "rgba(0,0,0,0.35)",
+                  color: "#fff",
+                  fontSize: 14,
+                  resize: "vertical",
+                }}
+              />
+              {reminderError ? (
+                <div style={{ fontSize: 12, color: "#fca5a5", marginBottom: 12 }}>{reminderError}</div>
+              ) : null}
+              <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", flexWrap: "wrap" }}>
+                <button
+                  type="button"
+                  disabled={reminderSaving}
+                  onClick={() => setAddReminderOpen(false)}
+                  style={{
+                    padding: "8px 14px",
+                    borderRadius: 8,
+                    border: "1px solid rgba(255,255,255,0.2)",
+                    background: "transparent",
+                    color: "#94a3b8",
+                    cursor: reminderSaving ? "not-allowed" : "pointer",
+                    fontWeight: 600,
+                    fontSize: 13,
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={reminderSaving || !id}
+                  onClick={async () => {
+                    if (!id) return;
+                    const name = reminderName.trim() || "Reminder";
+                    const due = reminderDue.trim();
+                    if (!due) {
+                      setReminderError("Pick a due date.");
+                      return;
+                    }
+                    setReminderError(null);
+                    setReminderSaving(true);
+                    const created = await createTask({
+                      eventId: id,
+                      taskName: name,
+                      taskType: TASK_TYPE_OPTION.generalFollowUp,
+                      dueDate: due,
+                      status: "Pending",
+                      notes: reminderNotes.trim() || undefined,
+                    });
+                    if (isErrorResult(created)) {
+                      const msg = (created.message ?? "").toLowerCase();
+                      const useNotesFallback =
+                        msg.includes("tasks table not configured") ||
+                        msg.includes("could not resolve task field");
+                      if (useNotesFallback) {
+                        const ts = formatNoteTimestamp();
+                        const detail = reminderNotes.trim() ? ` — ${reminderNotes.trim()}` : "";
+                        const line = `[${ts}] REMINDER due ${due}: ${name}${detail}`;
+                        const current = asString(useEventStore.getState().selectedEventData?.[FIELD_IDS.BEO_NOTES] ?? "");
+                        const next = current.trim() ? `${line}\n${current}` : line;
+                        const ok = await useEventStore.getState().setFields(id, { [FIELD_IDS.BEO_NOTES]: next });
+                        setReminderSaving(false);
+                        if (!ok) {
+                          setReminderError("Could not save reminder to event notes.");
+                          return;
+                        }
+                        await useEventStore.getState().loadEventData();
+                        setAddReminderOpen(false);
+                        return;
+                      }
+                      setReminderSaving(false);
+                      setReminderError(created.message ?? "Could not create reminder.");
+                      return;
+                    }
+                    setReminderSaving(false);
+                    const refreshed = await loadTasksForEvent(id);
+                    if (Array.isArray(refreshed)) setTasks(sortOutstandingTasks(refreshed));
+                    setAddReminderOpen(false);
+                  }}
+                  style={{
+                    padding: "8px 16px",
+                    borderRadius: 8,
+                    border: "1px solid rgba(34,197,94,0.5)",
+                    background: "rgba(34,197,94,0.2)",
+                    color: "#bbf7d0",
+                    cursor: reminderSaving || !id ? "not-allowed" : "pointer",
+                    fontWeight: 700,
+                    fontSize: 13,
+                  }}
+                >
+                  {reminderSaving ? "Saving…" : "Save reminder"}
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
 
         <FollowUpModal
           open={!!followUpTask}

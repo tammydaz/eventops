@@ -72,6 +72,11 @@ type CollapsibleSubsectionProps = {
   summary?: string;
   children: ReactNode;
   defaultOpen?: boolean;
+  /** When set, expansion is controlled by the parent (e.g. sync with loaded data). */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  /** `block` fits full-width panels (boxed lunch); default grid matches misc fields. */
+  bodyLayout?: "grid" | "block";
   /** When true, use green delivery styling for header */
   isDelivery?: boolean;
   /** Accent color for border and title (e.g. #ff6b6b, #a855f7) */
@@ -86,22 +91,55 @@ export const CollapsibleSubsection = ({
   summary,
   children,
   defaultOpen = false,
+  open: openControlled,
+  onOpenChange,
+  bodyLayout = "grid",
   isDelivery = false,
   accentColor,
   titleAlign = "left",
 }: CollapsibleSubsectionProps) => {
-  const [isOpen, setIsOpen] = useState(defaultOpen);
+  const isControlled = openControlled !== undefined;
+  const [internalOpen, setInternalOpen] = useState(defaultOpen);
   // Sync open state when defaultOpen changes (e.g. when a service is picked)
   const prevDefaultOpen = useRef(defaultOpen);
   useEffect(() => {
+    if (isControlled) return;
     if (prevDefaultOpen.current !== defaultOpen) {
       prevDefaultOpen.current = defaultOpen;
-      setIsOpen(defaultOpen);
+      setInternalOpen(defaultOpen);
     }
-  }, [defaultOpen]);
+  }, [defaultOpen, isControlled]);
+
+  const isOpen = isControlled ? openControlled : internalOpen;
+
+  const toggle = () => {
+    const next = !isOpen;
+    if (!isControlled) setInternalOpen(next);
+    onOpenChange?.(next);
+  };
 
   const borderColor = accentColor ?? (isDelivery ? "#22c55e" : "rgba(0,188,212,0.3)");
   const titleColor = accentColor ?? "#fff";
+
+  const bodyStyle =
+    bodyLayout === "block"
+      ? {
+          display: "block" as const,
+          width: "100%",
+          padding: accentColor ? 12 : 0,
+          borderRadius: accentColor ? 8 : 0,
+          backgroundColor: accentColor ? "rgba(0,0,0,0.15)" : undefined,
+          boxShadow: accentColor ? `0 4px 16px ${accentColor}40` : undefined,
+        }
+      : {
+          display: "grid" as const,
+          gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+          gap: "12px",
+          padding: accentColor ? 12 : 0,
+          borderRadius: accentColor ? 8 : 0,
+          backgroundColor: accentColor ? "rgba(0,0,0,0.15)" : undefined,
+          boxShadow: accentColor ? `0 4px 16px ${accentColor}40` : undefined,
+        };
 
   return (
     <div style={{ gridColumn: "1 / -1" }}>
@@ -109,7 +147,7 @@ export const CollapsibleSubsection = ({
         type="button"
         tabIndex={-1}
         aria-expanded={isOpen}
-        onClick={() => setIsOpen((prev) => !prev)}
+        onClick={toggle}
         style={{
           width: "100%",
           display: "flex",
@@ -147,21 +185,7 @@ export const CollapsibleSubsection = ({
           </span>
         )}
       </button>
-      {isOpen && (
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
-            gap: "12px",
-            padding: accentColor ? 12 : 0,
-            borderRadius: accentColor ? 8 : 0,
-            backgroundColor: accentColor ? "rgba(0,0,0,0.15)" : undefined,
-            boxShadow: accentColor ? `0 4px 16px ${accentColor}40` : undefined,
-          }}
-        >
-          {children}
-        </div>
-      )}
+      {isOpen && <div style={bodyStyle}>{children}</div>}
     </div>
   );
 };

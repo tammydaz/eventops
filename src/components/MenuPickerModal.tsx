@@ -4,10 +4,11 @@ import { usePickerStore } from "../state/usePickerStore";
 import { fetchMenuItemsByCategory, fetchDeliveryMenuPickerItems, isDeliveryPickerType } from "../services/airtable/menuItems";
 
 /**
- * Menu picker (BEO intake): items come from `fetchMenuItemsByCategory` / `fetchDeliveryMenuPickerItems`
- * on `getMenuItemsTable()` (Menu_Lab when configured). Catalog filter is category/execution only —
- * not Test Status. `search` filters the loaded list client-side; it cannot find items that belong
- * to a different picker category (open the correct + Add for that section).
+ * Menu picker (BEO intake): items come from `fetchMenuItemsByCategory` / `fetchDeliveryMenuPickerItems`.
+ * Production recovery assumption: legacy Menu Items is the event-safe catalog unless a validated
+ * Menu_Lab bridge is explicitly enabled. Catalog filter is category/execution only — not Test Status.
+ * `search` filters the loaded list client-side; it cannot find items that belong to a different
+ * picker category (open the correct + Add for that section).
  */
 type PickerItem = { id: string; name: string; childItems?: string[]; routeTargetField?: string };
 

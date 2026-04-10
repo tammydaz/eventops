@@ -15,7 +15,7 @@ import {
 } from "../../services/airtable/stationComponents";
 import { isErrorResult } from "../../services/airtable/selectors";
 import { CollapsibleSubsection } from "./FormSection";
-import { getStationPresetKey, TEX_MEX, RAMEN, ALL_AMERICAN, STREET_FOOD, RAW_BAR, CHARCUTERIE, CARVING, HIBACHI, CHICKEN_WAFFLE, LATE_NIGHT, FISHERMANS_CORNER, CRAVIN_ASIAN } from "../../config/stationPresets";
+import { getStationPresetKey, TEX_MEX, RAMEN, ALL_AMERICAN, STREET_FOOD, RAW_BAR, CHARCUTERIE, CARVING, HIBACHI, CHICKEN_WAFFLE, LATE_NIGHT, FISHERMANS_CORNER, CRAVIN_ASIAN, BARWERX, PHILLY_JAWN, PASTA_FLIGHT } from "../../config/stationPresets";
 
 /** Airtable uses "Starch"; we display "Starch (Pasta)" for pasta stations. */
 const TYPE_DISPLAY: Record<string, string> = {
@@ -556,8 +556,18 @@ export function StationComponentsConfigModal(props: {
       setOptions([]);
       setSelectedComponentIds([]);
       // For simple presets that don't use structured parsing, seed defaults.
-      if (!initialCustomItems && stationPresetKey === "charcuterie" && mode === "create") {
-        setCustomItems(`Items: ${CHARCUTERIE.included.join(", ")}`);
+      if (!initialCustomItems && mode === "create") {
+        if (stationPresetKey === "charcuterie") {
+          setCustomItems(`Items: ${CHARCUTERIE.included.join(", ")}`);
+        } else if (stationPresetKey === "barwerx") {
+          setCustomItems(`Items: ${BARWERX.included.join(", ")}`);
+        } else if (stationPresetKey === "philly-jawn") {
+          setCustomItems(`Items: ${PHILLY_JAWN.included.join(", ")}`);
+        } else if (stationPresetKey === "pasta-flight") {
+          setCustomItems(`Items: ${PASTA_FLIGHT.items.join(", ")}\nIncluded: ${PASTA_FLIGHT.included.join(", ")}`);
+        } else {
+          setCustomItems(initialCustomItems);
+        }
       } else {
         setCustomItems(initialCustomItems);
       }
@@ -784,8 +794,18 @@ export function StationComponentsConfigModal(props: {
       } else {
         setSelectedComponentIds(initialComponentIds);
       }
-      if (!initialCustomItems && stationPresetKey === "charcuterie" && mode === "create") {
-        setCustomItems(`Items: ${CHARCUTERIE.included.join(", ")}`);
+      if (!initialCustomItems && mode === "create") {
+        if (stationPresetKey === "charcuterie") {
+          setCustomItems(`Items: ${CHARCUTERIE.included.join(", ")}`);
+        } else if (stationPresetKey === "barwerx") {
+          setCustomItems(`Items: ${BARWERX.included.join(", ")}`);
+        } else if (stationPresetKey === "philly-jawn") {
+          setCustomItems(`Items: ${PHILLY_JAWN.included.join(", ")}`);
+        } else if (stationPresetKey === "pasta-flight") {
+          setCustomItems(`Items: ${PASTA_FLIGHT.items.join(", ")}\nIncluded: ${PASTA_FLIGHT.included.join(", ")}`);
+        } else {
+          setCustomItems(initialCustomItems);
+        }
       } else {
         setCustomItems(initialCustomItems);
       }
@@ -1342,7 +1362,7 @@ export function StationComponentsConfigModal(props: {
       return;
     }
 
-    const isSimpleStation = stationPresetKey === "vegetable" || stationPresetKey === "spreads-breads" || stationPresetKey === "charcuterie" || stationPresetKey === "pasta-flight" || stationPresetKey === "farmers-fruit" || stationPresetKey === "barwerx" || stationPresetKey === "philly-jawn";
+    const isSimpleStation = stationPresetKey === "vegetable" || stationPresetKey === "spreads-breads" || stationPresetKey === "charcuterie" || stationPresetKey === "pasta-flight" || stationPresetKey === "farmers-fruit" || stationPresetKey === "barwerx" || stationPresetKey === "philly-jawn" || stationPresetKey === "salad-bar";
     if (isSimpleStation) {
       const hasPlacement = beoPlacement === "Presented Appetizer" || beoPlacement === "Buffet Metal" || beoPlacement === "Buffet China";
       if (!hasPlacement) {
@@ -2437,7 +2457,7 @@ export function StationComponentsConfigModal(props: {
                 </>
               );
             })()
-          ) : presetId && (stationPresetKey === "vegetable" || stationPresetKey === "spreads-breads" || stationPresetKey === "charcuterie" || stationPresetKey === "pasta-flight" || stationPresetKey === "farmers-fruit" || stationPresetKey === "fishermans-corner" || stationPresetKey === "barwerx" || stationPresetKey === "philly-jawn") ? (
+          ) : presetId && (stationPresetKey === "vegetable" || stationPresetKey === "spreads-breads" || stationPresetKey === "charcuterie" || stationPresetKey === "pasta-flight" || stationPresetKey === "farmers-fruit" || stationPresetKey === "barwerx" || stationPresetKey === "philly-jawn" || stationPresetKey === "salad-bar") ? (
             (() => {
               const rowInputStyle = { padding: "5px 8px", borderRadius: 5, border: "1px solid #444", backgroundColor: "#1a1a1a", color: "#e0e0e0", fontSize: 12, minWidth: 0, width: "100%" };
               return (

@@ -3,7 +3,7 @@
  */
 
 import { airtableFetch, type AirtableListResponse, type AirtableRecord, type AirtableErrorResult } from "./client";
-import { isErrorResult, asString, asSingleSelectName } from "./selectors";
+import { isErrorResult, asString, asSingleSelectName, asLinkedRecordIds } from "./selectors";
 import { FIELD_IDS } from "./events";
 
 export const CLIENT_INTAKE_TABLE_ID = "tblIpmULxKigGE8p4";
@@ -301,7 +301,7 @@ export async function resolveClientIntakeIdFromEventHints(opts: {
 
 /**
  * Find or create a Client Intake row and return its record id so Events can link via `FIELD_IDS.CLIENT`.
- * Staff never touch Airtable — Quick Intake / new event flows call this automatically from `createEvent`.
+ * Called from `resolveOrCreateClientIntakeIdForEventFields` (event create + PATCH) — not directly from forms.
  */
 export async function ensureClientIntakeRecordForContact(opts: {
   firstName: string;
@@ -342,6 +342,68 @@ export async function ensureClientIntakeRecordForContact(opts: {
   const id = data.records?.[0]?.id;
   if (!id) return { error: true, message: "Client Intake create returned no record." };
   return id;
+}
+
+/**
+ * From Events row field map: match existing Client Intake (phone / name / company) or create when a phone exists.
+ * Used on every event create and when client identity fields are PATCHed — **Events → Client** is set in-app only.
+ */
+export async function resolveOrCreateClientIntakeIdForEventFields(
+  fields: Record<string, unknown>
+): Promise<string | null> {
+  const clientFirst = asString(fields[FIELD_IDS.CLIENT_FIRST_NAME]).trim();
+  const clientLast = asString(fields[FIELD_IDS.CLIENT_LAST_NAME]).trim();
+  const company = asString(fields[FIELD_IDS.BUSINESS_NAME]).trim();
+  const clientPhone = asString(fields[FIELD_IDS.CLIENT_PHONE]).trim();
+  const primaryPhone = asString(fields[FIELD_IDS.PRIMARY_CONTACT_PHONE]).trim();
+  const primaryName = asString(fields[FIELD_IDS.PRIMARY_CONTACT_NAME]).trim();
+  const eventName = asString(fields[FIELD_IDS.EVENT_NAME]).trim();
+  const nameFromEvent = eventName.split(/\s*[–—-]\s*/)[0]?.trim() ?? "";
+
+  const clientNameHint =
+    [clientFirst, clientLast].filter(Boolean).join(" ").trim() ||
+    company ||
+    primaryName ||
+    (nameFromEvent && nameFromEvent !== "—" ? nameFromEvent : undefined);
+
+  const resolved = await resolveClientIntakeIdFromEventHints({
+    clientPhone: clientPhone || undefined,
+    primaryContactPhone: primaryPhone || undefined,
+    clientNameHint,
+  });
+  if (resolved) return resolved;
+
+  const phone = clientPhone || primaryPhone;
+  if (!phone || !/\d/.test(phone)) return null;
+
+  const firstFromPrimary = primaryName ? primaryName.split(/\s+/)[0]?.trim() ?? "" : "";
+  const lastFromPrimary = primaryName ? primaryName.split(/\s+/).slice(1).join(" ").trim() : "";
+  const firstFromEvent = nameFromEvent ? nameFromEvent.split(/\s+/)[0]?.trim() ?? "" : "";
+  const lastFromEvent = nameFromEvent ? nameFromEvent.split(/\s+/).slice(1).join(" ").trim() : "";
+
+  const created = await ensureClientIntakeRecordForContact({
+    firstName: clientFirst || firstFromPrimary || firstFromEvent || "Client",
+    lastName: clientLast || lastFromPrimary || lastFromEvent,
+    phone,
+    email: asString(fields[FIELD_IDS.CLIENT_EMAIL]).trim() || undefined,
+    company: company || undefined,
+  });
+  if (isErrorResult(created)) {
+    console.warn("[clientIntake] resolveOrCreate: create failed:", created.message);
+    return null;
+  }
+  return created;
+}
+
+/** Add Events → Client when absent (after `prepareFieldsForCreate`). Idempotent if `CLIENT` already set. */
+export async function withClientIntakeLinkForNewEvent(
+  fields: Record<string, unknown>
+): Promise<Record<string, unknown>> {
+  const existing = asLinkedRecordIds(fields[FIELD_IDS.CLIENT]);
+  if (existing.length > 0) return fields;
+  const id = await resolveOrCreateClientIntakeIdForEventFields(fields);
+  if (!id) return fields;
+  return { ...fields, [FIELD_IDS.CLIENT]: [id] };
 }
 
 export async function loadClientIntakeRecord(

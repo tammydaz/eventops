@@ -225,6 +225,16 @@ export const BARWERX = {
   ] as const,
 };
 
+/** Pasta Flight Presentation — fixed 3-pasta display, no choices */
+export const PASTA_FLIGHT = {
+  items: [
+    "Penne a la Vodka with Red Pepper Jam",
+    "Bruschetta Pasta Primavera with Lots of Veggies",
+    "Bowties with Grilled Chicken, Basil Pesto, Yellow Peppers & Sun Dried Tomatoes",
+  ] as const,
+  included: ["Parmesan garlic bread"] as const,
+};
+
 /** The Philly Jawn — fixed 4-item display, no choices */
 export const PHILLY_JAWN = {
   included: [

@@ -9,7 +9,7 @@ import { getMenuCatalogFieldIds, LEGACY_MENU_ITEMS_TABLE_ID } from "../services/
 import { loadStationsByEventId } from "../services/airtable/linkedRecords";
 import { loadStationComponentNamesByIds } from "../services/airtable/stationComponents";
 import { loadBoxedLunchOrdersByEventId, type BoxedLunchOrder } from "../services/airtable/boxedLunchOrders";
-import { buildBoxedLunchBeoSectionsFromOrders } from "../utils/boxedLunchPrint";
+import { buildBoxedLunchBeoSectionsFromOrders, getBoxedLunchBreadValidationError } from "../utils/boxedLunchPrint";
 import { DELIVERY_SECTION_CONFIG } from "../config/deliverySectionConfig";
 import { formatPlatterPicksLine, hasPlatterPicks } from "../config/sandwichPlatterConfig";
 import { getPlatterOrdersByEventId } from "../state/platterOrdersStore";
@@ -22,6 +22,8 @@ import { AcceptTransferModal } from "../components/AcceptTransferModal";
 import { getSauceOverrides } from "../state/sauceOverrideStore";
 import { getBeoSpecStorageKey, getSpecOverrideKey } from "../utils/beoSpecStorage";
 import { loadEventMenuRows, type EventMenuRow, type ChildOverridesData } from "../services/airtable/eventMenu";
+import { DeliveryPaperBeveragesSpreadsheetFromEvent } from "../components/beo-print/DeliveryPaperBeveragesSpreadsheet";
+import { stationCustomItemsToLines } from "../utils/stationPrint";
 
 // ── Types ──
 type MenuLineItem = {
@@ -31,6 +33,8 @@ type MenuLineItem = {
   specVessel?: string;
   packOutItems?: string;
   loaded?: boolean;
+  /** Boxed lunch / other sections: indented sub-lines under the main name */
+  subItems?: { text: string }[];
 };
 
 type SectionData = {
@@ -47,12 +51,15 @@ type TopTab = "kitchenBEO" | "meetingBeoNotes" | "fullBeoPacket" | "buffetMenuSi
 
 // ── Section color by type ──
 const getSectionColor = (sectionTitle: string): string => {
-  // Delivery sections — locked structure colors
-  if (sectionTitle.includes("HOT FOOD")) return "#f97316";            // section 1: orange (heat)
-  if (sectionTitle.includes("COLD / DELI")) return "#3b82f6";         // section 2: blue (cold)
-  if (sectionTitle.includes("BOXED ITEMS")) return "#22c55e";          // section 3: green (packaged)
-  if (sectionTitle.includes("DESSERT / SNACKS")) return "#ef4444";     // section 4: red (sweets)
-  if (sectionTitle === "BEVERAGES") return "#a855f7";                  // section 5: purple
+  // Delivery sections — keyed to DISPOSABLE HOT/READY/BULK/DISPLAY terminology
+  if (sectionTitle.includes("DISPOSABLE HOT")) return "#ef4444";
+  if (sectionTitle.includes("DISPOSABLE READY")) return "#f97316";
+  if (sectionTitle.includes("DISPOSABLE BULK")) return "#26a69a";
+  if (sectionTitle.includes("DISPOSABLE DISPLAY")) return "#3b82f6";
+  if (sectionTitle.includes("BOXED LUNCH")) return "#22c55e";
+  if (sectionTitle.includes("SANDWICH TRAYS")) return "#d97706";
+  if (sectionTitle.includes("INDIVIDUAL WRAPPED")) return "#eab308";
+  if (sectionTitle === "BEVERAGES") return "#a855f7";
   if (sectionTitle === "SERVICEWARE") return "#6b7280";                // section 6: gray
   // Full-service sections (unchanged)
   if (sectionTitle.includes("PASSED")) return "#22c55e";
@@ -159,6 +166,7 @@ const printStyles = `
     }
   }
   @media print {
+    .delivery-pbb-empty-wrap { display: none !important; }
     html {
       color-scheme: light !important;
       margin: 0 !important;
@@ -1389,6 +1397,7 @@ function SBeoContent(props: {
   isDelivery: boolean;
 }) {
   const { kitchenPages, expandItemToRows, specOverrides, setSpecOverrides, checkState, setCheckState, packOutEdits, setPackOutEdits, isDelivery } = props;
+  const deliveryNotes = asString(props.eventData[FIELD_IDS.SPECIAL_NOTES] ?? "");
   const phoneStr = asString(props.eventData[FIELD_IDS.CONTACT_PHONE]) || asString(props.eventData[FIELD_IDS.CLIENT_PHONE]) || "";
   const leftCheck = "server";
   const gridTemplateColumns = "140px 1fr 40px";
@@ -1538,6 +1547,9 @@ function SBeoContent(props: {
                 })}
               </div>
             ))}
+            {page.pageNum === 1 && isDelivery && (
+              <DeliveryPaperBeveragesSpreadsheetFromEvent eventData={props.eventData} collapsibleWhenEmpty />
+            )}
           </div>
         ))
       )}
@@ -2340,6 +2352,7 @@ const BeoPrintPage: React.FC = () => {
     updateEvent,
     setFields,
     events,
+    boxedLunchSavedAt,
   } = useEventStore();
   /** Store may set null while switching events — print page must not index null */
   const eventData = eventDataFromStore ?? ({} as Record<string, unknown>);
@@ -2559,6 +2572,7 @@ const BeoPrintPage: React.FC = () => {
   }, [eventData]);
 
   // ── Fetch boxed lunch orders for event (merge into DELI section for delivery BEO) ──
+  // Depends on boxedLunchSavedAt so it re-fetches immediately after a save from BoxedLunchSection.
   useEffect(() => {
     if (!eventId) {
       setBoxedLunchOrders([]);
@@ -2568,7 +2582,7 @@ const BeoPrintPage: React.FC = () => {
       if (!isErrorResult(result)) setBoxedLunchOrders(result);
       else setBoxedLunchOrders([]);
     });
-  }, [eventId]);
+  }, [eventId, boxedLunchSavedAt]);
 
   // ── Body class for menu print mode (Buffet Menu Signs tab only) ──
   useEffect(() => {
@@ -2966,7 +2980,12 @@ const BeoPrintPage: React.FC = () => {
   // ── Menu Sections (linked items, or fallback to custom text from invoice)
   const eventType = asSingleSelectName(eventData[FIELD_IDS.EVENT_TYPE]);
   const isDelivery = isDeliveryOrPickup(eventType);
+  const boxedLunchBreadPrintError = isDelivery ? getBoxedLunchBreadValidationError(boxedLunchOrders) : null;
   const showFoodMustGoHotBanner = isDelivery && foodMustGoHot;
+
+  useEffect(() => {
+    if (isDelivery && topTab === "serverBeo2ndPage") setTopTab("kitchenBEO");
+  }, [isDelivery, topTab]);
 
   // Hard print order: Passed → Presented → Buffet Metal → Buffet China → Deli → Desserts
   // Stations route into their placement section (Presented Appetizer / Buffet Metal / Buffet China).
@@ -3035,30 +3054,7 @@ const BeoPrintPage: React.FC = () => {
             .split(/\r?\n/)
             .map((l) => l.replace(/^BEO Placement:\s*.+$/i, "").trim())
             .filter(Boolean);
-          // Preset stations (e.g. All-American) store Main, Potato, Chicken, Salad, Slider rolls, Toppings, Condiments, Dressings — show values as child lines (like old BEOs)
-          const customItems = (s as { customItems?: string }).customItems;
-          const rawCustomLines = customItems
-            ? customItems.split(/\r?\n/).map((l) => l.trim()).filter((l) => l && !/^BEO Placement:/i.test(l))
-            : [];
-          const customLines: string[] = [];
-          const multiValueKeys = /^(Toppings?|Condiments?|Dressings?|Salads?):\s*(.+)$/i;
-          for (const line of rawCustomLines) {
-            const multi = line.match(multiValueKeys);
-            if (multi) {
-              const values = multi[2].split(",").map((v) => v.trim()).filter(Boolean);
-              customLines.push(...values);
-            } else {
-              const keyVal = line.match(/^([A-Za-z\s]+):\s*(.+)$/);
-              if (keyVal) {
-                const key = keyVal[1].trim();
-                const val = keyVal[2].trim();
-                if (/^Salad\s*shooters?$/i.test(key) && /^yes$/i.test(val)) customLines.push("Salad shooters (included)");
-                else if (!/^yes$/i.test(val) || !/^Salad/i.test(key)) customLines.push(val);
-              } else customLines.push(line);
-            }
-          }
-          const stripPlatter = (s: string) => s.replace(/^PLATTER\s+/i, "");
-          const cleanedCustomLines = customLines.map(stripPlatter);
+          const cleanedCustomLines = stationCustomItemsToLines((s as { customItems?: string }).customItems);
           const allComponents = linkedComponentNames.length > 0 || menuItemNames.length > 0
             ? [...linkedComponentNames, ...menuItemNames, ...cleanedCustomLines, ...notesLines]
             : [...cleanedCustomLines, ...notesLines];
@@ -3139,7 +3135,7 @@ const BeoPrintPage: React.FC = () => {
       }
       // Insert new sections (BOXED ITEMS) after COLD / DELI and before DESSERT / SNACKS
       if (newSections.length > 0) {
-        const deliIdx = menuSections.findIndex((s) => s.title === "COLD / DELI — PLASTIC CONTAINER");
+        const deliIdx = menuSections.findIndex((s) => s.title === "BOXED LUNCH — SIDES" || s.title === "COLD / DELI — PLASTIC CONTAINER");
         if (deliIdx >= 0) {
           menuSections = [...menuSections.slice(0, deliIdx + 1), ...newSections, ...menuSections.slice(deliIdx + 1)];
         } else {
@@ -3240,6 +3236,14 @@ const BeoPrintPage: React.FC = () => {
     const data = menuItemData[item.id];
     const emRow = eventMenuByCatalogId[item.id];
     const rows: { lineName: string; isChild: boolean; itemId: string }[] = [];
+    if (item.subItems && item.subItems.length > 0) {
+      rows.push({ lineName: item.name, isChild: false, itemId: item.id });
+      item.subItems.forEach((sub, i) => {
+        rows.push({ lineName: ` ${sub.text}`, isChild: true, itemId: `${item.id}-sub${i}` });
+      });
+      rows.push({ lineName: "", isChild: false, itemId: `${item.id}-blank` });
+      return rows;
+    }
     // Station items (id starts with "station-hdr-"): name encodes header + components separated by \n
     if (item.id.startsWith("station-hdr-")) {
       const lines = item.name.split("\n");
@@ -3686,15 +3690,17 @@ const BeoPrintPage: React.FC = () => {
             >
               Buffet Menu Signs
             </button>
-            <button
-              style={{
-                ...styles.topTab,
-                ...(topTab === "serverBeo2ndPage" ? styles.topTabActive : {}),
-              }}
-              onClick={() => setTopTab("serverBeo2ndPage")}
-            >
-              Server Beo 2nd page
-            </button>
+            {!isDelivery && (
+              <button
+                style={{
+                  ...styles.topTab,
+                  ...(topTab === "serverBeo2ndPage" ? styles.topTabActive : {}),
+                }}
+                onClick={() => setTopTab("serverBeo2ndPage")}
+              >
+                Server Beo 2nd page
+              </button>
+            )}
             <button
               style={{
                 ...styles.topTab,
@@ -3835,13 +3841,18 @@ const BeoPrintPage: React.FC = () => {
               </div>
             )}
 
-            {page.pageNum === 1 && (beoNotes.trim() || notBuffetBanner || showFoodMustGoHotBanner || allergies || religiousRestrictions.trim() || dietarySummary.trim()) && (
+            {page.pageNum === 1 && (beoNotes.trim() || notBuffetBanner || showFoodMustGoHotBanner || allergies || religiousRestrictions.trim() || dietarySummary.trim() || boxedLunchBreadPrintError) && (
               <div className="beo-banner-container">
                 {beoNotes.trim() && (
                   <div className="beo-banner-block" style={styles.beoNotesBanner}>📋 BEO NOTES: {beoNotes.trim()}</div>
                 )}
                 {notBuffetBanner && (
                   <div className="beo-banner-block" style={styles.notBuffetBanner}>{notBuffetBanner}</div>
+                )}
+                {boxedLunchBreadPrintError && isDelivery && (
+                  <div className="beo-banner-block" style={{ background: "#b45309", color: "#fff", fontWeight: 700, padding: "5px 10px", borderRadius: 3, textAlign: "center", fontSize: 13, marginBottom: 4 }}>
+                    ⚠️ {boxedLunchBreadPrintError} — boxed lunch is omitted from this BEO until every sandwich line has bread in BEO Intake.
+                  </div>
                 )}
                 {showFoodMustGoHotBanner && (
                   <div className="beo-banner-block" style={{ background: "#ff0000", color: "#fff", fontWeight: 700, padding: "5px 10px", borderRadius: 3, textAlign: "center", letterSpacing: 1, fontSize: 13, marginBottom: 4 }}>
@@ -4013,6 +4024,9 @@ const BeoPrintPage: React.FC = () => {
             })}
           </div>
         ))}
+            {page.pageNum === 1 && isDelivery && (
+              <DeliveryPaperBeveragesSpreadsheetFromEvent eventData={eventData} collapsibleWhenEmpty />
+            )}
 
             {/* Last page only (when no Server BEO 2nd page): Allergy banner + footer */}
             {pageIdx === kitchenPages.length - 1 && !["packout", "expeditor", "server"].includes(leftCheck) && (
@@ -4047,8 +4061,8 @@ const BeoPrintPage: React.FC = () => {
             )}
           </div>
         )))}
-        {/* When packout/expeditor/server: append Server BEO 2nd page (beverage, hydration, paper, notes, timeline) so it appears in those checks */}
-        {(leftCheck === "packout" || leftCheck === "expeditor" || leftCheck === "server") && (
+        {/* When packout/expeditor/server: append Server BEO 2nd page (full service only — delivery uses page-1 paper & beverages block) */}
+        {!isDelivery && (leftCheck === "packout" || leftCheck === "expeditor" || leftCheck === "server") && (
           <div className="kitchen-beo-page print-page page">
             {/* Grey BEO letterhead bar + 9in buffer (same as kitchen pages 2+) */}
             <div className="beo-letterhead-bar" style={{
@@ -4153,30 +4167,32 @@ const BeoPrintPage: React.FC = () => {
                 setPackOutEdits={setPackOutEdits}
                 isDelivery={isDelivery}
               />
-              <FullBeoPacketBeveragesContent
-              eventDate={eventDate}
-              clientName={clientName}
-              contactName={contactName}
-              cityState={cityState}
-              jobNumberDisplay={jobNumberDisplay}
-              dispatchTime={dispatchTime}
-              eventArrival={eventArrival}
-              guestCount={guestCount}
-              eventLocation={eventLocation}
-              venueAddress={venueAddress}
-              eventStart={eventStart}
-              eventEnd={eventEnd}
-              fwStaff={fwStaff}
-              allergies={allergies}
-              notBuffetBanner={notBuffetBanner}
-              religiousRestrictions={religiousRestrictions}
-              beoNotes={beoNotes}
-              eventData={eventData}
-              barServiceFieldId={barServiceFieldId}
-            />
+              {!isDelivery && (
+                <FullBeoPacketBeveragesContent
+                  eventDate={eventDate}
+                  clientName={clientName}
+                  contactName={contactName}
+                  cityState={cityState}
+                  jobNumberDisplay={jobNumberDisplay}
+                  dispatchTime={dispatchTime}
+                  eventArrival={eventArrival}
+                  guestCount={guestCount}
+                  eventLocation={eventLocation}
+                  venueAddress={venueAddress}
+                  eventStart={eventStart}
+                  eventEnd={eventEnd}
+                  fwStaff={fwStaff}
+                  allergies={allergies}
+                  notBuffetBanner={notBuffetBanner}
+                  religiousRestrictions={religiousRestrictions}
+                  beoNotes={beoNotes}
+                  eventData={eventData}
+                  barServiceFieldId={barServiceFieldId}
+                />
+              )}
             </>
           )}
-          {topTab === "serverBeo2ndPage" && (
+          {topTab === "serverBeo2ndPage" && !isDelivery && (
             <ServerBeo2ndPageContent
               eventDate={eventDate}
               clientName={clientName}

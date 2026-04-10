@@ -48,6 +48,13 @@ export type EventStore = {
   intakeDirty: boolean;
   setIntakeDirty: (dirty: boolean) => void;
 
+  /**
+   * Increments whenever boxed lunch orders are saved. Components that display
+   * boxed lunch data (live preview, print page) watch this to refresh.
+   */
+  boxedLunchSavedAt: number;
+  notifyBoxedLunchSaved: () => void;
+
   fields: Fields;
   setFieldLegacy: (name: string, value: unknown) => void;
   resetFields: () => void;
@@ -68,18 +75,27 @@ export const useEventStore = create<EventStore>((set, get) => ({
     if (!background) {
       set({ eventsLoading: true, eventsError: null });
     }
-    const result = await fetchEventsList();
-    if (isErrorResult(result)) {
+    try {
+      const result = await fetchEventsList();
+      if (isErrorResult(result)) {
+        if (!background) {
+          set({
+            eventsLoading: false,
+            eventsError: result.message ?? "Failed to load events",
+          });
+        }
+        return null;
+      }
+      set({ events: result, eventsLoading: false, eventsError: null });
+      return result;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Failed to load events";
+      console.error("loadEvents:", err);
       if (!background) {
-        set({
-          eventsLoading: false,
-          eventsError: result.message ?? "Failed to load events",
-        });
+        set({ eventsLoading: false, eventsError: msg });
       }
       return null;
     }
-    set({ events: result, eventsLoading: false, eventsError: null });
-    return result;
   },
 
   selectedEventId: null,
@@ -299,6 +315,9 @@ export const useEventStore = create<EventStore>((set, get) => ({
 
   intakeDirty: false,
   setIntakeDirty: (dirty) => set({ intakeDirty: dirty }),
+
+  boxedLunchSavedAt: 0,
+  notifyBoxedLunchSaved: () => set((s) => ({ boxedLunchSavedAt: s.boxedLunchSavedAt + 1 })),
 
   fields: { ...emptyFields },
   setFieldLegacy: (name, value) =>

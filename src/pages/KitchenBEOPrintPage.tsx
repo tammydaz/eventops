@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from "react";
 import { useEventStore } from "../state/eventStore";
 import { FIELD_IDS, getFoodwerxArrivalFieldId, resolveFwStaffLineFromFields } from "../services/airtable/events";
-import { asString, asBarServicePrimary, asMultiSelectNames, asBoolean, asStringArray, asLinkedRecordIds, asSingleSelectName, isErrorResult } from "../services/airtable/selectors";
+import { asString, asBarServicePrimary, asMultiSelectNames, asBoolean, asLinkedRecordIds, asSingleSelectName, isErrorResult } from "../services/airtable/selectors";
 import { loadStationsByEventId } from "../services/airtable/linkedRecords";
 import { loadBoxedLunchOrdersByEventId, type BoxedLunchOrder } from "../services/airtable/boxedLunchOrders";
-import { buildBoxedLunchKitchenSectionsFromOrders } from "../utils/boxedLunchPrint";
+import { buildBoxedLunchKitchenSectionsFromOrders, getBoxedLunchBreadValidationError } from "../utils/boxedLunchPrint";
 import { formatPlatterPickForDisplay, hasPlatterPicks } from "../config/sandwichPlatterConfig";
 import { getPlatterOrdersByEventId } from "../state/platterOrdersStore";
 import { airtableFetch, getMenuItemsTable } from "../services/airtable/client";
@@ -14,6 +14,11 @@ import { secondsTo12HourString } from "../utils/timeHelpers";
 import { MIMOSA_BAR_FRUIT_GARNISH_ITEMS } from "../constants/fullBarPackage";
 import { isDeliveryOrPickup, isPickup } from "../lib/deliveryHelpers";
 import { DELIVERY_SECTION_CONFIG } from "../config/deliverySectionConfig";
+import { stationCustomItemsToLines } from "../utils/stationPrint";
+import {
+  DeliveryPaperBeveragesSpreadsheet,
+  buildDeliveryBeverageLines,
+} from "../components/beo-print/DeliveryPaperBeveragesSpreadsheet";
 
 // ── Types ──
 type SubItem = {
@@ -960,51 +965,6 @@ const renderPage2FullService = (beo: BEOData) => (
   </div>
 );
 
-const renderPaperProductsDelivery = (beo: BEOData) => (
-  <>
-    <div style={{ ...print.redSectionBanner, background: "#16a34a", color: "#fff" }}>PAPER PRODUCTS & BEVERAGES</div>
-    <table style={print.paperTable}>
-      <thead>
-        <tr>
-          <td style={{ ...print.paperCell, background: "#16a34a", color: "#fff", width: "10%", textAlign: "center" }}>
-            {beo.paperProductsIncluded ? "YES" : "NO"}
-          </td>
-          <td style={{ ...print.paperCell, background: "#16a34a", color: "#fff", width: "40%" }}>
-            STANDARD PAPER PRODUCTS
-          </td>
-          <td style={{ ...print.paperCell, background: "#16a34a", color: "#fff", width: "35%" }}>
-            BEVERAGES
-          </td>
-          <td style={{ ...print.paperCell, background: "#16a34a", color: "#fff", width: "15%", textAlign: "center" }}>
-            {beo.deliveryBeveragesIncluded ? "YES" : "NO"}
-          </td>
-        </tr>
-      </thead>
-      <tbody>
-        {Array.from({
-          length: Math.max(
-            beo.paperProductsIncluded ? Math.max(beo.paperProducts?.length || 0, 1) : 0,
-            beo.deliveryBeveragesIncluded ? Math.max(beo.deliveryBeverages?.length || 0, 1) : 0,
-          ),
-        }).map((_, i) => (
-          <tr key={i}>
-            <td style={{ ...print.paperCell, textAlign: "center" }}>
-              {beo.paperProducts?.[i]?.qty || ""}
-            </td>
-            <td style={print.paperCell}>{beo.paperProducts?.[i]?.item || ""}</td>
-            <td style={{ ...print.paperCell, color: "#16a34a", fontWeight: 700 }}>
-              {beo.deliveryBeverages?.[i]?.item || ""}
-            </td>
-            <td style={{ ...print.paperCell, textAlign: "center" }}>
-              {beo.deliveryBeverages?.[i]?.qty || ""}
-            </td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
-  </>
-);
-
 // ── Section config for building from event data (with custom text fields) ──
 // Hard print order: Passed → Presented → DELI → Buffet Metal → Buffet China → Dessert.
 // Kitchen BEO ALWAYS ends after Dessert. Stations route into their placement section.
@@ -1107,35 +1067,6 @@ function parseServicewareLines(text: string): { item: string; qty: string; suppl
   return items;
 }
 
-/** Build delivery beverages.
- *  Primary source: SERVICEWARE_NOTES (bullet lines saved by DeliveryPaperProductsSection).
- *  Fallback: legacy hydration/soda fields so older events still print correctly.
- */
-function buildDeliveryBeveragesFromEvent(fields: Record<string, unknown> | null): BeverageItem[] {
-  if (!fields) return [];
-  const items: BeverageItem[] = [];
-
-  // Primary: structured beverage lines stored in SERVICEWARE_NOTES
-  const notesRaw = asString(fields[FIELD_IDS.SERVICEWARE_NOTES]);
-  if (notesRaw?.trim()) {
-    parseServicewareLines(notesRaw).forEach((p) => {
-      items.push({ qty: p.qty, item: p.item });
-    });
-  }
-
-  // Fallback: older hydration fields (kept so pre-new-UI events still show)
-  if (items.length === 0) {
-    const soda = asStringArray(fields[FIELD_IDS.HYDRATION_SODA_SELECTION]);
-    if (soda.length > 0) items.push({ qty: "", item: soda.join(", ") });
-    const water = asSingleSelectName(fields[FIELD_IDS.HYDRATION_BOTTLED_WATER]);
-    if (water) items.push({ qty: "", item: `Bottled Water: ${water}` });
-    const other = asString(fields[FIELD_IDS.HYDRATION_OTHER]);
-    if (other?.trim()) items.push({ qty: "", item: other });
-  }
-
-  return items;
-}
-
 /** Build paper products from PLATES_LIST, CUTLERY_LIST, GLASSWARE_LIST (for delivery table) */
 function buildPaperProductsFromEvent(fields: Record<string, unknown> | null): PaperProduct[] {
   if (!fields) return [];
@@ -1196,7 +1127,7 @@ const getKitchenBeoEventIdFromUrl = (): string | null => {
 };
 
 const KitchenBEOPrintPage: React.FC = () => {
-  const { selectedEventId, selectedEventData, loadEvents, loadEventData, selectEvent, setFields } = useEventStore();
+  const { selectedEventId, selectedEventData, loadEvents, loadEventData, selectEvent, setFields, boxedLunchSavedAt } = useEventStore();
   const urlKitchenEventId = getKitchenBeoEventIdFromUrl();
   const eventIdForBoxedOrders = urlKitchenEventId ?? selectedEventId ?? null;
   const [loading, setLoading] = useState(true);
@@ -1266,6 +1197,7 @@ const KitchenBEOPrintPage: React.FC = () => {
   }, [selectedEventId, selectedEventData]);
 
   // Fetch boxed lunch orders for event (used in delivery BEO DELI section). URL wins so data matches /kitchen-beo-print/:id before store syncs.
+  // Depends on boxedLunchSavedAt so it re-fetches immediately after a save from BoxedLunchSection.
   useEffect(() => {
     if (!eventIdForBoxedOrders) {
       setBoxedLunchOrders([]);
@@ -1275,7 +1207,7 @@ const KitchenBEOPrintPage: React.FC = () => {
       if (!isErrorResult(result)) setBoxedLunchOrders(result);
       else setBoxedLunchOrders([]);
     });
-  }, [eventIdForBoxedOrders]);
+  }, [eventIdForBoxedOrders, boxedLunchSavedAt]);
 
   // Fetch menu items with Item Name + Child Items (linked records)
   // Exclude STATIONS — those are station IDs; we fetch stations separately and add station item IDs here
@@ -1448,7 +1380,7 @@ const KitchenBEOPrintPage: React.FC = () => {
   }, [selectedEventData, selectedEventId]);
 
   // Build sections from event data with parent/child from linked Child Items
-  const buildSectionsFromEvent = (isDelivery: boolean): MenuSection[] => {
+  const buildSectionsFromEvent = (isDelivery: boolean, boxedBreadBlock: string | null): MenuSection[] => {
     const guestCount = parseInt(asString(selectedEventData[FIELD_IDS.GUEST_COUNT]) || "0", 10);
     const sections: MenuSection[] = [];
 
@@ -1530,7 +1462,9 @@ const KitchenBEOPrintPage: React.FC = () => {
           });
         }
       }
-      const extra = buildBoxedLunchKitchenSectionsFromOrders(boxedLunchOrders) as MenuSection[];
+      const extra = boxedBreadBlock
+        ? []
+        : (buildBoxedLunchKitchenSectionsFromOrders(boxedLunchOrders) as MenuSection[]);
       if (extra.length > 0) {
         // Merge same-titled sections; insert new sections after COLD / DELI
         const toInsert: typeof extra = [];
@@ -1543,7 +1477,7 @@ const KitchenBEOPrintPage: React.FC = () => {
           }
         }
         if (toInsert.length > 0) {
-          const deliIdx = sections.findIndex((s) => s.title === "COLD / DELI — PLASTIC CONTAINER");
+          const deliIdx = sections.findIndex((s) => s.title === "BOXED LUNCH — SIDES" || s.title === "COLD / DELI — PLASTIC CONTAINER");
           if (deliIdx >= 0) {
             sections.splice(deliIdx + 1, 0, ...toInsert);
           } else {
@@ -1561,24 +1495,7 @@ const KitchenBEOPrintPage: React.FC = () => {
           .split(/\r?\n/)
           .map((l) => l.trim())
           .filter(Boolean);
-        const rawCustom = (st.customItems || "").split(/\r?\n/).map((l) => l.trim()).filter((l) => l && !/^BEO Placement:/i.test(l));
-        const customLines: string[] = [];
-        for (const line of rawCustom) {
-          const multi = line.match(/^(Toppings?|Condiments?|Dressings?|Salads?):\s*(.+)$/i);
-          if (multi) {
-            customLines.push(...multi[2].split(",").map((v) => v.trim()).filter(Boolean));
-          } else {
-            const keyVal = line.match(/^([A-Za-z\s]+):\s*(.+)$/);
-            if (keyVal) {
-              const key = keyVal[1].trim();
-              const val = keyVal[2].trim();
-              if (/^Salad\s*shooters?$/i.test(key) && /^yes$/i.test(val)) customLines.push("Salad shooters (included)");
-              else if (!/^yes$/i.test(val) || !/^Salad/i.test(key)) customLines.push(val);
-            } else customLines.push(line);
-          }
-        }
-        const stripPlatter = (s: string) => s.replace(/^PLATTER\s+/i, "");
-        const cleanedCustomLines = customLines.map(stripPlatter);
+        const cleanedCustomLines = stationCustomItemsToLines(st.customItems);
         const allLines = [...itemLines, ...cleanedCustomLines, ...notesLines];
         const stationDisplayName = /all-american|all american/i.test(st.stationType || "") ? "The All-American Station" : (st.stationType || "—");
         return {
@@ -1660,7 +1577,12 @@ const KitchenBEOPrintPage: React.FC = () => {
   const eventTypeLabel = asSingleSelectName(selectedEventData?.[FIELD_IDS.EVENT_TYPE]) ?? "";
   const isDelivery = isDeliveryOrPickup(eventTypeLabel);
   const isPickUp = isPickup(eventTypeLabel);
+  const boxedLunchBreadPrintError = isDelivery ? getBoxedLunchBreadValidationError(boxedLunchOrders) : null;
   const serviceType: "full-service" | "delivery" = isDelivery ? "delivery" : "full-service";
+
+  const deliveryBeverageLines: BeverageItem[] = selectedEventData
+    ? buildDeliveryBeverageLines(selectedEventData as Record<string, unknown>)
+    : [];
 
   // Build BEO data from real event — use formula/print fields when available, fallback to source fields
   const venueAddress =
@@ -1708,7 +1630,7 @@ const KitchenBEOPrintPage: React.FC = () => {
       ? "NO KITCHEN ON SITE"
       : undefined,
     eventOccasion: asSingleSelectName(selectedEventData[FIELD_IDS.EVENT_OCCASION]) || undefined,
-    sections: buildSectionsFromEvent(isDelivery),
+    sections: buildSectionsFromEvent(isDelivery, boxedLunchBreadPrintError),
     notes: asString(selectedEventData[FIELD_IDS.BEO_NOTES]) ? asString(selectedEventData[FIELD_IDS.BEO_NOTES]).split("\n").filter(Boolean) : [],
     timeline: parseBEOTimeline(asString(selectedEventData[FIELD_IDS.BEO_TIMELINE])),
     beveragesFoodwerx: safeBeveragesFoodwerx(selectedEventData),
@@ -1722,8 +1644,8 @@ const KitchenBEOPrintPage: React.FC = () => {
       }
       return items.length > 0 || !!asSingleSelectName(selectedEventData[FIELD_IDS.SERVICEWARE_SOURCE]);
     })(),
-    deliveryBeverages: buildDeliveryBeveragesFromEvent(selectedEventData),
-    deliveryBeveragesIncluded: buildDeliveryBeveragesFromEvent(selectedEventData).length > 0,
+    deliveryBeverages: deliveryBeverageLines,
+    deliveryBeveragesIncluded: deliveryBeverageLines.length > 0,
   } : FULL_SERVICE_SAMPLE;
 
   const handlePrint = () => {
@@ -1774,6 +1696,7 @@ const KitchenBEOPrintPage: React.FC = () => {
           background: #43a047 !important;
         }
         @media print {
+          .delivery-pbb-empty-wrap { display: none !important; }
           html, body {
             background: #fff !important;
             color: #000 !important;
@@ -1826,7 +1749,12 @@ const KitchenBEOPrintPage: React.FC = () => {
         }
       `}</style>
       <div style={print.toolbar} className="no-print kitchen-beo-toolbar">
-        <div style={{ display: "flex", gap: 8, flexShrink: 0, alignItems: "center" }}>
+        <div style={{ display: "flex", gap: 8, flexShrink: 0, alignItems: "center", flexWrap: "wrap" }}>
+          {boxedLunchBreadPrintError && (
+            <span style={{ padding: "6px 12px", background: "#b45309", color: "#fff", fontWeight: 700, fontSize: 12, borderRadius: 4, maxWidth: 420 }}>
+              ⚠️ {boxedLunchBreadPrintError} — boxed lunch omitted from print until fixed in intake.
+            </span>
+          )}
           <button type="button" style={print.backBtn} onClick={() => window.history.back()}>
             ← Back
           </button>
@@ -1882,6 +1810,12 @@ const KitchenBEOPrintPage: React.FC = () => {
           <div style={print.allergyBanner}>{beo.allergyBanner}</div>
         )}
 
+        {boxedLunchBreadPrintError && beo.serviceType === "delivery" && (
+          <div style={{ background: "#b45309", color: "#fff", fontWeight: 700, fontSize: 13, textAlign: "center", padding: "8px 12px", margin: "6px 0", borderRadius: 4 }}>
+            ⚠️ {boxedLunchBreadPrintError} — boxed lunch is not shown below until every sandwich line has bread in BEO Intake.
+          </div>
+        )}
+
         {beo.noKitchenOnSite && beo.kitchenBanner && (
           <div style={{ border: "3px solid #ff0000", borderRadius: 4, margin: "6px 0", overflow: "hidden" }}>
             <div style={{ background: "#ff0000", color: "#fff", fontWeight: 700, fontSize: 14, textAlign: "center", padding: "5px 8px", letterSpacing: 1 }}>
@@ -1908,7 +1842,13 @@ const KitchenBEOPrintPage: React.FC = () => {
 
         {beo.sections.map((section, idx) => renderSection(section, idx, beo.serviceType === "delivery", checkState, setCheckState))}
 
-        {beo.serviceType === "delivery" && renderPaperProductsDelivery(beo)}
+        {beo.serviceType === "delivery" && (
+          <DeliveryPaperBeveragesSpreadsheet
+            paper={(beo.paperProducts ?? []).map((p) => ({ item: p.item, qty: p.qty }))}
+            beverages={(beo.deliveryBeverages ?? []).map((p) => ({ item: p.item, qty: p.qty }))}
+            collapsibleWhenEmpty
+          />
+        )}
 
         {beo.serviceType === "full-service" && renderPage2FullService(beo)}
       </div>

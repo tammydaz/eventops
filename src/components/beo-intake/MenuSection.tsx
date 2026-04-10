@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, Fragment, type ReactNode } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { FIELD_IDS } from "../../services/airtable/events";
 import { CATEGORY_MAP, type MenuCategoryKey } from "../../constants/menuCategories";
@@ -23,11 +23,17 @@ import { loadStationPresets, loadStationComponentNamesByIds } from "../../servic
 import { StationComponentsConfigModal } from "./StationComponentsConfigModal";
 import { BoxedLunchSection } from "./BoxedLunchSection";
 import { SandwichPlatterConfigModal } from "./SandwichPlatterConfigModal";
+import { DeliveryIntakeMenuAddRow } from "./DeliveryIntakeMenuAddRow";
 import { SALAD_BAR } from "../../config/stationPresets";
-import { getPlatterOrdersByEventId, setPlatterOrdersForEvent } from "../../state/platterOrdersStore";
+import {
+  getPlatterOrdersByEventId,
+  platterOrdersHaveContent,
+  setPlatterOrdersForEvent,
+} from "../../state/platterOrdersStore";
+import { boxedLunchOrdersHaveContent, loadBoxedLunchOrdersByEventId } from "../../services/airtable/boxedLunchOrders";
 import { asLinkedRecordIds, asSingleSelectName, asString, isErrorResult } from "../../services/airtable/selectors";
 import { useEventStore } from "../../state/eventStore";
-import { FormSection, BEO_SECTION_PILL_ACCENT } from "./FormSection";
+import { FormSection, BEO_SECTION_PILL_ACCENT, CollapsibleSubsection } from "./FormSection";
 import { CustomFoodItemsBlock } from "./CustomFoodItemsBlock";
 import { getSauceOverrides, setSauceOverride, type SauceOverride, type SauceOverrideValue } from "../../state/sauceOverrideStore";
 import { calculateAutoSpec, type FoodCategory } from "../../utils/beoAutoSpec";
@@ -38,9 +44,9 @@ import {
   deliveryItemBelongsInSection,
   type DeliverySectionRow,
 } from "../../config/deliverySectionConfig";
-import { DELIVERY_INTAKE_SECTIONS, LEGACY_MENU_ITEMS_TABLE_ID } from "../../services/airtable/menuCatalogConfig";
-import { DELIVERY_INTAKE_TARGET_FIELD, fetchExecutionTokensByMenuItemIds } from "../../services/airtable/menuItems";
-import { deleteEventMenuRow, syncShadowToEvent } from "../../services/airtable/eventMenu";
+import { LEGACY_MENU_ITEMS_TABLE_ID } from "../../services/airtable/menuCatalogConfig";
+import { fetchExecutionTokensByMenuItemIds } from "../../services/airtable/menuItems";
+import { deleteEventMenuRow, syncShadowToEvent, updateEventMenuRow } from "../../services/airtable/eventMenu";
 
 function laneToFoodCategory(lane: string): FoodCategory {
   if (lane === "passedAppetizers") return "passed";
@@ -56,46 +62,6 @@ function laneUsesSauceOnFirstChild(lane: string): boolean {
 /** Match Menu_Lab vs legacy Item Name despite extra spaces / case. */
 function normMenuNameForMatch(s: string): string {
   return s.trim().toLowerCase().replace(/\s+/g, " ");
-}
-
-/** Delivery “Food List”: teal header, collapsible — matches full-service speck table layout. */
-function FoodListCollapsible(props: { title: string; defaultOpen?: boolean; children: ReactNode }) {
-  const { title, defaultOpen = false, children } = props;
-  const [open, setOpen] = useState(defaultOpen);
-  const accent = BEO_SECTION_PILL_ACCENT;
-  const border = "rgba(255,255,255,0.15)";
-  return (
-    <div
-      style={{
-        border: `1px solid ${border}`,
-        borderRadius: 8,
-        background: "#0a0a0a",
-        marginBottom: 12,
-        overflow: "hidden",
-      }}
-    >
-      <button
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        style={{
-          width: "100%",
-          display: "flex",
-          alignItems: "center",
-          gap: 8,
-          padding: "10px 14px",
-          background: "rgba(0,0,0,0.4)",
-          border: "none",
-          borderBottom: open ? `1px solid ${border}` : "none",
-          cursor: "pointer",
-          textAlign: "left",
-        }}
-      >
-        <span style={{ color: accent, fontSize: 11, width: 14, flexShrink: 0 }}>{open ? "▼" : "▶"}</span>
-        <span style={{ color: accent, fontWeight: 700, fontSize: 13, letterSpacing: "0.06em" }}>{title}</span>
-      </button>
-      {open && <div style={{ padding: "0 0 8px 0" }}>{children}</div>}
-    </div>
-  );
 }
 
 /** Collapsible block with same visual shell as CourseBlock: heading with colored dots and chevron. Use for any section that should match course-block look. */
@@ -1312,6 +1278,11 @@ function shadowRowMatchesLane(
 type MenuSectionProps = {
   embedded?: boolean;
   isDelivery?: boolean;
+  /**
+   * Delivery only: `full` shows category pills, boxed lunch, and platter config here (e.g. FOH intake view).
+   * `kitchen-only` omits that chrome when Beo Intake renders the same controls above the food list.
+   */
+  deliveryChromeMode?: "full" | "kitchen-only";
   /** When set, removing a line deletes the shadow row + syncs so Print/BEO and Airtable stay aligned. */
   shadowMenuRows?: Array<{ id: string; section: string; catalogItemId: string | null }>;
   loadShadowMenu?: (opts?: { retryIfEmpty?: boolean }) => Promise<void>;
@@ -1320,6 +1291,7 @@ type MenuSectionProps = {
 export const MenuSection = ({
   embedded = false,
   isDelivery = false,
+  deliveryChromeMode = "full",
   shadowMenuRows: shadowMenuRowsForRemove,
   loadShadowMenu,
 }: MenuSectionProps) => {
@@ -1354,7 +1326,13 @@ export const MenuSection = ({
   const [error, setError] = useState<string | null>(null);
   const [showDressingPicker, setShowDressingPicker] = useState(false);
   const [dressingPickerSearch, setDressingPickerSearch] = useState("");
+  const [dressingSaladName, setDressingSaladName] = useState<string>("");
+  const [dressingSaladShadowRowId, setDressingSaladShadowRowId] = useState<string | null>(null);
+  const [pendingDressingIds, setPendingDressingIds] = useState<string[]>([]);
+  const [pendingDressingTexts, setPendingDressingTexts] = useState<string[]>([]);
   const [platterModalOpen, setPlatterModalOpen] = useState(false);
+  const [deliveryChromeBoxedOpen, setDeliveryChromeBoxedOpen] = useState(false);
+  const [deliveryChromePlatterOpen, setDeliveryChromePlatterOpen] = useState(false);
   /** Menu_Lab execution tokens per catalog id — used to bucket delivery sections. */
   const [deliveryExecByItemId, setDeliveryExecByItemId] = useState<Record<string, string[]>>({});
   const [kitchenFields, setKitchenFields] = useState({ allergies: "", religious: "", dietaryMeals: "" });
@@ -1404,6 +1382,30 @@ export const MenuSection = ({
     selections.desserts,
     selections.deliveryDeli,
   ]);
+
+  const syncDeliveryCorporateChrome =
+    isDelivery && deliveryChromeMode === "full" && Boolean(selectedEventId);
+
+  useEffect(() => {
+    if (!syncDeliveryCorporateChrome || !selectedEventId) return;
+    setDeliveryChromeBoxedOpen(false);
+    let cancel = false;
+    void (async () => {
+      const res = await loadBoxedLunchOrdersByEventId(selectedEventId);
+      if (cancel) return;
+      if (!isErrorResult(res) && boxedLunchOrdersHaveContent(res)) {
+        setDeliveryChromeBoxedOpen(true);
+      }
+    })();
+    return () => {
+      cancel = true;
+    };
+  }, [selectedEventId, syncDeliveryCorporateChrome]);
+
+  useEffect(() => {
+    if (!syncDeliveryCorporateChrome || !selectedEventId) return;
+    setDeliveryChromePlatterOpen(platterOrdersHaveContent(selectedEventId));
+  }, [selectedEventId, syncDeliveryCorporateChrome]);
 
   // Load menu items on mount
   useEffect(() => {
@@ -1916,7 +1918,48 @@ export const MenuSection = ({
   const closeDressingPicker = () => {
     setShowDressingPicker(false);
     setDressingPickerSearch("");
+    setDressingSaladName("");
+    setDressingSaladShadowRowId(null);
+    setPendingDressingIds([]);
+    setPendingDressingTexts([]);
   };
+
+  const confirmDressingSelection = async () => {
+    if (!selectedEventId) return;
+    // Batch-add all linked dressing records
+    let currentItems = selections.buffetChina;
+    for (const id of pendingDressingIds) {
+      if (!currentItems.includes(id)) {
+        currentItems = [...currentItems, id];
+      }
+    }
+    if (currentItems.length !== selections.buffetChina.length) {
+      setSelections((prev) => ({ ...prev, buffetChina: currentItems }));
+      await setFields(selectedEventId, { [FIELD_IDS.BUFFET_CHINA]: currentItems });
+    }
+    // Batch-add all text dressings to custom field
+    if (pendingDressingTexts.length > 0) {
+      const current = (customFields.customBuffetChina || "").trim();
+      const next = [...(current ? [current] : []), ...pendingDressingTexts].join("\n");
+      setCustomFields((prev) => ({ ...prev, customBuffetChina: next }));
+      await setFields(selectedEventId, { [FIELD_IDS.CUSTOM_BUFFET_CHINA]: next });
+    }
+    // Store dressing choices as a note on the salad's shadow row
+    if (dressingSaladShadowRowId) {
+      const allNames = [
+        ...pendingDressingIds.map((id) => menuItems.find((m) => m.id === id)?.name ?? id),
+        ...pendingDressingTexts,
+      ];
+      if (allNames.length > 0) {
+        await updateEventMenuRow(dressingSaladShadowRowId, {
+          packOutNotes: `Dressings: ${allNames.join(", ")}`,
+        });
+        if (loadShadowMenu) await loadShadowMenu();
+      }
+    }
+    closeDressingPicker();
+  };
+
 
   const removeMenuItem = async (fieldKey: keyof MenuSelections, itemId: string) => {
     if (!selectedEventId) return;
@@ -2229,559 +2272,64 @@ export const MenuSection = ({
         </div>
       </div>
 
-      {isDelivery ? (
+      {isDelivery && deliveryChromeMode === "full" ? (
         <div style={{ gridColumn: "1 / -1", width: "100%", display: "flex", justifyContent: "center" }}>
-          <div style={{ maxWidth: 720, width: "100%" }}>
-            {/* ── Client-facing menu section buttons ── */}
-            <div
-              style={{
-                textAlign: "center",
-                marginBottom: 6,
-                fontSize: 14,
-                fontWeight: 700,
-                letterSpacing: "0.14em",
-                color: "#fff",
+          <div style={{ maxWidth: 640, width: "100%" }}>
+            <DeliveryIntakeMenuAddRow
+              disabled={!canEdit}
+              onOpenSandwichPlatters={() => {
+                setDeliveryChromePlatterOpen(true);
+                requestAnimationFrame(() =>
+                  document
+                    .getElementById("beo-delivery-platter")
+                    ?.scrollIntoView({ behavior: "smooth", block: "start" })
+                );
               }}
-            >
-              ADD FROM MENU
+            />
+            <div id="beo-delivery-boxed-lunch" style={{ marginTop: 8 }}>
+              <CollapsibleSubsection
+                title="Boxed lunches"
+                isDelivery
+                open={deliveryChromeBoxedOpen}
+                onOpenChange={setDeliveryChromeBoxedOpen}
+                bodyLayout="block"
+              >
+                <BoxedLunchSection
+                  eventId={selectedEventId}
+                  canEdit={canEdit}
+                  onDone={() => setDeliveryChromeBoxedOpen(false)}
+                />
+              </CollapsibleSubsection>
             </div>
-            <div
-              className="beo-menu-add-buttons"
-              style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))",
-                gap: 8,
-                marginBottom: 20,
-              }}
-            >
-              {DELIVERY_INTAKE_SECTIONS.map((sec) => (
-                <button
-                  key={sec.id}
-                  type="button"
-                  disabled={!canEdit}
-                  onClick={() =>
-                    openPicker(
-                      `delivery_intake_${sec.id}`,
-                      DELIVERY_INTAKE_TARGET_FIELD,
-                      `Add — ${sec.title}`
-                    )
-                  }
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    gap: 6,
-                    padding: "12px 10px",
-                    borderRadius: 8,
-                    border: "1px solid rgba(255,255,255,0.18)",
-                    background: "rgba(255,255,255,0.05)",
-                    color: "#fff",
-                    fontSize: 12,
-                    fontWeight: 700,
-                    letterSpacing: "0.06em",
-                    cursor: canEdit ? "pointer" : "not-allowed",
-                    transition: "all 0.15s",
+            <div id="beo-delivery-platter" style={{ marginTop: 8 }}>
+              <CollapsibleSubsection
+                title="Sandwich platters"
+                isDelivery
+                accentColor="#f97316"
+                open={deliveryChromePlatterOpen}
+                onOpenChange={setDeliveryChromePlatterOpen}
+                bodyLayout="block"
+              >
+                <SandwichPlatterConfigModal
+                  open={deliveryChromePlatterOpen}
+                  inline
+                  onClose={() => setDeliveryChromePlatterOpen(false)}
+                  onConfirm={(rows) => {
+                    if (!selectedEventId) {
+                      setError("Select an event first");
+                      return;
+                    }
+                    setPlatterOrdersForEvent(selectedEventId, rows);
+                    setDeliveryChromePlatterOpen(true);
                   }}
-                >
-                  <span style={{ fontSize: 16 }}>{sec.icon}</span>
-                  {sec.title}
-                </button>
-              ))}
-            </div>
-
-            {/* ── Kitchen-language food list — now rendered as shadow rows in BeoIntakePage ── */}
-            {false && (<><div
-              style={{
-                textAlign: "center",
-                marginBottom: 14,
-                fontSize: 14,
-                fontWeight: 700,
-                letterSpacing: "0.14em",
-                color: "#fff",
-              }}
-            >
-              YOUR FOOD LIST
-            </div>
-            {DELIVERY_SECTION_CONFIG.map((config) => {
-              const guestCount =
-                selectedEventData?.[FIELD_IDS.GUEST_COUNT] != null ? Number(selectedEventData[FIELD_IDS.GUEST_COUNT]) : 0;
-              const sectionRows: { itemId: string; lane: keyof MenuSelections; sourceFieldId: string }[] = [];
-              for (const fieldId of config.fieldIds) {
-                const lane = EVENT_FIELD_ID_TO_LANE[fieldId];
-                if (!lane) continue;
-                for (const itemId of selections[lane]) {
-                  const tokens = deliveryExecByItemId[itemId] ?? [];
-                  if (deliveryItemBelongsInSection(config.id, tokens, fieldId)) {
-                    sectionRows.push({ itemId, lane, sourceFieldId: fieldId });
-                  }
-                }
-              }
-              if (!shouldShowDeliveryFoodSection(config, sectionRows.length, customFields, selectedEventId)) {
-                return <Fragment key={config.id} />;
-              }
-              const course = DELIVERY_COURSE_BLOCK[config.id];
-              type DRow = {
-                rowKey: string;
-                parentId: string;
-                lane: keyof MenuSelections;
-                sourceFieldId: string;
-                isChild: boolean;
-                childId?: string;
-                isFirstChild?: boolean;
-                rowIdx: number;
-              };
-              const flatRows: DRow[] = [];
-              for (const sr of sectionRows) {
-                flatRows.push({
-                  rowKey: `p-${sr.itemId}-${sr.sourceFieldId}`,
-                  parentId: sr.itemId,
-                  lane: sr.lane,
-                  sourceFieldId: sr.sourceFieldId,
-                  isChild: false,
-                  rowIdx: 0,
-                });
-                (menuItemChildIds[sr.itemId] ?? []).forEach((childId, idx) => {
-                  flatRows.push({
-                    rowKey: `c-${sr.itemId}-${childId}-${sr.sourceFieldId}`,
-                    parentId: sr.itemId,
-                    lane: sr.lane,
-                    sourceFieldId: sr.sourceFieldId,
-                    isChild: true,
-                    childId,
-                    isFirstChild: idx === 0,
-                    rowIdx: idx + 1,
-                  });
-                });
-              }
-              const overrideInputStyle: React.CSSProperties = {
-                width: "100%",
-                padding: "4px 6px",
-                borderRadius: 4,
-                border: "1px solid rgba(255,255,255,0.12)",
-                background: "rgba(0,0,0,0.2)",
-                color: "#fff",
-                fontSize: 12,
-              };
-              return (
-                <FoodListCollapsible key={config.id} title={course.blockTitle}>
-                  <div style={{ margin: "0 8px 8px 8px" }}>
-                    <div
-                      style={{
-                        border: "1px solid rgba(255,255,255,0.12)",
-                        borderRadius: 6,
-                        overflow: "hidden",
-                        background: "rgba(0,0,0,0.35)",
-                      }}
-                    >
-                      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-                        <thead>
-                          <tr>
-                            <th
-                              style={{
-                                textAlign: "left",
-                                padding: "6px 8px",
-                                borderBottom: "1px solid rgba(255,255,255,0.12)",
-                                fontWeight: 600,
-                                color: "#fff",
-                                width: "22%",
-                              }}
-                            >
-                              Auto speck
-                            </th>
-                            <th
-                              style={{
-                                textAlign: "left",
-                                padding: "6px 8px",
-                                borderBottom: "1px solid rgba(255,255,255,0.12)",
-                                fontWeight: 600,
-                                color: "#fff",
-                                width: "44%",
-                              }}
-                            >
-                              Items
-                            </th>
-                            <th
-                              style={{
-                                textAlign: "left",
-                                padding: "6px 8px",
-                                borderBottom: "1px solid rgba(255,255,255,0.12)",
-                                fontWeight: 600,
-                                color: "#fff",
-                                width: "24%",
-                              }}
-                            >
-                              Override
-                            </th>
-                            <th style={{ width: 32 }} />
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {flatRows.length === 0 ? (
-                            <tr>
-                              <td
-                                colSpan={4}
-                                style={{ padding: "10px 8px", color: "rgba(255,255,255,0.45)", fontSize: 13 }}
-                              >
-                                No items yet.
-                              </td>
-                            </tr>
-                          ) : (
-                            flatRows.map((r) => {
-                              const specKey = getSpecOverrideKey(r.sourceFieldId, r.parentId, r.rowIdx);
-                              if (r.isChild && r.childId != null) {
-                                const ov = sauceOverrides[r.parentId];
-                                const defSauce = menuItemSauce[r.parentId] ?? "";
-                                const showSauce =
-                                  laneUsesSauceOnFirstChild(r.lane) && r.isFirstChild && (defSauce || ov);
-                                const childDisplaySpec =
-                                  (menuSpecOverrides[specKey] ?? "").trim() !== "" ? menuSpecOverrides[specKey] : "";
-                                return (
-                                  <tr key={r.rowKey} style={{ borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
-                                    <td style={{ padding: "4px 8px", color: "#fff", verticalAlign: "top" }}>
-                                      {childDisplaySpec || "—"}
-                                    </td>
-                                    <td style={{ padding: "4px 8px", color: "#fff", paddingLeft: 24, verticalAlign: "top" }}>
-                                      {showSauce ? (
-                                        <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                                          <select
-                                            value={
-                                              ov?.sauceOverride === "Other"
-                                                ? "Other"
-                                                : ov?.sauceOverride === "None"
-                                                  ? "None"
-                                                  : "Default"
-                                            }
-                                            disabled={!canEdit}
-                                            onChange={(e) => {
-                                              const v = e.target.value as SauceOverrideValue;
-                                              handleSauceChange(r.parentId, {
-                                                sauceOverride: v,
-                                                customSauce: v === "Other" ? ov?.customSauce ?? null : null,
-                                              });
-                                            }}
-                                            style={{ ...inputStyle, padding: "4px 6px", fontSize: 12 }}
-                                          >
-                                            <option value="Default">{defSauce?.trim() || "Default"}</option>
-                                            <option value="None">None</option>
-                                            <option value="Other">Other…</option>
-                                          </select>
-                                          {ov?.sauceOverride === "Other" && (
-                                            <input
-                                              type="text"
-                                              value={ov?.customSauce ?? ""}
-                                              onChange={(e) =>
-                                                handleSauceChange(r.parentId, {
-                                                  sauceOverride: "Other",
-                                                  customSauce: e.target.value || null,
-                                                })
-                                              }
-                                              placeholder="Custom sauce name"
-                                              disabled={!canEdit}
-                                              style={{ ...inputStyle, padding: "4px 6px", fontSize: 12 }}
-                                            />
-                                          )}
-                                        </div>
-                                      ) : (
-                                        <span style={{ fontSize: 13 }}>
-                                          <span style={{ color: "rgba(255,255,255,0.6)", marginRight: 4 }}>•</span>
-                                          ✓ {getItemName(r.childId)}
-                                        </span>
-                                      )}
-                                    </td>
-                                    <td style={{ padding: 2, verticalAlign: "top" }}>
-                                      <input
-                                        type="text"
-                                        value={menuSpecOverrides[specKey] ?? ""}
-                                        disabled={!canEdit}
-                                        onChange={(e) => handleSpecOverrideChange(specKey, e.target.value)}
-                                        placeholder="—"
-                                        style={overrideInputStyle}
-                                      />
-                                    </td>
-                                    <td />
-                                  </tr>
-                                );
-                              }
-                              const name = getItemName(r.parentId);
-                              const cat = laneToFoodCategory(r.lane);
-                              const spec = calculateAutoSpec(name, cat, guestCount);
-                              const displaySpec =
-                                (menuSpecOverrides[specKey] ?? "").trim() !== "" ? menuSpecOverrides[specKey] : spec.quantity;
-                              return (
-                                <tr key={r.rowKey} style={{ borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
-                                  <td style={{ padding: "4px 8px", color: "#fff", verticalAlign: "top" }}>{displaySpec}</td>
-                                  <td style={{ padding: "4px 8px", color: "#fff", verticalAlign: "top" }}>
-                                    <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 4 }}>{name}</div>
-                                    {!laneUsesSauceOnFirstChild(r.lane) && (
-                                      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginTop: 4 }}>
-                                        <select
-                                          value={
-                                            (sauceOverrides[r.parentId]?.sauceOverride === "Other"
-                                              ? "Other"
-                                              : sauceOverrides[r.parentId]?.sauceOverride === "None"
-                                                ? "None"
-                                                : "Default") as SauceOverrideValue
-                                          }
-                                          disabled={!canEdit}
-                                          onChange={(e) => {
-                                            const v = e.target.value as SauceOverrideValue;
-                                            const cur = sauceOverrides[r.parentId] ?? {
-                                              sauceOverride: "Default" as SauceOverrideValue,
-                                              customSauce: null,
-                                            };
-                                            handleSauceChange(r.parentId, {
-                                              sauceOverride: v,
-                                              customSauce: v === "Other" ? cur.customSauce : null,
-                                            });
-                                          }}
-                                          style={{ ...inputStyle, padding: "4px 6px", fontSize: 12, maxWidth: 200 }}
-                                        >
-                                          <option value="Default">
-                                            {menuItemSauce[r.parentId]?.trim() || "Default (none)"}
-                                          </option>
-                                          <option value="None">None</option>
-                                          <option value="Other">Other…</option>
-                                        </select>
-                                        {sauceOverrides[r.parentId]?.sauceOverride === "Other" && (
-                                          <input
-                                            type="text"
-                                            value={sauceOverrides[r.parentId]?.customSauce ?? ""}
-                                            onChange={(e) =>
-                                              handleSauceChange(r.parentId, {
-                                                sauceOverride: "Other",
-                                                customSauce: e.target.value || null,
-                                              })
-                                            }
-                                            placeholder="Custom sauce"
-                                            disabled={!canEdit}
-                                            style={{ ...inputStyle, padding: "4px 6px", fontSize: 12, maxWidth: 200 }}
-                                          />
-                                        )}
-                                      </div>
-                                    )}
-                                  </td>
-                                  <td style={{ padding: 2, verticalAlign: "top" }}>
-                                    <input
-                                      type="text"
-                                      value={menuSpecOverrides[specKey] ?? ""}
-                                      disabled={!canEdit}
-                                      onChange={(e) => handleSpecOverrideChange(specKey, e.target.value)}
-                                      placeholder="—"
-                                      style={overrideInputStyle}
-                                    />
-                                  </td>
-                                  <td style={{ padding: "4px 6px", verticalAlign: "top" }}>
-                                    <button
-                                      type="button"
-                                      disabled={!canEdit}
-                                      onClick={() => removeMenuItem(r.lane, r.parentId)}
-                                      style={{
-                                        background: "none",
-                                        border: "none",
-                                        color: "#ff6b6b",
-                                        cursor: "pointer",
-                                        fontSize: 16,
-                                        fontWeight: "bold",
-                                      }}
-                                      title="Remove"
-                                    >
-                                      ✕
-                                    </button>
-                                  </td>
-                                </tr>
-                              );
-                            })
-                          )}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                  <div style={{ margin: "0 8px 8px 8px" }}>
-                    <button
-                      type="button"
-                      disabled={!canEdit}
-                      onClick={() => openPicker(config.pickerType, config.targetField, `Add — ${config.title}`)}
-                      style={smallAddButtonStyle}
-                    >
-                      + Add
-                    </button>
-                  </div>
-
-                  {config.id === "sandwich_trays" ? (
-                    <div style={{ margin: "12px 8px 0 8px" }}>
-                      <button
-                        type="button"
-                        onClick={() => setPlatterModalOpen((v) => !v)}
-                        style={{ ...smallAddButtonStyle, borderColor: "#f97316", color: "#f97316" }}
-                      >
-                        {platterModalOpen ? "− Hide platters" : "+ Sandwich platters"}
-                      </button>
-                      <BoxedLunchSection eventId={selectedEventId} canEdit={canEdit} />
-                      {platterModalOpen ? (
-                        <SandwichPlatterConfigModal
-                          open
-                          inline
-                          onClose={() => setPlatterModalOpen(false)}
-                          onConfirm={(rows) => {
-                            if (!selectedEventId) {
-                              setError("Select an event first");
-                              return;
-                            }
-                            setPlatterOrdersForEvent(selectedEventId, rows);
-                            setPlatterModalOpen(false);
-                          }}
-                          initialRows={selectedEventId ? getPlatterOrdersByEventId(selectedEventId) : []}
-                        />
-                      ) : null}
-                    </div>
-                  ) : null}
-
-                  {config.customFieldIds.map((cfid) => (
-                    <div key={cfid} style={{ margin: "8px 8px 12px 8px" }}>
-                      {cfid === FIELD_IDS.CUSTOM_BUFFET_METAL && (
-                        <CustomFoodItemsBlock
-                          value={customFields.customBuffetMetal}
-                          fieldId={FIELD_IDS.CUSTOM_BUFFET_METAL}
-                          placeholder="Item name"
-                          notesPlaceholder="Notes (optional)"
-                          canEdit={canEdit}
-                          onSave={saveCustomField}
-                          label="Custom hot buffet (not in menu)"
-                          inputStyle={inputStyle}
-                          labelStyle={labelStyle}
-                          buttonStyle={smallAddButtonStyle}
-                        />
-                      )}
-                      {cfid === FIELD_IDS.CUSTOM_PASSED_APP && (
-                        <CustomFoodItemsBlock
-                          value={customFields.customPassedApp}
-                          fieldId={FIELD_IDS.CUSTOM_PASSED_APP}
-                          placeholder="Item name"
-                          notesPlaceholder="Notes (optional)"
-                          canEdit={canEdit}
-                          onSave={saveCustomField}
-                          label="Custom (not in menu)"
-                          inputStyle={inputStyle}
-                          labelStyle={labelStyle}
-                          buttonStyle={smallAddButtonStyle}
-                        />
-                      )}
-                      {cfid === FIELD_IDS.CUSTOM_PRESENTED_APP && (
-                        <CustomFoodItemsBlock
-                          value={customFields.customPresentedApp}
-                          fieldId={FIELD_IDS.CUSTOM_PRESENTED_APP}
-                          placeholder="Item name"
-                          notesPlaceholder="Notes (optional)"
-                          canEdit={canEdit}
-                          onSave={saveCustomField}
-                          label="Custom (not in menu)"
-                          inputStyle={inputStyle}
-                          labelStyle={labelStyle}
-                          buttonStyle={smallAddButtonStyle}
-                        />
-                      )}
-                      {cfid === FIELD_IDS.CUSTOM_DELIVERY_DELI && (
-                        <CustomFoodItemsBlock
-                          value={customFields.customDeli}
-                          fieldId={FIELD_IDS.CUSTOM_DELIVERY_DELI}
-                          placeholder="Sandwich or wrap name"
-                          notesPlaceholder="Notes (optional)"
-                          canEdit={canEdit}
-                          onSave={saveCustomField}
-                          label="Custom sandwich / wrap (not in menu)"
-                          inputStyle={inputStyle}
-                          labelStyle={labelStyle}
-                          buttonStyle={smallAddButtonStyle}
-                        />
-                      )}
-                      {cfid === FIELD_IDS.CUSTOM_BUFFET_CHINA && (
-                        <CustomFoodItemsBlock
-                          value={customFields.customBuffetChina}
-                          fieldId={FIELD_IDS.CUSTOM_BUFFET_CHINA}
-                          placeholder="Item name"
-                          notesPlaceholder="Notes (optional)"
-                          canEdit={canEdit}
-                          onSave={saveCustomField}
-                          label="Custom cold / bulk (not in menu)"
-                          inputStyle={inputStyle}
-                          labelStyle={labelStyle}
-                          buttonStyle={smallAddButtonStyle}
-                        />
-                      )}
-                      {cfid === FIELD_IDS.CUSTOM_ROOM_TEMP_DISPLAY && (
-                        <CustomFoodItemsBlock
-                          value={customFields.customRoomTemp}
-                          fieldId={FIELD_IDS.CUSTOM_ROOM_TEMP_DISPLAY}
-                          placeholder="Salad or display item"
-                          notesPlaceholder="Notes (optional)"
-                          canEdit={canEdit}
-                          onSave={saveCustomField}
-                          label="Custom salad / display (not in menu)"
-                          inputStyle={inputStyle}
-                          labelStyle={labelStyle}
-                          buttonStyle={smallAddButtonStyle}
-                        />
-                      )}
-                      {cfid === FIELD_IDS.CUSTOM_DESSERTS && (
-                        <CustomFoodItemsBlock
-                          value={customFields.customDessert}
-                          fieldId={FIELD_IDS.CUSTOM_DESSERTS}
-                          placeholder="Dessert name"
-                          notesPlaceholder="Notes (optional)"
-                          canEdit={canEdit}
-                          onSave={saveCustomField}
-                          label="Custom desserts (not in menu)"
-                          inputStyle={inputStyle}
-                          labelStyle={labelStyle}
-                          buttonStyle={smallAddButtonStyle}
-                        />
-                      )}
-                    </div>
-                  ))}
-                </FoodListCollapsible>
-              );
-            })}</>)}
-
-            {/* ── Boxed Lunches + Sandwich Platters (always visible for delivery) ── */}
-            <div style={{ maxWidth: 640, width: "100%", margin: "0 auto" }}>
-              <BoxedLunchSection eventId={selectedEventId} canEdit={canEdit} />
-              <div style={{ marginTop: 12 }}>
-                <button
-                  type="button"
-                  onClick={() => setPlatterModalOpen((v) => !v)}
-                  style={{
-                    padding: "8px 16px",
-                    fontSize: 13,
-                    fontWeight: 600,
-                    borderRadius: 8,
-                    border: "1px solid rgba(249,115,22,0.5)",
-                    background: "rgba(249,115,22,0.1)",
-                    color: "#f97316",
-                    cursor: "pointer",
-                    marginBottom: 8,
-                  }}
-                >
-                  {platterModalOpen ? "− Hide Sandwich Platters" : "+ Sandwich Platters"}
-                </button>
-                {platterModalOpen && (
-                  <SandwichPlatterConfigModal
-                    open
-                    inline
-                    onClose={() => setPlatterModalOpen(false)}
-                    onConfirm={(rows) => {
-                      if (!selectedEventId) { setError("Select an event first"); return; }
-                      setPlatterOrdersForEvent(selectedEventId, rows);
-                      setPlatterModalOpen(false);
-                    }}
-                    initialRows={selectedEventId ? getPlatterOrdersByEventId(selectedEventId) : []}
-                  />
-                )}
-              </div>
+                  initialRows={selectedEventId ? getPlatterOrdersByEventId(selectedEventId) : []}
+                />
+              </CollapsibleSubsection>
             </div>
           </div>
         </div>
-      ) : (
-        /* ── FULL SERVICE: Passed → Presented → Buffet Metal → China → Deli → Desserts → Platters → Stations ── */
+      ) : null}
+      {!isDelivery ? (
         <div style={{ gridColumn: "1 / -1", width: "100%", display: "flex", justifyContent: "center" }}>
           <div style={{ maxWidth: 640, width: "100%" }}>
       {/* Passed Appetizers — every item on its own row for speck: parent line then sauce/child line(s); specKey matches BEO print */}
@@ -3325,7 +2873,7 @@ export const MenuSection = ({
 
           </div>
         </div>
-      )}
+      ) : null}
 
       {/* ── Dressing Picker (pops up when salad selected in Buffet China) ── */}
       {showDressingPicker &&
@@ -3341,26 +2889,35 @@ export const MenuSection = ({
               justifyContent: "center",
               padding: "16px",
             }}
-            onClick={closeDressingPicker}
           >
             <div
               style={{
                 backgroundColor: "#1a1a1a",
                 borderRadius: "12px",
-                border: "2px solid #ff6b6b",
-                maxWidth: "600px",
+                border: "2px solid #3b82f6",
+                maxWidth: "540px",
                 width: "100%",
-                maxHeight: "80vh",
+                maxHeight: "82vh",
                 display: "flex",
                 flexDirection: "column",
                 overflow: "hidden",
               }}
               onClick={(e) => e.stopPropagation()}
             >
-              <div style={{ borderBottom: "1px solid #ff6b6b", padding: "16px", flexShrink: 0 }}>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "12px" }}>
-                  <h3 style={{ fontSize: "18px", fontWeight: "bold", color: "#e0e0e0", margin: 0 }}>Select Dressings</h3>
-                  <button onClick={closeDressingPicker} style={{ background: "none", border: "none", color: "#ff6b6b", fontSize: "24px", cursor: "pointer", fontWeight: "bold" }}>✕</button>
+              {/* Header */}
+              <div style={{ borderBottom: "1px solid rgba(59,130,246,0.4)", padding: "16px", flexShrink: 0 }}>
+                <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8 }}>
+                  <div>
+                    <h3 style={{ fontSize: "17px", fontWeight: "bold", color: "#e0e0e0", margin: 0 }}>
+                      Select Dressings
+                    </h3>
+                    {dressingSaladName && (
+                      <div style={{ fontSize: "12px", color: "#93c5fd", marginTop: 4 }}>
+                        for {dressingSaladName}
+                      </div>
+                    )}
+                  </div>
+                  <button onClick={closeDressingPicker} style={{ background: "none", border: "none", color: "#9ca3af", fontSize: "20px", cursor: "pointer", lineHeight: 1, flexShrink: 0 }}>✕</button>
                 </div>
                 <input
                   type="text"
@@ -3369,106 +2926,174 @@ export const MenuSection = ({
                   onChange={(e) => setDressingPickerSearch(e.target.value)}
                   style={{
                     width: "100%",
-                    padding: "10px",
+                    marginTop: "12px",
+                    padding: "9px 12px",
                     borderRadius: "6px",
-                    border: "1px solid #444",
-                    backgroundColor: "#2a2a2a",
+                    border: "1px solid #374151",
+                    backgroundColor: "#111827",
                     color: "#e0e0e0",
                     fontSize: "14px",
+                    boxSizing: "border-box",
                   }}
                   autoFocus
                 />
-                <div style={{ fontSize: "11px", color: "#999", marginTop: "8px" }}>
-                  {dressingFilteredItems.length} from menu
-                  {dressingCategoryFiltered.length === 0 && " — use common options below"}
-                </div>
+                {(pendingDressingIds.length + pendingDressingTexts.length) > 0 && (
+                  <div style={{ marginTop: 10, fontSize: "12px", color: "#93c5fd" }}>
+                    {pendingDressingIds.length + pendingDressingTexts.length} selected
+                  </div>
+                )}
               </div>
-              <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "16px" }}>
-                {dressingFilteredItems.map((item) => (
-                  <div
-                    key={item.id}
-                    onClick={() => addDressingItem(item.id)}
-                    style={{
-                      padding: "12px",
-                      marginBottom: "8px",
-                      backgroundColor: selections.buffetChina.includes(item.id) ? "#3a2a2a" : "#2a2a2a",
-                      border: "1px solid #444",
-                      borderRadius: "6px",
-                      cursor: "pointer",
-                      color: "#e0e0e0",
-                      transition: "all 0.2s",
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.backgroundColor = "#3a3a3a";
-                      e.currentTarget.style.borderColor = "#ff6b6b";
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.backgroundColor = selections.buffetChina.includes(item.id) ? "#3a2a2a" : "#2a2a2a";
-                      e.currentTarget.style.borderColor = "#444";
-                    }}
-                  >
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                      <span>{item.name}</span>
-                      {selections.buffetChina.includes(item.id) && (
-                        <span style={{ fontSize: "11px", color: "#22c55e" }}>✓ Added</span>
-                      )}
+
+              {/* Scrollable list */}
+              <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "12px 16px" }}>
+                {/* From menu (Dressing category) */}
+                {dressingFilteredItems.length > 0 && (
+                  <>
+                    <div style={{ fontSize: "11px", color: "#6b7280", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8 }}>
+                      From menu
                     </div>
-                  </div>
-                ))}
-                <div style={{ marginTop: 16, marginBottom: 8, fontSize: "12px", color: "#aaa", fontWeight: 600 }}>Common dressings (add to Buffet China)</div>
-                {(SALAD_BAR.dressingOptions as readonly string[]).map((name) => (
-                  <div
-                    key={name}
-                    onClick={() => addDressingOrSaladCustom(name)}
-                    style={{
-                      padding: "10px 12px",
-                      marginBottom: "6px",
-                      backgroundColor: "#2a2a2a",
-                      border: "1px solid #444",
-                      borderRadius: "6px",
-                      cursor: "pointer",
-                      color: "#e0e0e0",
-                      fontSize: "14px",
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.backgroundColor = "#3a3a3a";
-                      e.currentTarget.style.borderColor = "#ff6b6b";
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.backgroundColor = "#2a2a2a";
-                      e.currentTarget.style.borderColor = "#444";
-                    }}
-                  >
-                    {name}
-                  </div>
-                ))}
-                <div style={{ marginTop: 16, marginBottom: 8, fontSize: "12px", color: "#aaa", fontWeight: 600 }}>Common salads (add to Buffet China)</div>
-                {["Field of Greens Salad", "Tri-Colored Rotini Pasta Salad", "Seasonal Fruit Salad", "Wedge Salad", "Bruschetta Tortellini Pasta Salad", "Caesar Salad", "Greek Salad"].map((name) => (
-                  <div
-                    key={name}
-                    onClick={() => addDressingOrSaladCustom(name)}
-                    style={{
-                      padding: "10px 12px",
-                      marginBottom: "6px",
-                      backgroundColor: "#2a2a2a",
-                      border: "1px solid #444",
-                      borderRadius: "6px",
-                      cursor: "pointer",
-                      color: "#e0e0e0",
-                      fontSize: "14px",
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.backgroundColor = "#3a3a3a";
-                      e.currentTarget.style.borderColor = "#ff6b6b";
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.backgroundColor = "#2a2a2a";
-                      e.currentTarget.style.borderColor = "#444";
-                    }}
-                  >
-                    {name}
-                  </div>
-                ))}
+                    {dressingFilteredItems.map((item) => {
+                      const alreadyAdded = selections.buffetChina.includes(item.id);
+                      const isPending = pendingDressingIds.includes(item.id);
+                      const isActive = alreadyAdded || isPending;
+                      return (
+                        <div
+                          key={item.id}
+                          onClick={() => {
+                            if (alreadyAdded) return;
+                            setPendingDressingIds((prev) =>
+                              isPending ? prev.filter((x) => x !== item.id) : [...prev, item.id]
+                            );
+                          }}
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 10,
+                            padding: "10px 12px",
+                            marginBottom: "6px",
+                            backgroundColor: isActive ? "rgba(59,130,246,0.12)" : "#111827",
+                            border: `1px solid ${isActive ? "#3b82f6" : "#1f2937"}`,
+                            borderRadius: "8px",
+                            cursor: alreadyAdded ? "default" : "pointer",
+                            color: "#e0e0e0",
+                            transition: "all 0.15s",
+                          }}
+                        >
+                          <div style={{
+                            width: 18,
+                            height: 18,
+                            borderRadius: 4,
+                            border: `2px solid ${isActive ? "#3b82f6" : "#4b5563"}`,
+                            backgroundColor: isActive ? "#3b82f6" : "transparent",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            flexShrink: 0,
+                            fontSize: 11,
+                            color: "#fff",
+                            fontWeight: "bold",
+                          }}>
+                            {isActive && "✓"}
+                          </div>
+                          <span style={{ flex: 1, fontSize: 14 }}>{item.name}</span>
+                          {alreadyAdded && <span style={{ fontSize: "11px", color: "#22c55e" }}>Already added</span>}
+                        </div>
+                      );
+                    })}
+                  </>
+                )}
+
+                {/* Common dressings (hardcoded list) */}
+                {!dressingPickerSearch.trim() && (
+                  <>
+                    <div style={{ fontSize: "11px", color: "#6b7280", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", marginTop: dressingFilteredItems.length > 0 ? 16 : 0, marginBottom: 8 }}>
+                      Common options
+                    </div>
+                    {(SALAD_BAR.dressingOptions as readonly string[]).map((name) => {
+                      const isPending = pendingDressingTexts.includes(name);
+                      return (
+                        <div
+                          key={name}
+                          onClick={() =>
+                            setPendingDressingTexts((prev) =>
+                              isPending ? prev.filter((x) => x !== name) : [...prev, name]
+                            )
+                          }
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 10,
+                            padding: "10px 12px",
+                            marginBottom: "6px",
+                            backgroundColor: isPending ? "rgba(59,130,246,0.12)" : "#111827",
+                            border: `1px solid ${isPending ? "#3b82f6" : "#1f2937"}`,
+                            borderRadius: "8px",
+                            cursor: "pointer",
+                            color: "#e0e0e0",
+                            fontSize: "14px",
+                            transition: "all 0.15s",
+                          }}
+                        >
+                          <div style={{
+                            width: 18,
+                            height: 18,
+                            borderRadius: 4,
+                            border: `2px solid ${isPending ? "#3b82f6" : "#4b5563"}`,
+                            backgroundColor: isPending ? "#3b82f6" : "transparent",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            flexShrink: 0,
+                            fontSize: 11,
+                            color: "#fff",
+                            fontWeight: "bold",
+                          }}>
+                            {isPending && "✓"}
+                          </div>
+                          {name}
+                        </div>
+                      );
+                    })}
+                  </>
+                )}
+              </div>
+
+              {/* Footer with Done button */}
+              <div style={{ borderTop: "1px solid rgba(59,130,246,0.3)", padding: "14px 16px", display: "flex", gap: 10, flexShrink: 0 }}>
+                <button
+                  type="button"
+                  onClick={() => void confirmDressingSelection()}
+                  style={{
+                    flex: 1,
+                    padding: "11px",
+                    borderRadius: "8px",
+                    border: "none",
+                    backgroundColor: "#3b82f6",
+                    color: "#fff",
+                    fontSize: "15px",
+                    fontWeight: 600,
+                    cursor: "pointer",
+                  }}
+                >
+                  {(pendingDressingIds.length + pendingDressingTexts.length) > 0
+                    ? `Add ${pendingDressingIds.length + pendingDressingTexts.length} dressing${(pendingDressingIds.length + pendingDressingTexts.length) > 1 ? "s" : ""}`
+                    : "Skip / Done"}
+                </button>
+                <button
+                  type="button"
+                  onClick={closeDressingPicker}
+                  style={{
+                    padding: "11px 18px",
+                    borderRadius: "8px",
+                    border: "1px solid #374151",
+                    backgroundColor: "transparent",
+                    color: "#9ca3af",
+                    fontSize: "14px",
+                    cursor: "pointer",
+                  }}
+                >
+                  Cancel
+                </button>
               </div>
             </div>
           </div>,

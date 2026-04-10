@@ -1,18 +1,20 @@
 /**
- * Tasks API for FOH task management.
- * Airtable table fields: Task Name, Event, Task Type, Due Date, Status, Notes, Created At, Updated At.
- * Set VITE_AIRTABLE_TASKS_TABLE to your table ID. When unset, returns demo data.
+ * Tasks API — FoodWerx Tasks table (field IDs in `tasksSchema.ts`).
+ * Override table with VITE_AIRTABLE_TASKS_TABLE if needed.
  */
 
 import {
   airtableFetch,
-  airtableMetaFetch,
   getTasksTable,
   type AirtableListResponse,
   type AirtableRecord,
   type AirtableErrorResult,
 } from "./client";
 import { asString, asSingleSelectName, isErrorResult } from "./selectors";
+import {
+  getTasksFieldIdMap,
+  normalizeTaskTypeForAirtable,
+} from "./tasksSchema";
 
 export type TaskStatus = "Pending" | "Completed" | "Overdue" | "Due Today";
 
@@ -30,51 +32,8 @@ export type Task = {
   updatedAt: string;
 };
 
-const TASK_FIELD_NAMES = [
-  "Task Name",
-  "Event",
-  "Task Type",
-  "Due Date",
-  "Status",
-  "Notes",
-] as const;
-
-type AirtableTableSchema = {
-  id: string;
-  name: string;
-  fields: Array<{ id: string; name: string; type: string }>;
-};
-
-type AirtableTablesResponse = {
-  tables: AirtableTableSchema[];
-};
-
-let cachedTaskFieldIds: Record<string, string> | null | undefined = undefined;
-
-async function getTaskFieldIds(): Promise<Record<string, string> | null> {
-  if (cachedTaskFieldIds !== undefined) return cachedTaskFieldIds;
-  const tableId = getTasksTable();
-  if (!tableId) {
-    cachedTaskFieldIds = null;
-    return null;
-  }
-  const data = await airtableMetaFetch<AirtableTablesResponse>("");
-  if (isErrorResult(data)) {
-    cachedTaskFieldIds = null;
-    return null;
-  }
-  const table = data.tables.find((t) => t.id === tableId || t.name === tableId);
-  if (!table) {
-    cachedTaskFieldIds = null;
-    return null;
-  }
-  const byName = Object.fromEntries(table.fields.map((f) => [f.name, f.id]));
-  const ids: Record<string, string> = {};
-  for (const name of TASK_FIELD_NAMES) {
-    if (byName[name]) ids[name] = byName[name];
-  }
-  cachedTaskFieldIds = Object.keys(ids).length >= 4 ? ids : null;
-  return cachedTaskFieldIds;
+function getTaskFieldIds(): Record<string, string> {
+  return getTasksFieldIdMap();
 }
 
 function computeTaskStatus(dueDate: string, statusRaw: string): TaskStatus {
@@ -108,6 +67,9 @@ function recordToTask(
       ? eventIds
       : "";
 
+  const createdFromField = ids["Created At"] ? asString(f[ids["Created At"]]) : "";
+  const updatedFromField = ids["Updated At"] ? asString(f[ids["Updated At"]]) : "";
+
   return {
     id: record.id,
     taskId: record.id,
@@ -118,12 +80,12 @@ function recordToTask(
     dueDate,
     status: computeTaskStatus(dueDate, statusRaw),
     notes: asString(f[ids["Notes"]]) || "",
-    createdAt: record.createdTime ?? "",
-    updatedAt: record.lastModifiedTime ?? "",
+    createdAt: createdFromField || record.createdTime || "",
+    updatedAt: updatedFromField || record.lastModifiedTime || "",
   };
 }
 
-/** Demo tasks when table is not configured */
+/** Demo tasks when Tasks table id resolves empty (should not happen with default table id). */
 function getDemoTasks(eventId?: string): Task[] {
   const today = new Date().toISOString().slice(0, 10);
   const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
@@ -134,7 +96,7 @@ function getDemoTasks(eventId?: string): Task[] {
       taskId: "demo_task_1",
       eventId: eventId || "recDemo1",
       taskName: "Follow up on questionnaire",
-      taskType: "Follow-up",
+      taskType: "Questionnaire Follow-Up",
       dueDate: yesterday,
       status: "Overdue",
       notes: "",
@@ -146,7 +108,7 @@ function getDemoTasks(eventId?: string): Task[] {
       taskId: "demo_task_2",
       eventId: eventId || "recDemo1",
       taskName: "Send proposal package",
-      taskType: "Follow-up",
+      taskType: "General Follow-Up",
       dueDate: today,
       status: "Due Today",
       notes: "",
@@ -158,7 +120,7 @@ function getDemoTasks(eventId?: string): Task[] {
       taskId: "demo_task_3",
       eventId: eventId || "recDemo1",
       taskName: "Get guest count from client",
-      taskType: "BEO Missing",
+      taskType: "Missing BEO Field",
       dueDate: tomorrow,
       status: "Pending",
       notes: "",
@@ -175,16 +137,12 @@ export async function loadTasksForEvent(eventId: string): Promise<Task[] | Airta
     return getDemoTasks(eventId).filter((t) => t.status !== "Completed");
   }
 
-  const ids = await getTaskFieldIds();
-  if (!ids) {
-    return { error: true, message: "Could not resolve task field IDs. Ensure table has: Task Name, Event, Task Type, Due Date, Status, Notes." };
-  }
-
+  const ids = getTaskFieldIds();
   const params = new URLSearchParams();
   params.set("pageSize", "100");
   params.set("cellFormat", "json");
   params.set("returnFieldsByFieldId", "true");
-  Object.values(ids).forEach((id) => params.append("fields[]", id));
+  Object.values(ids).forEach((fid) => params.append("fields[]", fid));
 
   const data = await airtableFetch<AirtableListResponse<Record<string, unknown>>>(
     `/${tableId}?${params.toString()}`
@@ -194,7 +152,7 @@ export async function loadTasksForEvent(eventId: string): Promise<Task[] | Airta
   }
 
   const tasks = (data.records ?? [])
-    .map((r) => recordToTask(r, ids))
+    .map((r) => recordToTask(r as AirtableRecordWithTimestamps, ids))
     .filter((t) => t.eventId === eventId && t.status !== "Completed");
   return tasks;
 }
@@ -211,11 +169,7 @@ export async function loadTodaysTasks(
     return demos;
   }
 
-  const ids = await getTaskFieldIds();
-  if (!ids) {
-    return { error: true, message: "Could not resolve task field IDs. Ensure table has: Task Name, Event, Task Type, Due Date, Status, Notes." };
-  }
-
+  const ids = getTaskFieldIds();
   const today = new Date().toISOString().slice(0, 10);
   const params = new URLSearchParams();
   params.set("pageSize", "100");
@@ -225,7 +179,7 @@ export async function loadTodaysTasks(
     "filterByFormula",
     `AND(DATESTR({Due Date}) = "${today}", OR({Status} = "Pending", {Status} = ""))`
   );
-  Object.values(ids).forEach((id) => params.append("fields[]", id));
+  Object.values(ids).forEach((fid) => params.append("fields[]", fid));
 
   const data = await airtableFetch<AirtableListResponse<Record<string, unknown>>>(
     `/${tableId}?${params.toString()}`
@@ -235,7 +189,7 @@ export async function loadTodaysTasks(
   }
 
   return (data.records ?? []).map((r) => {
-    const t = recordToTask(r, ids);
+    const t = recordToTask(r as AirtableRecordWithTimestamps, ids);
     if (eventNamesById && t.eventId) {
       t.eventName = eventNamesById[t.eventId];
     }
@@ -249,14 +203,14 @@ export async function createTask(params: {
   taskName: string;
   taskType?: string;
   dueDate: string;
-  status?: "Pending" | "Completed";
+  status?: "Pending" | "Completed" | "Overdue";
   notes?: string;
 }): Promise<{ id: string } | AirtableErrorResult> {
   const tableId = getTasksTable();
   if (!tableId) return { error: true, message: "Tasks table not configured" };
 
-  const ids = await getTaskFieldIds();
-  if (!ids) return { error: true, message: "Could not resolve task field IDs" };
+  const ids = getTaskFieldIds();
+  const taskTypeNorm = normalizeTaskTypeForAirtable(params.taskType);
 
   const fields: Record<string, unknown> = {
     [ids["Task Name"]]: params.taskName,
@@ -264,11 +218,11 @@ export async function createTask(params: {
     [ids["Due Date"]]: params.dueDate,
     [ids["Status"]]: params.status ?? "Pending",
   };
-  if (ids["Task Type"] && params.taskType) {
-    fields[ids["Task Type"]] = params.taskType;
+  if (taskTypeNorm) {
+    fields[ids["Task Type"]] = taskTypeNorm;
   }
-  if (ids["Notes"] && params.notes) {
-    fields[ids["Notes"]] = params.notes;
+  if (params.notes?.trim()) {
+    fields[ids["Notes"]] = params.notes.trim();
   }
 
   const result = await airtableFetch<AirtableListResponse<Record<string, unknown>>>(
@@ -287,13 +241,12 @@ export async function createTask(params: {
 /** Update a task */
 export async function updateTask(
   taskId: string,
-  updates: { status?: "Pending" | "Completed"; dueDate?: string; notes?: string }
+  updates: { status?: "Pending" | "Completed" | "Overdue"; dueDate?: string; notes?: string }
 ): Promise<{ success: true } | AirtableErrorResult> {
   const tableId = getTasksTable();
   if (!tableId) return { error: true, message: "Tasks table not configured" };
 
-  const ids = await getTaskFieldIds();
-  if (!ids) return { error: true, message: "Could not resolve task field IDs" };
+  const ids = getTaskFieldIds();
 
   const fields: Record<string, unknown> = {};
   if (updates.status !== undefined) fields[ids["Status"]] = updates.status;

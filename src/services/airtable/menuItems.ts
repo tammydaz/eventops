@@ -2,7 +2,9 @@ import { airtableFetch, getMenuItemsTable, type AirtableErrorResult } from "./cl
 import { isErrorResult, asLinkedRecordIds } from "./selectors";
 import { cleanDisplayName } from "../../utils/displayName";
 import { CATEGORY_MAP } from "../../constants/menuCategories";
+import { isClassicCorporateSandwichMenuName } from "../../config/boxedLunchCorporateCatering";
 import {
+  LEGACY_MENU_ITEMS_BOXED_LUNCH_CATEGORY_FIELD_ID,
   buildMenuLabCategoryFormula,
   buildMenuLabChaferHotBuffetFormula,
   buildMenuLabExecutionOrFormula,
@@ -11,6 +13,9 @@ import {
   DELIVERY_INTAKE_SECTIONS,
   getMenuCatalogFieldIds,
   isMenuLabCatalog,
+  LEGACY_MENU_ITEMS_BOXED_LUNCH_CATEGORY_FILTER_NAME,
+  LEGACY_MENU_ITEMS_BOX_LUNCH_TYPE_FIELD_ID,
+  LEGACY_MENU_ITEMS_BOX_LUNCH_TYPE_FILTER_NAME,
   LEGACY_MENU_ITEMS_TABLE_ID,
   parseExecutionTokensFromCatalogFields,
 } from "./menuCatalogConfig";
@@ -30,31 +35,58 @@ const LEGACY_BOXED_LUNCH_BOX_FORMULA =
 
 const LEGACY_MENU_NAME_FIELD = "fldW5gfSlHRTl01v1";
 const LEGACY_MENU_CHILD_FIELD = "fldIu6qmlUwAEn2W9";
+const LEGACY_MENU_CATEGORY_FIELD = "fldM7lWvjH8S0YNSX";
+const LEGACY_MENU_SERVICE_TYPE_FIELD = "fld2EhDP5GRalZJzQ";
+const LEGACY_MENU_SECTION_FIELD = "fldwl2KIn0xOW1TR3";
+const LEGACY_MENU_VESSEL_FIELD = "fldZCnfKzWijIDaeV";
+
+export type LegacyMenuItemsFetchResult = {
+  rows: MenuItemRecord[];
+  /** Set when the list-records API fails (422 formula, network, etc.) — not used for “zero matching rows”. */
+  airtableError: string | null;
+};
+
+type LegacyMenuItemsQueryResult = LegacyMenuItemsFetchResult & {
+  records: Array<{ id: string; fields: Record<string, unknown> }>;
+};
 
 /**
  * Always reads **legacy** Menu Items — same table the shadow "Catalog Item" and boxed-lunch orders use.
- * Use for category pickers, boxed-lunch sandwiches, and box templates regardless of VITE_AIRTABLE_MENU_ITEMS_TABLE.
+ * Surfaces API failures via `airtableError` instead of returning an empty list with no explanation.
  */
-async function fetchLegacyMenuItemsByFilterFormula(filterByFormula: string): Promise<MenuItemRecord[]> {
+async function legacyMenuItemsQuery(opts: {
+  filterByFormula?: string;
+  extraFieldIds?: string[];
+}): Promise<LegacyMenuItemsQueryResult> {
   const tableId = MENU_ITEMS_TABLE_ID_DEFAULT;
   const allRecords: Array<{ id: string; fields: Record<string, unknown> }> = [];
   let offset: string | undefined;
+  let airtableError: string | null = null;
+  const fieldIds = [...new Set([LEGACY_MENU_NAME_FIELD, LEGACY_MENU_CHILD_FIELD, ...(opts.extraFieldIds ?? [])])];
+
   do {
     const params = new URLSearchParams();
-    params.set("filterByFormula", filterByFormula);
     params.set("pageSize", "100");
     params.set("returnFieldsByFieldId", "true");
-    params.append("fields[]", LEGACY_MENU_NAME_FIELD);
-    params.append("fields[]", LEGACY_MENU_CHILD_FIELD);
+    if (opts.filterByFormula) params.set("filterByFormula", opts.filterByFormula);
+    for (const fieldId of fieldIds) params.append("fields[]", fieldId);
     if (offset) params.set("offset", offset);
     const data = await airtableFetch<{
       records?: Array<{ id: string; fields: Record<string, unknown> }>;
       offset?: string;
     }>(`/${tableId}?${params.toString()}`);
-    if (isErrorResult(data) || !data?.records) break;
+    if (isErrorResult(data)) {
+      airtableError = data.message ?? "Airtable request failed";
+      break;
+    }
+    if (!data?.records) break;
     allRecords.push(...data.records);
     offset = data.offset;
   } while (offset);
+
+  if (airtableError) {
+    return { rows: [], airtableError, records: [] };
+  }
 
   const idToName: Record<string, string> = {};
   for (const rec of allRecords) {
@@ -89,12 +121,94 @@ async function fetchLegacyMenuItemsByFilterFormula(filterByFormula: string): Pro
     }
   }
 
-  return allRecords.map((rec) => {
+  const rows = allRecords.map((rec) => {
     const name = idToName[rec.id] ?? rec.id;
     const childIds = asLinkedRecordIds(rec.fields[LEGACY_MENU_CHILD_FIELD]).filter((id) => id.startsWith("rec"));
     const childItems = childIds.map((cid) => idToName[cid]).filter(Boolean);
     return { id: rec.id, name, childItems: childItems.length > 0 ? childItems : undefined };
   });
+  return { rows, airtableError: null, records: allRecords };
+}
+
+async function legacyMenuItemsFromFilterFormula(filterByFormula: string): Promise<LegacyMenuItemsFetchResult> {
+  const { rows, airtableError } = await legacyMenuItemsQuery({ filterByFormula });
+  return { rows, airtableError };
+}
+
+function readSingleSelectName(raw: unknown): string {
+  if (typeof raw === "string") return raw.trim();
+  if (raw && typeof raw === "object" && "name" in raw) {
+    return String((raw as { name?: unknown }).name ?? "").trim();
+  }
+  return "";
+}
+
+async function fetchLegacyMenuItemsByExactFieldValues(
+  expectedFieldValues: Record<string, string>
+): Promise<LegacyMenuItemsFetchResult> {
+  const fieldIds = Object.keys(expectedFieldValues).filter(Boolean);
+  if (fieldIds.length === 0) return { rows: [], airtableError: null };
+
+  const { rows, airtableError, records } = await legacyMenuItemsQuery({ extraFieldIds: fieldIds });
+  if (airtableError) return { rows: [], airtableError };
+
+  const matchedIds = new Set(
+    records
+      .filter((rec) =>
+        fieldIds.every((fieldId) => {
+          const actual = readSingleSelectName(rec.fields[fieldId]).toLowerCase();
+          const expected = expectedFieldValues[fieldId]?.trim().toLowerCase() ?? "";
+          return actual === expected;
+        })
+      )
+      .map((rec) => rec.id)
+  );
+
+  return {
+    rows: rows.filter((row) => matchedIds.has(row.id)),
+    airtableError: null,
+  };
+}
+
+async function fetchClassicBoxedLunchSandwichesByNameFallback(): Promise<LegacyMenuItemsFetchResult> {
+  const { rows, airtableError } = await legacyMenuItemsQuery({});
+  if (airtableError) return { rows: [], airtableError };
+  return {
+    rows: rows.filter((row) => isClassicCorporateSandwichMenuName(row.name)),
+    airtableError: null,
+  };
+}
+
+function buildLegacyCategoryOrFormula(categories: readonly string[]): string {
+  const orParts = categories.map((cat) => {
+    const escaped = String(cat).replace(/"/g, '\\"');
+    return `{Category}="${escaped}"`;
+  });
+  return `OR(${orParts.join(",")})`;
+}
+
+async function fetchLegacyMenuItemsByCategoryFilter(
+  categories: readonly string[],
+  keep: (fields: Record<string, unknown>) => boolean
+): Promise<MenuItemRecord[]> {
+  const filterByFormula = buildLegacyCategoryOrFormula(categories);
+  const { rows, airtableError, records } = await legacyMenuItemsQuery({
+    filterByFormula,
+    extraFieldIds: [
+      LEGACY_MENU_CATEGORY_FIELD,
+      LEGACY_MENU_SERVICE_TYPE_FIELD,
+      LEGACY_MENU_SECTION_FIELD,
+      LEGACY_MENU_VESSEL_FIELD,
+    ],
+  });
+  if (airtableError) return [];
+  const allowedIds = new Set(records.filter((rec) => keep(rec.fields)).map((rec) => rec.id));
+  return rows.filter((row) => allowedIds.has(row.id));
+}
+
+async function fetchLegacyMenuItemsByFilterFormula(filterByFormula: string): Promise<MenuItemRecord[]> {
+  const { rows } = await legacyMenuItemsFromFilterFormula(filterByFormula);
+  return rows;
 }
 
 /** Loads rows from `getMenuItemsTable()` matching `filterByFormula`. Menu_Lab: no Test Status filter. */
@@ -205,8 +319,7 @@ export type BoxLunchTypeValue = "Classic Sandwich" | "Gourmet Sandwich" | "Wrap"
 
 /**
  * Fetch sandwich / wrap rows for the boxed-lunch picker.
- * Always uses **legacy** `{Box Lunch Type}` (Classic Sandwich | Gourmet Sandwich | Wrap).
- * Menu_Lab name-guessing is not used — it mixed wrong items when the catalog pointed at Menu_Lab.
+ * Legacy Menu Items (`tbl0aN33DGG6R1sPZ`) + `{Box Lunch Type field id} = "…"`.
  */
 export async function fetchMenuItemsByBoxLunchType(
   boxLunchType: BoxLunchTypeValue
@@ -217,8 +330,56 @@ export async function fetchMenuItemsByBoxLunchType(
     return [];
   }
   const escaped = String(boxLunchType).replace(/\\/g, "\\\\").replace(/"/g, '\\"');
-  const filterByFormula = `{Box Lunch Type} = "${escaped}"`;
+  const typeName = LEGACY_MENU_ITEMS_BOX_LUNCH_TYPE_FILTER_NAME;
+  const filterByFormula = `{${typeName}} = "${escaped}"`;
+  const rows = await fetchLegacyMenuItemsByFilterFormula(filterByFormula);
+  if (rows.length > 0) return rows;
+  const fallback = await fetchLegacyMenuItemsByExactFieldValues({
+    [LEGACY_MENU_ITEMS_BOX_LUNCH_TYPE_FIELD_ID]: boxLunchType,
+  });
+  return fallback.rows;
+}
+
+/**
+ * Fetch legacy Menu Items where `{fieldName} = categoryValue`.
+ * **Important:** `fieldName` must be the Airtable column title; Web API `filterByFormula` does not accept `fld…` ids.
+ */
+export async function fetchMenuItemsByBoxedLunchCategoryFieldId(
+  fieldName: string,
+  categoryValue: string
+): Promise<MenuItemRecord[]> {
+  const fname = fieldName.trim();
+  const t = categoryValue.trim();
+  if (!fname || !t) return [];
+  const escaped = t.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+  const filterByFormula = `{${fname}} = "${escaped}"`;
   return fetchLegacyMenuItemsByFilterFormula(filterByFormula);
+}
+
+/**
+ * Classic (Super Saver) boxed lunch sandwiches — legacy Menu Items `tbl0aN33DGG6R1sPZ` only.
+ * Strict: `{Boxed Lunch Category} = "Classic"` AND `{Box Lunch Type} = "Classic Sandwich"` (Airtable field **names** in filterByFormula).
+ * Item labels use `fldW5gfSlHRTl01v1` via `returnFieldsByFieldId`.
+ */
+export async function fetchClassicBoxedLunchSandwichesByCategory(): Promise<LegacyMenuItemsFetchResult> {
+  const catName = LEGACY_MENU_ITEMS_BOXED_LUNCH_CATEGORY_FILTER_NAME;
+  const typeName = LEGACY_MENU_ITEMS_BOX_LUNCH_TYPE_FILTER_NAME;
+  const cat = "Classic".replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+  const typ = "Classic Sandwich".replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+  const filterByFormula = `AND({${catName}} = "${cat}", {${typeName}} = "${typ}")`;
+  const primary = await legacyMenuItemsFromFilterFormula(filterByFormula);
+  if (primary.rows.length > 0) return primary;
+
+  const fallback = await fetchLegacyMenuItemsByExactFieldValues({
+    [LEGACY_MENU_ITEMS_BOXED_LUNCH_CATEGORY_FIELD_ID]: "Classic",
+    [LEGACY_MENU_ITEMS_BOX_LUNCH_TYPE_FIELD_ID]: "Classic Sandwich",
+  });
+  if (fallback.rows.length > 0) return fallback;
+
+  const byName = await fetchClassicBoxedLunchSandwichesByNameFallback();
+  if (byName.rows.length > 0) return byName;
+
+  return primary.airtableError ? primary : fallback;
 }
 
 /** Sentinel: cold display picker — each item carries `routeTargetField` (buffetChina | roomTempDisplay | desserts). */
@@ -293,8 +454,9 @@ export async function fetchDeliveryMenuPickerItems(pickerType: string): Promise<
   if (pickerType.startsWith("delivery_intake_")) {
     const sectionId = pickerType.replace("delivery_intake_", "");
     const section = DELIVERY_INTAKE_SECTIONS.find((s) => s.id === sectionId);
-    if (section) return fetchDeliveryIntakeItems(section.menuSectionTags);
-    return [];
+    if (!section) return [];
+    if (isMenuLabCatalog()) return fetchDeliveryIntakeItems(section.menuSectionTags);
+    return fetchLegacyDeliveryIntakeItems(section.legacyCategoryValues, section.legacyRouteTarget);
   }
   if (pickerType === "delivery_chafer_hot") {
     return fetchChaferExecutionPickerItems(["CHAFER HOT"]);
@@ -434,7 +596,21 @@ export function routeTargetFieldFromExecutionTokens(tokens: string[]): string {
 }
 
 /**
- * Fetch delivery intake items by Menu Section tags.
+ * Legacy fallback for delivery intake pickers.
+ * Queries the Legacy Menu Items table by Category field values and stamps every
+ * returned item with a fixed routeTargetField so the shadow-row save lane is correct.
+ */
+async function fetchLegacyDeliveryIntakeItems(
+  categoryValues: readonly string[],
+  routeTarget: string
+): Promise<MenuItemRecordWithTargetField[]> {
+  if (categoryValues.length === 0) return [];
+  const items = await fetchLegacyMenuItemsByCategoryFilter(categoryValues, () => true);
+  return items.map((it) => ({ ...it, routeTargetField: routeTarget }));
+}
+
+/**
+ * Fetch delivery intake items by Menu Section tags (Menu_Lab only).
  * Each returned item includes `routeTargetField` derived from its Execution Type,
  * and `menuSectionTags` for optional sub-grouping in the picker UI.
  */
@@ -710,16 +886,62 @@ export async function fetchExecutionTokensByMenuItemIds(ids: string[]): Promise<
  * so pickers must return legacy record IDs — never Menu_Lab IDs.
  */
 export async function fetchMenuItemsByCategory(categoryKey: string): Promise<MenuItemRecord[]> {
+  if (categoryKey === "passed") {
+    return fetchLegacyMenuItemsByCategoryFilter(
+      ["Passed App", "Presented App", "Appetizer", "Passed", "App"],
+      (fields) => {
+        const category = readSingleSelectName(fields[LEGACY_MENU_CATEGORY_FIELD]);
+        const serviceType = readSingleSelectName(fields[LEGACY_MENU_SERVICE_TYPE_FIELD]);
+        const menuSection = readSingleSelectName(fields[LEGACY_MENU_SECTION_FIELD]);
+        const vessel = readSingleSelectName(fields[LEGACY_MENU_VESSEL_FIELD]);
+
+        if (["Passed App", "Passed", "App"].includes(category)) return true;
+        if (category === "Presented App" || ["Station Item", "Station"].includes(category)) return false;
+        if (menuSection === "Passed Apps" || serviceType === "Passed App") return true;
+        if (category === "Appetizer") {
+          return !(menuSection === "Presented Apps" || serviceType === "Room Temp Display" || vessel.startsWith("China"));
+        }
+        return false;
+      }
+    );
+  }
+
+  if (categoryKey === "presented") {
+    return fetchLegacyMenuItemsByCategoryFilter(
+      ["Presented App", "Appetizer", "Display"],
+      (fields) => {
+        const category = readSingleSelectName(fields[LEGACY_MENU_CATEGORY_FIELD]);
+        const serviceType = readSingleSelectName(fields[LEGACY_MENU_SERVICE_TYPE_FIELD]);
+        const menuSection = readSingleSelectName(fields[LEGACY_MENU_SECTION_FIELD]);
+        const vessel = readSingleSelectName(fields[LEGACY_MENU_VESSEL_FIELD]);
+
+        if (["Presented App", "Display"].includes(category)) return true;
+        if (menuSection === "Presented Apps" || serviceType === "Room Temp Display") return true;
+        if (category === "Appetizer") {
+          return menuSection === "Presented Apps" || serviceType === "Room Temp Display" || vessel.startsWith("China");
+        }
+        return false;
+      }
+    );
+  }
+
+  if (categoryKey === "room_temp" || categoryKey === "displays") {
+    return fetchLegacyMenuItemsByCategoryFilter(
+      ["Room Temp Display", "Display", "Buffet China"],
+      (fields) => {
+        const category = readSingleSelectName(fields[LEGACY_MENU_CATEGORY_FIELD]);
+        const serviceType = readSingleSelectName(fields[LEGACY_MENU_SERVICE_TYPE_FIELD]);
+        return category === "Display" || serviceType === "Room Temp Display";
+      }
+    );
+  }
+
   const allowedCategories = CATEGORY_MAP[categoryKey as keyof typeof CATEGORY_MAP];
   if (!allowedCategories?.length) {
     return [];
   }
 
-  const orParts = allowedCategories.map((cat) => {
-    const escaped = String(cat).replace(/"/g, '\\"');
-    return `FIND("${escaped}", {Category})`;
-  });
-  const filterByFormula = `OR(${orParts.join(",")})`;
+  const filterByFormula = buildLegacyCategoryOrFormula(allowedCategories);
   return fetchLegacyMenuItemsByFilterFormula(filterByFormula);
 }
 
