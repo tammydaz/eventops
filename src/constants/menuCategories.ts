@@ -28,6 +28,8 @@ export const CATEGORY_MAP: Record<string, string[]> = {
     "Full Service Hot Lunch", "Happy Hour",
     // Hot breakfast items for full-service morning events
     "Hot Breakfast",
+    // Delivery-style hot lunches available for full-service too
+    "Hot Lunch Delivery",
   ],
   buffet_china: [
     "Buffet China", "Salad", "Bread", "Side",
@@ -37,6 +39,8 @@ export const CATEGORY_MAP: Record<string, string[]> = {
     "Classic Salad", "Signature Salad",
     // Cold breakfast items for full-service morning events
     "Breakfast Room Temp",
+    // Snack/break displays available for full-service events
+    "Snack",
   ],
 
   desserts: ["Dessert", "Dessert/Metal", "Dessert/China", "Dessert (Display)", "Dessert (Individual)"],
@@ -44,7 +48,8 @@ export const CATEGORY_MAP: Record<string, string[]> = {
   dressing:     ['Dressing'],
   deli: [
     "Deli/Sandwhiches", "Deli/Breads", "Deli/Sandwiches", "Deli",
-    // Lunch presentations, salad stands, sandwich builders, etc.
+    // Gourmet sandwiches, wraps, panini, hoagies (lunch presentations)
+    "Gourmet Sandwich", "Classic Sandwich", "Wrap", "Panini", "Hoagie",
   ],
   room_temp: ["Room Temp Display", "Display", "Buffet China", "Ambient Display"],
   displays:     ['Display', 'Buffet China', 'Ambient Display'],
