@@ -55,6 +55,8 @@ import {
 import { fetchMenuItemChildren, fetchMenuItemsByCategory } from "../services/airtable/menuItems";
 import { CreationStationContent, MenuSection } from "../components/beo-intake/MenuSection";
 import { DeliveryIntakeMenuAddRow } from "../components/beo-intake/DeliveryIntakeMenuAddRow";
+import { DeliveryPackageConfigModal } from "../components/beo-intake/DeliveryPackageConfigModal";
+import { getDeliveryPackagePreset, type DeliveryPackagePreset } from "../config/deliveryPackagePresets";
 import { BoxedLunchSection } from "../components/beo-intake/BoxedLunchSection";
 import { SandwichPlatterConfigModal } from "../components/beo-intake/SandwichPlatterConfigModal";
 import {
@@ -138,6 +140,7 @@ export const BeoIntakePage = () => {
   const [bohIds, setBohIds] = useState<Awaited<ReturnType<typeof getBOHProductionFieldIds>>>(null);
   const [showSendToBOHModal, setShowSendToBOHModal] = useState(false);
   const [showMissingFieldsModal, setShowMissingFieldsModal] = useState(false);
+  const [pendingPackageItem, setPendingPackageItem] = useState<{ id: string; name: string; routeTargetField: string; preset: DeliveryPackagePreset } | null>(null);
   const [dressingPickerSalad, setDressingPickerSalad] = useState<{ id: string; name: string; shadowRowId: string } | null>(null);
   const [dressingPickerItems, setDressingPickerItems] = useState<{ id: string; name: string }[]>([]);
   const [dressingPickerSearch, setDressingPickerSearch] = useState("");
@@ -606,6 +609,15 @@ export const BeoIntakePage = () => {
         return;
       }
 
+      // For delivery intake items: check if this is a choice package → show selection modal first
+      if (storeTarget === DELIVERY_INTAKE_TARGET_FIELD) {
+        const preset = getDeliveryPackagePreset(item.name);
+        if (preset) {
+          setPendingPackageItem({ id: item.id, name: item.name, routeTargetField: targetField, preset });
+          return;
+        }
+      }
+
       const createResult = await createEventMenuRow(selectedEventId, mappedSection, item.id);
       if (createResult && "error" in createResult) {
         console.error("[handlePickerAdd] createEventMenuRow failed:", createResult);
@@ -659,6 +671,44 @@ export const BeoIntakePage = () => {
       }
     },
     [selectedEventId, loadShadowMenu, loadEventData]
+  );
+
+  /** Called when staff completes the DeliveryPackageConfigModal. Creates the shadow row then saves picks as customText. */
+  const handlePackageConfirm = useCallback(
+    async (customLines: string[]) => {
+      if (!pendingPackageItem || !selectedEventId) { setPendingPackageItem(null); return; }
+      const { id, name, routeTargetField, preset } = pendingPackageItem;
+      setPendingPackageItem(null);
+      const mappedSection = targetFieldToSection(routeTargetField);
+      if (!mappedSection) return;
+      const createResult = await createEventMenuRow(selectedEventId, mappedSection, id);
+      if (createResult && "error" in createResult) {
+        console.error("[handlePackageConfirm] createEventMenuRow failed:", createResult);
+        return;
+      }
+      const newRowId = (createResult as { id: string }).id;
+      const customText = customLines.join("\n");
+      if (customText) await updateEventMenuRow(newRowId, { customText });
+      const newRow: EventMenuRow & { catalogItemName: string; components?: EventMenuRowComponent[] } = {
+        id: newRowId,
+        section: mappedSection,
+        sortOrder: 0,
+        catalogItemId: id,
+        displayName: null,
+        customText: customText || null,
+        sauceOverride: null,
+        packOutNotes: null,
+        parentItemId: null,
+        childOverrides: null,
+        catalogItemName: name,
+        components: [],
+      };
+      setShadowMenuRows((prev) => [...prev, newRow]);
+      await syncShadowToEvent(selectedEventId, { injectedRows: [{ section: mappedSection, catalogItemId: id }] });
+      await loadShadowMenu({ retryIfEmpty: true });
+      await loadEventData(selectedEventId);
+    },
+    [pendingPackageItem, selectedEventId, loadShadowMenu, loadEventData]
   );
 
   const handlePickerRemove = useCallback(
@@ -1403,6 +1453,17 @@ export const BeoIntakePage = () => {
           <MenuPickerModal onAdd={handlePickerAdd} onRemove={handlePickerRemove} alreadyAddedIds={pickerAlreadyAddedIds} alreadyAddedNames={pickerAlreadyAddedNames} />
         </div>
       </div>
+
+      {/* ── Delivery Package Config Modal (choice packages: "It's Your Choice Breakfast", platters, etc.) ── */}
+      {pendingPackageItem && createPortal(
+        <DeliveryPackageConfigModal
+          preset={pendingPackageItem.preset}
+          itemName={pendingPackageItem.name}
+          onConfirm={handlePackageConfirm}
+          onCancel={() => setPendingPackageItem(null)}
+        />,
+        document.body
+      )}
 
       {/* ── Dressing Picker (auto-opens when a salad is added to Buffet China) ── */}
       {dressingPickerSalad && createPortal(
