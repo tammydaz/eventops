@@ -49,12 +49,13 @@ type BevRowDef = {
 };
 
 const BEV_ROWS: BevRowDef[] = [
-  { key: "oj",         label: "Orange Juice",           printLabel: "Orange Juice"                   },
-  { key: "coffee_reg", label: "Coffee - Reg (boxes)",   printLabel: "Coffee Regular Boxes"           },
-  { key: "coffee_dec", label: "Coffee - Decaf (boxes)", printLabel: "Coffee Decaf Boxes"             },
-  { key: "soda_cans",  label: "Soda Cans (Assorted)",   printLabel: "Cold Assorted Soda Cans"        },
-  { key: "iced_tea",   label: "Iced Tea Bottles",       printLabel: "Cold Assorted Iced Tea Bottles" },
-  { key: "water",      label: "Water Bottles",          printLabel: "Water Bottles"                  },
+  { key: "oj",          label: "Orange Juice",                    printLabel: "Orange Juice"                        },
+  { key: "coffee_reg",  label: "Coffee - Reg (boxes)",            printLabel: "Coffee Regular Boxes"                },
+  { key: "coffee_dec",  label: "Coffee - Decaf (boxes)",          printLabel: "Coffee Decaf Boxes"                  },
+  { key: "coffee_setup", label: "☕ Coffee Setup",                printLabel: "Coffee Setup (sweetener, stirrers & creamers)" },
+  { key: "soda_cans",   label: "Soda Cans (Assorted)",            printLabel: "Cold Assorted Soda Cans"             },
+  { key: "iced_tea",    label: "Iced Tea Bottles",                printLabel: "Cold Assorted Iced Tea Bottles"      },
+  { key: "water",       label: "Water Bottles",                   printLabel: "Water Bottles"                       },
   {
     key: "infused_water",
     label: "Infused Water",
@@ -162,7 +163,7 @@ function mapBevChoicesFromSaved(saved: Record<string, number>): Record<string, s
 
 const GUEST_COUNT_BUFFER = 15;
 
-function autoFillPaperQtys(guestCount: number): Record<string, number | null> {
+function autoFillPaperQtys(guestCount: number, hasCoffee = false): Record<string, number | null> {
   const n = Math.max(0, guestCount) + GUEST_COUNT_BUFFER;
   return {
     bowls: null,
@@ -171,7 +172,7 @@ function autoFillPaperQtys(guestCount: number): Record<string, number | null> {
     forks: n,
     teaspoons: Math.ceil(n * 0.25),
     knives: n,
-    coffee_cups: null,
+    coffee_cups: hasCoffee ? n : null,
     dinner_napkins: Math.round(n * 1.5),
     tongs: null,
     serving_spoons: null,
@@ -304,6 +305,19 @@ export const DeliveryPaperProductsSection = ({
     const t = setTimeout(() => saveToAirtable(paperNeeded, beveragesIncluded, paperQtys, bevQtys, bevChoices), 600);
     return () => clearTimeout(t);
   }, [selectedEventId, paperNeeded, beveragesIncluded, paperQtys, bevQtys, bevChoices, saveToAirtable]);
+
+  // Auto-count coffee cups + add Coffee Setup when coffee boxes are entered
+  useEffect(() => {
+    if (!hasLoadedRef.current) return;
+    const hasCoffee = (bevQtys.coffee_reg ?? 0) > 0 || (bevQtys.coffee_dec ?? 0) > 0;
+    if (!hasCoffee) return;
+    const n = Math.max(0, guestCount) + GUEST_COUNT_BUFFER;
+    // Reveal and fill coffee cups if not already set
+    setPaperQtys((prev) => (prev.coffee_cups ? prev : { ...prev, coffee_cups: n }));
+    setShowOptional((prev) => ({ ...prev, coffee_cups: true }));
+    // Auto-add Coffee Setup (qty 1) if not already set
+    setBevQtys((prev) => (prev.coffee_setup ? prev : { ...prev, coffee_setup: 1 }));
+  }, [bevQtys.coffee_reg, bevQtys.coffee_dec, guestCount]);
 
   const updatePaper = (key: string, qty: number | null) =>
     setPaperQtys((prev) => ({ ...prev, [key]: qty }));
@@ -508,7 +522,12 @@ export const DeliveryPaperProductsSection = ({
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14, flexWrap: "wrap" }}>
         <button
           type="button"
-          onClick={() => { setPaperQtys(autoFillPaperQtys(guestCount)); setPaperNeeded("yes"); }}
+          onClick={() => {
+            const hasCoffee = (bevQtys.coffee_reg ?? 0) > 0 || (bevQtys.coffee_dec ?? 0) > 0;
+            setPaperQtys(autoFillPaperQtys(guestCount, hasCoffee));
+            setPaperNeeded("yes");
+            if (hasCoffee) setShowOptional((prev) => ({ ...prev, coffee_cups: true }));
+          }}
           style={{
             padding: "7px 14px",
             borderRadius: 7,
