@@ -623,6 +623,23 @@ export async function fetchMenuItemByExactName(name: string): Promise<{ id: stri
 }
 
 /**
+ * Global menu search — finds items whose name contains `query` (case-insensitive).
+ * Returns up to 60 results. Used by the "Find Any Item" global search picker.
+ */
+export async function searchMenuItemsByName(query: string): Promise<MenuItemRecord[]> {
+  if (!query.trim()) return [];
+  const lower = query.trim().toLowerCase().replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+  const formula = `SEARCH("${lower}", LOWER({Item Name}))`;
+  const { rows } = await legacyMenuItemsQuery({ filterByFormula: formula });
+  // Filter out child/component items that have a " – " suffix but no children
+  return rows.filter((r) => {
+    const hasDash = r.name.includes(" \u2013 ");
+    const hasChildren = (r.childItems?.length ?? 0) > 0;
+    return hasChildren || !hasDash;
+  }).slice(0, 60);
+}
+
+/**
  * Fetch delivery intake items by Menu Section tags (Menu_Lab only).
  * Each returned item includes `routeTargetField` derived from its Execution Type,
  * and `menuSectionTags` for optional sub-grouping in the picker UI.

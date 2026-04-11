@@ -39,8 +39,9 @@ const pillButton = (color: string, disabled: boolean): CSSProperties => ({
 export function DeliveryIntakeMenuAddRow(props: {
   disabled: boolean;
   onOpenPackages: () => void;
+  onOpenGlobalSearch?: () => void;
 }) {
-  const { disabled, onOpenPackages } = props;
+  const { disabled, onOpenPackages, onOpenGlobalSearch } = props;
   const openPicker = usePickerStore((s) => s.openPicker);
 
   return (
@@ -89,6 +90,23 @@ export function DeliveryIntakeMenuAddRow(props: {
       >
         📦 + Packages
       </button>
+
+      {/* Global search — find any item, then pick its heading */}
+      {onOpenGlobalSearch && (
+        <button
+          type="button"
+          disabled={disabled}
+          onClick={onOpenGlobalSearch}
+          style={{
+            ...pillButton("rgba(255,255,255,0.7)", disabled),
+            background: "rgba(255,255,255,0.07)",
+            border: "1px solid rgba(255,255,255,0.2)",
+            fontWeight: 600,
+          }}
+        >
+          🔍 Find Any Item
+        </button>
+      )}
     </div>
   );
 }

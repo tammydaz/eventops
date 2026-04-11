@@ -33,6 +33,7 @@ import { secondsTo12HourString } from "../utils/timeHelpers";
 import { createTask } from "../services/airtable/tasks";
 import { TASK_TYPE_OPTION } from "../services/airtable/tasksSchema";
 import { MenuPickerModal } from "../components/MenuPickerModal";
+import { GlobalSearchPickerModal } from "../components/GlobalSearchPickerModal";
 import { usePickerStore } from "../state/usePickerStore";
 import {
   DELIVERY_COLD_DISPLAY_TARGET_FIELD,
@@ -143,6 +144,7 @@ export const BeoIntakePage = () => {
   const [showSendToBOHModal, setShowSendToBOHModal] = useState(false);
   const [showMissingFieldsModal, setShowMissingFieldsModal] = useState(false);
   const [showPackagesPanel, setShowPackagesPanel] = useState(false);
+  const [showGlobalSearch, setShowGlobalSearch] = useState(false);
   const [pendingPackageItem, setPendingPackageItem] = useState<{ id: string; name: string; routeTargetField: string; preset: DeliveryPackagePreset } | null>(null);
   const [dressingPickerSalad, setDressingPickerSalad] = useState<{ id: string; name: string; shadowRowId: string } | null>(null);
   const [dressingPickerItems, setDressingPickerItems] = useState<{ id: string; name: string }[]>([]);
@@ -1062,12 +1064,16 @@ export const BeoIntakePage = () => {
                                 <button type="button" disabled={isLocked} onClick={() => setShowPackagesPanel(true)} style={{ padding: "8px 16px", fontSize: 12, fontWeight: 700, borderRadius: 6, border: "1px solid #7c3aed", background: "linear-gradient(135deg, rgba(124,58,237,0.35), rgba(124,58,237,0.15))", color: "#c4b5fd", cursor: isLocked ? "default" : "pointer", flexShrink: 0 }}>
                                   📦 Packages
                                 </button>
+                                <button type="button" disabled={isLocked} onClick={() => setShowGlobalSearch(true)} style={{ padding: "8px 16px", fontSize: 12, fontWeight: 700, borderRadius: 6, border: "1px solid rgba(255,255,255,0.25)", background: "rgba(255,255,255,0.06)", color: "rgba(255,255,255,0.8)", cursor: isLocked ? "default" : "pointer", flexShrink: 0 }}>
+                                  🔍 Find Any Item
+                                </button>
                             </div>
                             )}
                             {isDelivery && (
                               <DeliveryIntakeMenuAddRow
                                 disabled={isLocked}
                                 onOpenPackages={() => setShowPackagesPanel(true)}
+                                onOpenGlobalSearch={() => setShowGlobalSearch(true)}
                               />
                             )}
                             {(!isDelivery || deliveryMenuBodyVisible) &&
@@ -1465,6 +1471,17 @@ export const BeoIntakePage = () => {
           <MenuPickerModal onAdd={handlePickerAdd} onRemove={handlePickerRemove} alreadyAddedIds={pickerAlreadyAddedIds} alreadyAddedNames={pickerAlreadyAddedNames} />
         </div>
       </div>
+
+      {/* ── Global Search Picker — find any item, then choose which section it goes under ── */}
+      <GlobalSearchPickerModal
+        isOpen={showGlobalSearch}
+        isDelivery={isDelivery}
+        onAdd={(item) => {
+          setShowGlobalSearch(false);
+          handlePickerAdd(item);
+        }}
+        onClose={() => setShowGlobalSearch(false)}
+      />
 
       {/* ── Packages Panel — available for both full-service and delivery events ── */}
       {showPackagesPanel && createPortal(
