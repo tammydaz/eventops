@@ -3398,7 +3398,7 @@ const BeoPrintPage: React.FC = () => {
 
   // Grid columns: spec (left), item (middle), override/equipment/checkbox (right)
   const gridTemplateColumns =
-    leftCheck === "spec" ? "140px 1fr 200px" :
+    leftCheck === "spec" ? "140px 1fr" :
     leftCheck === "packout" ? "140px 1fr 250px" :
     leftCheck === "kitchen" || leftCheck === "expeditor" || leftCheck === "server" ? "140px 1fr 40px" :
     "1fr";
@@ -3907,8 +3907,19 @@ const BeoPrintPage: React.FC = () => {
                 const overrideKeyLegacy = `${section.fieldId}:${item.id}`;
                 return (
               <div key={rowIdx} className="beo-line-item" style={{ ...styles.lineItem, borderBottom: "none", gridTemplateColumns, padding: row.isChild ? "0 8px 0 8px" : "0 8px", paddingLeft: row.isChild ? "calc(8px + 2ch)" : 8, lineHeight: 1.15, minHeight: "unset", alignItems: "flex-start", marginTop: row.isChild ? 0 : 0 }}>
-                {/* SPEC / PACK-OUT / EXPEDITOR / KITCHEN / SERVER: Spec Column (left) */}
-                {(leftCheck === "spec" || leftCheck === "packout" || leftCheck === "expeditor" || leftCheck === "kitchen" || leftCheck === "server") && (
+                {/* Spec Column (left) — editable input in spec mode, read-only label otherwise */}
+                {leftCheck === "spec" && (
+                  <div className="beo-spec-col" style={{ ...styles.specCol, lineHeight: 1.2 }} onClick={(e) => { e.stopPropagation(); if (document.activeElement instanceof HTMLButtonElement) document.activeElement.blur(); }}>
+                    <input
+                      type="text"
+                      placeholder="spec…"
+                      value={specOverrides[overrideKey] ?? (rowIdx === 0 ? specOverrides[overrideKeyLegacy] : undefined) ?? (rowIdx === 0 ? item.specQty : undefined) ?? ""}
+                      onChange={(e) => { setSpecOverrides((prev) => ({ ...prev, [overrideKey]: e.target.value })); }}
+                      style={{ width: "100%", padding: "2px 4px", fontSize: 11, lineHeight: 1, background: "#f5f5f5", border: "1px solid #ccc", borderRadius: 2, fontWeight: 700, color: "#333" }}
+                    />
+                  </div>
+                )}
+                {(leftCheck === "packout" || leftCheck === "expeditor" || leftCheck === "kitchen" || leftCheck === "server") && (
                   <div className="beo-spec-col" style={{ ...styles.specCol, lineHeight: 1.2 }}>
                     <span>{(specOverrides[overrideKey] ?? (rowIdx === 0 ? specOverrides[overrideKeyLegacy] : undefined) ?? (rowIdx === 0 ? item.specQty : undefined) ?? "").trim() || "—"}</span>
                   </div>
@@ -3918,30 +3929,6 @@ const BeoPrintPage: React.FC = () => {
                 <div className="beo-item-col" style={{ ...styles.itemCol, lineHeight: 1.25, ...getItemRowNameStyle(row.isChild, rows.some(r => r.isChild)) }}>
                   {row.lineName}
                 </div>
-
-                {/* SPEC VIEW: Override input (right) — to override the spec on the left */}
-                {leftCheck === "spec" && (
-                  <div className="beo-spec-col" style={{ ...styles.specCol, display: "flex", flexDirection: "column", gap: 2 }} onClick={(e) => { e.stopPropagation(); if (document.activeElement instanceof HTMLButtonElement) document.activeElement.blur(); }}>
-                    <input
-                      type="text"
-                      placeholder="spec..."
-                      value={specOverrides[overrideKey] ?? (rowIdx === 0 ? specOverrides[overrideKeyLegacy] : undefined) ?? (rowIdx === 0 ? item.specQty : undefined) ?? ""}
-                      onChange={(e) => {
-                        setSpecOverrides((prev) => ({ ...prev, [overrideKey]: e.target.value }));
-                      }}
-                      style={{
-                        width: "100%",
-                        padding: "2px 6px",
-                        fontSize: 11,
-                        lineHeight: 1,
-                        background: "#f9f9f9",
-                        border: "1px solid #ddd",
-                        borderRadius: 2,
-                      }}
-                      className="no-print"
-                    />
-                  </div>
-                )}
 
                 {/* KITCHEN / EXPEDITOR / SERVER: Checkbox (right) */}
                 {(leftCheck === "kitchen" || leftCheck === "expeditor" || leftCheck === "server") && (
@@ -4005,17 +3992,17 @@ const BeoPrintPage: React.FC = () => {
                 const overrideKeyLegacy = `${section.fieldId}:${item.id}`;
                 return (
               <div key={rowIdx} className="beo-line-item" style={{ ...styles.lineItem, borderBottom: "none", gridTemplateColumns, padding: row.isChild ? "0 8px 0 8px" : "0 8px", paddingLeft: row.isChild ? "calc(8px + 2ch)" : 8, lineHeight: 1.15, minHeight: "unset", alignItems: "flex-start", marginTop: row.isChild ? 0 : 0 }}>
-                {(leftCheck === "spec" || leftCheck === "packout" || leftCheck === "expeditor" || leftCheck === "kitchen" || leftCheck === "server") && (
+                {leftCheck === "spec" && (
+                  <div className="beo-spec-col" style={{ ...styles.specCol, lineHeight: 1.2 }} onClick={(e) => { e.stopPropagation(); if (document.activeElement instanceof HTMLButtonElement) document.activeElement.blur(); }}>
+                    <input type="text" placeholder="spec…" value={specOverrides[overrideKey] ?? (rowIdx === 0 ? specOverrides[overrideKeyLegacy] : undefined) ?? (rowIdx === 0 ? item.specQty : undefined) ?? ""} onChange={(e) => { setSpecOverrides((prev) => ({ ...prev, [overrideKey]: e.target.value })); }} style={{ width: "100%", padding: "2px 4px", fontSize: 11, lineHeight: 1, background: "#f5f5f5", border: "1px solid #ccc", borderRadius: 2, fontWeight: 700, color: "#333" }} />
+                  </div>
+                )}
+                {(leftCheck === "packout" || leftCheck === "expeditor" || leftCheck === "kitchen" || leftCheck === "server") && (
                   <div className="beo-spec-col" style={{ ...styles.specCol, lineHeight: 1.2 }}>
                     <span>{(specOverrides[overrideKey] ?? (rowIdx === 0 ? specOverrides[overrideKeyLegacy] : undefined) ?? (rowIdx === 0 ? item.specQty : undefined) ?? "").trim() || "—"}</span>
                   </div>
                 )}
                 <div className="beo-item-col" style={{ ...styles.itemCol, lineHeight: 1.25, ...getItemRowNameStyle(row.isChild, rows.some(r => r.isChild)) }}>{row.lineName}</div>
-                {leftCheck === "spec" && (
-                  <div className="beo-spec-col" style={{ ...styles.specCol, display: "flex", flexDirection: "column", gap: 2 }} onClick={(e) => { e.stopPropagation(); if (document.activeElement instanceof HTMLButtonElement) document.activeElement.blur(); }}>
-                    <input type="text" placeholder="spec..." value={specOverrides[overrideKey] ?? (rowIdx === 0 ? specOverrides[overrideKeyLegacy] : undefined) ?? (rowIdx === 0 ? item.specQty : undefined) ?? ""} onChange={(e) => { setSpecOverrides((prev) => ({ ...prev, [overrideKey]: e.target.value })); }} style={{ width: "100%", padding: "2px 6px", fontSize: 11, lineHeight: 1, background: "#f9f9f9", border: "1px solid #ddd", borderRadius: 2 }} className="no-print" />
-                  </div>
-                )}
                 {(leftCheck === "kitchen" || leftCheck === "expeditor" || leftCheck === "server") && (
                   <div style={styles.checkboxCol} onClick={(e) => { e.stopPropagation(); if (document.activeElement instanceof HTMLButtonElement) document.activeElement.blur(); }}>
                     <input type="checkbox" checked={checkState[`${leftCheck}:${section.fieldId}:${item.id}:${rowIdx}`] ?? item.loaded ?? false} onChange={(e) => { setCheckState((prev) => ({ ...prev, [`${leftCheck}:${section.fieldId}:${item.id}:${rowIdx}`]: e.target.checked })); }} className="no-print" style={{ width: "20px", height: "20px", accentColor: "#333", cursor: "pointer" }} />
