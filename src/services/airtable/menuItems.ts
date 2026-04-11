@@ -610,6 +610,19 @@ async function fetchLegacyDeliveryIntakeItems(
 }
 
 /**
+ * Look up a single menu item by exact name. Used by the Packages panel to resolve
+ * an Airtable record ID from a preset's displayName before creating a shadow row.
+ * Returns null if not found or on error.
+ */
+export async function fetchMenuItemByExactName(name: string): Promise<{ id: string; name: string } | null> {
+  const escaped = name.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+  const formula = `{Item Name} = "${escaped}"`;
+  const items = await fetchLegacyMenuItemsByFilterFormula(formula);
+  if (items.length === 0) return null;
+  return { id: items[0]!.id, name: items[0]!.name };
+}
+
+/**
  * Fetch delivery intake items by Menu Section tags (Menu_Lab only).
  * Each returned item includes `routeTargetField` derived from its Execution Type,
  * and `menuSectionTags` for optional sub-grouping in the picker UI.

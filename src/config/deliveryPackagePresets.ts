@@ -1,12 +1,17 @@
 /**
  * Delivery package presets — guided "Pick N" choice groups.
  *
- * When a delivery intake item matches a preset key, the DeliveryPackageConfigModal
- * opens so staff can record which options the client chose.  Selections are saved
- * as customItems on the shadow-menu row and appear on the BEO under the parent item.
+ * When a package is selected from the Packages panel, the DeliveryPackageConfigModal
+ * opens so staff can record which options the client chose. Selections are saved
+ * as customText on the shadow-menu row and appear on the BEO under the parent item.
  *
  * Pattern mirrors stationPresets.ts / StationComponentsConfigModal.
  */
+
+export type DeliveryPanelCategory =
+  | "breakfast"
+  | "lunch_platter"
+  | "hot_lunch";
 
 export interface DeliveryPickGroup {
   /** Section heading shown in the modal (e.g. "Eggs — Pick 1") */
@@ -19,7 +24,13 @@ export interface DeliveryPickGroup {
 
 export interface DeliveryPackagePreset {
   key: string;
-  /** User-facing package name (used to match via name.toLowerCase().includes) */
+  /** Exact display name shown in the panel and used to look up the Airtable record */
+  displayName: string;
+  /** Panel grouping category */
+  panelCategory: DeliveryPanelCategory;
+  /** Which shadow-menu section this package routes to */
+  routeTargetField: "buffetMetal" | "deliveryDeli";
+  /** Match patterns used to identify this preset from an item name (fallback for picker flow) */
   matchPatterns: readonly string[];
   /** Groups the staff works through in the modal */
   groups: readonly DeliveryPickGroup[];
@@ -31,6 +42,9 @@ export interface DeliveryPackagePreset {
 
 export const ITS_YOUR_CHOICE_BREAKFAST: DeliveryPackagePreset = {
   key: "its-your-choice-breakfast",
+  displayName: "It's Your Choice Breakfast",
+  panelCategory: "breakfast",
+  routeTargetField: "buffetMetal",
   matchPatterns: ["it's your choice", "its your choice", "choice breakfast"],
   groups: [
     {
@@ -71,6 +85,9 @@ export const ITS_YOUR_CHOICE_BREAKFAST: DeliveryPackagePreset = {
 
 export const BB_BASIC_BREAKFAST: DeliveryPackagePreset = {
   key: "bb-basic-breakfast",
+  displayName: "BB Basic Breakfast",
+  panelCategory: "breakfast",
+  routeTargetField: "buffetMetal",
   matchPatterns: ["bb basic breakfast", "basic breakfast"],
   groups: [
     {
@@ -88,6 +105,9 @@ export const BB_BASIC_BREAKFAST: DeliveryPackagePreset = {
 
 export const ENGLISH_MUFFIN_WRAP_SANDWICHES: DeliveryPackagePreset = {
   key: "english-muffin-wrap",
+  displayName: "English Muffin & Wrap Sandwiches",
+  panelCategory: "breakfast",
+  routeTargetField: "buffetMetal",
   matchPatterns: ["english muffin & wrap", "english muffin wrap"],
   groups: [
     {
@@ -102,7 +122,7 @@ export const ENGLISH_MUFFIN_WRAP_SANDWICHES: DeliveryPackagePreset = {
       ],
     },
     {
-      label: "Add-On (optional)",
+      label: "Add-On — Pick 1 (optional)",
       pickCount: 1,
       options: ["Chefs' Skillet Potatoes or Tater Tots (+$2pp)", "Seasonal Fruit (+$4pp)", "None"],
     },
@@ -111,6 +131,9 @@ export const ENGLISH_MUFFIN_WRAP_SANDWICHES: DeliveryPackagePreset = {
 
 export const ONE_HAND_PICKUP: DeliveryPackagePreset = {
   key: "one-hand-pickup",
+  displayName: "One Hand Pick Up Breakfast",
+  panelCategory: "breakfast",
+  routeTargetField: "buffetMetal",
   matchPatterns: ["one hand pick up", "one hand pickup", "mini roll", "petite croissant"],
   groups: [
     {
@@ -125,17 +148,20 @@ export const ONE_HAND_PICKUP: DeliveryPackagePreset = {
       ],
     },
     {
-      label: "Bread",
+      label: "Bread — Pick 1",
       pickCount: 1,
       options: ["Mini Rolls", "Small Bagels", "Petite Croissants"],
     },
   ],
 };
 
-// ─── Lunch / Sandwich Packages ───────────────────────────────────────────────
+// ─── Lunch Platter Packages ───────────────────────────────────────────────────
 
 export const CLASSIC_SANDWICH_PLATTER: DeliveryPackagePreset = {
   key: "classic-sandwich-platter",
+  displayName: "Classic Sandwich Platter",
+  panelCategory: "lunch_platter",
+  routeTargetField: "deliveryDeli",
   matchPatterns: ["classic sandwich platter", "classic sandwich"],
   groups: [
     {
@@ -152,7 +178,7 @@ export const CLASSIC_SANDWICH_PLATTER: DeliveryPackagePreset = {
       ],
     },
     {
-      label: "Salad Upgrade (included in pricing)",
+      label: "Salad Upgrade",
       pickCount: 1,
       options: [
         "1 Classic Salad (included)",
@@ -170,6 +196,9 @@ export const CLASSIC_SANDWICH_PLATTER: DeliveryPackagePreset = {
 
 export const GOURMET_SANDWICH_PLATTER: DeliveryPackagePreset = {
   key: "gourmet-sandwich-platter",
+  displayName: "Gourmet Signature Sandwich Platter",
+  panelCategory: "lunch_platter",
+  routeTargetField: "deliveryDeli",
   matchPatterns: ["gourmet signature sandwich platter", "gourmet sandwich platter", "signature specialty platter"],
   groups: [
     {
@@ -200,7 +229,7 @@ export const GOURMET_SANDWICH_PLATTER: DeliveryPackagePreset = {
       ],
     },
     {
-      label: "Salad Selection",
+      label: "Salad Selection — Pick 1",
       pickCount: 1,
       options: [
         "1 Classic Salad (included)",
@@ -213,6 +242,9 @@ export const GOURMET_SANDWICH_PLATTER: DeliveryPackagePreset = {
 
 export const SIGNATURE_WRAP_PLATTER: DeliveryPackagePreset = {
   key: "signature-wrap-platter",
+  displayName: "Signature Wrap Platter",
+  panelCategory: "lunch_platter",
+  routeTargetField: "deliveryDeli",
   matchPatterns: ["signature wrap platter", "werx wrap platter"],
   groups: [
     {
@@ -231,7 +263,7 @@ export const SIGNATURE_WRAP_PLATTER: DeliveryPackagePreset = {
       ],
     },
     {
-      label: "Salad Selection",
+      label: "Salad Selection — Pick 1",
       pickCount: 1,
       options: ["1 Classic Salad (included)", "2 Classic Salads (+$2pp)", "1 Signature Salad (+$2pp)"],
     },
@@ -240,10 +272,13 @@ export const SIGNATURE_WRAP_PLATTER: DeliveryPackagePreset = {
 
 export const PANINI_PRESS_PLATTER: DeliveryPackagePreset = {
   key: "panini-press-platter",
+  displayName: "Panini Press Platter",
+  panelCategory: "lunch_platter",
+  routeTargetField: "deliveryDeli",
   matchPatterns: ["panini press platter", "panini press"],
   groups: [
     {
-      label: "Panini Selections",
+      label: "Panini Selections — Pick 5",
       pickCount: 5,
       options: [
         "Italiano (Genoa, prosciutto, capicola & sharp provolone)",
@@ -254,7 +289,7 @@ export const PANINI_PRESS_PLATTER: DeliveryPackagePreset = {
       ],
     },
     {
-      label: "Salad Selection",
+      label: "Salad Selection — Pick 1",
       pickCount: 1,
       options: ["1 Classic Salad (included)", "2 Classic Salads (+$2pp)", "1 Signature Salad (+$2pp)"],
     },
@@ -263,10 +298,13 @@ export const PANINI_PRESS_PLATTER: DeliveryPackagePreset = {
 
 export const PHILLY_HOAGIE_PLATTER: DeliveryPackagePreset = {
   key: "philly-hoagie-platter",
+  displayName: "Philadelphia Hoagie Platter",
+  panelCategory: "lunch_platter",
+  routeTargetField: "deliveryDeli",
   matchPatterns: ["philadelphia hoagie platter", "philly hoagie"],
   groups: [
     {
-      label: "Hoagie Selections",
+      label: "Hoagie Selections — Pick 5",
       pickCount: 5,
       options: [
         "Italian by foodwerx",
@@ -279,7 +317,7 @@ export const PHILLY_HOAGIE_PLATTER: DeliveryPackagePreset = {
       ],
     },
     {
-      label: "Salad Selection",
+      label: "Salad Selection — Pick 1",
       pickCount: 1,
       options: ["1 Classic Salad (included)", "2 Classic Salads (+$2pp)", "1 Signature Salad (+$2pp)"],
     },
@@ -287,10 +325,13 @@ export const PHILLY_HOAGIE_PLATTER: DeliveryPackagePreset = {
   autoIncluded: ["Brick Oven Sesame Semolina Hoagie Rolls"],
 };
 
-// ─── Hot Lunch Packages with choices ─────────────────────────────────────────
+// ─── Hot Lunch Packages ───────────────────────────────────────────────────────
 
 export const PHILLY_CHEESESTEAK: DeliveryPackagePreset = {
   key: "philly-cheesesteak",
+  displayName: "Philly Cheesesteak",
+  panelCategory: "hot_lunch",
+  routeTargetField: "buffetMetal",
   matchPatterns: ["philly cheesesteak", "cheesesteak station"],
   groups: [
     {
@@ -310,6 +351,9 @@ export const PHILLY_CHEESESTEAK: DeliveryPackagePreset = {
 
 export const TACO_TIME: DeliveryPackagePreset = {
   key: "taco-time",
+  displayName: "Taco Time",
+  panelCategory: "hot_lunch",
+  routeTargetField: "buffetMetal",
   matchPatterns: ["taco time"],
   groups: [
     {
@@ -330,6 +374,9 @@ export const TACO_TIME: DeliveryPackagePreset = {
 
 export const FAJITA_FESTIVAL: DeliveryPackagePreset = {
   key: "fajita-festival",
+  displayName: "Fajita Festival",
+  panelCategory: "hot_lunch",
+  routeTargetField: "buffetMetal",
   matchPatterns: ["fajita festival"],
   groups: [
     {
@@ -348,7 +395,7 @@ export const FAJITA_FESTIVAL: DeliveryPackagePreset = {
   ],
 };
 
-// ─── Registry & matcher ───────────────────────────────────────────────────────
+// ─── Registry & helpers ───────────────────────────────────────────────────────
 
 export const ALL_DELIVERY_PACKAGE_PRESETS: readonly DeliveryPackagePreset[] = [
   ITS_YOUR_CHOICE_BREAKFAST,
@@ -365,6 +412,12 @@ export const ALL_DELIVERY_PACKAGE_PRESETS: readonly DeliveryPackagePreset[] = [
   FAJITA_FESTIVAL,
 ];
 
+export const PANEL_CATEGORY_LABELS: Record<DeliveryPanelCategory, string> = {
+  breakfast: "🍳 Breakfast Packages",
+  lunch_platter: "🥪 Lunch Platters",
+  hot_lunch: "🔥 Hot Lunch",
+};
+
 /** Returns a preset if the item name matches any of its patterns, otherwise null. */
 export function getDeliveryPackagePreset(itemName: string): DeliveryPackagePreset | null {
   const lower = (itemName || "").toLowerCase();
@@ -374,7 +427,7 @@ export function getDeliveryPackagePreset(itemName: string): DeliveryPackagePrese
   return null;
 }
 
-/** Format confirmed picks as BEO custom item lines. */
+/** Format confirmed picks as BEO custom text lines. */
 export function formatDeliveryPackagePicksAsLines(
   preset: DeliveryPackagePreset,
   picks: Record<string, string[]>

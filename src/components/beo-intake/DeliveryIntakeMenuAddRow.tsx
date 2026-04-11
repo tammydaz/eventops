@@ -17,7 +17,7 @@ const SHORT_LABEL: Record<string, string> = {
   disposable_display: "+ Disp. Display",
 };
 
-const fullServePillButton = (color: string, disabled: boolean): CSSProperties => ({
+const pillButton = (color: string, disabled: boolean): CSSProperties => ({
   padding: "8px 16px",
   fontSize: 12,
   fontWeight: 600,
@@ -30,17 +30,15 @@ const fullServePillButton = (color: string, disabled: boolean): CSSProperties =>
 });
 
 /**
- * Compact category row for delivery intake — matches full-service BEO pill styling.
+ * Compact category row for delivery intake.
+ * 4 disposable-type pickers + one consolidated "+ Packages" button
+ * (which opens DeliveryPackagesPanel for delivery packages, boxed lunches, and sandwich platters).
  */
 export function DeliveryIntakeMenuAddRow(props: {
   disabled: boolean;
-  /** Scroll target for "+ Boxed lunches" */
-  boxedAnchorId?: string;
-  /** Called before scroll so parent can mount boxed-lunch UI (e.g. first open). */
-  onOpenBoxedLunches?: () => void;
-  onOpenSandwichPlatters: () => void;
+  onOpenPackages: () => void;
 }) {
-  const { disabled, boxedAnchorId = "beo-delivery-boxed-lunch", onOpenBoxedLunches, onOpenSandwichPlatters } = props;
+  const { disabled, onOpenPackages } = props;
   const openPicker = usePickerStore((s) => s.openPicker);
 
   return (
@@ -57,6 +55,7 @@ export function DeliveryIntakeMenuAddRow(props: {
         alignItems: "flex-start",
       }}
     >
+      {/* Disposable category pickers */}
       {DELIVERY_INTAKE_SECTIONS.map((sec) => {
         const color = INTAKE_PILL_COLORS[sec.id] ?? "#94a3b8";
         const label = SHORT_LABEL[sec.id] ?? `+ ${sec.title}`;
@@ -68,32 +67,25 @@ export function DeliveryIntakeMenuAddRow(props: {
             onClick={() =>
               openPicker(`delivery_intake_${sec.id}`, DELIVERY_INTAKE_TARGET_FIELD, `Add — ${sec.title}`)
             }
-            style={fullServePillButton(color, disabled)}
+            style={pillButton(color, disabled)}
           >
             {label}
           </button>
         );
       })}
+
+      {/* Single consolidated Packages button */}
       <button
         type="button"
         disabled={disabled}
-        onClick={() => {
-          onOpenBoxedLunches?.();
-          requestAnimationFrame(() =>
-            document.getElementById(boxedAnchorId)?.scrollIntoView({ behavior: "smooth", block: "start" })
-          );
+        onClick={onOpenPackages}
+        style={{
+          ...pillButton("#8b5cf6", disabled),
+          fontWeight: 700,
+          letterSpacing: "0.01em",
         }}
-        style={fullServePillButton("#22c55e", disabled)}
       >
-        + Boxed lunches
-      </button>
-      <button
-        type="button"
-        disabled={disabled}
-        onClick={onOpenSandwichPlatters}
-        style={fullServePillButton("#f97316", disabled)}
-      >
-        + Sandwich platters
+        📦 + Packages
       </button>
     </div>
   );

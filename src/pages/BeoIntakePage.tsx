@@ -56,7 +56,9 @@ import { fetchMenuItemChildren, fetchMenuItemsByCategory } from "../services/air
 import { CreationStationContent, MenuSection } from "../components/beo-intake/MenuSection";
 import { DeliveryIntakeMenuAddRow } from "../components/beo-intake/DeliveryIntakeMenuAddRow";
 import { DeliveryPackageConfigModal } from "../components/beo-intake/DeliveryPackageConfigModal";
+import { DeliveryPackagesPanel } from "../components/beo-intake/DeliveryPackagesPanel";
 import { getDeliveryPackagePreset, type DeliveryPackagePreset } from "../config/deliveryPackagePresets";
+import { fetchMenuItemByExactName } from "../services/airtable/menuItems";
 import { BoxedLunchSection } from "../components/beo-intake/BoxedLunchSection";
 import { SandwichPlatterConfigModal } from "../components/beo-intake/SandwichPlatterConfigModal";
 import {
@@ -140,6 +142,7 @@ export const BeoIntakePage = () => {
   const [bohIds, setBohIds] = useState<Awaited<ReturnType<typeof getBOHProductionFieldIds>>>(null);
   const [showSendToBOHModal, setShowSendToBOHModal] = useState(false);
   const [showMissingFieldsModal, setShowMissingFieldsModal] = useState(false);
+  const [showPackagesPanel, setShowPackagesPanel] = useState(false);
   const [pendingPackageItem, setPendingPackageItem] = useState<{ id: string; name: string; routeTargetField: string; preset: DeliveryPackagePreset } | null>(null);
   const [dressingPickerSalad, setDressingPickerSalad] = useState<{ id: string; name: string; shadowRowId: string } | null>(null);
   const [dressingPickerItems, setDressingPickerItems] = useState<{ id: string; name: string }[]>([]);
@@ -711,6 +714,16 @@ export const BeoIntakePage = () => {
     [pendingPackageItem, selectedEventId, loadShadowMenu, loadEventData]
   );
 
+  /** Called when staff clicks a package in the DeliveryPackagesPanel. Looks up the Airtable ID then opens the config modal. */
+  const handlePanelSelectPackage = useCallback(async (preset: DeliveryPackagePreset) => {
+    const found = await fetchMenuItemByExactName(preset.displayName);
+    if (!found) {
+      alert(`Could not find "${preset.displayName}" in the menu catalog. Please check Airtable.`);
+      return;
+    }
+    setPendingPackageItem({ id: found.id, name: found.name, routeTargetField: preset.routeTargetField, preset });
+  }, []);
+
   const handlePickerRemove = useCallback(
     async (catalogItemId: string, itemName?: string) => {
       if (!selectedEventId) return;
@@ -1052,19 +1065,7 @@ export const BeoIntakePage = () => {
                             {isDelivery && (
                               <DeliveryIntakeMenuAddRow
                                 disabled={isLocked}
-                                onOpenBoxedLunches={() => {
-                                  setDeliveryRevealFoodChrome(true);
-                                  setDeliveryBoxedSectionOpen(true);
-                                }}
-                                onOpenSandwichPlatters={() => {
-                                  setDeliveryRevealFoodChrome(true);
-                                  setDeliveryPlatterSectionOpen(true);
-                                  requestAnimationFrame(() =>
-                                    document
-                                      .getElementById("beo-delivery-platter")
-                                      ?.scrollIntoView({ behavior: "smooth", block: "start" })
-                                  );
-                                }}
+                                onOpenPackages={() => setShowPackagesPanel(true)}
                               />
                             )}
                             {(!isDelivery || deliveryMenuBodyVisible) &&
@@ -1453,6 +1454,32 @@ export const BeoIntakePage = () => {
           <MenuPickerModal onAdd={handlePickerAdd} onRemove={handlePickerRemove} alreadyAddedIds={pickerAlreadyAddedIds} alreadyAddedNames={pickerAlreadyAddedNames} />
         </div>
       </div>
+
+      {/* ── Delivery Packages Panel (+ Packages button) ── */}
+      {showPackagesPanel && createPortal(
+        <DeliveryPackagesPanel
+          onSelectPackage={handlePanelSelectPackage}
+          onOpenBoxedLunches={() => {
+            setShowPackagesPanel(false);
+            setDeliveryRevealFoodChrome(true);
+            setDeliveryBoxedSectionOpen(true);
+            requestAnimationFrame(() =>
+              document.getElementById("beo-delivery-boxed-lunch")?.scrollIntoView({ behavior: "smooth", block: "start" })
+            );
+          }}
+          onOpenSandwichPlatters={() => {
+            setShowPackagesPanel(false);
+            setDeliveryRevealFoodChrome(true);
+            setDeliveryPlatterSectionOpen(true);
+            requestAnimationFrame(() =>
+              document.getElementById("beo-delivery-platter")?.scrollIntoView({ behavior: "smooth", block: "start" })
+            );
+          }}
+          onClose={() => setShowPackagesPanel(false)}
+          disabled={isLocked}
+        />,
+        document.body
+      )}
 
       {/* ── Delivery Package Config Modal (choice packages: "It's Your Choice Breakfast", platters, etc.) ── */}
       {pendingPackageItem && createPortal(
