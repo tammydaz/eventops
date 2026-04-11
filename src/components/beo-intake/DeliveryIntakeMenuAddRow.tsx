@@ -8,13 +8,15 @@ const INTAKE_PILL_COLORS: Record<string, string> = {
   disposable_ready: "#f97316",
   disposable_bulk: "#26a69a",
   disposable_display: "#3b82f6",
+  desserts: "#a855f7",
 };
 
 const SHORT_LABEL: Record<string, string> = {
-  disposable_hot: "+ Disp. Hot",
-  disposable_ready: "+ Disp. Ready",
-  disposable_bulk: "+ Disp. Bulk",
-  disposable_display: "+ Disp. Display",
+  disposable_hot: "+ Hot",
+  disposable_ready: "+ Ready",
+  disposable_bulk: "+ Bulk",
+  disposable_display: "+ Display",
+  desserts: "🍰 Desserts",
 };
 
 const pillButton = (color: string, disabled: boolean): CSSProperties => ({

@@ -294,7 +294,8 @@ export type DeliveryIntakeSectionId =
   | "disposable_hot"
   | "disposable_ready"
   | "disposable_bulk"
-  | "disposable_display";
+  | "disposable_display"
+  | "desserts";
 
 export interface DeliveryIntakeSection {
   id: DeliveryIntakeSectionId;
@@ -350,9 +351,7 @@ export const DELIVERY_INTAKE_SECTIONS: readonly DeliveryIntakeSection[] = [
       "Lunch - Wraps",
       "Lunch - Panini",
       "Lunch - Hoagies",
-      "Desserts",
       "Breaks and Snacks",
-      "Ambient Displays",
     ],
     legacyCategoryValues: [
       "Deli",
@@ -362,12 +361,21 @@ export const DELIVERY_INTAKE_SECTIONS: readonly DeliveryIntakeSection[] = [
       "Wrap",
       "Panini",
       "Hoagie",
+      "Display",
+      "Snack",
+    ],
+    legacyRouteTarget: "deliveryDeli",
+  },
+  {
+    id: "desserts",
+    title: "DESSERTS",
+    icon: "🍰",
+    menuSectionTags: ["Desserts"],
+    legacyCategoryValues: [
       "Dessert",
       "Dessert (Display)",
       "Dessert (Individual)",
-      "Display",
-      "Snack",
-      // Room-temp ambient display platters available for delivery too
+      // Ambient displays are room-temp presentation platters
       "Ambient Display",
     ],
     legacyRouteTarget: "deliveryDeli",

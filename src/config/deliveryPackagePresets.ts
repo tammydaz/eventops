@@ -14,7 +14,8 @@ export type DeliveryPanelCategory =
   | "hot_lunch"
   | "ambient_display"
   | "happy_hour"
-  | "lunch_premium";
+  | "lunch_premium"
+  | "desserts";
 
 export interface DeliveryPickGroup {
   /** Section heading shown in the modal (e.g. "Eggs — Pick 1") */
@@ -530,6 +531,311 @@ export const QUICHE_ASSORTMENT: DeliveryPackagePreset = {
 
 // ─── Ambient Display Packages (with protein choice) ───────────────────────────
 
+// ─── Ambient Displays — Vegetarian ───────────────────────────────────────────
+
+export const VERY_VEGETARIAN_VICTORY_LANDSLIDE: DeliveryPackagePreset = {
+  key: "very-vegetarian-victory-landslide",
+  displayName: "Very Vegetarian Victory Landslide",
+  panelCategory: "ambient_display",
+  routeTargetField: "buffetChina",
+  matchPatterns: ["very vegetarian victory", "vegetarian victory landslide"],
+  groups: [],
+  autoIncluded: [
+    "Marinated grilled vegetables atop roasted red skin & sweet potatoes",
+    "Blistered grape tomatoes, grilled shallot rings, crispy onion straws & fried hot peppers",
+    "Calimyrna fig vinaigrette drizzle",
+    "Choice of classic salad with artisan rolls & butter",
+  ],
+};
+
+export const BUFFALO_GRILLED_CAULIFLOWER_STEAKS: DeliveryPackagePreset = {
+  key: "buffalo-grilled-cauliflower-steaks",
+  displayName: "Buffalo Grilled Cauliflower Steaks Display",
+  panelCategory: "ambient_display",
+  routeTargetField: "buffetChina",
+  matchPatterns: ["buffalo grilled cauliflower", "buffalo cauliflower steaks"],
+  groups: [],
+  autoIncluded: [
+    "Cauliflower steaks atop crisp romaine lettuce",
+    "Garbanzo beans, bleu cheese crumbles, tomato, celery, turkish golden raisins & shredded carrots",
+    "Creamiest ranch dressing",
+    "Choice of classic salad with artisan rolls & butter",
+  ],
+};
+
+export const GRILLED_PORTABELLA_MUSHROOM_CAPS: DeliveryPackagePreset = {
+  key: "grilled-portabella-mushroom-caps",
+  displayName: "Grilled Portabella Mushroom Caps Display",
+  panelCategory: "ambient_display",
+  routeTargetField: "buffetChina",
+  matchPatterns: ["grilled portabella mushroom caps", "portabella mushroom caps display"],
+  groups: [],
+  autoIncluded: [
+    "Portabella mushroom caps stuffed with israeli couscous, spinach, roasted vegetables & asiago cheese",
+    "Balsamic basil pesto drizzle",
+    "Choice of classic salad with artisan rolls & butter",
+  ],
+};
+
+export const BBQ_RUBBED_GRILLED_TOFU: DeliveryPackagePreset = {
+  key: "bbq-rubbed-grilled-tofu",
+  displayName: "BBQ Rubbed Grilled Tofu Display",
+  panelCategory: "ambient_display",
+  routeTargetField: "buffetChina",
+  matchPatterns: ["bbq rubbed grilled tofu", "grilled tofu display"],
+  groups: [],
+  autoIncluded: [
+    "BBQ rubbed grilled tofu with white shoe peg confetti corn, sweet cherry tomatoes & red onion",
+    "Atop a mixture of kale, arugula & mesclun",
+    "Snappy chipotle ranch dressing",
+    "Choice of classic salad with artisan rolls & butter",
+  ],
+};
+
+export const GRILLED_VEGETABLE_TOWER_DISPLAY: DeliveryPackagePreset = {
+  key: "grilled-vegetable-tower-display",
+  displayName: "Grilled Vegetable Tower Display",
+  panelCategory: "ambient_display",
+  routeTargetField: "buffetChina",
+  matchPatterns: ["grilled vegetable tower display", "vegetable tower display"],
+  groups: [],
+  autoIncluded: [
+    "Grilled eggplant, zucchini, summer squash, grilled peppers, carrot coins, red onion & roma tomato",
+    "Speared with a rosemary sprig",
+    "Herb infused olive oil & lemon zest drizzle",
+    "Choice of classic salad with artisan rolls & butter",
+  ],
+};
+
+// ─── Ambient Displays — Chicken ───────────────────────────────────────────────
+
+export const CRISPY_FRIED_BONELESS_PICNIC_CHICKEN: DeliveryPackagePreset = {
+  key: "crispy-fried-boneless-picnic-chicken",
+  displayName: "Crispy Fried Boneless Picnic Chicken Display",
+  panelCategory: "ambient_display",
+  routeTargetField: "buffetChina",
+  matchPatterns: ["crispy fried boneless picnic chicken", "picnic chicken display"],
+  groups: [],
+  autoIncluded: [
+    "Crispy fried boneless picnic chicken",
+    "Within a baked potato salad circle accentuating a colorful grilled corn salad center",
+    "Choice of classic salad with artisan rolls & butter",
+  ],
+};
+
+export const MESQUITE_GRILLED_CHICKEN_DISPLAY: DeliveryPackagePreset = {
+  key: "mesquite-grilled-chicken-display",
+  displayName: "Mesquite Grilled Chicken Display",
+  panelCategory: "ambient_display",
+  routeTargetField: "buffetChina",
+  matchPatterns: ["mesquite grilled chicken display"],
+  groups: [],
+  autoIncluded: [
+    "Mesquite grilled chicken with crumbled bacon, roasted corn, charred grape tomatoes & jalapeño jack cheese",
+    "Crunchy tortilla strips atop crisp romaine & peppery arugula",
+    "BBQ honey ranch dressing",
+    "Choice of classic salad with artisan rolls & butter",
+  ],
+};
+
+export const GRILLED_LEMON_CHICKEN_WILD_RICE: DeliveryPackagePreset = {
+  key: "grilled-lemon-chicken-wild-rice",
+  displayName: "Grilled Lemon Chicken Breast & Wild Rice Dyad",
+  panelCategory: "ambient_display",
+  routeTargetField: "buffetChina",
+  matchPatterns: ["grilled lemon chicken breast", "lemon chicken wild rice dyad"],
+  groups: [],
+  autoIncluded: [
+    "Grilled lemon chicken breast & wild rice",
+    "Toasted almonds, dried cranberries, orange zest & baby arugula",
+    "Refreshing citrus vinaigrette",
+    "Choice of classic salad with artisan rolls & butter",
+  ],
+};
+
+export const FAR_EAST_CHICKEN_DISPLAY: DeliveryPackagePreset = {
+  key: "far-east-chicken-display",
+  displayName: "Far East Chicken Display",
+  panelCategory: "ambient_display",
+  routeTargetField: "buffetChina",
+  matchPatterns: ["far east chicken display"],
+  groups: [],
+  autoIncluded: [
+    "Teriyaki marinated chicken atop spicy pepper & peanut vermicelli pasta & salad greens",
+    "Sesame seeds, sliced orange segments, water chestnut",
+    "Sesame dressing drizzle",
+    "Choice of classic salad with artisan rolls & butter",
+  ],
+};
+
+export const GRILLED_BONELESS_CHICKEN_BASIL_EVOO: DeliveryPackagePreset = {
+  key: "grilled-boneless-chicken-basil-evoo",
+  displayName: "Grilled Boneless Chicken with Basil EVOO",
+  panelCategory: "ambient_display",
+  routeTargetField: "buffetChina",
+  matchPatterns: ["grilled boneless chicken with basil evoo", "basil infused evoo"],
+  groups: [],
+  autoIncluded: [
+    "Grilled boneless breast of chicken brushed with basil infused EVOO",
+    "Paired with bruschetta tortellini salad",
+    "Choice of classic salad with artisan rolls & butter",
+  ],
+};
+
+// ─── Ambient Displays — Beef ──────────────────────────────────────────────────
+
+export const VIETNAMESE_STEAK_DISPLAY: DeliveryPackagePreset = {
+  key: "vietnamese-steak-display",
+  displayName: "Vietnamese Steak Display",
+  panelCategory: "ambient_display",
+  routeTargetField: "buffetChina",
+  matchPatterns: ["vietnamese steak display"],
+  groups: [],
+  autoIncluded: [
+    "Vermicelli noodle salad circle envelops steamed broccoli center",
+    "Scallions, fried jalapeño rings & toasted coconut",
+    "Ginger soy sesame dressing drizzle",
+    "Choice of classic salad with artisan rolls & butter",
+  ],
+};
+
+export const WERX_SIGNATURE_FLANK_STEAK_DISPLAY: DeliveryPackagePreset = {
+  key: "werx-signature-flank-steak-display",
+  displayName: "werx Signature Flank Steak Display",
+  panelCategory: "ambient_display",
+  routeTargetField: "buffetChina",
+  matchPatterns: ["werx signature flank steak display"],
+  groups: [],
+  autoIncluded: [
+    "Grilled flank steak displayed with crisp romaine hearts",
+    "Roasted zucchini, red skinned potato cubes, butter roasted mushroom caps, olives & feta",
+    "Roasted roma tomatoes with signature fig & balsamic syrup drizzle",
+    "Choice of classic salad with artisan rolls & butter",
+  ],
+};
+
+export const SOUTHWEST_GRILLED_FLANK_STEAK_DISPLAY: DeliveryPackagePreset = {
+  key: "southwest-grilled-flank-steak-display",
+  displayName: "Southwest Grilled Flank Steak Display",
+  panelCategory: "ambient_display",
+  routeTargetField: "buffetChina",
+  matchPatterns: ["southwest grilled flank steak display"],
+  groups: [],
+  autoIncluded: [
+    "Grilled flank steak with roasted chili potatoes & grilled white corn salad",
+    "Sautéed peppers, charred red onion rings",
+    "Grilled pineapple salsa & avocado cilantro crema",
+    "Choice of classic salad with artisan rolls & butter",
+  ],
+};
+
+export const ROASTED_FILET_MIGNON_DISPLAY: DeliveryPackagePreset = {
+  key: "roasted-filet-mignon-display",
+  displayName: "Roasted Filet Mignon Display",
+  panelCategory: "ambient_display",
+  routeTargetField: "buffetChina",
+  matchPatterns: ["roasted filet mignon display"],
+  groups: [],
+  autoIncluded: [
+    "Filet mignon in rosemary & cracked black pepper crust",
+    "Roasted potatoes, sautéed trilogy of mushrooms, crispy onion straws",
+    "Petite rolls, whipped herb infused butter, horseradish crème",
+    "Salad selection — 15 guest minimum",
+  ],
+};
+
+// ─── Ambient Displays — Seafood ───────────────────────────────────────────────
+
+export const SWEET_SOUR_GLAZED_SHRIMP_DISPLAY: DeliveryPackagePreset = {
+  key: "sweet-sour-glazed-shrimp-display",
+  displayName: "Sweet & Sour Glazed Shrimp Display",
+  panelCategory: "ambient_display",
+  routeTargetField: "buffetChina",
+  matchPatterns: ["sweet & sour glazed shrimp display", "sweet and sour glazed shrimp"],
+  groups: [],
+  autoIncluded: [
+    "Sweet & sour glazed shrimp in a confetti black rice ring",
+    "Mango, cilantro, pepper trio & orange segments with lime vinaigrette",
+    "Paired with spicy cucumber salad",
+    "Choice of classic salad with artisan rolls & butter",
+  ],
+};
+
+export const SALMON_PROVENCAL_DISPLAY: DeliveryPackagePreset = {
+  key: "salmon-provencal-display",
+  displayName: "Salmon Provencal Display",
+  panelCategory: "ambient_display",
+  routeTargetField: "buffetChina",
+  matchPatterns: ["salmon provencal display"],
+  groups: [],
+  autoIncluded: [
+    "Seasoned seared salmon atop arugula, white beans, cherry tomatoes",
+    "Sautéed rosemary shallots & capers tossed with roasted pepper vinaigrette",
+    "Choice of classic salad with artisan rolls & butter",
+  ],
+};
+
+export const SEARED_TUNA_NICOISE_DISPLAY: DeliveryPackagePreset = {
+  key: "seared-tuna-nicoise-display",
+  displayName: "Seared Tuna Nicoise Display",
+  panelCategory: "ambient_display",
+  routeTargetField: "buffetChina",
+  matchPatterns: ["seared tuna nicoise display"],
+  groups: [],
+  autoIncluded: [
+    "Seared tuna with fingerling potatoes, haricots verts, olives, red onion & diced egg",
+    "Mixed greens tossed with simple red wine vinaigrette",
+    "Crispy wonton threads",
+    "Choice of classic salad with artisan rolls & butter",
+  ],
+};
+
+export const SRIRACHA_HONEY_GLAZED_SALMON_DISPLAY: DeliveryPackagePreset = {
+  key: "sriracha-honey-glazed-salmon-display",
+  displayName: "Sriracha Honey Glazed Salmon Tiles Display",
+  panelCategory: "ambient_display",
+  routeTargetField: "buffetChina",
+  matchPatterns: ["sriracha honey glazed salmon tiles", "sriracha salmon tiles"],
+  groups: [],
+  autoIncluded: [
+    "Sriracha honey glazed salmon tiles with sautéed shallots & avocado relish",
+    "Atop dried cherries, green onion, micro-cut yellow pepper & citrus zest studded wheatberry salad",
+    "Choice of classic salad with artisan rolls & butter",
+  ],
+};
+
+export const SESAME_ENCRUSTED_AHI_TUNA_DISPLAY: DeliveryPackagePreset = {
+  key: "sesame-encrusted-ahi-tuna-display",
+  displayName: "Sesame Encrusted Ahi Tuna Display",
+  panelCategory: "ambient_display",
+  routeTargetField: "buffetChina",
+  matchPatterns: ["sesame encrusted ahi tuna display"],
+  groups: [],
+  autoIncluded: [
+    "Pan seared ahi tuna cut sushi style",
+    "Red pepper & cucumber slaw, sushi rice salad",
+    "Black soy balsamic drizzle with micro greens & pickled ginger",
+    "Choice of classic salad with artisan rolls & butter",
+  ],
+};
+
+export const BAJA_SHRIMP_SALAD_DISPLAY: DeliveryPackagePreset = {
+  key: "baja-shrimp-salad-display",
+  displayName: "Baja Shrimp Salad Display",
+  panelCategory: "ambient_display",
+  routeTargetField: "buffetChina",
+  matchPatterns: ["baja shrimp salad display"],
+  groups: [],
+  autoIncluded: [
+    "Tequila & lime marinated shrimp with avocado, tomatoes, black beans & corn",
+    "Atop mixed greens with crispy tortilla strips",
+    "Creamy sweet red pepper ranch dressing",
+    "Choice of classic salad with artisan rolls & butter",
+  ],
+};
+
+// ─── Ambient Displays — Mixed Grill ───────────────────────────────────────────
+
 export const SOUTH_OF_BORDER_MIXED_GRILL: DeliveryPackagePreset = {
   key: "south-of-border-mixed-grill",
   displayName: "South of the Border Mixed Grill",
@@ -564,6 +870,176 @@ export const TERIYAKI_SAMPLER_MIXED_GRILL: DeliveryPackagePreset = {
   ],
 };
 
+export const HEALTHWERX_TWOSOME_MIXED_GRILL: DeliveryPackagePreset = {
+  key: "healthwerx-twosome-mixed-grill",
+  displayName: "Healthwerx Twosome Mixed Grill",
+  panelCategory: "ambient_display",
+  routeTargetField: "buffetChina",
+  matchPatterns: ["healthwerx twosome", "healthwerx twosome mixed grill"],
+  groups: [],
+  autoIncluded: [
+    "Line-caught blackened salmon",
+    "Mandarin ginger glazed chicken",
+    "Kale & quinoa combo topped with toasted almonds, dried cranberries, toasted shallots & orange zest",
+    "Center of black bean salsa",
+    "Choice of classic salad with artisan rolls & butter",
+  ],
+};
+
+export const SOUTHEAST_ASIAN_MIXED_GRILL: DeliveryPackagePreset = {
+  key: "southeast-asian-mixed-grill",
+  displayName: "Southeast Asian Mixed Grill",
+  panelCategory: "ambient_display",
+  routeTargetField: "buffetChina",
+  matchPatterns: ["southeast asian mixed grill"],
+  groups: [],
+  autoIncluded: [
+    "Grilled lemongrass-ginger shrimp",
+    "Hoisin brushed chicken",
+    "Sweet & spicy black rice salad & julienne vegetables",
+    "Mango, cilantro, shredded coconut surrounding avocado jicama salad with pumpkin seeds",
+    "Ginger-sambal vinaigrette drizzle",
+    "Choice of classic salad with artisan rolls & butter",
+  ],
+};
+
+export const ANYTIME_GRILL: DeliveryPackagePreset = {
+  key: "anytime-grill",
+  displayName: "Anytime Mixed Grill",
+  panelCategory: "ambient_display",
+  routeTargetField: "buffetChina",
+  matchPatterns: ["anytime mixed grill", "anytime grill"],
+  groups: [],
+  autoIncluded: [
+    "Orange teriyaki glazed grilled tuna",
+    "Mesquite grilled chicken breast",
+    "Grilled asparagus, roasted roma tomato halves & fire roasted peppers",
+    "Grilled white corn salad with melon citrus vinaigrette",
+    "Choice of classic salad with artisan rolls & butter",
+  ],
+};
+
+export const KABOOM_MIXED_GRILL: DeliveryPackagePreset = {
+  key: "kaboom-mixed-grill",
+  displayName: "Kaboom!! Mixed Grill",
+  panelCategory: "ambient_display",
+  routeTargetField: "buffetChina",
+  matchPatterns: ["kaboom!! mixed grill", "kaboom mixed grill", "kaboom!!"],
+  groups: [],
+  autoIncluded: [
+    "Tender marinated beef & chicken kabobs",
+    "Crown of seasonal grilled vegetables",
+    "Basmati rice with chopped tomatoes, kalamata olives, red pepper, feta & scallions",
+    "Green goddess vinaigrette, micro chopped cashew & chili infused honey drizzle",
+    "Choice of classic salad with artisan rolls & butter",
+  ],
+};
+
+// ─── Desserts ─────────────────────────────────────────────────────────────────
+
+export const DECADENT_DESSERT_DISPLAY: DeliveryPackagePreset = {
+  key: "decadent-dessert-display",
+  displayName: "Decadent Dessert Display",
+  panelCategory: "desserts",
+  routeTargetField: "deliveryDeli",
+  matchPatterns: ["decadent dessert display"],
+  groups: [],
+  autoIncluded: [
+    "Freshly baked cookies, brownies, blondies & assorted dessert bars",
+    "Artfully arranged & garnished with chocolate covered strawberries, mini cannolis & beignets",
+  ],
+};
+
+export const DECADENT_DESSERT_DISPLAY_PLUS: DeliveryPackagePreset = {
+  key: "decadent-dessert-display-plus",
+  displayName: "Decadent Dessert Display PLUS!!",
+  panelCategory: "desserts",
+  routeTargetField: "deliveryDeli",
+  matchPatterns: ["decadent dessert display plus"],
+  groups: [],
+  autoIncluded: [
+    "Housemade cookies, brownies, blondies & featured dessert bar",
+    "Mini cheese cakes & foodwerx Bark",
+    "Chocolate dipped strawberries, granny smith apples & coconut macaroons",
+  ],
+};
+
+export const SINFULLY_DELICIOUS_CHOC_DIPPED_1: DeliveryPackagePreset = {
+  key: "sinfully-delicious-choc-dipped-1",
+  displayName: "Sinfully Delicious Chocolate Dipped #1 — Strictly Sweet",
+  panelCategory: "desserts",
+  routeTargetField: "deliveryDeli",
+  matchPatterns: ["sinfully delicious chocolate dipped #1", "strictly sweet chocolate dipped"],
+  groups: [],
+  autoIncluded: [
+    "Sweet driscoll strawberries, granny smith apples, selected seasonal fruit",
+    "Oreos, coconut macaroons, brownies hand dipped in chocolate",
+  ],
+};
+
+export const SINFULLY_DELICIOUS_CHOC_DIPPED_2: DeliveryPackagePreset = {
+  key: "sinfully-delicious-choc-dipped-2",
+  displayName: "Sinfully Delicious Chocolate Dipped #2 — Sweet & Salty",
+  panelCategory: "desserts",
+  routeTargetField: "deliveryDeli",
+  matchPatterns: ["sinfully delicious chocolate dipped #2", "sweet & salty chocolate dipped"],
+  groups: [],
+  autoIncluded: [
+    "Plump driscoll strawberries, granny smith apples, rice crispy treats, mini cannolis",
+    "Thick-cut potato chips, salted pretzels & salty toffee drizzled nuts — all dipped in CHOCOLATE!",
+  ],
+};
+
+export const MINI_PASTRIES_PETIT_FOURS: DeliveryPackagePreset = {
+  key: "mini-pastries-petit-fours",
+  displayName: "Mini Pastries & Petit Fours",
+  panelCategory: "desserts",
+  routeTargetField: "deliveryDeli",
+  matchPatterns: ["mini pastries & petit fours", "petit fours"],
+  groups: [],
+  autoIncluded: [
+    "Traditional petit fours, mini eclairs, cream puffs, cannolis & mini fruit tartlets",
+  ],
+};
+
+export const DESSERT_SHOT: DeliveryPackagePreset = {
+  key: "dessert-shot",
+  displayName: 'Dessert "Shot" Display',
+  panelCategory: "desserts",
+  routeTargetField: "deliveryDeli",
+  matchPatterns: ["dessert shot", "dessert \"shot\""],
+  groups: [],
+  autoIncluded: [
+    "Perfect size desserts presented in mini shot vessels",
+    "Double chocolate, strawberry cream cheese pound cake, lemon & pineapple spoon bread",
+  ],
+};
+
+export const COOKIES_COOKIES_COOKIES: DeliveryPackagePreset = {
+  key: "cookies-cookies-cookies",
+  displayName: "Cookies Cookies Cookies!",
+  panelCategory: "desserts",
+  routeTargetField: "deliveryDeli",
+  matchPatterns: ["cookies cookies cookies"],
+  groups: [],
+  autoIncluded: [
+    "Housemade chocolate chip, white macadamia, oatmeal raisin & foodwerx featured flavor cookies",
+    "Garnished with driscoll sweet berries",
+  ],
+};
+
+export const COOKIES_N_BROWNIES: DeliveryPackagePreset = {
+  key: "cookies-n-brownies",
+  displayName: "Cookies 'n Brownies",
+  panelCategory: "desserts",
+  routeTargetField: "deliveryDeli",
+  matchPatterns: ["cookies n brownies", "cookies 'n brownies"],
+  groups: [],
+  autoIncluded: [
+    "Assorted cookies & brownie squares",
+  ],
+};
+
 // ─── Registry & helpers ───────────────────────────────────────────────────────
 
 export const ALL_DELIVERY_PACKAGE_PRESETS: readonly DeliveryPackagePreset[] = [
@@ -588,18 +1064,56 @@ export const ALL_DELIVERY_PACKAGE_PRESETS: readonly DeliveryPackagePreset[] = [
   BBY_SIGNATURE_SALAD_BAR,
   // Happy Hour
   SLAMMIN_SLIDERS,
-  // Ambient Displays (fixed components — shown in panel for reference)
+  // Ambient Displays — Vegetarian
+  VERY_VEGETARIAN_VICTORY_LANDSLIDE,
+  BUFFALO_GRILLED_CAULIFLOWER_STEAKS,
+  GRILLED_PORTABELLA_MUSHROOM_CAPS,
+  BBQ_RUBBED_GRILLED_TOFU,
+  GRILLED_VEGETABLE_TOWER_DISPLAY,
+  // Ambient Displays — Chicken
+  CRISPY_FRIED_BONELESS_PICNIC_CHICKEN,
+  MESQUITE_GRILLED_CHICKEN_DISPLAY,
+  GRILLED_LEMON_CHICKEN_WILD_RICE,
+  FAR_EAST_CHICKEN_DISPLAY,
+  GRILLED_BONELESS_CHICKEN_BASIL_EVOO,
+  // Ambient Displays — Beef
+  VIETNAMESE_STEAK_DISPLAY,
+  WERX_SIGNATURE_FLANK_STEAK_DISPLAY,
+  SOUTHWEST_GRILLED_FLANK_STEAK_DISPLAY,
+  ROASTED_FILET_MIGNON_DISPLAY,
+  // Ambient Displays — Seafood
+  SWEET_SOUR_GLAZED_SHRIMP_DISPLAY,
+  SALMON_PROVENCAL_DISPLAY,
+  SEARED_TUNA_NICOISE_DISPLAY,
+  SRIRACHA_HONEY_GLAZED_SALMON_DISPLAY,
+  SESAME_ENCRUSTED_AHI_TUNA_DISPLAY,
+  BAJA_SHRIMP_SALAD_DISPLAY,
+  // Ambient Displays — Mixed Grill
   SOUTH_OF_BORDER_MIXED_GRILL,
   TERIYAKI_SAMPLER_MIXED_GRILL,
+  HEALTHWERX_TWOSOME_MIXED_GRILL,
+  SOUTHEAST_ASIAN_MIXED_GRILL,
+  ANYTIME_GRILL,
+  KABOOM_MIXED_GRILL,
+  // Desserts
+  DECADENT_DESSERT_DISPLAY,
+  DECADENT_DESSERT_DISPLAY_PLUS,
+  SINFULLY_DELICIOUS_CHOC_DIPPED_1,
+  SINFULLY_DELICIOUS_CHOC_DIPPED_2,
+  MINI_PASTRIES_PETIT_FOURS,
+  DESSERT_SHOT,
+  COOKIES_COOKIES_COOKIES,
+  COOKIES_N_BROWNIES,
 ];
 
 export const PANEL_CATEGORY_LABELS: Record<DeliveryPanelCategory, string> = {
-  breakfast: "Breakfast Packages",
-  lunch_platter: "Lunch Platters",
-  hot_lunch: "Hot Lunch",
-  lunch_premium: "Premium Lunch",
-  happy_hour: "Happy Hour",
-  ambient_display: "Ambient Displays",
+  breakfast: "🍳 Breakfast Packages",
+  lunch_platter: "🥪 Lunch Platters",
+  hot_lunch: "🔥 Hot Lunch",
+  lunch_premium: "⭐ Premium Lunch",
+  happy_hour: "🍺 Happy Hour",
+  ambient_display: "🌿 Ambient Displays",
+  desserts: "🍰 Desserts",
 };
 
 /** Returns a preset if the item name matches any of its patterns, otherwise null. */
