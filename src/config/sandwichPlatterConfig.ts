@@ -188,6 +188,8 @@ export type PlatterRow = {
   platterType: string;
   picks: PlatterPick[];
   quantity: number;
+  /** Special instructions / modifications (e.g. "No Tomato, No Lettuce") */
+  modifications?: string;
 };
 
 const MAX_PICK_QTY = 999;
@@ -219,6 +221,7 @@ export function normalizePlatterRow(row: Partial<PlatterRow> & Record<string, un
     platterType: String(row.platterType ?? ""),
     picks: normalizePlatterPicks(row.picks),
     quantity: Math.max(0, Number(row.quantity) || 0),
+    ...(row.modifications ? { modifications: String(row.modifications) } : {}),
   };
 }
 

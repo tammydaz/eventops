@@ -86,6 +86,19 @@ function buildSaladRows(loaded: Array<{ name: string; qty: number }>): SaladRow[
 
 // ── Styles ────────────────────────────────────────────────────────────────────
 
+const MOD_CHIPS = [
+  "No Tomato", "No Lettuce", "No Onion",
+  "No Cheese", "Extra Cheese",
+  "No Mayo", "No Mustard",
+] as const;
+
+/** Toggle a modification token in/out of a notes string. */
+function toggleMod(notes: string, mod: string): string {
+  const parts = notes.split(",").map((s) => s.trim()).filter(Boolean);
+  if (parts.includes(mod)) return parts.filter((p) => p !== mod).join(", ");
+  return [...parts, mod].join(", ");
+}
+
 const S = {
   section: {
     width: "100%",
@@ -588,52 +601,82 @@ export function BoxedLunchSection({ eventId, canEdit, onSaved, onDone }: Props) 
                     ORDER SUMMARY
                   </div>
                   {selectedLines.map((line) => (
-                    <div key={line.id} style={S.selectedLine}>
-                      <span style={{ flex: "1 1 160px", fontSize: 13, color: "#e5e7eb", minWidth: 120 }}>
-                        {line.name}
-                      </span>
+                    <div key={line.id} style={{ ...S.selectedLine, flexDirection: "column", alignItems: "stretch", gap: 6 }}>
+                      {/* Top row: name, bread, qty, remove */}
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                        <span style={{ flex: "1 1 140px", fontSize: 13, color: "#e5e7eb", minWidth: 100, fontWeight: 600 }}>
+                          {line.name}
+                        </span>
 
-                      {/* Bread */}
-                      <select
-                        value={line.breadType}
-                        disabled={!canEdit}
-                        onChange={(e) => updateLine(line.id, { breadType: e.target.value })}
-                        style={{ ...S.select, fontSize: 12, flex: "0 0 auto" }}
-                      >
-                        <option value="">— Bread —</option>
-                        {BOXED_LUNCH_BREAD_TYPES.map((b) => (
-                          <option key={b} value={b}>{b}</option>
-                        ))}
-                      </select>
+                        {/* Bread */}
+                        <select
+                          value={line.breadType}
+                          disabled={!canEdit}
+                          onChange={(e) => updateLine(line.id, { breadType: e.target.value })}
+                          style={{ ...S.select, fontSize: 12, flex: "0 0 auto" }}
+                        >
+                          <option value="">— Bread —</option>
+                          {BOXED_LUNCH_BREAD_TYPES.map((b) => (
+                            <option key={b} value={b}>{b}</option>
+                          ))}
+                        </select>
 
-                      {/* Qty */}
-                      <input
-                        type="number"
-                        min={1}
-                        value={line.qty}
-                        disabled={!canEdit}
-                        onChange={(e) => updateLine(line.id, { qty: parseInt(e.target.value, 10) || 1 })}
-                        style={{ ...S.input, width: 56, textAlign: "center", fontSize: 13 }}
-                      />
+                        {/* Qty */}
+                        <input
+                          type="number"
+                          min={1}
+                          value={line.qty}
+                          disabled={!canEdit}
+                          onChange={(e) => updateLine(line.id, { qty: parseInt(e.target.value, 10) || 1 })}
+                          style={{ ...S.input, width: 56, textAlign: "center", fontSize: 13 }}
+                        />
 
-                      {/* Notes (compact) */}
-                      <input
-                        type="text"
-                        placeholder="Notes…"
-                        value={line.customNotes}
-                        disabled={!canEdit}
-                        onChange={(e) => updateLine(line.id, { customNotes: e.target.value })}
-                        style={{ ...S.input, flex: "1 1 100px", minWidth: 80, fontSize: 12 }}
-                      />
+                        <button
+                          type="button"
+                          disabled={!canEdit}
+                          onClick={() => removeLine(line.id)}
+                          style={{ ...S.removeBtn, marginLeft: "auto" }}
+                        >
+                          ✕
+                        </button>
+                      </div>
 
-                      <button
-                        type="button"
-                        disabled={!canEdit}
-                        onClick={() => removeLine(line.id)}
-                        style={S.removeBtn}
-                      >
-                        ✕
-                      </button>
+                      {/* Mod chips + free-text notes */}
+                      <div style={{ display: "flex", gap: 5, flexWrap: "wrap", alignItems: "center", paddingLeft: 2 }}>
+                        {MOD_CHIPS.map((mod) => {
+                          const active = line.customNotes.includes(mod);
+                          return (
+                            <button
+                              key={mod}
+                              type="button"
+                              disabled={!canEdit}
+                              onClick={() => updateLine(line.id, { customNotes: toggleMod(line.customNotes, mod) })}
+                              style={{
+                                padding: "3px 8px",
+                                fontSize: 11,
+                                fontWeight: 600,
+                                borderRadius: 20,
+                                border: `1px solid ${active ? "#f97316" : "rgba(255,255,255,0.15)"}`,
+                                background: active ? "rgba(249,115,22,0.2)" : "rgba(255,255,255,0.05)",
+                                color: active ? "#fb923c" : "rgba(255,255,255,0.45)",
+                                cursor: canEdit ? "pointer" : "default",
+                                transition: "all 0.15s",
+                                flexShrink: 0,
+                              }}
+                            >
+                              {active ? "✓ " : ""}{mod}
+                            </button>
+                          );
+                        })}
+                        <input
+                          type="text"
+                          placeholder="Other notes…"
+                          value={line.customNotes}
+                          disabled={!canEdit}
+                          onChange={(e) => updateLine(line.id, { customNotes: e.target.value })}
+                          style={{ ...S.input, flex: "1 1 100px", minWidth: 80, fontSize: 11 }}
+                        />
+                      </div>
                     </div>
                   ))}
                 </div>

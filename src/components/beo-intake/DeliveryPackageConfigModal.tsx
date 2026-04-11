@@ -24,12 +24,21 @@ interface Props {
   onCancel: () => void;
 }
 
+// ── Dark theme ────────────────────────────────────────────────────────────────
+
+const BG_PANEL   = "#111827";
+const BG_CARD    = "#1e2736";
+const BG_HEADER  = "#111827";
+const BORDER     = "rgba(255,255,255,0.1)";
+const TEXT_PRI   = "#f0f4f8";
+const TEXT_MUT   = "rgba(255,255,255,0.45)";
+
 // ── Styles ────────────────────────────────────────────────────────────────────
 
 const OVERLAY: React.CSSProperties = {
   position: "fixed",
   inset: 0,
-  background: "rgba(0,0,0,0.55)",
+  background: "rgba(0,0,0,0.72)",
   zIndex: 9000,
   display: "flex",
   alignItems: "center",
@@ -38,23 +47,24 @@ const OVERLAY: React.CSSProperties = {
 };
 
 const MODAL: React.CSSProperties = {
-  background: "#fff",
+  background: BG_PANEL,
+  border: `1px solid ${BORDER}`,
   borderRadius: 12,
   width: "100%",
   maxWidth: 560,
   maxHeight: "90vh",
   overflowY: "auto",
-  boxShadow: "0 20px 60px rgba(0,0,0,0.3)",
+  boxShadow: "0 20px 60px rgba(0,0,0,0.6)",
   display: "flex",
   flexDirection: "column",
 };
 
 const HEADER: React.CSSProperties = {
   padding: "20px 24px 14px",
-  borderBottom: "1px solid #f0f0f0",
+  borderBottom: `1px solid ${BORDER}`,
   position: "sticky",
   top: 0,
-  background: "#fff",
+  background: BG_HEADER,
   zIndex: 1,
 };
 
@@ -65,26 +75,26 @@ const BODY: React.CSSProperties = {
 
 const FOOTER: React.CSSProperties = {
   padding: "14px 24px",
-  borderTop: "1px solid #f0f0f0",
+  borderTop: `1px solid ${BORDER}`,
   display: "flex",
   gap: 10,
   justifyContent: "flex-end",
   position: "sticky",
   bottom: 0,
-  background: "#fff",
+  background: BG_PANEL,
 };
 
 const GROUP_BOX: React.CSSProperties = {
   marginBottom: 18,
-  border: "1px solid #e5e7eb",
+  border: `1px solid ${BORDER}`,
   borderRadius: 8,
   overflow: "hidden",
 };
 
 const GROUP_HEADER: React.CSSProperties = {
   padding: "8px 12px",
-  background: "#f8fafc",
-  borderBottom: "1px solid #e5e7eb",
+  background: BG_CARD,
+  borderBottom: `1px solid ${BORDER}`,
   display: "flex",
   alignItems: "center",
   justifyContent: "space-between",
@@ -92,10 +102,10 @@ const GROUP_HEADER: React.CSSProperties = {
 
 const GROUP_LABEL: React.CSSProperties = {
   fontWeight: 700,
-  fontSize: 13,
-  color: "#374151",
+  fontSize: 12,
+  color: "rgba(255,255,255,0.7)",
   textTransform: "uppercase" as const,
-  letterSpacing: "0.03em",
+  letterSpacing: "0.05em",
 };
 
 const OPTION_ROW: React.CSSProperties = {
@@ -110,7 +120,7 @@ const OPTION_ROW: React.CSSProperties = {
 const AUTO_ROW: React.CSSProperties = {
   padding: "6px 12px",
   fontSize: 13,
-  color: "#6b7280",
+  color: "rgba(255,255,255,0.5)",
   display: "flex",
   alignItems: "center",
   gap: 8,
@@ -184,11 +194,11 @@ export function DeliveryPackageConfigModal({ preset, itemName, onConfirm, onCanc
       <div style={MODAL} onClick={(e) => e.stopPropagation()}>
         {/* Header */}
         <div style={HEADER}>
-          <div style={{ fontSize: 11, fontWeight: 600, color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>
+          <div style={{ fontSize: 10, fontWeight: 700, color: TEXT_MUT, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 4 }}>
             Delivery Package
           </div>
-          <div style={{ fontSize: 18, fontWeight: 800, color: "#111827" }}>{itemName}</div>
-          <div style={{ fontSize: 13, color: "#6b7280", marginTop: 4 }}>
+          <div style={{ fontSize: 18, fontWeight: 800, color: TEXT_PRI }}>{itemName}</div>
+          <div style={{ fontSize: 13, color: TEXT_MUT, marginTop: 4 }}>
             Make selections for each section below, then save.
           </div>
         </div>
@@ -214,7 +224,7 @@ export function DeliveryPackageConfigModal({ preset, itemName, onConfirm, onCanc
                       key={opt}
                       style={{
                         ...OPTION_ROW,
-                        background: checked ? "#eff6ff" : "transparent",
+                        background: checked ? "rgba(59,130,246,0.15)" : "transparent",
                         opacity: disabled ? 0.4 : 1,
                         cursor: disabled ? "not-allowed" : "pointer",
                       }}
@@ -225,8 +235,8 @@ export function DeliveryPackageConfigModal({ preset, itemName, onConfirm, onCanc
                           width: 18,
                           height: 18,
                           borderRadius: group.pickCount === 1 ? "50%" : 4,
-                          border: checked ? "none" : "2px solid #d1d5db",
-                          background: checked ? "#2563eb" : "#fff",
+                          border: checked ? "none" : `2px solid rgba(255,255,255,0.25)`,
+                          background: checked ? "#2563eb" : "rgba(255,255,255,0.07)",
                           display: "flex",
                           alignItems: "center",
                           justifyContent: "center",
@@ -239,7 +249,7 @@ export function DeliveryPackageConfigModal({ preset, itemName, onConfirm, onCanc
                           </svg>
                         )}
                       </div>
-                      <span style={{ fontSize: 14, color: "#111827" }}>{opt}</span>
+                      <span style={{ fontSize: 14, color: TEXT_PRI }}>{opt}</span>
                     </div>
                   );
                 })}
@@ -249,10 +259,10 @@ export function DeliveryPackageConfigModal({ preset, itemName, onConfirm, onCanc
 
           {/* Auto-included section */}
           {(preset.autoIncluded ?? []).length > 0 && (
-            <div style={{ ...GROUP_BOX, borderColor: "#f0fdf4" }}>
-              <div style={{ ...GROUP_HEADER, background: "#f0fdf4" }}>
-                <span style={{ ...GROUP_LABEL, color: "#15803d" }}>Always Included</span>
-                <span style={{ fontSize: 11, color: "#16a34a", fontWeight: 600 }}>✓ Auto</span>
+            <div style={{ ...GROUP_BOX, borderColor: "rgba(34,197,94,0.25)" }}>
+              <div style={{ ...GROUP_HEADER, background: "rgba(34,197,94,0.1)" }}>
+                <span style={{ ...GROUP_LABEL, color: "#4ade80" }}>Always Included</span>
+                <span style={{ fontSize: 11, color: "#4ade80", fontWeight: 600 }}>✓ Auto</span>
               </div>
               {(preset.autoIncluded ?? []).map((item) => (
                 <div key={item} style={AUTO_ROW}>
@@ -267,13 +277,13 @@ export function DeliveryPackageConfigModal({ preset, itemName, onConfirm, onCanc
           {validation.length > 0 && (
             <div
               style={{
-                background: "#fef9c3",
-                border: "1px solid #fde047",
+                background: "rgba(234,179,8,0.12)",
+                border: "1px solid rgba(234,179,8,0.4)",
                 borderRadius: 8,
                 padding: "10px 14px",
                 marginTop: 8,
                 fontSize: 13,
-                color: "#713f12",
+                color: "#fde047",
               }}
             >
               <strong>Still needed:</strong> {validation.join(", ")}
@@ -289,11 +299,11 @@ export function DeliveryPackageConfigModal({ preset, itemName, onConfirm, onCanc
             style={{
               padding: "9px 20px",
               borderRadius: 6,
-              border: "1px solid #d1d5db",
-              background: "#fff",
+              border: `1px solid ${BORDER}`,
+              background: "rgba(255,255,255,0.06)",
               fontSize: 14,
               cursor: "pointer",
-              color: "#374151",
+              color: TEXT_PRI,
             }}
           >
             Cancel
@@ -306,8 +316,8 @@ export function DeliveryPackageConfigModal({ preset, itemName, onConfirm, onCanc
               padding: "9px 20px",
               borderRadius: 6,
               border: "none",
-              background: validation.length > 0 ? "#9ca3af" : "#2563eb",
-              color: "#fff",
+              background: validation.length > 0 ? "#374151" : "#2563eb",
+              color: validation.length > 0 ? "rgba(255,255,255,0.35)" : "#fff",
               fontWeight: 700,
               fontSize: 14,
               cursor: validation.length > 0 ? "not-allowed" : "pointer",

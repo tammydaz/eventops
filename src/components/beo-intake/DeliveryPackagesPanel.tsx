@@ -1,13 +1,11 @@
 /**
  * DeliveryPackagesPanel
  *
- * Full-screen overlay panel — the single "Packages" entry point for delivery events.
+ * Dark-themed overlay panel — the single "Packages" entry point for delivery events.
  * Shows three sections:
  *   1. Delivery Packages — grouped by panelCategory, each button opens DeliveryPackageConfigModal
- *   2. Boxed Lunches    — button scrolls to / reveals the BoxedLunchSection below
+ *   2. Boxed Lunches    — button reveals the BoxedLunchSection below
  *   3. Sandwich Platters — button opens SandwichPlatterConfigModal
- *
- * Replaces the standalone "+ Boxed Lunches" and "+ Sandwich Platters" buttons.
  */
 import React from "react";
 import {
@@ -25,12 +23,23 @@ interface Props {
   disabled?: boolean;
 }
 
+// ── Dark theme colours (matches SandwichPlatterConfigModal / app dark UI) ──────
+
+const BG_OVERLAY   = "rgba(0,0,0,0.72)";
+const BG_PANEL     = "#111827";
+const BG_CARD      = "#1e2736";
+const BG_SECTION   = "#162032";
+const BORDER       = "rgba(255,255,255,0.1)";
+const TEXT_PRIMARY = "#f0f4f8";
+const TEXT_MUTED   = "rgba(255,255,255,0.45)";
+const TEXT_LABEL   = "rgba(255,255,255,0.55)";
+
 // ── Styles ────────────────────────────────────────────────────────────────────
 
 const OVERLAY: React.CSSProperties = {
   position: "fixed",
   inset: 0,
-  background: "rgba(0,0,0,0.65)",
+  background: BG_OVERLAY,
   zIndex: 8500,
   display: "flex",
   alignItems: "center",
@@ -39,44 +48,45 @@ const OVERLAY: React.CSSProperties = {
 };
 
 const PANEL: React.CSSProperties = {
-  background: "#fff",
+  background: BG_PANEL,
   borderRadius: 14,
   width: "100%",
   maxWidth: 640,
   maxHeight: "92vh",
   overflowY: "auto",
-  boxShadow: "0 24px 64px rgba(0,0,0,0.35)",
+  boxShadow: "0 24px 64px rgba(0,0,0,0.6)",
   display: "flex",
   flexDirection: "column",
+  border: `1px solid ${BORDER}`,
 };
 
 const HEADER: React.CSSProperties = {
-  padding: "20px 24px 16px",
-  borderBottom: "1px solid #f0f0f0",
+  padding: "18px 22px 14px",
+  borderBottom: `1px solid ${BORDER}`,
   display: "flex",
   alignItems: "center",
   justifyContent: "space-between",
   position: "sticky",
   top: 0,
-  background: "#fff",
+  background: BG_PANEL,
   zIndex: 1,
 };
 
 const BODY: React.CSSProperties = {
-  padding: "16px 24px 24px",
+  padding: "14px 22px 24px",
   flex: 1,
 };
 
 const SECTION_LABEL: React.CSSProperties = {
-  fontSize: 11,
+  fontSize: 10,
   fontWeight: 800,
-  letterSpacing: "0.08em",
+  letterSpacing: "0.1em",
   textTransform: "uppercase" as const,
-  color: "#6b7280",
-  marginBottom: 10,
+  color: TEXT_LABEL,
+  marginBottom: 9,
   marginTop: 20,
   paddingBottom: 6,
-  borderBottom: "1px solid #f3f4f6",
+  borderBottom: `1px solid ${BORDER}`,
 };
 
 const PKG_GRID: React.CSSProperties = {
@@ -85,10 +95,10 @@ const PKG_GRID: React.CSSProperties = {
   gap: 8,
 };
 
-const CATEGORY_COLORS: Record<DeliveryPanelCategory, { bg: string; border: string; text: string; dot: string }> = {
-  breakfast: { bg: "#fff7ed", border: "#fed7aa", text: "#c2410c", dot: "#f97316" },
-  lunch_platter: { bg: "#eff6ff", border: "#bfdbfe", text: "#1d4ed8", dot: "#3b82f6" },
-  hot_lunch: { bg: "#fef2f2", border: "#fecaca", text: "#b91c1c", dot: "#ef4444" },
+const CATEGORY_COLORS: Record<DeliveryPanelCategory, { accent: string; dot: string }> = {
+  breakfast: { accent: "#f97316", dot: "#fb923c" },
+  lunch_platter: { accent: "#3b82f6", dot: "#60a5fa" },
+  hot_lunch: { accent: "#ef4444", dot: "#f87171" },
 };
 
 function PackageButton({
@@ -101,34 +111,35 @@ function PackageButton({
   disabled?: boolean;
 }) {
   const c = CATEGORY_COLORS[preset.panelCategory];
-  const hasChoices = preset.groups.length > 0;
   return (
     <button
       type="button"
       disabled={disabled}
       onClick={onClick}
       style={{
-        background: c.bg,
-        border: `1px solid ${c.border}`,
+        background: BG_CARD,
+        border: `1px solid ${c.accent}40`,
         borderRadius: 8,
-        padding: "11px 14px",
+        padding: "11px 13px",
         textAlign: "left",
         cursor: disabled ? "not-allowed" : "pointer",
         display: "flex",
         flexDirection: "column",
-        gap: 4,
+        gap: 5,
         opacity: disabled ? 0.5 : 1,
-        transition: "box-shadow 0.15s",
+        transition: "border-color 0.15s, background 0.15s",
       }}
+      onMouseEnter={(e) => { if (!disabled) (e.currentTarget as HTMLButtonElement).style.borderColor = c.accent; }}
+      onMouseLeave={(e) => { if (!disabled) (e.currentTarget as HTMLButtonElement).style.borderColor = `${c.accent}40`; }}
     >
-      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
         <span style={{ width: 7, height: 7, borderRadius: "50%", background: c.dot, flexShrink: 0 }} />
-        <span style={{ fontSize: 13, fontWeight: 700, color: c.text, lineHeight: 1.3 }}>
+        <span style={{ fontSize: 13, fontWeight: 700, color: TEXT_PRIMARY, lineHeight: 1.3 }}>
           {preset.displayName}
         </span>
       </div>
-      {hasChoices && (
-        <div style={{ fontSize: 11, color: "#9ca3af", paddingLeft: 13 }}>
+      {preset.groups.length > 0 && (
+        <div style={{ fontSize: 11, color: TEXT_MUTED, paddingLeft: 14 }}>
           {preset.groups.map((g) => `Pick ${g.pickCount}`).join(" · ")}
         </div>
       )}
@@ -140,14 +151,14 @@ function BigActionButton({
   icon,
   label,
   sublabel,
-  color,
+  accent,
   onClick,
   disabled,
 }: {
   icon: string;
   label: string;
   sublabel: string;
-  color: string;
+  accent: string;
   onClick: () => void;
   disabled?: boolean;
 }) {
@@ -163,20 +174,22 @@ function BigActionButton({
         gap: 14,
         padding: "14px 16px",
         borderRadius: 10,
-        border: `1px solid ${color}40`,
-        background: `${color}10`,
+        border: `1px solid ${accent}40`,
+        background: BG_CARD,
         cursor: disabled ? "not-allowed" : "pointer",
         textAlign: "left",
         opacity: disabled ? 0.5 : 1,
         marginBottom: 8,
       }}
+      onMouseEnter={(e) => { if (!disabled) (e.currentTarget as HTMLButtonElement).style.borderColor = accent; }}
+      onMouseLeave={(e) => { if (!disabled) (e.currentTarget as HTMLButtonElement).style.borderColor = `${accent}40`; }}
     >
-      <span style={{ fontSize: 28, lineHeight: 1 }}>{icon}</span>
+      <span style={{ fontSize: 26, lineHeight: 1 }}>{icon}</span>
       <div style={{ flex: 1 }}>
-        <div style={{ fontSize: 15, fontWeight: 700, color: "#111827" }}>{label}</div>
-        <div style={{ fontSize: 12, color: "#6b7280", marginTop: 2 }}>{sublabel}</div>
+        <div style={{ fontSize: 14, fontWeight: 700, color: TEXT_PRIMARY }}>{label}</div>
+        <div style={{ fontSize: 12, color: TEXT_MUTED, marginTop: 2 }}>{sublabel}</div>
       </div>
-      <span style={{ fontSize: 18, color: color, fontWeight: 700 }}>→</span>
+      <span style={{ fontSize: 16, color: accent, fontWeight: 700 }}>→</span>
     </button>
   );
 }
@@ -200,26 +213,28 @@ export function DeliveryPackagesPanel({
   return (
     <div style={OVERLAY} onClick={onClose}>
       <div style={PANEL} onClick={(e) => e.stopPropagation()}>
+
         {/* Header */}
         <div style={HEADER}>
           <div>
-            <div style={{ fontSize: 11, fontWeight: 700, color: "#6b7280", letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 3 }}>
+            <div style={{ fontSize: 10, fontWeight: 700, color: TEXT_MUTED, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 3 }}>
               Delivery
             </div>
-            <div style={{ fontSize: 20, fontWeight: 800, color: "#111827" }}>📦 Packages</div>
+            <div style={{ fontSize: 19, fontWeight: 800, color: TEXT_PRIMARY }}>📦 Packages</div>
           </div>
           <button
             type="button"
             onClick={onClose}
-            style={{ background: "none", border: "none", fontSize: 22, color: "#9ca3af", cursor: "pointer", lineHeight: 1, padding: 4 }}
+            style={{ background: "none", border: "none", fontSize: 22, color: TEXT_MUTED, cursor: "pointer", lineHeight: 1, padding: 4 }}
           >
             ✕
           </button>
         </div>
 
         <div style={BODY}>
-          {/* Delivery Package presets */}
-          {byCategory.map(({ cat, presets }) => (
+
+          {/* Delivery Package presets by category */}
+          {byCategory.map(({ cat, presets }) =>
             presets.length === 0 ? null : (
               <div key={cat}>
                 <div style={SECTION_LABEL}>{PANEL_CATEGORY_LABELS[cat]}</div>
@@ -229,44 +244,33 @@ export function DeliveryPackagesPanel({
                       key={preset.key}
                       preset={preset}
                       disabled={disabled}
-                      onClick={() => {
-                        onClose();
-                        onSelectPackage(preset);
-                      }}
+                      onClick={() => { onClose(); onSelectPackage(preset); }}
                     />
                   ))}
                 </div>
               </div>
             )
-          ))}
+          )}
 
-          {/* Divider */}
-          <div style={{ borderTop: "2px solid #f3f4f6", margin: "24px 0 20px" }} />
-
-          {/* Boxed Lunches & Sandwich Platters */}
+          {/* Order builders divider */}
+          <div style={{ borderTop: `1px solid ${BORDER}`, margin: "22px 0 18px" }} />
           <div style={{ ...SECTION_LABEL, marginTop: 0 }}>🥡 Order Builders</div>
 
           <BigActionButton
             icon="🥡"
             label="Boxed Lunches"
             sublabel="Individual boxes — classic, executive, or salad"
-            color="#22c55e"
+            accent="#22c55e"
             disabled={disabled}
-            onClick={() => {
-              onClose();
-              onOpenBoxedLunches();
-            }}
+            onClick={() => { onClose(); onOpenBoxedLunches(); }}
           />
           <BigActionButton
             icon="🥪"
             label="Sandwich Platters"
             sublabel="Classic or gourmet sandwich trays"
-            color="#f97316"
+            accent="#f97316"
             disabled={disabled}
-            onClick={() => {
-              onClose();
-              onOpenSandwichPlatters();
-            }}
+            onClick={() => { onClose(); onOpenSandwichPlatters(); }}
           />
         </div>
       </div>

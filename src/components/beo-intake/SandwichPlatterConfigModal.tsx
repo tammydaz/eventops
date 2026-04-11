@@ -99,6 +99,19 @@ export function SandwichPlatterConfigModal({
     setRows((prev) => prev.map((r) => r.id === id ? { ...r, quantity } : r));
   }, []);
 
+  const updateModifications = useCallback((id: string, modifications: string) => {
+    setRows((prev) => prev.map((r) => r.id === id ? { ...r, modifications } : r));
+  }, []);
+
+  const togglePlatterMod = useCallback((id: string, mod: string) => {
+    setRows((prev) => prev.map((r) => {
+      if (r.id !== id) return r;
+      const parts = (r.modifications ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+      const next = parts.includes(mod) ? parts.filter((p) => p !== mod) : [...parts, mod];
+      return { ...r, modifications: next.join(", ") };
+    }));
+  }, []);
+
   // Update a specific pick slot index
   const updatePickSlot = useCallback((rowId: string, slotIdx: number, value: string) => {
     setRows((prev) => prev.map((r) => {
@@ -173,6 +186,7 @@ export function SandwichPlatterConfigModal({
         platterType: r.platterType,
         picks: [...r.picks.filter(Boolean), ...r.customPicks],
         quantity: r.quantity,
+        ...(r.modifications?.trim() ? { modifications: r.modifications.trim() } : {}),
       }))
       .filter((r) => r.picks.length > 0);
     onConfirm(valid);
@@ -462,6 +476,46 @@ export function SandwichPlatterConfigModal({
                     + Add
                   </button>
                 </div>
+
+                {/* Modifications — quick-tap chips + free text */}
+                <div style={{ marginTop: 10, paddingTop: 10, borderTop: "1px solid #333" }}>
+                  <div style={{ fontSize: 10, color: "#888", fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 6 }}>
+                    Modifications / Special Instructions
+                  </div>
+                  <div style={{ display: "flex", gap: 5, flexWrap: "wrap", alignItems: "center", marginBottom: 6 }}>
+                    {(["No Tomato", "No Lettuce", "No Onion", "No Cheese", "Extra Cheese", "No Mayo", "No Mustard"] as const).map((mod) => {
+                      const active = (row.modifications ?? "").includes(mod);
+                      return (
+                        <button
+                          key={mod}
+                          type="button"
+                          onClick={() => togglePlatterMod(row.id, mod)}
+                          style={{
+                            padding: "3px 9px",
+                            fontSize: 11,
+                            fontWeight: 600,
+                            borderRadius: 20,
+                            border: `1px solid ${active ? accentColor : "#444"}`,
+                            background: active ? accentBg : "#1a1a1a",
+                            color: active ? accentColor : "#666",
+                            cursor: "pointer",
+                            transition: "all 0.15s",
+                            flexShrink: 0,
+                          }}
+                        >
+                          {active ? "✓ " : ""}{mod}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <input
+                    type="text"
+                    value={row.modifications ?? ""}
+                    onChange={(e) => updateModifications(row.id, e.target.value)}
+                    placeholder="Other instructions (e.g. sub provolone, gluten-free)…"
+                    style={{ ...rowInputStyle, width: "100%", fontSize: 12 }}
+                  />
+                </div>
               </div>
             </div>
           );
@@ -494,6 +548,11 @@ export function SandwichPlatterConfigModal({
                       {allPicks.map((p, i) => (
                         <div key={i} style={{ fontSize: 11, color: "#aaa" }}>• {formatPlatterPickForDisplay(p)}</div>
                       ))}
+                      {row.modifications?.trim() && (
+                        <div style={{ fontSize: 11, color: "#f97316", fontStyle: "italic", marginTop: 2 }}>
+                          ✎ {row.modifications.trim()}
+                        </div>
+                      )}
                     </div>
                   </div>
                 );
