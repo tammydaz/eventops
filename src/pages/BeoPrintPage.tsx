@@ -3270,30 +3270,40 @@ const BeoPrintPage: React.FC = () => {
     } else {
       const rawName = data?.name || item.name || "Loading...";
       const dashIdx = rawName.indexOf(" – ");
-      let parentName = dashIdx >= 0 ? rawName.slice(0, dashIdx).trim() : rawName;
+      const parentName = dashIdx >= 0 ? rawName.slice(0, dashIdx).trim() : rawName;
       const nameSuffixChild = dashIdx >= 0 ? rawName.slice(dashIdx + 3).trim() : "";
-      if (emRow?.customText) parentName = emRow.customText;
-      rows.push({ lineName: parentName, isChild: false, itemId: item.id });
-      if (emRow?.components && emRow.components.length > 0) {
-        emRow.components.forEach((c, i) => {
-          const prefix = c.isAdded ? " • + " : " • ✓ ";
-          rows.push({ lineName: `${prefix}${c.name}`, isChild: true, itemId: `${item.id}-emc${i}` });
+
+      // Package items: customText holds the staff-selected choices (newline-separated).
+      // Print the real item name as the bold header, then each selection as an indented bullet.
+      if (emRow?.customText?.trim()) {
+        rows.push({ lineName: parentName, isChild: false, itemId: item.id });
+        const selectionLines = emRow.customText.split("\n").map((l) => l.trim()).filter(Boolean);
+        selectionLines.forEach((line, i) => {
+          rows.push({ lineName: ` • ${line}`, isChild: true, itemId: `${item.id}-pkg${i}` });
         });
       } else {
-        if (nameSuffixChild) rows.push({ lineName: ` • ✓ ${nameSuffixChild}`, isChild: true, itemId: `${item.id}-namesuffix` });
-        const effectiveSauce = getEffectiveSauce(item.id);
-        if (effectiveSauce && effectiveSauce !== nameSuffixChild) rows.push({ lineName: ` • ✓ ${effectiveSauce}`, isChild: true, itemId: `${item.id}-sauce` });
-        const desc = buffetMenuEdits[item.id] ?? data?.description;
-        const parentLabel = [parentName, desc, effectiveSauce, nameSuffixChild].filter(Boolean).join(" ").toLowerCase();
-        if (data?.childIds?.length) {
-          const childIdsToShow = data.childIds.filter((childId) => {
-            const childName = menuItemData[childId]?.name || "";
-            return childName && !parentLabel.includes(childName.toLowerCase());
+        rows.push({ lineName: parentName, isChild: false, itemId: item.id });
+        if (emRow?.components && emRow.components.length > 0) {
+          emRow.components.forEach((c, i) => {
+            const prefix = c.isAdded ? " • + " : " • ✓ ";
+            rows.push({ lineName: `${prefix}${c.name}`, isChild: true, itemId: `${item.id}-emc${i}` });
           });
-          childIdsToShow.forEach((childId) => {
-            const childName = menuItemData[childId]?.name || "Loading...";
-            rows.push({ lineName: ` • ✓ ${childName}`, isChild: true, itemId: childId });
-          });
+        } else {
+          if (nameSuffixChild) rows.push({ lineName: ` • ✓ ${nameSuffixChild}`, isChild: true, itemId: `${item.id}-namesuffix` });
+          const effectiveSauce = getEffectiveSauce(item.id);
+          if (effectiveSauce && effectiveSauce !== nameSuffixChild) rows.push({ lineName: ` • ✓ ${effectiveSauce}`, isChild: true, itemId: `${item.id}-sauce` });
+          const desc = buffetMenuEdits[item.id] ?? data?.description;
+          const parentLabel = [parentName, desc, effectiveSauce, nameSuffixChild].filter(Boolean).join(" ").toLowerCase();
+          if (data?.childIds?.length) {
+            const childIdsToShow = data.childIds.filter((childId) => {
+              const childName = menuItemData[childId]?.name || "";
+              return childName && !parentLabel.includes(childName.toLowerCase());
+            });
+            childIdsToShow.forEach((childId) => {
+              const childName = menuItemData[childId]?.name || "Loading...";
+              rows.push({ lineName: ` • ✓ ${childName}`, isChild: true, itemId: childId });
+            });
+          }
         }
       }
     }
