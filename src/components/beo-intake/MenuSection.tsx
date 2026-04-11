@@ -1286,6 +1286,8 @@ type MenuSectionProps = {
   /** When set, removing a line deletes the shadow row + syncs so Print/BEO and Airtable stay aligned. */
   shadowMenuRows?: Array<{ id: string; section: string; catalogItemId: string | null }>;
   loadShadowMenu?: (opts?: { retryIfEmpty?: boolean }) => Promise<void>;
+  /** Opens the packages panel — shows all choice packages for the current event type */
+  onOpenPackages?: () => void;
 };
 
 export const MenuSection = ({
@@ -1294,6 +1296,7 @@ export const MenuSection = ({
   deliveryChromeMode = "full",
   shadowMenuRows: shadowMenuRowsForRemove,
   loadShadowMenu,
+  onOpenPackages,
 }: MenuSectionProps) => {
   const { selectedEventId, selectedEventData, setFields, loadEventData } = useEventStore();
   const [menuItems, setMenuItems] = useState<LinkedRecordItem[]>([]);
@@ -2601,7 +2604,10 @@ export const MenuSection = ({
                   </tbody>
                 </table>
               </div>
-              <button type="button" disabled={!canEdit} onClick={() => openPicker("buffet_metal", "buffetMetal", "Buffet – Metal")} style={smallAddButtonStyle}>+ Add</button>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                <button type="button" disabled={!canEdit} onClick={() => openPicker("buffet_metal", "buffetMetal", "Buffet – Metal")} style={smallAddButtonStyle}>+ Add</button>
+                {onOpenPackages && <button type="button" disabled={!canEdit} onClick={onOpenPackages} style={{ ...smallAddButtonStyle, background: "#7c3aed", borderColor: "#7c3aed" }}>📦 Packages</button>}
+              </div>
               <div style={{ marginTop: 6 }}>
                 <CustomFoodItemsBlock value={customFields.customBuffetMetal} fieldId={FIELD_IDS.CUSTOM_BUFFET_METAL} placeholder="Item name" notesPlaceholder="Notes (optional)" canEdit={canEdit} onSave={saveCustomField} label="Custom Buffet Metal (not in menu)" inputStyle={inputStyle} labelStyle={labelStyle} buttonStyle={smallAddButtonStyle} />
               </div>
@@ -2672,7 +2678,10 @@ export const MenuSection = ({
                   </tbody>
                 </table>
               </div>
-              <button type="button" disabled={!canEdit} onClick={() => openPicker("buffet_china", "buffetChina", "Select Buffet Items (China)")} style={smallAddButtonStyle}>+ Add</button>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                <button type="button" disabled={!canEdit} onClick={() => openPicker("buffet_china", "buffetChina", "Select Buffet Items (China)")} style={smallAddButtonStyle}>+ Add</button>
+                {onOpenPackages && <button type="button" disabled={!canEdit} onClick={onOpenPackages} style={{ ...smallAddButtonStyle, background: "#7c3aed", borderColor: "#7c3aed" }}>📦 Packages</button>}
+              </div>
               <div style={{ marginTop: 6, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                 <span style={labelStyle}>Salads & dressings</span>
                 <button type="button" disabled={!canEdit} onClick={() => setShowDressingPicker(true)} style={smallAddButtonStyle}>+ Add dressing</button>
@@ -2748,7 +2757,10 @@ export const MenuSection = ({
                   </tbody>
                 </table>
               </div>
-              <button type="button" disabled={!canEdit} onClick={() => openPicker("deli", "fullServiceDeli", "Select Deli Items (Sandwiches, Wraps)")} style={smallAddButtonStyle}>+ Add</button>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                <button type="button" disabled={!canEdit} onClick={() => openPicker("deli", "fullServiceDeli", "Select Deli Items (Sandwiches, Wraps)")} style={smallAddButtonStyle}>+ Add</button>
+                {onOpenPackages && <button type="button" disabled={!canEdit} onClick={onOpenPackages} style={{ ...smallAddButtonStyle, background: "#7c3aed", borderColor: "#7c3aed" }}>📦 Packages</button>}
+              </div>
               <p style={{ fontSize: 11, color: "rgba(255,255,255,0.5)", marginTop: 4 }}>For sandwich platters and other DELI items. Slider rolls, lettuce & tomato, condiments are picked in the station (e.g. Configure Station All-American).</p>
               <div style={{ marginTop: 6 }}>
                 <CustomFoodItemsBlock value={customFields.customFullServiceDeli} fieldId={FIELD_IDS.CUSTOM_FULL_SERVICE_DELI} placeholder="Item name" notesPlaceholder="Notes (optional)" canEdit={canEdit} onSave={saveCustomField} label="Custom DELI (not in menu)" inputStyle={inputStyle} labelStyle={labelStyle} buttonStyle={smallAddButtonStyle} />
@@ -2821,7 +2833,10 @@ export const MenuSection = ({
                   </tbody>
                 </table>
               </div>
-              <button type="button" disabled={!canEdit} onClick={() => openPicker("desserts", "desserts", "Desserts")} style={smallAddButtonStyle}>+ Add</button>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                <button type="button" disabled={!canEdit} onClick={() => openPicker("desserts", "desserts", "Desserts")} style={smallAddButtonStyle}>+ Add</button>
+                {onOpenPackages && <button type="button" disabled={!canEdit} onClick={onOpenPackages} style={{ ...smallAddButtonStyle, background: "#7c3aed", borderColor: "#7c3aed" }}>📦 Packages</button>}
+              </div>
               <div style={{ marginTop: 6 }}>
                 <CustomFoodItemsBlock value={customFields.customDessert} fieldId={FIELD_IDS.CUSTOM_DESSERTS} placeholder="Dessert name" notesPlaceholder="Notes (optional)" canEdit={canEdit} onSave={saveCustomField} label="Custom Desserts (not in menu)" inputStyle={inputStyle} labelStyle={labelStyle} buttonStyle={smallAddButtonStyle} />
               </div>

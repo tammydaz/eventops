@@ -17,8 +17,10 @@ import {
 
 interface Props {
   onSelectPackage: (preset: DeliveryPackagePreset) => void;
-  onOpenBoxedLunches: () => void;
-  onOpenSandwichPlatters: () => void;
+  /** Pass null to hide the Boxed Lunches builder (e.g. full-service events) */
+  onOpenBoxedLunches: (() => void) | null;
+  /** Pass null to hide the Sandwich Platters builder (e.g. full-service events) */
+  onOpenSandwichPlatters: (() => void) | null;
   onClose: () => void;
   disabled?: boolean;
 }
@@ -262,26 +264,34 @@ export function DeliveryPackagesPanel({
             )
           )}
 
-          {/* Order builders divider */}
-          <div style={{ borderTop: `1px solid ${BORDER}`, margin: "22px 0 18px" }} />
-          <div style={{ ...SECTION_LABEL, marginTop: 0 }}>🥡 Order Builders</div>
+          {/* Order builders divider — only shown when builders are available (delivery events) */}
+          {(onOpenBoxedLunches || onOpenSandwichPlatters) && (
+            <>
+              <div style={{ borderTop: `1px solid ${BORDER}`, margin: "22px 0 18px" }} />
+              <div style={{ ...SECTION_LABEL, marginTop: 0 }}>🥡 Order Builders</div>
 
-          <BigActionButton
-            icon="🥡"
-            label="Boxed Lunches"
-            sublabel="Individual boxes — classic, executive, or salad"
-            accent="#22c55e"
-            disabled={disabled}
-            onClick={() => { onClose(); onOpenBoxedLunches(); }}
-          />
-          <BigActionButton
-            icon="🥪"
-            label="Sandwich Platters"
-            sublabel="Classic or gourmet sandwich trays"
-            accent="#f97316"
-            disabled={disabled}
-            onClick={() => { onClose(); onOpenSandwichPlatters(); }}
-          />
+              {onOpenBoxedLunches && (
+                <BigActionButton
+                  icon="🥡"
+                  label="Boxed Lunches"
+                  sublabel="Individual boxes — classic, executive, or salad"
+                  accent="#22c55e"
+                  disabled={disabled}
+                  onClick={() => { onClose(); onOpenBoxedLunches(); }}
+                />
+              )}
+              {onOpenSandwichPlatters && (
+                <BigActionButton
+                  icon="🥪"
+                  label="Sandwich Platters"
+                  sublabel="Classic or gourmet sandwich trays"
+                  accent="#f97316"
+                  disabled={disabled}
+                  onClick={() => { onClose(); onOpenSandwichPlatters(); }}
+                />
+              )}
+            </>
+          )}
         </div>
       </div>
     </div>

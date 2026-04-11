@@ -1059,6 +1059,9 @@ export const BeoIntakePage = () => {
                                     {label}
                                   </button>
                                 ))}
+                                <button type="button" disabled={isLocked} onClick={() => setShowPackagesPanel(true)} style={{ padding: "8px 16px", fontSize: 12, fontWeight: 700, borderRadius: 6, border: "1px solid #7c3aed", background: "linear-gradient(135deg, rgba(124,58,237,0.35), rgba(124,58,237,0.15))", color: "#c4b5fd", cursor: isLocked ? "default" : "pointer", flexShrink: 0 }}>
+                                  📦 Packages
+                                </button>
                             </div>
                             )}
                             {isDelivery && (
@@ -1135,7 +1138,16 @@ export const BeoIntakePage = () => {
                                               </span>
                                               <span style={{ fontSize: 13, fontWeight: 700, letterSpacing: "0.05em", color: sectionColor }}>{headerLabel}</span>
                                             </td>
-                                            <td style={{ width: 140, minWidth: 140, padding: 0 }} />
+                                            <td style={{ width: 140, minWidth: 140, padding: 0, textAlign: "right" }}>
+                                              <button
+                                                type="button"
+                                                disabled={isLocked}
+                                                onClick={(e) => { e.stopPropagation(); setShowPackagesPanel(true); }}
+                                                style={{ padding: "3px 10px", fontSize: 11, fontWeight: 700, borderRadius: 5, border: "1px solid #7c3aed", background: "rgba(124,58,237,0.2)", color: "#c4b5fd", cursor: isLocked ? "default" : "pointer", whiteSpace: "nowrap" }}
+                                              >
+                                                📦 Packages
+                                              </button>
+                                            </td>
                                           </tr>
                                         </tbody>
                                       </table>
@@ -1454,26 +1466,26 @@ export const BeoIntakePage = () => {
         </div>
       </div>
 
-      {/* ── Delivery Packages Panel (+ Packages button) ── */}
+      {/* ── Packages Panel — available for both full-service and delivery events ── */}
       {showPackagesPanel && createPortal(
         <DeliveryPackagesPanel
           onSelectPackage={handlePanelSelectPackage}
-          onOpenBoxedLunches={() => {
+          onOpenBoxedLunches={isDelivery ? () => {
             setShowPackagesPanel(false);
             setDeliveryRevealFoodChrome(true);
             setDeliveryBoxedSectionOpen(true);
             requestAnimationFrame(() =>
               document.getElementById("beo-delivery-boxed-lunch")?.scrollIntoView({ behavior: "smooth", block: "start" })
             );
-          }}
-          onOpenSandwichPlatters={() => {
+          } : null}
+          onOpenSandwichPlatters={isDelivery ? () => {
             setShowPackagesPanel(false);
             setDeliveryRevealFoodChrome(true);
             setDeliveryPlatterSectionOpen(true);
             requestAnimationFrame(() =>
               document.getElementById("beo-delivery-platter")?.scrollIntoView({ behavior: "smooth", block: "start" })
             );
-          }}
+          } : null}
           onClose={() => setShowPackagesPanel(false)}
           disabled={isLocked}
         />,
