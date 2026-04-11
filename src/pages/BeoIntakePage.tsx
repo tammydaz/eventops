@@ -612,13 +612,12 @@ export const BeoIntakePage = () => {
         return;
       }
 
-      // For delivery intake items: check if this is a choice package → show selection modal first
-      if (storeTarget === DELIVERY_INTAKE_TARGET_FIELD) {
-        const preset = getDeliveryPackagePreset(item.name);
-        if (preset) {
-          setPendingPackageItem({ id: item.id, name: item.name, routeTargetField: targetField, preset });
-          return;
-        }
+      // Check if this item is a choice package — show selection modal before creating shadow row.
+      // Works for both delivery (DELIVERY_INTAKE_TARGET_FIELD) and full-service pickers.
+      const preset = getDeliveryPackagePreset(item.name);
+      if (preset) {
+        setPendingPackageItem({ id: item.id, name: item.name, routeTargetField: targetField, preset });
+        return;
       }
 
       const createResult = await createEventMenuRow(selectedEventId, mappedSection, item.id);

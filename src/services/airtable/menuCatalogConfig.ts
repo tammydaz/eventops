@@ -314,7 +314,14 @@ export const DELIVERY_INTAKE_SECTIONS: readonly DeliveryIntakeSection[] = [
     title: "DISPOSABLE HOT",
     icon: "🔥",
     menuSectionTags: ["Breakfast - Hot", "Hot Lunch"],
-    legacyCategoryValues: ["Hot Breakfast", "Hot Lunch Delivery"],
+    legacyCategoryValues: [
+      "Hot Breakfast",
+      "Hot Lunch Delivery",
+      // Full-service hot lunches (chicken, seafood, beef, pasta, kabobs) also available for delivery
+      "Full Service Hot Lunch",
+      // Happy hour buffets
+      "Happy Hour",
+    ],
     legacyRouteTarget: "buffetMetal",
   },
   {
@@ -360,6 +367,8 @@ export const DELIVERY_INTAKE_SECTIONS: readonly DeliveryIntakeSection[] = [
       "Dessert (Individual)",
       "Display",
       "Snack",
+      // Room-temp ambient display platters available for delivery too
+      "Ambient Display",
     ],
     legacyRouteTarget: "deliveryDeli",
   },

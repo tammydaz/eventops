@@ -99,6 +99,9 @@ const CATEGORY_COLORS: Record<DeliveryPanelCategory, { accent: string; dot: stri
   breakfast: { accent: "#f97316", dot: "#fb923c" },
   lunch_platter: { accent: "#3b82f6", dot: "#60a5fa" },
   hot_lunch: { accent: "#ef4444", dot: "#f87171" },
+  lunch_premium: { accent: "#a855f7", dot: "#c084fc" },
+  happy_hour: { accent: "#f59e0b", dot: "#fbbf24" },
+  ambient_display: { accent: "#14b8a6", dot: "#2dd4bf" },
 };
 
 function PackageButton({
@@ -196,7 +199,14 @@ function BigActionButton({
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-const CATEGORY_ORDER: DeliveryPanelCategory[] = ["breakfast", "lunch_platter", "hot_lunch"];
+const CATEGORY_ORDER: DeliveryPanelCategory[] = [
+  "breakfast",
+  "lunch_platter",
+  "hot_lunch",
+  "lunch_premium",
+  "happy_hour",
+  "ambient_display",
+];
 
 export function DeliveryPackagesPanel({
   onSelectPackage,

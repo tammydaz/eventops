@@ -24,15 +24,30 @@ export const CATEGORY_MAP: Record<string, string[]> = {
     "Buffet Metal", "Buffet", "Buffet Item", "Side",
     // Full-service entrée & side categories from Airtable
     "Entrée", "Protein (Entrée)", "Pasta (Entrée)", "Pasta (Side)", "Starch (Side)", "Vegetable (Side)",
+    // Corporate menu full-service hot packages
+    "Full Service Hot Lunch", "Happy Hour",
+    // Hot breakfast items for full-service morning events
+    "Hot Breakfast",
   ],
-  buffet_china: ["Buffet China", "Salad", "Bread", "Side"],
+  buffet_china: [
+    "Buffet China", "Salad", "Bread", "Side",
+    // Ambient Displays (room-temp presented platters)
+    "Ambient Display",
+    // Classic & signature salads for the china picker
+    "Classic Salad", "Signature Salad",
+    // Cold breakfast items for full-service morning events
+    "Breakfast Room Temp",
+  ],
 
   desserts: ["Dessert", "Dessert/Metal", "Dessert/China", "Dessert (Display)", "Dessert (Individual)"],
   stations:     ['Station', 'Stations', 'Station Item'],
   dressing:     ['Dressing'],
-  deli: ["Deli/Sandwhiches", "Deli/Breads", "Deli/Sandwiches", "Deli"],
-  room_temp: ["Room Temp Display", "Display", "Buffet China"],
-  displays:     ['Display', 'Buffet China'],
+  deli: [
+    "Deli/Sandwhiches", "Deli/Breads", "Deli/Sandwiches", "Deli",
+    // Lunch presentations, salad stands, sandwich builders, etc.
+  ],
+  room_temp: ["Room Temp Display", "Display", "Buffet China", "Ambient Display"],
+  displays:     ['Display', 'Buffet China', 'Ambient Display'],
   beverage_service: ['Beverage', 'Beverages', 'Drink', 'Bar / Beverage Component'],
   bar_service:     ['Bar', 'Bar Item', 'Beverage', 'Beverages', 'Bar / Beverage Component'],
   creation_station: ['Station', 'Stations', 'Station Item'],

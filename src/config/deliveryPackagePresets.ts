@@ -11,7 +11,10 @@
 export type DeliveryPanelCategory =
   | "breakfast"
   | "lunch_platter"
-  | "hot_lunch";
+  | "hot_lunch"
+  | "ambient_display"
+  | "happy_hour"
+  | "lunch_premium";
 
 export interface DeliveryPickGroup {
   /** Section heading shown in the modal (e.g. "Eggs — Pick 1") */
@@ -395,27 +398,208 @@ export const FAJITA_FESTIVAL: DeliveryPackagePreset = {
   ],
 };
 
+// ─── Lunch Premium Packages ───────────────────────────────────────────────────
+
+export const HEART_HEALTHY_LETTUCE_WRAPS: DeliveryPackagePreset = {
+  key: "heart-healthy-lettuce-wraps",
+  displayName: "Heart Healthy Lettuce Wraps",
+  panelCategory: "lunch_premium",
+  routeTargetField: "deliveryDeli",
+  matchPatterns: ["heart healthy lettuce wraps", "lettuce wraps"],
+  groups: [
+    {
+      label: "Protein — Pick 1",
+      pickCount: 1,
+      options: [
+        "Teriyaki Marinated Flank Steak",
+        "Spicy Chili Marinated Shaved Chicken",
+        "Lemon, Garlic & Soy Poached Shrimp",
+      ],
+    },
+  ],
+  autoIncluded: [
+    "Crunchy sesame noodles, pico de gallo, chopped roasted peppers, shredded carrots, frizzled onion straws & raw sesame seeds",
+    "Green leaf & iceberg leaves",
+    "Choice of 1 classic salad",
+    "Teriyaki ginger, chili sauce & sriracha aioli condiments",
+  ],
+};
+
+export const SLAMMIN_SLIDERS: DeliveryPackagePreset = {
+  key: "slammin-sliders",
+  displayName: "Slammin' Sliders",
+  panelCategory: "happy_hour",
+  routeTargetField: "buffetMetal",
+  matchPatterns: ["slammin' sliders", "slammin sliders"],
+  groups: [
+    {
+      label: "Slider Proteins — Pick 2",
+      pickCount: 2,
+      options: [
+        "Angus Beef Sliders",
+        "Carolina Pulled Pork",
+        "Crispy Chicken",
+        "Chipotle Pulled Chicken",
+        "Grilled Vegetable Stax",
+      ],
+    },
+  ],
+  autoIncluded: [
+    "Petite slider buns",
+    "Shredded cheese mix, frizzled onions & fried pickle toppers",
+    "Tater tots",
+    "Individual salad shooters",
+  ],
+};
+
+export const BBY_SIGNATURE_SALAD_BAR: DeliveryPackagePreset = {
+  key: "bby-signature-salad-bar",
+  displayName: "BBY Signature Salad Bar",
+  panelCategory: "lunch_premium",
+  routeTargetField: "buffetChina",
+  matchPatterns: ["bby signature salad bar", "signature salad bar", "built by you salad"],
+  groups: [
+    {
+      label: "Greens — Pick 3",
+      pickCount: 3,
+      options: ["Romaine", "Spring Mix", "Arugula", "Kale", "Spinach", "Super Greens Blend", "Red Cabbage", "Rough Chop Iceberg"],
+    },
+    {
+      label: "Proteins — Pick 3",
+      pickCount: 3,
+      options: [
+        "Marinated Grilled Chicken", "Buffalo Chicken", "Chicken Salad",
+        "Marinated Steak", "Roasted Turkey Breast",
+        "Tuna Salad", "Crispy Crumbled Bacon",
+        "Steamed Shrimp", "Quinoa", "Seared Tofu", "Poached Salmon",
+      ],
+    },
+    {
+      label: "Crunch — Pick 3",
+      pickCount: 3,
+      options: [
+        "Garlic & Herb Croutons", "Toasted Pita Squares", "Candied Pecans",
+        "Toasted Walnuts", "Sunflower Seeds", "Pumpkin Seeds",
+        "Wonton Threads", "Frizzled Onions", "Toasted Almond Slivers", "Chow Mein Noodles",
+      ],
+    },
+    {
+      label: "Cheese — Pick 2",
+      pickCount: 2,
+      options: ["Crumbled Bleu Cheese", "Feta", "Chards of Parmesan Romano", "Cheddar Blend"],
+    },
+    {
+      label: "Fruit — Pick 1",
+      pickCount: 1,
+      options: ["Sliced Strawberries", "Blueberries", "Chunked Pineapple", "Mango", "Grapes"],
+    },
+    {
+      label: "Dressings — Pick 3",
+      pickCount: 3,
+      options: [
+        "Balsamic Vinaigrette", "Creamy Ranch", "Parmesan Peppercorn",
+        "Classic Caesar", "Low Fat Raspberry", "Red Wine Vinegar & Olive Oil",
+        "Reduced Fat Caesar", "Chefs' Choice Trending Dressing",
+      ],
+    },
+  ],
+  autoIncluded: [
+    "Cucumbers, grape tomatoes, mushrooms, confetti peppers, carrots, red onion, chick peas & seasonal marinated grilled vegetables, hard-boiled eggs (essentials)",
+    "Artisan rolls & flavor infused whipped butter",
+  ],
+};
+
+export const QUICHE_ASSORTMENT: DeliveryPackagePreset = {
+  key: "quiche-assortment",
+  displayName: "Quiche Assortment",
+  panelCategory: "breakfast",
+  routeTargetField: "buffetMetal",
+  matchPatterns: ["quiche assortment", "quiche"],
+  groups: [
+    {
+      label: "Quiche Type — Pick 1",
+      pickCount: 1,
+      options: [
+        "Spinach, Tomato, Feta & Cracked Black Pepper",
+        "Artichoke, Green Onion, Mushroom & Gruyère",
+        "Bacon, Caramelized Onions & Cheddar Cheese",
+      ],
+    },
+  ],
+};
+
+// ─── Ambient Display Packages (with protein choice) ───────────────────────────
+
+export const SOUTH_OF_BORDER_MIXED_GRILL: DeliveryPackagePreset = {
+  key: "south-of-border-mixed-grill",
+  displayName: "South of the Border Mixed Grill",
+  panelCategory: "ambient_display",
+  routeTargetField: "buffetChina",
+  matchPatterns: ["south of the border mixed grill", "south of the border grill"],
+  groups: [],
+  autoIncluded: [
+    "Chimichurri brushed flank steak",
+    "Chipotle glazed chicken",
+    "Spanish rice, grilled peppers & onions, chili glazed sweet potato coins",
+    "Housemade pico de gallo",
+    "Sweet & spicy bacon jalapeño ranch dressing",
+    "Choice of classic salad with artisan rolls & butter",
+  ],
+};
+
+export const TERIYAKI_SAMPLER_MIXED_GRILL: DeliveryPackagePreset = {
+  key: "teriyaki-sampler-mixed-grill",
+  displayName: "Teriyaki Sampler Mixed Grill",
+  panelCategory: "ambient_display",
+  routeTargetField: "buffetChina",
+  matchPatterns: ["teriyaki sampler mixed grill", "teriyaki sampler"],
+  groups: [],
+  autoIncluded: [
+    "Grilled teriyaki glazed salmon",
+    "Teriyaki glazed chicken",
+    "Ginger-soy marinated rice noodle salad & mixed baby greens",
+    "Carrots, cabbage, green onions, crispy wontons & julienned bamboo shoots",
+    "Asian sesame dressing",
+    "Choice of classic salad with artisan rolls & butter",
+  ],
+};
+
 // ─── Registry & helpers ───────────────────────────────────────────────────────
 
 export const ALL_DELIVERY_PACKAGE_PRESETS: readonly DeliveryPackagePreset[] = [
+  // Breakfast
   ITS_YOUR_CHOICE_BREAKFAST,
   BB_BASIC_BREAKFAST,
   ENGLISH_MUFFIN_WRAP_SANDWICHES,
   ONE_HAND_PICKUP,
+  QUICHE_ASSORTMENT,
+  // Lunch Platters
   CLASSIC_SANDWICH_PLATTER,
   GOURMET_SANDWICH_PLATTER,
   SIGNATURE_WRAP_PLATTER,
   PANINI_PRESS_PLATTER,
   PHILLY_HOAGIE_PLATTER,
+  // Hot Lunch
   PHILLY_CHEESESTEAK,
   TACO_TIME,
   FAJITA_FESTIVAL,
+  // Premium Lunch
+  HEART_HEALTHY_LETTUCE_WRAPS,
+  BBY_SIGNATURE_SALAD_BAR,
+  // Happy Hour
+  SLAMMIN_SLIDERS,
+  // Ambient Displays (fixed components — shown in panel for reference)
+  SOUTH_OF_BORDER_MIXED_GRILL,
+  TERIYAKI_SAMPLER_MIXED_GRILL,
 ];
 
 export const PANEL_CATEGORY_LABELS: Record<DeliveryPanelCategory, string> = {
-  breakfast: "🍳 Breakfast Packages",
-  lunch_platter: "🥪 Lunch Platters",
-  hot_lunch: "🔥 Hot Lunch",
+  breakfast: "Breakfast Packages",
+  lunch_platter: "Lunch Platters",
+  hot_lunch: "Hot Lunch",
+  lunch_premium: "Premium Lunch",
+  happy_hour: "Happy Hour",
+  ambient_display: "Ambient Displays",
 };
 
 /** Returns a preset if the item name matches any of its patterns, otherwise null. */
