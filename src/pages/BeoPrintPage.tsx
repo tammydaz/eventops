@@ -172,6 +172,8 @@ const printStyles = `
     .beo-print-content {
       box-shadow: 0 2px 12px rgba(0,0,0,0.12);
     }
+    .beo-spec-col input { color: #0d9488 !important; }
+    .beo-spec-col input::placeholder { color: #0d9488 !important; opacity: 0.5; }
   }
   @media print {
     .delivery-pbb-empty-wrap { display: none !important; }
@@ -328,6 +330,8 @@ const printStyles = `
     }
     .no-print { display: none !important; }
     .print-only { display: block !important; }
+    .beo-spec-col input { color: #0d9488 !important; }
+    .beo-spec-col input::placeholder { color: #0d9488 !important; opacity: 0.5; }
     .print-page { break-after: page; }
     .kitchen-beo-page {
       width: 8.5in;
