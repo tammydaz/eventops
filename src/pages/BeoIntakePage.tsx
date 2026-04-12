@@ -1101,10 +1101,14 @@ export const BeoIntakePage = () => {
                                 <button type="button" disabled={isLocked} onClick={() => setShowGlobalSearch(true)} style={{ padding: "8px 16px", fontSize: 12, fontWeight: 700, borderRadius: 6, border: "1px solid rgba(255,255,255,0.25)", background: "rgba(255,255,255,0.06)", color: "rgba(255,255,255,0.8)", cursor: isLocked ? "default" : "pointer", flexShrink: 0 }}>
                                   🔍 Find Any Item
                                 </button>
-                                <button type="button" onClick={() => { if (selectedEventId) navigate(`/beo-print/${selectedEventId}?editMode=1`); }} disabled={!selectedEventId} style={{ padding: "8px 16px", fontSize: 12, fontWeight: 700, borderRadius: 6, border: "1px solid rgba(255,255,255,0.35)", background: "rgba(255,255,255,0.12)", color: "#fff", cursor: selectedEventId ? "pointer" : "default", flexShrink: 0, opacity: selectedEventId ? 1 : 0.4 }}>
+                            </div>
+                            )}
+                            {!isDelivery && (
+                            <div style={{ display: "flex", justifyContent: "center", gap: 8, marginBottom: 12 }}>
+                                <button type="button" onClick={() => { if (selectedEventId) navigate(`/beo-print/${selectedEventId}?editMode=1`); }} disabled={!selectedEventId} style={{ padding: "8px 16px", fontSize: 12, fontWeight: 700, borderRadius: 6, border: "1px solid rgba(255,255,255,0.35)", background: "rgba(255,255,255,0.12)", color: "#fff", cursor: selectedEventId ? "pointer" : "default", opacity: selectedEventId ? 1 : 0.4 }}>
                                   📄 Edit BEO
                                 </button>
-                                <button type="button" onClick={() => { if (selectedEventId) setShowQuestionnaireModal(true); }} disabled={!selectedEventId} style={{ padding: "8px 16px", fontSize: 12, fontWeight: 700, borderRadius: 6, border: "1px solid #0d9488", background: "rgba(13,148,136,0.15)", color: "#5eead4", cursor: selectedEventId ? "pointer" : "default", flexShrink: 0, opacity: selectedEventId ? 1 : 0.4 }}>
+                                <button type="button" onClick={() => { if (selectedEventId) setShowQuestionnaireModal(true); }} disabled={!selectedEventId} style={{ padding: "8px 16px", fontSize: 12, fontWeight: 700, borderRadius: 6, border: "1px solid #0d9488", background: "rgba(13,148,136,0.15)", color: "#5eead4", cursor: selectedEventId ? "pointer" : "default", opacity: selectedEventId ? 1 : 0.4 }}>
                                   ✉️ Send Questionnaire
                                 </button>
                             </div>
