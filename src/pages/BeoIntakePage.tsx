@@ -167,6 +167,7 @@ export const BeoIntakePage = () => {
   const [shadowMenuRows, setShadowMenuRows] = useState<(EventMenuRow & { catalogItemName: string; components?: EventMenuRowComponent[] })[]>([]);
   /** Skip next sessionStorage write for shadow menu — avoids persisting previous event's rows under the new event id (passive effect can run before rows clear). */
   const shadowMenuStorageSkipRef = useRef(false);
+  const shadowMenuLoadGenRef = useRef(0);
   const [editingShadowRow, setEditingShadowRow] = useState<(EventMenuRow & { catalogItemName: string; components?: EventMenuRowComponent[] }) | null>(null);
   const [editDraft, setEditDraft] = useState<{ customText: string; packOutNotes: string }>({ customText: "", packOutNotes: "" });
   const [editDisplayNameEditing, setEditDisplayNameEditing] = useState(false);
@@ -316,7 +317,11 @@ export const BeoIntakePage = () => {
         return;
       }
       const eventIdForThisLoad = selectedEventId;
-      const loadStale = () => useEventStore.getState().selectedEventId !== eventIdForThisLoad;
+      // Increment generation so any older in-flight load for this same event is discarded
+      const myGen = ++shadowMenuLoadGenRef.current;
+      const loadStale = () =>
+        useEventStore.getState().selectedEventId !== eventIdForThisLoad ||
+        shadowMenuLoadGenRef.current !== myGen;
 
       const fetchWithRetry = async (attempt = 0): Promise<EventMenuRow[] | { error: true }> => {
         const res = await loadEventMenuRows(eventIdForThisLoad);
@@ -412,6 +417,7 @@ export const BeoIntakePage = () => {
 
   /** Clear menu UI before paint so you never see the previous event's food under the new header. */
   useLayoutEffect(() => {
+    shadowMenuLoadGenRef.current = 0; // reset generation on event switch
     if (!selectedEventId) {
       shadowMenuStorageSkipRef.current = true;
       setShadowMenuRows([]);
