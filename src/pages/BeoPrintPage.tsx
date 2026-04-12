@@ -3275,11 +3275,20 @@ const BeoPrintPage: React.FC = () => {
     : null;
 
   // Hard print order ends at DESSERTS — no section after it. Always show DELI for full service (like old BEOs).
-  const activeSections = [...menuSections.filter((s) => s.items.length > 0 || (s.title === "DELI" && !isDelivery))];
+  // In Edit Mode: show all full-service sections even if empty, so staff can add to any course.
+  const activeSections = [...menuSections.filter((s) =>
+    s.items.length > 0 ||
+    (s.title === "DELI" && !isDelivery) ||
+    (isEditMode && !isDelivery)
+  )];
   const visibleSections = activeSections.map((s) => ({
     ...s,
     items: s.items.filter((item) => !hiddenMenuItems.has(item.id)),
-  })).filter((s) => s.items.length > 0 || (s.title === "DELI" && !isDelivery));
+  })).filter((s) =>
+    s.items.length > 0 ||
+    (s.title === "DELI" && !isDelivery) ||
+    (isEditMode && !isDelivery)
+  );
 
   const NOTES_SEP = " – ";
   const sauceOverrides = getSauceOverrides(eventId);
