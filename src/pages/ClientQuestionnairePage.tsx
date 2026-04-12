@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
-import { airtableFetch } from "../services/airtable/client";
-import { FIELD_IDS, getEventsTable } from "../services/airtable/events";
+import { airtableFetch, getEventsTable } from "../services/airtable/client";
+import { FIELD_IDS } from "../services/airtable/events";
 
 type FieldPatch = Record<string, unknown>;
 
