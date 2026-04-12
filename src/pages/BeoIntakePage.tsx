@@ -680,13 +680,24 @@ export const BeoIntakePage = () => {
         catalogItemName: item.name,
         components: [],
       };
-      setShadowMenuRows((prev) => [...prev, newRow]);
+      // Fetch children for just this new item, then update state — avoids a full reload
+      let components: EventMenuRowComponent[] = [];
+      try {
+        const children = await fetchMenuItemChildren(item.id);
+        if (Array.isArray(children)) {
+          components = children.map((c) => ({ name: c.name, isRemoved: false, isAdded: false }));
+        }
+      } catch {
+        // non-blocking
+      }
+      setShadowMenuRows((prev) =>
+        prev.map((r) => (r.id === newRowId ? { ...r, components } : r))
+      );
 
-      await syncShadowToEvent(selectedEventId, {
+      // Sync linked fields on the Event record (non-blocking)
+      syncShadowToEvent(selectedEventId, {
         injectedRows: [{ section: mappedSection, catalogItemId: item.id }],
-      });
-      await loadShadowMenu({ retryIfEmpty: true });
-      await loadEventData(selectedEventId);
+      }).catch((err) => console.warn("[handlePickerAdd] syncShadowToEvent failed:", err));
 
       // Auto-open dressing picker when a salad is added to Buffet China
       if (mappedSection === "Buffet \u2013 China" && /\bsalad\b/i.test(item.name)) {
