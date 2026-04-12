@@ -145,6 +145,7 @@ export const BeoIntakePage = () => {
   const [showMissingFieldsModal, setShowMissingFieldsModal] = useState(false);
   const [showPackagesPanel, setShowPackagesPanel] = useState(false);
   const [showGlobalSearch, setShowGlobalSearch] = useState(false);
+  const [showQuestionnaireModal, setShowQuestionnaireModal] = useState(false);
   const [pendingPackageItem, setPendingPackageItem] = useState<{ id: string; name: string; routeTargetField: string; preset: DeliveryPackagePreset } | null>(null);
   const [dressingPickerSalad, setDressingPickerSalad] = useState<{ id: string; name: string; shadowRowId: string } | null>(null);
   const [dressingPickerItems, setDressingPickerItems] = useState<{ id: string; name: string }[]>([]);
@@ -512,16 +513,26 @@ export const BeoIntakePage = () => {
   const clientFirstName = selectedEventData ? asString(selectedEventData[FIELD_IDS.CLIENT_FIRST_NAME]) : "";
   const eventDateDisplay = selectedEventData ? asString(selectedEventData[FIELD_IDS.EVENT_DATE]).slice(0, 10) : "";
 
-  const buildQuestionnaireMailto = () => {
-    if (!selectedEventId) return "#";
-    const baseUrl = window.location.origin;
-    const link = `${baseUrl}/client-form/${selectedEventId}`;
-    const subject = encodeURIComponent(`Your Upcoming Event — A Few Quick Questions`);
+  const getQuestionnaireLink = () =>
+    selectedEventId ? `${window.location.origin}/client-form/${selectedEventId}` : "";
+
+  const getQuestionnaireEmailBody = () => {
+    const link = getQuestionnaireLink();
     const greeting = clientFirstName ? `Hi ${clientFirstName},` : "Hi,";
     const dateStr = eventDateDisplay ? ` on ${eventDateDisplay}` : "";
-    const body = encodeURIComponent(
-      `${greeting}\n\nWe're looking forward to your event${dateStr} and want to make sure everything is perfect.\n\nCould you take a few minutes to fill out this short questionnaire? It covers details like venue access, dietary needs, and setup preferences:\n\n${link}\n\nThank you!\n— The Foodwerx Team`
-    );
+    return `${greeting}\n\nWe're looking forward to your event${dateStr} and want to make sure everything is perfect.\n\nCould you take a few minutes to fill out this short questionnaire? It covers details like venue access, dietary needs, and setup preferences:\n\n${link}\n\nThank you!\n— The Foodwerx Team`;
+  };
+
+  const buildGmailLink = () => {
+    const subject = encodeURIComponent(`Your Upcoming Event — A Few Quick Questions`);
+    const body = encodeURIComponent(getQuestionnaireEmailBody());
+    const to = clientEmail ? encodeURIComponent(clientEmail) : "";
+    return `https://mail.google.com/mail/?view=cm&fs=1&to=${to}&su=${subject}&body=${body}`;
+  };
+
+  const buildMailtoLink = () => {
+    const subject = encodeURIComponent(`Your Upcoming Event — A Few Quick Questions`);
+    const body = encodeURIComponent(getQuestionnaireEmailBody());
     const to = clientEmail ? encodeURIComponent(clientEmail) : "";
     return `mailto:${to}?subject=${subject}&body=${body}`;
   };
@@ -1093,9 +1104,9 @@ export const BeoIntakePage = () => {
                                 <button type="button" onClick={() => { if (selectedEventId) navigate(`/beo-print/${selectedEventId}?editMode=1`); }} disabled={!selectedEventId} style={{ padding: "8px 16px", fontSize: 12, fontWeight: 700, borderRadius: 6, border: "1px solid rgba(255,255,255,0.35)", background: "rgba(255,255,255,0.12)", color: "#fff", cursor: selectedEventId ? "pointer" : "default", flexShrink: 0, opacity: selectedEventId ? 1 : 0.4 }}>
                                   📄 Edit BEO
                                 </button>
-                                <a href={selectedEventId ? buildQuestionnaireMailto() : "#"} onClick={(e) => { if (!selectedEventId) e.preventDefault(); }} style={{ padding: "8px 16px", fontSize: 12, fontWeight: 700, borderRadius: 6, border: "1px solid #0d9488", background: "rgba(13,148,136,0.15)", color: "#5eead4", cursor: selectedEventId ? "pointer" : "default", flexShrink: 0, opacity: selectedEventId ? 1 : 0.4, textDecoration: "none", display: "inline-flex", alignItems: "center" }}>
+                                <button type="button" onClick={() => { if (selectedEventId) setShowQuestionnaireModal(true); }} disabled={!selectedEventId} style={{ padding: "8px 16px", fontSize: 12, fontWeight: 700, borderRadius: 6, border: "1px solid #0d9488", background: "rgba(13,148,136,0.15)", color: "#5eead4", cursor: selectedEventId ? "pointer" : "default", flexShrink: 0, opacity: selectedEventId ? 1 : 0.4 }}>
                                   ✉️ Send Questionnaire
-                                </a>
+                                </button>
                             </div>
                             )}
                             {isDelivery && (
@@ -1109,9 +1120,9 @@ export const BeoIntakePage = () => {
                                   <button type="button" onClick={() => { if (selectedEventId) navigate(`/beo-print/${selectedEventId}?editMode=1`); }} disabled={!selectedEventId} style={{ padding: "7px 18px", fontSize: 12, fontWeight: 700, borderRadius: 6, border: "1px solid rgba(255,255,255,0.35)", background: "rgba(255,255,255,0.12)", color: "#fff", cursor: selectedEventId ? "pointer" : "default", opacity: selectedEventId ? 1 : 0.4 }}>
                                     📄 Edit BEO
                                   </button>
-                                  <a href={selectedEventId ? buildQuestionnaireMailto() : "#"} onClick={(e) => { if (!selectedEventId) e.preventDefault(); }} style={{ padding: "7px 18px", fontSize: 12, fontWeight: 700, borderRadius: 6, border: "1px solid #0d9488", background: "rgba(13,148,136,0.15)", color: "#5eead4", cursor: selectedEventId ? "pointer" : "default", opacity: selectedEventId ? 1 : 0.4, textDecoration: "none", display: "inline-flex", alignItems: "center" }}>
+                                  <button type="button" onClick={() => { if (selectedEventId) setShowQuestionnaireModal(true); }} disabled={!selectedEventId} style={{ padding: "7px 18px", fontSize: 12, fontWeight: 700, borderRadius: 6, border: "1px solid #0d9488", background: "rgba(13,148,136,0.15)", color: "#5eead4", cursor: selectedEventId ? "pointer" : "default", opacity: selectedEventId ? 1 : 0.4 }}>
                                     ✉️ Send Questionnaire
-                                  </a>
+                                  </button>
                                 </div>
                               </>
                             )}
@@ -1371,6 +1382,52 @@ export const BeoIntakePage = () => {
           {selectedEventId && <BeoJumpToNav isDelivery={isDelivery} />}
           <SubmitChangeRequestModal open={showChangeRequestModal} onClose={() => setShowChangeRequestModal(false)} eventName={eventName} onConfirm={handleSubmitChangeRequest} />
           <ConfirmSendToBOHModal open={showSendToBOHModal} onClose={() => setShowSendToBOHModal(false)} eventName={eventName} onConfirm={handleSendToBOH} />
+          {showQuestionnaireModal && selectedEventId && createPortal(
+            <div onClick={() => setShowQuestionnaireModal(false)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
+              <div onClick={(e) => e.stopPropagation()} style={{ background: "#1e293b", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 14, padding: "28px 24px", maxWidth: 520, width: "100%", color: "#f1f5f9" }}>
+                <div style={{ fontSize: 17, fontWeight: 700, marginBottom: 6 }}>✉️ Send Client Questionnaire</div>
+                <div style={{ fontSize: 13, color: "#94a3b8", marginBottom: 20 }}>
+                  Share this link with {clientFirstName || "the client"} so they can fill in event logistics details.
+                </div>
+
+                {/* Link copy box */}
+                <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1, color: "#64748b", textTransform: "uppercase", marginBottom: 6 }}>Questionnaire Link</div>
+                <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>
+                  <input readOnly value={getQuestionnaireLink()} style={{ flex: 1, background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 8, padding: "8px 12px", color: "#5eead4", fontSize: 12, outline: "none" }} onClick={(e) => (e.target as HTMLInputElement).select()} />
+                  <button type="button" onClick={() => { navigator.clipboard.writeText(getQuestionnaireLink()); }} style={{ padding: "8px 14px", fontSize: 12, fontWeight: 700, borderRadius: 8, border: "1px solid rgba(255,255,255,0.2)", background: "rgba(255,255,255,0.08)", color: "#e2e8f0", cursor: "pointer", whiteSpace: "nowrap" }}>
+                    Copy Link
+                  </button>
+                </div>
+
+                {/* Email options */}
+                <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1, color: "#64748b", textTransform: "uppercase", marginBottom: 10 }}>Send via Email</div>
+                <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 20 }}>
+                  <a href={buildGmailLink()} target="_blank" rel="noopener noreferrer" style={{ flex: 1, minWidth: 140, padding: "10px 16px", fontSize: 13, fontWeight: 700, borderRadius: 8, border: "1px solid #ea4335", background: "rgba(234,67,53,0.12)", color: "#fca5a5", cursor: "pointer", textDecoration: "none", textAlign: "center" }}>
+                    Open in Gmail
+                  </a>
+                  <a href={buildMailtoLink()} style={{ flex: 1, minWidth: 140, padding: "10px 16px", fontSize: 13, fontWeight: 700, borderRadius: 8, border: "1px solid rgba(255,255,255,0.2)", background: "rgba(255,255,255,0.06)", color: "#cbd5e1", cursor: "pointer", textDecoration: "none", textAlign: "center" }}>
+                    Open Email App
+                  </a>
+                </div>
+
+                {clientEmail && (
+                  <div style={{ fontSize: 12, color: "#64748b", marginBottom: 16 }}>
+                    Client email on file: <span style={{ color: "#94a3b8" }}>{clientEmail}</span>
+                  </div>
+                )}
+                {!clientEmail && (
+                  <div style={{ fontSize: 12, color: "#f87171", marginBottom: 16 }}>
+                    No client email on file — paste the link manually or add an email to the event header.
+                  </div>
+                )}
+
+                <button type="button" onClick={() => setShowQuestionnaireModal(false)} style={{ width: "100%", padding: "10px", fontSize: 13, fontWeight: 600, borderRadius: 8, border: "1px solid rgba(255,255,255,0.1)", background: "rgba(255,255,255,0.04)", color: "#64748b", cursor: "pointer" }}>
+                  Close
+                </button>
+              </div>
+            </div>,
+            document.body
+          )}
           <MissingFieldsModal open={showMissingFieldsModal} onClose={() => setShowMissingFieldsModal(false)} missingFields={getMissingRequiredFields(selectedEventData)} onConfirm={handleMissingFieldsConfirm} />
           <UnsavedChangesModal
             open={showUnsavedModal}
