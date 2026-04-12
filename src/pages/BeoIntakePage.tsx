@@ -134,6 +134,19 @@ const SECTION_PARAM_TO_ID: Record<string, string> = {
   notes: "beo-section-notes",
 };
 
+function CopyButton({ text, label }: { text: string; label: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <button
+      type="button"
+      onClick={() => { navigator.clipboard.writeText(text); setCopied(true); setTimeout(() => setCopied(false), 2000); }}
+      style={{ padding: "8px 14px", fontSize: 12, fontWeight: 700, borderRadius: 8, border: "1px solid rgba(255,255,255,0.2)", background: copied ? "rgba(13,148,136,0.3)" : "rgba(255,255,255,0.08)", color: copied ? "#5eead4" : "#e2e8f0", cursor: "pointer", whiteSpace: "nowrap", transition: "all 0.2s" }}
+    >
+      {copied ? "✓ Copied!" : label}
+    </button>
+  );
+}
+
 export const BeoIntakePage = () => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -523,19 +536,6 @@ export const BeoIntakePage = () => {
     return `${greeting}\n\nWe're looking forward to your event${dateStr} and want to make sure everything is perfect.\n\nCould you take a few minutes to fill out this short questionnaire? It covers details like venue access, dietary needs, and setup preferences:\n\n${link}\n\nThank you!\n— The Foodwerx Team`;
   };
 
-  const buildGmailLink = () => {
-    const subject = encodeURIComponent(`Your Upcoming Event — A Few Quick Questions`);
-    const body = encodeURIComponent(getQuestionnaireEmailBody());
-    const to = clientEmail ? encodeURIComponent(clientEmail) : "";
-    return `https://mail.google.com/mail/?view=cm&fs=1&to=${to}&su=${subject}&body=${body}`;
-  };
-
-  const buildMailtoLink = () => {
-    const subject = encodeURIComponent(`Your Upcoming Event — A Few Quick Questions`);
-    const body = encodeURIComponent(getQuestionnaireEmailBody());
-    const to = clientEmail ? encodeURIComponent(clientEmail) : "";
-    return `mailto:${to}?subject=${subject}&body=${body}`;
-  };
   const role = user?.role ?? null;
   const canSubmitChangeRequest = role === "foh" || role === "intake" || role === "ops_admin";
 
@@ -1384,42 +1384,33 @@ export const BeoIntakePage = () => {
           <ConfirmSendToBOHModal open={showSendToBOHModal} onClose={() => setShowSendToBOHModal(false)} eventName={eventName} onConfirm={handleSendToBOH} />
           {showQuestionnaireModal && selectedEventId && createPortal(
             <div onClick={() => setShowQuestionnaireModal(false)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
-              <div onClick={(e) => e.stopPropagation()} style={{ background: "#1e293b", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 14, padding: "28px 24px", maxWidth: 520, width: "100%", color: "#f1f5f9" }}>
-                <div style={{ fontSize: 17, fontWeight: 700, marginBottom: 6 }}>✉️ Send Client Questionnaire</div>
+              <div onClick={(e) => e.stopPropagation()} style={{ background: "#1e293b", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 14, padding: "28px 24px", maxWidth: 540, width: "100%", color: "#f1f5f9" }}>
+                <div style={{ fontSize: 17, fontWeight: 700, marginBottom: 4 }}>✉️ Client Questionnaire</div>
                 <div style={{ fontSize: 13, color: "#94a3b8", marginBottom: 20 }}>
-                  Share this link with {clientFirstName || "the client"} so they can fill in event logistics details.
+                  Copy the link and paste it into an email to {clientFirstName || "the client"}.
                 </div>
 
-                {/* Link copy box */}
-                <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1, color: "#64748b", textTransform: "uppercase", marginBottom: 6 }}>Questionnaire Link</div>
-                <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>
+                {/* Link */}
+                <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1, color: "#64748b", textTransform: "uppercase", marginBottom: 6 }}>Form Link</div>
+                <div style={{ display: "flex", gap: 8, marginBottom: 6 }}>
                   <input readOnly value={getQuestionnaireLink()} style={{ flex: 1, background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 8, padding: "8px 12px", color: "#5eead4", fontSize: 12, outline: "none" }} onClick={(e) => (e.target as HTMLInputElement).select()} />
-                  <button type="button" onClick={() => { navigator.clipboard.writeText(getQuestionnaireLink()); }} style={{ padding: "8px 14px", fontSize: 12, fontWeight: 700, borderRadius: 8, border: "1px solid rgba(255,255,255,0.2)", background: "rgba(255,255,255,0.08)", color: "#e2e8f0", cursor: "pointer", whiteSpace: "nowrap" }}>
-                    Copy Link
-                  </button>
+                  <CopyButton text={getQuestionnaireLink()} label="Copy" />
                 </div>
+                {clientEmail && <div style={{ fontSize: 12, color: "#64748b", marginBottom: 20 }}>Client email: <span style={{ color: "#94a3b8" }}>{clientEmail}</span></div>}
+                {!clientEmail && <div style={{ fontSize: 12, color: "#f87171", marginBottom: 20 }}>No client email saved on this event.</div>}
 
-                {/* Email options */}
-                <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1, color: "#64748b", textTransform: "uppercase", marginBottom: 10 }}>Send via Email</div>
-                <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 20 }}>
-                  <a href={buildGmailLink()} target="_blank" rel="noopener noreferrer" style={{ flex: 1, minWidth: 140, padding: "10px 16px", fontSize: 13, fontWeight: 700, borderRadius: 8, border: "1px solid #ea4335", background: "rgba(234,67,53,0.12)", color: "#fca5a5", cursor: "pointer", textDecoration: "none", textAlign: "center" }}>
-                    Open in Gmail
-                  </a>
-                  <a href={buildMailtoLink()} style={{ flex: 1, minWidth: 140, padding: "10px 16px", fontSize: 13, fontWeight: 700, borderRadius: 8, border: "1px solid rgba(255,255,255,0.2)", background: "rgba(255,255,255,0.06)", color: "#cbd5e1", cursor: "pointer", textDecoration: "none", textAlign: "center" }}>
-                    Open Email App
-                  </a>
+                {/* Pre-written email body */}
+                <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1, color: "#64748b", textTransform: "uppercase", marginBottom: 6 }}>Pre-written Email (copy &amp; paste)</div>
+                <textarea
+                  readOnly
+                  rows={8}
+                  value={getQuestionnaireEmailBody()}
+                  onClick={(e) => (e.target as HTMLTextAreaElement).select()}
+                  style={{ width: "100%", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, padding: "10px 12px", color: "#cbd5e1", fontSize: 12, lineHeight: 1.6, resize: "none", outline: "none", boxSizing: "border-box", marginBottom: 6 }}
+                />
+                <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginBottom: 20 }}>
+                  <CopyButton text={getQuestionnaireEmailBody()} label="Copy Email Text" />
                 </div>
-
-                {clientEmail && (
-                  <div style={{ fontSize: 12, color: "#64748b", marginBottom: 16 }}>
-                    Client email on file: <span style={{ color: "#94a3b8" }}>{clientEmail}</span>
-                  </div>
-                )}
-                {!clientEmail && (
-                  <div style={{ fontSize: 12, color: "#f87171", marginBottom: 16 }}>
-                    No client email on file — paste the link manually or add an email to the event header.
-                  </div>
-                )}
 
                 <button type="button" onClick={() => setShowQuestionnaireModal(false)} style={{ width: "100%", padding: "10px", fontSize: 13, fontWeight: 600, borderRadius: 8, border: "1px solid rgba(255,255,255,0.1)", background: "rgba(255,255,255,0.04)", color: "#64748b", cursor: "pointer" }}>
                   Close
