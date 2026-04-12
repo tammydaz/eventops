@@ -608,6 +608,7 @@ export function CreationStationContent(props: {
   const [newStationType, setNewStationType] = useState("");
   const [newStationPresetId, setNewStationPresetId] = useState("");
   const [newStationNotes, setNewStationNotes] = useState("");
+  const [showAddStationForm, setShowAddStationForm] = useState(false);
   const [showConfigModal, setShowConfigModal] = useState(false);
   const [showComponentsModal, setShowComponentsModal] = useState(false);
   const [editingStationId, setEditingStationId] = useState<string | null>(null);
@@ -621,6 +622,15 @@ export function CreationStationContent(props: {
   }, [selectedEventId]);
   useEffect(() => {
     getStationTypeOptions().then((opts) => setStationTypeOptions(opts.length > 0 ? opts : [...STATION_TYPE_OPTIONS]));
+  }, []);
+
+  // Listen for the "openAddStationForm" event dispatched by the "+ Station" quick-add button
+  useEffect(() => {
+    const el = document.getElementById("beo-creation-stations");
+    if (!el) return;
+    const handler = () => setShowAddStationForm(true);
+    el.addEventListener("openAddStationForm", handler);
+    return () => el.removeEventListener("openAddStationForm", handler);
   }, []);
 
   useEffect(() => {
@@ -1073,43 +1083,58 @@ export function CreationStationContent(props: {
         })()}
       </div>
       {canEdit && (
-        <div style={{ marginTop: 16, padding: 12, border: "2px dashed #444", borderRadius: 8 }}>
-          <label style={labelStyle}>Add station</label>
-          <div style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))" }}>
-            {usePresetFlow ? (
-              <div>
-                <label style={labelStyle}>Station Preset</label>
-                <select value={newStationPresetId} onChange={(e) => setNewStationPresetId(e.target.value)} disabled={!canEdit} style={selectStyle}>
-                  <option value="">Select preset</option>
-                  {stationPresets.map((p) => (
-                    <option key={p.id} value={p.id}>{p.name}</option>
-                  ))}
-                </select>
-              </div>
-            ) : (
-              <div>
-                <label style={labelStyle}>Station Type</label>
-                <select value={newStationType} onChange={(e) => setNewStationType(e.target.value)} disabled={!canEdit} style={selectStyle}>
-                  <option value="">Select type</option>
-                  {([...new Set([...(stationTypeOptions.length > 0 ? stationTypeOptions : []), ...STATION_TYPE_OPTIONS])]).map((opt) => (
-                    <option key={opt} value={opt}>{opt}</option>
-                  ))}
-                </select>
-              </div>
-            )}
-            <div style={{ gridColumn: "1 / -1" }}>
-              <label style={labelStyle}>Station Notes</label>
-              <textarea rows={2} value={newStationNotes} onChange={(e) => setNewStationNotes(e.target.value)} disabled={!canEdit} style={inputStyle} placeholder="Special instructions or notes..." />
-            </div>
+        <div style={{ marginTop: 16 }}>
+          {!showAddStationForm ? (
             <button
               type="button"
-              disabled={!canEdit || (usePresetFlow ? !newStationPresetId : !newStationType.trim())}
-              onClick={openAddStationModal}
-              style={compactStyle}
+              onClick={() => setShowAddStationForm(true)}
+              style={{ padding: "6px 16px", fontSize: 12, fontWeight: 600, borderRadius: 6, border: "1px dashed #666", background: "transparent", color: "#aaa", cursor: "pointer" }}
             >
               + Add Station
             </button>
-          </div>
+          ) : (
+            <div style={{ padding: 12, border: "2px dashed #444", borderRadius: 8 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                <label style={labelStyle}>Add station</label>
+                <button type="button" onClick={() => setShowAddStationForm(false)} style={{ background: "none", border: "none", color: "#888", cursor: "pointer", fontSize: 16, lineHeight: 1 }}>✕</button>
+              </div>
+              <div style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))" }}>
+                {usePresetFlow ? (
+                  <div>
+                    <label style={labelStyle}>Station Preset</label>
+                    <select value={newStationPresetId} onChange={(e) => setNewStationPresetId(e.target.value)} disabled={!canEdit} style={selectStyle}>
+                      <option value="">Select preset</option>
+                      {stationPresets.map((p) => (
+                        <option key={p.id} value={p.id}>{p.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                ) : (
+                  <div>
+                    <label style={labelStyle}>Station Type</label>
+                    <select value={newStationType} onChange={(e) => setNewStationType(e.target.value)} disabled={!canEdit} style={selectStyle}>
+                      <option value="">Select type</option>
+                      {([...new Set([...(stationTypeOptions.length > 0 ? stationTypeOptions : []), ...STATION_TYPE_OPTIONS])]).map((opt) => (
+                        <option key={opt} value={opt}>{opt}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+                <div style={{ gridColumn: "1 / -1" }}>
+                  <label style={labelStyle}>Station Notes</label>
+                  <textarea rows={2} value={newStationNotes} onChange={(e) => setNewStationNotes(e.target.value)} disabled={!canEdit} style={inputStyle} placeholder="Special instructions or notes..." />
+                </div>
+                <button
+                  type="button"
+                  disabled={!canEdit || (usePresetFlow ? !newStationPresetId : !newStationType.trim())}
+                  onClick={openAddStationModal}
+                  style={compactStyle}
+                >
+                  + Add Station
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
       <StationItemsConfigModal
