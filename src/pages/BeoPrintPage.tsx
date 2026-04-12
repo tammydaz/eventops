@@ -1,8 +1,10 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { useLocation } from "react-router-dom";
 import { useEventStore } from "../state/eventStore";
 import { useAuthStore } from "../state/authStore";
 import { useBeoPrintStore } from "../state/beoPrintStore";
+import { usePickerStore } from "../state/usePickerStore";
 import { FIELD_IDS, getBarServiceFieldId, getLockoutFieldIds, getBOHProductionFieldIds, resolveFwStaffLineFromFields } from "../services/airtable/events";
 import { airtableFetch, getMenuItemsTable } from "../services/airtable/client";
 import { getMenuCatalogFieldIds, LEGACY_MENU_ITEMS_TABLE_ID } from "../services/airtable/menuCatalogConfig";
@@ -21,9 +23,15 @@ import { ConfirmSendToBOHModal } from "../components/ConfirmSendToBOHModal";
 import { AcceptTransferModal } from "../components/AcceptTransferModal";
 import { getSauceOverrides } from "../state/sauceOverrideStore";
 import { getBeoSpecStorageKey, getSpecOverrideKey } from "../utils/beoSpecStorage";
-import { loadEventMenuRows, type EventMenuRow, type ChildOverridesData } from "../services/airtable/eventMenu";
+import { createEventMenuRow, loadEventMenuRows, syncShadowToEvent, targetFieldToSection, updateEventMenuRow, type EventMenuRow, type ChildOverridesData } from "../services/airtable/eventMenu";
+import { fetchMenuItemByExactName } from "../services/airtable/menuItems";
 import { DeliveryPaperBeveragesSpreadsheetFromEvent } from "../components/beo-print/DeliveryPaperBeveragesSpreadsheet";
 import { stationCustomItemsToLines } from "../utils/stationPrint";
+import { MenuPickerModal } from "../components/MenuPickerModal";
+import { GlobalSearchPickerModal } from "../components/GlobalSearchPickerModal";
+import { DeliveryPackagesPanel } from "../components/beo-intake/DeliveryPackagesPanel";
+import { DeliveryPackageConfigModal } from "../components/beo-intake/DeliveryPackageConfigModal";
+import { getDeliveryPackagePreset, type DeliveryPackagePreset } from "../config/deliveryPackagePresets";
 
 // ── Types ──
 type MenuLineItem = {
@@ -2395,6 +2403,14 @@ const BeoPrintPage: React.FC = () => {
   const [hiddenMenuItems, setHiddenMenuItems] = useState<Set<string>>(new Set());
   const [eventMenuRows, setEventMenuRows] = useState<EventMenuRow[]>([]);
   const [barServiceFieldId, setBarServiceFieldId] = useState<string | null>(null);
+
+  // ── Edit Mode — let staff build the menu directly on the BEO ──
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [showPackagesPanelBeo, setShowPackagesPanelBeo] = useState(false);
+  const [showGlobalSearchBeo, setShowGlobalSearchBeo] = useState(false);
+  const [pendingPackageItemBeo, setPendingPackageItemBeo] = useState<{ id: string; name: string; routeTargetField: string; preset: DeliveryPackagePreset } | null>(null);
+  const [editSectionTarget, setEditSectionTarget] = useState<{ pickerType: string; routeTargetField: string } | null>(null);
+  const openPicker = usePickerStore((s) => s.openPicker);
   const [lockoutIds, setLockoutIds] = useState<Awaited<ReturnType<typeof getLockoutFieldIds>>>(null);
   const [bohIds, setBohIds] = useState<Awaited<ReturnType<typeof getBOHProductionFieldIds>>>(null);
   const [showSendToBOHModal, setShowSendToBOHModal] = useState(false);
@@ -2862,6 +2878,79 @@ const BeoPrintPage: React.FC = () => {
       else setEventMenuRows([]);
     });
   }, [eventId]);
+
+  // ── Edit Mode: section → picker config mapping ──
+  const SECTION_EDIT_CONFIG: Record<string, { pickerType: string; routeTargetField: string }> = {
+    "PASSED APPETIZERS":   { pickerType: "passed",       routeTargetField: "passedApps" },
+    "PRESENTED APPETIZERS":{ pickerType: "presented",    routeTargetField: "presentedApps" },
+    "BUFFET \u2013 METAL": { pickerType: "buffet_metal", routeTargetField: "buffetMetal" },
+    "BUFFET \u2013 CHINA": { pickerType: "buffet_china", routeTargetField: "buffetChina" },
+    "DELI":                { pickerType: "deli",         routeTargetField: "fullServiceDeli" },
+    "DESSERTS":            { pickerType: "desserts",     routeTargetField: "desserts" },
+  };
+
+  // ── Edit Mode: reload shadow rows after an item is added ──
+  const reloadShadowRows = useCallback(async () => {
+    if (!eventId) return;
+    const result = await loadEventMenuRows(eventId);
+    if (!isErrorResult(result)) setEventMenuRows(result);
+  }, [eventId]);
+
+  // ── Edit Mode: add a menu item from the BEO ──
+  const handlePickerAddFromBeo = useCallback(
+    async (item: { id: string; name: string; routeTargetField?: string; hasChildren?: boolean }) => {
+      const targetField = item.routeTargetField ?? editSectionTarget?.routeTargetField;
+      if (!eventId || !targetField) return;
+      const mappedSection = targetFieldToSection(targetField);
+      if (!mappedSection) return;
+      const alreadyExists = eventMenuRows.some((r) => r.catalogItemId === item.id);
+      if (alreadyExists) return;
+      const preset = getDeliveryPackagePreset(item.name);
+      if (preset) {
+        setPendingPackageItemBeo({ id: item.id, name: item.name, routeTargetField: targetField, preset });
+        return;
+      }
+      const createResult = await createEventMenuRow(eventId, mappedSection, item.id);
+      if (createResult && "error" in createResult) return;
+      await syncShadowToEvent(eventId, { injectedRows: [{ section: mappedSection, catalogItemId: item.id }] });
+      await loadEventData();
+      await reloadShadowRows();
+    },
+    [eventId, editSectionTarget, eventMenuRows, loadEventData, reloadShadowRows]
+  );
+
+  // ── Edit Mode: package config confirmed ──
+  const handlePackageConfirmFromBeo = useCallback(
+    async (customLines: string[]) => {
+      if (!pendingPackageItemBeo || !eventId) { setPendingPackageItemBeo(null); return; }
+      const { id, routeTargetField } = pendingPackageItemBeo;
+      setPendingPackageItemBeo(null);
+      const mappedSection = targetFieldToSection(routeTargetField);
+      if (!mappedSection) return;
+      const createResult = await createEventMenuRow(eventId, mappedSection, id);
+      if (createResult && "error" in createResult) return;
+      const newRowId = (createResult as { id: string }).id;
+      const customText = customLines.join("\n");
+      if (customText) await updateEventMenuRow(newRowId, { customText });
+      await syncShadowToEvent(eventId, { injectedRows: [{ section: mappedSection, catalogItemId: id }] });
+      await loadEventData();
+      await reloadShadowRows();
+    },
+    [pendingPackageItemBeo, eventId, loadEventData, reloadShadowRows]
+  );
+
+  // ── Edit Mode: package panel → look up Airtable ID then open config ──
+  const handlePanelSelectPackageFromBeo = useCallback(async (preset: DeliveryPackagePreset) => {
+    const found = await fetchMenuItemByExactName(preset.displayName);
+    if (!found) { alert(`Could not find "${preset.displayName}" in the menu catalog.`); return; }
+    setPendingPackageItemBeo({ id: found.id, name: found.name, routeTargetField: preset.routeTargetField, preset });
+  }, []);
+
+  // ── Edit Mode: already-added IDs for MenuPickerModal ──
+  const pickerAlreadyAddedIdsBeo = useMemo(
+    () => eventMenuRows.map((r) => r.catalogItemId).filter((id): id is string => !!id),
+    [eventMenuRows]
+  );
 
   // ── Extract event fields ──
   const f = (id: string): string => {
@@ -3599,6 +3688,19 @@ const BeoPrintPage: React.FC = () => {
               >
                 ☑️ Server check
               </button>
+              {!isDelivery && (
+                <button
+                  type="button"
+                  style={{
+                    ...styles.leftBox,
+                    ...(isEditMode ? { background: "#2563eb", borderColor: "#2563eb", color: "#fff" } : { borderColor: "#2563eb", color: "#2563eb" }),
+                    marginTop: 12,
+                  }}
+                  onClick={() => { setIsEditMode((v) => !v); setTopTab("kitchenBEO"); }}
+                >
+                  ✏️ {isEditMode ? "Done Editing" : "Edit Menu"}
+                </button>
+              )}
             </>
           )}
           <div style={{ flex: 1 }} />
@@ -3890,6 +3992,36 @@ const BeoPrintPage: React.FC = () => {
                 <span>{section.title}{isContinuation ? " (cont.)" : ""}</span>
                 <span style={{ color: getSectionColor(section.title), fontSize: "22px", lineHeight: 0 }}>●</span>
               </div>
+              {/* ── Edit Mode: inline add buttons per section ── */}
+              {isEditMode && !isContinuation && !isDelivery && (() => {
+                const cfg = SECTION_EDIT_CONFIG[section.title];
+                if (!cfg) return null;
+                return (
+                  <div className="no-print" style={{ display: "flex", gap: 6, padding: "6px 10px", background: "rgba(37,99,235,0.06)", borderBottom: "1px solid rgba(37,99,235,0.18)", flexWrap: "wrap" }}>
+                    <button
+                      type="button"
+                      onClick={() => { setEditSectionTarget(cfg); openPicker(cfg.pickerType, cfg.routeTargetField, section.title); }}
+                      style={{ padding: "3px 12px", fontSize: 11, fontWeight: 700, borderRadius: 4, border: "1px solid rgba(37,99,235,0.4)", background: "rgba(37,99,235,0.1)", color: "#1d4ed8", cursor: "pointer" }}
+                    >
+                      + Add Item
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setEditSectionTarget(cfg); setShowPackagesPanelBeo(true); }}
+                      style={{ padding: "3px 12px", fontSize: 11, fontWeight: 700, borderRadius: 4, border: "1px solid rgba(37,99,235,0.4)", background: "rgba(37,99,235,0.1)", color: "#1d4ed8", cursor: "pointer" }}
+                    >
+                      📦 Packages
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setEditSectionTarget(cfg); setShowGlobalSearchBeo(true); }}
+                      style={{ padding: "3px 12px", fontSize: 11, fontWeight: 700, borderRadius: 4, border: "1px solid rgba(37,99,235,0.4)", background: "rgba(37,99,235,0.1)", color: "#1d4ed8", cursor: "pointer" }}
+                    >
+                      🔍 Find Any Item
+                    </button>
+                  </div>
+                );
+              })()}
               {(leftCheck === "kitchen" || leftCheck === "expeditor" || leftCheck === "server") && sectionItems.length > 0 && secIdx === 0 && (
                 <div className="beo-line-item" style={{ ...styles.lineItem, borderBottom: "1px solid #ddd", gridTemplateColumns, padding: "4px 8px", lineHeight: 1.2, minHeight: "unset", alignItems: "center", fontWeight: 600, fontSize: 10, color: "#333" }}>
                   <div style={styles.specCol}>—</div>
@@ -4236,6 +4368,46 @@ const BeoPrintPage: React.FC = () => {
           )}
         </div>
       </div>
+
+      {/* ── Edit Mode Modals ── */}
+      {isEditMode && (
+        <MenuPickerModal
+          onAdd={handlePickerAddFromBeo}
+          onRemove={() => { /* removal handled in intake */ }}
+          alreadyAddedIds={pickerAlreadyAddedIdsBeo}
+          alreadyAddedNames={[]}
+        />
+      )}
+
+      {isEditMode && (
+        <GlobalSearchPickerModal
+          isOpen={showGlobalSearchBeo}
+          isDelivery={false}
+          onAdd={(item) => { setShowGlobalSearchBeo(false); handlePickerAddFromBeo(item); }}
+          onClose={() => setShowGlobalSearchBeo(false)}
+        />
+      )}
+
+      {isEditMode && showPackagesPanelBeo && createPortal(
+        <DeliveryPackagesPanel
+          onSelectPackage={handlePanelSelectPackageFromBeo}
+          onOpenBoxedLunches={null}
+          onOpenSandwichPlatters={null}
+          onClose={() => setShowPackagesPanelBeo(false)}
+          disabled={false}
+        />,
+        document.body
+      )}
+
+      {isEditMode && pendingPackageItemBeo && createPortal(
+        <DeliveryPackageConfigModal
+          preset={pendingPackageItemBeo.preset}
+          itemName={pendingPackageItemBeo.name}
+          onConfirm={handlePackageConfirmFromBeo}
+          onCancel={() => setPendingPackageItemBeo(null)}
+        />,
+        document.body
+      )}
     </>
   );
 };
