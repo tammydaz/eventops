@@ -159,6 +159,7 @@ export const BeoIntakePage = () => {
   const [showPackagesPanel, setShowPackagesPanel] = useState(false);
   const [showGlobalSearch, setShowGlobalSearch] = useState(false);
   const [showQuestionnaireModal, setShowQuestionnaireModal] = useState(false);
+  const [menuSaveError, setMenuSaveError] = useState<string | null>(null);
   const [pendingPackageItem, setPendingPackageItem] = useState<{ id: string; name: string; routeTargetField: string; preset: DeliveryPackagePreset } | null>(null);
   const [dressingPickerSalad, setDressingPickerSalad] = useState<{ id: string; name: string; shadowRowId: string } | null>(null);
   const [dressingPickerItems, setDressingPickerItems] = useState<{ id: string; name: string }[]>([]);
@@ -659,8 +660,10 @@ export const BeoIntakePage = () => {
       const createResult = await createEventMenuRow(selectedEventId, mappedSection, item.id);
       if (createResult && "error" in createResult) {
         console.error("[handlePickerAdd] createEventMenuRow failed:", createResult);
+        setMenuSaveError(`Could not save "${item.name}" — ${(createResult as { message?: string }).message ?? "Airtable error"}. Try refreshing.`);
         return;
       }
+      setMenuSaveError(null);
 
       const newRowId = (createResult as { id: string }).id;
       const newRow: EventMenuRow & { catalogItemName: string; components?: EventMenuRowComponent[] } = {
@@ -1083,6 +1086,11 @@ export const BeoIntakePage = () => {
                           isDelivery={isDelivery}
                         >
                           <div className="beo-menu-inner" style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 0, gridColumn: "1 / -1", width: "100%", maxWidth: "100%", margin: "0 auto" }}>
+                            {menuSaveError && (
+                              <div style={{ width: "100%", marginBottom: 10, padding: "8px 12px", background: "rgba(239,68,68,0.15)", border: "1px solid #ef4444", borderRadius: 8, color: "#fca5a5", fontSize: 12, textAlign: "center" }}>
+                                ⚠️ {menuSaveError}
+                              </div>
+                            )}
                             {!isDelivery && (
                             <div className="beo-menu-add-buttons" style={{ display: "flex", justifyContent: "center", flexWrap: "wrap", gap: "8px", marginBottom: "20px", overflowX: "auto", paddingBottom: "4px", alignItems: "flex-start" }}>
                                 {(
