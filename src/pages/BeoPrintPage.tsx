@@ -23,7 +23,7 @@ import { ConfirmSendToBOHModal } from "../components/ConfirmSendToBOHModal";
 import { AcceptTransferModal } from "../components/AcceptTransferModal";
 import { getSauceOverrides } from "../state/sauceOverrideStore";
 import { getBeoSpecStorageKey, getSpecOverrideKey } from "../utils/beoSpecStorage";
-import { createEventMenuRow, loadEventMenuRows, syncShadowToEvent, targetFieldToSection, updateEventMenuRow, type EventMenuRow, type ChildOverridesData } from "../services/airtable/eventMenu";
+import { createEventMenuRow, deleteEventMenuRow, loadEventMenuRows, syncShadowToEvent, targetFieldToSection, updateEventMenuRow, type EventMenuRow, type ChildOverridesData } from "../services/airtable/eventMenu";
 import { fetchMenuItemByExactName } from "../services/airtable/menuItems";
 import { DeliveryPaperBeveragesSpreadsheetFromEvent } from "../components/beo-print/DeliveryPaperBeveragesSpreadsheet";
 import { stationCustomItemsToLines } from "../utils/stationPrint";
@@ -2953,6 +2953,17 @@ const BeoPrintPage: React.FC = () => {
     setPendingPackageItemBeo({ id: found.id, name: found.name, routeTargetField: preset.routeTargetField, preset });
   }, []);
 
+  // ── Edit Mode: delete an item from the BEO ──
+  const handleDeleteFromBeo = useCallback(async (catalogItemId: string) => {
+    if (!eventId) return;
+    const row = eventMenuRows.find((r) => r.catalogItemId === catalogItemId);
+    if (!row) return;
+    await deleteEventMenuRow(row.id);
+    await syncShadowToEvent(eventId);
+    await loadEventData();
+    await reloadShadowRows();
+  }, [eventId, eventMenuRows, loadEventData, reloadShadowRows]);
+
   // ── Edit Mode: already-added IDs for MenuPickerModal ──
   const pickerAlreadyAddedIdsBeo = useMemo(
     () => eventMenuRows.map((r) => r.catalogItemId).filter((id): id is string => !!id),
@@ -4012,26 +4023,30 @@ const BeoPrintPage: React.FC = () => {
               {isEditMode && !isContinuation && !isDelivery && (() => {
                 const cfg = SECTION_EDIT_CONFIG[section.title];
                 if (!cfg) return null;
+                const sectionColor = getSectionColor(section.title);
                 return (
-                  <div className="no-print" style={{ display: "flex", gap: 6, padding: "6px 10px", background: "rgba(37,99,235,0.06)", borderBottom: "1px solid rgba(37,99,235,0.18)", flexWrap: "wrap" }}>
+                  <div className="no-print" style={{ display: "flex", gap: 6, padding: "5px 10px", background: `${sectionColor}10`, borderLeft: `3px solid ${sectionColor}`, borderBottom: `1px solid ${sectionColor}30`, flexWrap: "wrap", alignItems: "center" }}>
+                    <span style={{ fontSize: 10, fontWeight: 800, color: sectionColor, letterSpacing: "0.05em", marginRight: 4, flexShrink: 0 }}>
+                      ADD TO {section.title}:
+                    </span>
                     <button
                       type="button"
                       onClick={() => { setEditSectionTarget(cfg); openPicker(cfg.pickerType, cfg.routeTargetField, section.title); }}
-                      style={{ padding: "3px 12px", fontSize: 11, fontWeight: 700, borderRadius: 4, border: "1px solid rgba(37,99,235,0.4)", background: "rgba(37,99,235,0.1)", color: "#1d4ed8", cursor: "pointer" }}
+                      style={{ padding: "3px 12px", fontSize: 11, fontWeight: 700, borderRadius: 4, border: `1px solid ${sectionColor}60`, background: `${sectionColor}18`, color: sectionColor, cursor: "pointer" }}
                     >
                       + Add Item
                     </button>
                     <button
                       type="button"
                       onClick={() => { setEditSectionTarget(cfg); setShowPackagesPanelBeo(true); }}
-                      style={{ padding: "3px 12px", fontSize: 11, fontWeight: 700, borderRadius: 4, border: "1px solid rgba(37,99,235,0.4)", background: "rgba(37,99,235,0.1)", color: "#1d4ed8", cursor: "pointer" }}
+                      style={{ padding: "3px 12px", fontSize: 11, fontWeight: 700, borderRadius: 4, border: `1px solid ${sectionColor}60`, background: `${sectionColor}18`, color: sectionColor, cursor: "pointer" }}
                     >
                       📦 Packages
                     </button>
                     <button
                       type="button"
                       onClick={() => { setEditSectionTarget(cfg); setShowGlobalSearchBeo(true); }}
-                      style={{ padding: "3px 12px", fontSize: 11, fontWeight: 700, borderRadius: 4, border: "1px solid rgba(37,99,235,0.4)", background: "rgba(37,99,235,0.1)", color: "#1d4ed8", cursor: "pointer" }}
+                      style={{ padding: "3px 12px", fontSize: 11, fontWeight: 700, borderRadius: 4, border: `1px solid ${sectionColor}60`, background: `${sectionColor}18`, color: sectionColor, cursor: "pointer" }}
                     >
                       🔍 Find Any Item
                     </button>
@@ -4074,8 +4089,19 @@ const BeoPrintPage: React.FC = () => {
                 )}
 
                 {/* Item Name (middle column) */}
-                <div className="beo-item-col" style={{ ...styles.itemCol, lineHeight: 1.25, ...getItemRowNameStyle(row.isChild, rows.some(r => r.isChild)) }}>
-                  {row.lineName}
+                <div className="beo-item-col" style={{ ...styles.itemCol, lineHeight: 1.25, ...getItemRowNameStyle(row.isChild, rows.some(r => r.isChild)), display: "flex", alignItems: "flex-start", gap: 6 }}>
+                  <span style={{ flex: 1 }}>{row.lineName}</span>
+                  {isEditMode && !isDelivery && rowIdx === 0 && !row.isChild && (
+                    <button
+                      type="button"
+                      className="no-print"
+                      onClick={() => handleDeleteFromBeo(item.id)}
+                      title="Remove from BEO"
+                      style={{ flexShrink: 0, padding: "1px 6px", fontSize: 11, fontWeight: 700, borderRadius: 3, border: "1px solid #fca5a5", background: "#fee2e2", color: "#dc2626", cursor: "pointer", lineHeight: 1.2 }}
+                    >
+                      ✕
+                    </button>
+                  )}
                 </div>
 
                 {/* KITCHEN / EXPEDITOR / SERVER: Checkbox (right) */}
