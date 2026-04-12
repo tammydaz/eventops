@@ -2418,6 +2418,13 @@ const BeoPrintPage: React.FC = () => {
   const urlEventId = getEventIdFromUrl();
   const eventId = urlEventId ?? selectedEventId ?? null;
 
+  // Auto-activate Edit Mode when navigated here from intake via ?editMode=1
+  useEffect(() => {
+    if (new URLSearchParams(location.search).get("editMode") === "1") {
+      setIsEditMode(true);
+    }
+  }, [location.search]);
+
   useEffect(() => {
     getBarServiceFieldId().then(setBarServiceFieldId);
   }, []);

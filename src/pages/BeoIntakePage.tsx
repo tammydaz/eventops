@@ -1067,6 +1067,11 @@ export const BeoIntakePage = () => {
                                 <button type="button" disabled={isLocked} onClick={() => setShowGlobalSearch(true)} style={{ padding: "8px 16px", fontSize: 12, fontWeight: 700, borderRadius: 6, border: "1px solid rgba(255,255,255,0.25)", background: "rgba(255,255,255,0.06)", color: "rgba(255,255,255,0.8)", cursor: isLocked ? "default" : "pointer", flexShrink: 0 }}>
                                   🔍 Find Any Item
                                 </button>
+                                {selectedEventId && (
+                                  <button type="button" onClick={() => navigate(`/beo-print/${selectedEventId}?editMode=1`)} style={{ padding: "8px 16px", fontSize: 12, fontWeight: 700, borderRadius: 6, border: "1px solid rgba(255,255,255,0.35)", background: "rgba(255,255,255,0.12)", color: "#fff", cursor: "pointer", flexShrink: 0 }}>
+                                    📄 Edit BEO
+                                  </button>
+                                )}
                             </div>
                             )}
                             {isDelivery && (
@@ -1075,6 +1080,13 @@ export const BeoIntakePage = () => {
                                 onOpenPackages={() => setShowPackagesPanel(true)}
                                 onOpenGlobalSearch={() => setShowGlobalSearch(true)}
                               />
+                              {selectedEventId && (
+                                <div style={{ display: "flex", justifyContent: "center", marginTop: 6 }}>
+                                  <button type="button" onClick={() => navigate(`/beo-print/${selectedEventId}?editMode=1`)} style={{ padding: "7px 18px", fontSize: 12, fontWeight: 700, borderRadius: 6, border: "1px solid rgba(255,255,255,0.35)", background: "rgba(255,255,255,0.12)", color: "#fff", cursor: "pointer" }}>
+                                    📄 Edit BEO
+                                  </button>
+                                </div>
+                              )}
                             )}
                             {(!isDelivery || deliveryMenuBodyVisible) &&
                             (shadowMenuRows.length === 0 ? (
