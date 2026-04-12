@@ -39,6 +39,7 @@ import FeedbackIssuesPage from "./pages/FeedbackIssuesPage";
 const InvoiceIntakePage = lazy(() => import("./pages/InvoiceIntakePage").then((m) => ({ default: m.default })));
 import AdminPage from "./pages/AdminPage";
 import EventOverviewPage from "./pages/EventOverviewPage";
+import ClientQuestionnairePage from "./pages/ClientQuestionnairePage";
 import FOHLeadOverview from "./pages/FOHLeadOverview";
 import EarlyEventSections from "./pages/EarlyEventSections";
 
@@ -63,6 +64,7 @@ export const Router = ({ selectedEventId }: { selectedEventId: string | null }) 
 
   return (
     <Routes>
+      <Route path="/client-form/:eventId" element={<ClientQuestionnairePage />} />
       <Route path="/event/:id" element={<EventOverviewPage />} />
       <Route path="/lead/:id" element={<FOHLeadOverview />} />
       <Route

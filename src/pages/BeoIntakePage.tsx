@@ -508,6 +508,23 @@ export const BeoIntakePage = () => {
   }, [editingShadowRow?.id, editingShadowRow?.catalogItemId, editingShadowRow?.childOverrides]);
 
   const eventName = selectedEventData ? asString(selectedEventData[FIELD_IDS.EVENT_NAME]) || "This event" : "This event";
+  const clientEmail = selectedEventData ? asString(selectedEventData[FIELD_IDS.CLIENT_EMAIL]) : "";
+  const clientFirstName = selectedEventData ? asString(selectedEventData[FIELD_IDS.CLIENT_FIRST_NAME]) : "";
+  const eventDateDisplay = selectedEventData ? asString(selectedEventData[FIELD_IDS.EVENT_DATE]).slice(0, 10) : "";
+
+  const buildQuestionnaireMailto = () => {
+    if (!selectedEventId) return "#";
+    const baseUrl = window.location.origin;
+    const link = `${baseUrl}/client-form/${selectedEventId}`;
+    const subject = encodeURIComponent(`Your Upcoming Event — A Few Quick Questions`);
+    const greeting = clientFirstName ? `Hi ${clientFirstName},` : "Hi,";
+    const dateStr = eventDateDisplay ? ` on ${eventDateDisplay}` : "";
+    const body = encodeURIComponent(
+      `${greeting}\n\nWe're looking forward to your event${dateStr} and want to make sure everything is perfect.\n\nCould you take a few minutes to fill out this short questionnaire? It covers details like venue access, dietary needs, and setup preferences:\n\n${link}\n\nThank you!\n— The Foodwerx Team`
+    );
+    const to = clientEmail ? encodeURIComponent(clientEmail) : "";
+    return `mailto:${to}?subject=${subject}&body=${body}`;
+  };
   const role = user?.role ?? null;
   const canSubmitChangeRequest = role === "foh" || role === "intake" || role === "ops_admin";
 
@@ -1076,6 +1093,9 @@ export const BeoIntakePage = () => {
                                 <button type="button" onClick={() => { if (selectedEventId) navigate(`/beo-print/${selectedEventId}?editMode=1`); }} disabled={!selectedEventId} style={{ padding: "8px 16px", fontSize: 12, fontWeight: 700, borderRadius: 6, border: "1px solid rgba(255,255,255,0.35)", background: "rgba(255,255,255,0.12)", color: "#fff", cursor: selectedEventId ? "pointer" : "default", flexShrink: 0, opacity: selectedEventId ? 1 : 0.4 }}>
                                   📄 Edit BEO
                                 </button>
+                                <a href={selectedEventId ? buildQuestionnaireMailto() : "#"} onClick={(e) => { if (!selectedEventId) e.preventDefault(); }} style={{ padding: "8px 16px", fontSize: 12, fontWeight: 700, borderRadius: 6, border: "1px solid #0d9488", background: "rgba(13,148,136,0.15)", color: "#5eead4", cursor: selectedEventId ? "pointer" : "default", flexShrink: 0, opacity: selectedEventId ? 1 : 0.4, textDecoration: "none", display: "inline-flex", alignItems: "center" }}>
+                                  ✉️ Send Questionnaire
+                                </a>
                             </div>
                             )}
                             {isDelivery && (
@@ -1085,10 +1105,13 @@ export const BeoIntakePage = () => {
                                   onOpenPackages={() => setShowPackagesPanel(true)}
                                   onOpenGlobalSearch={() => setShowGlobalSearch(true)}
                                 />
-                                <div style={{ display: "flex", justifyContent: "center", marginTop: 6 }}>
+                                <div style={{ display: "flex", justifyContent: "center", gap: 8, marginTop: 6 }}>
                                   <button type="button" onClick={() => { if (selectedEventId) navigate(`/beo-print/${selectedEventId}?editMode=1`); }} disabled={!selectedEventId} style={{ padding: "7px 18px", fontSize: 12, fontWeight: 700, borderRadius: 6, border: "1px solid rgba(255,255,255,0.35)", background: "rgba(255,255,255,0.12)", color: "#fff", cursor: selectedEventId ? "pointer" : "default", opacity: selectedEventId ? 1 : 0.4 }}>
                                     📄 Edit BEO
                                   </button>
+                                  <a href={selectedEventId ? buildQuestionnaireMailto() : "#"} onClick={(e) => { if (!selectedEventId) e.preventDefault(); }} style={{ padding: "7px 18px", fontSize: 12, fontWeight: 700, borderRadius: 6, border: "1px solid #0d9488", background: "rgba(13,148,136,0.15)", color: "#5eead4", cursor: selectedEventId ? "pointer" : "default", opacity: selectedEventId ? 1 : 0.4, textDecoration: "none", display: "inline-flex", alignItems: "center" }}>
+                                    ✉️ Send Questionnaire
+                                  </a>
                                 </div>
                               </>
                             )}

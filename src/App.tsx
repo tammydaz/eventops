@@ -30,6 +30,7 @@ function App() {
   const isClientOverview = pathname.startsWith("/client/");
   const isDeliveryIntake = pathname === "/delivery/intake";
   const isEarlyEventSections = pathname.startsWith("/early-event-sections");
+  const isClientForm = pathname.startsWith("/client-form/");
 
   useEffect(() => {
     loadEvents();
@@ -48,6 +49,11 @@ function App() {
       selectEvent(eventIdFromUrl);
     }
   }, [pathname, selectEvent]);
+
+  // Public routes — no auth required
+  if (isClientForm) {
+    return <Router selectedEventId={selectedEventId} />;
+  }
 
   if (isPrintTest || isHome || isQuickIntake || isWatchtower || isPapaChulo || isFOH || isDashboardOld || isBeoIntake || isBeoPrint || isSeedDemo || isInvoiceIntake || isFeedbackIssues || isAdmin || isKitchen || isFlair || isDeliveryCommand || isIntakeFOH || isEventOverview || isClientOverview || isDeliveryIntake || isEarlyEventSections) {
     return (
