@@ -45,6 +45,7 @@ export default function ClientQuestionnairePage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [saveError, setSaveError] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // Event header info
@@ -160,7 +161,9 @@ export default function ClientQuestionnairePage() {
 
     setSaving(false);
 
-    // Even if Airtable save fails, show success — responses are captured
+    if (result && typeof result === "object" && "error" in result) {
+      setSaveError(true);
+    }
     setSubmitted(true);
   };
 
@@ -303,19 +306,50 @@ export default function ClientQuestionnairePage() {
   }
 
   if (submitted) {
+    const answers = [
+      { label: "Dietary Restrictions", value: dietaryNotes },
+      { label: "Religious Restrictions", value: religiousRestrictions },
+      { label: "Venue Notes", value: venueNotes },
+      { label: "Parking Notes", value: parkingNotes },
+      { label: "Load-In / Access Notes", value: loadInNotes },
+      { label: "Stairs / Steps", value: stairsSteps },
+      { label: "Elevators", value: elevatorsAvailable },
+      { label: "Animals / Pets", value: animalsPets },
+      { label: "Food Setup Location", value: foodSetupLocation },
+      { label: "Event Purpose", value: eventPurpose },
+      { label: "Theme / Colors", value: themeColorScheme },
+      { label: "Client-Supplied Food", value: clientSuppliedFood },
+      { label: "Special Notes", value: specialNotes },
+    ].filter((a) => a.value);
+
     return (
       <div style={s.page}>
-        <div style={{ ...s.card, ...s.successBox }}>
-          <div style={{ fontSize: 52, marginBottom: 16 }}>✅</div>
+        <div style={{ ...s.card, textAlign: "center" as const, padding: "40px 28px" }}>
+          <div style={{ fontSize: 52, marginBottom: 16 }}>{saveError ? "📋" : "✅"}</div>
           <div style={{ fontSize: 22, fontWeight: 700, color: "#f1f5f9", marginBottom: 8 }}>
-            Thank you, {clientName.split(" ")[0]}!
+            {saveError ? "Responses Received" : `Thank you${clientName ? ", " + clientName.split(" ")[0] : ""}!`}
           </div>
-          <div style={{ color: "#94a3b8", fontSize: 14, lineHeight: 1.6 }}>
-            Your responses have been saved. Our team will review them and be in touch if we have any follow-up questions.
-            <br /><br />
-            We're looking forward to your event!
+          <div style={{ color: "#94a3b8", fontSize: 14, lineHeight: 1.6, marginBottom: 24 }}>
+            {saveError
+              ? "We captured your responses below. Please forward this page or screenshot it to your Foodwerx contact."
+              : "Your responses have been saved and our team will review them before your event."}
           </div>
-          <div style={{ marginTop: 32, fontSize: 13, color: "#475569" }}>— The Foodwerx Team</div>
+
+          {answers.length > 0 && (
+            <div style={{ textAlign: "left" as const, background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 10, padding: "16px 20px", marginBottom: 24 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1, color: "#64748b", textTransform: "uppercase" as const, marginBottom: 12 }}>Your Responses</div>
+              {answers.map((a) => (
+                <div key={a.label} style={{ marginBottom: 10 }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: "#64748b", marginBottom: 2 }}>{a.label}</div>
+                  <div style={{ fontSize: 13, color: "#cbd5e1" }}>{a.value}</div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {!saveError && (
+            <div style={{ fontSize: 13, color: "#475569" }}>— The Foodwerx Team</div>
+          )}
         </div>
       </div>
     );
