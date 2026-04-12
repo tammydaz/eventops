@@ -235,27 +235,13 @@ export const FormSection = ({
   const isBeoPillChrome = accent?.toUpperCase() === BEO_SECTION_PILL_ACCENT.toUpperCase();
   /** Delivery/pickup: yellow “dispatch” theme must win over the default cyan BEO pill chrome. */
   const borderColor = isDelivery
-    ? "#eab308"
-    : isBeoPillChrome
-      ? BEO_SECTION_PILL_ACCENT
-      : accent
-        ? hexToRgba(accent, 0.55)
-        : "#00bcd4";
-  const glowColor = isDelivery
-    ? "rgba(234,179,8,0.22)"
-    : isBeoPillChrome
-      ? "rgba(59, 130, 246, 0.2)"
-      : accent
-        ? hexToRgba(accent, 0.28)
-        : "rgba(0,188,212,0.2)";
-  const titleAccent = isDelivery ? "#fffbeb" : isBeoPillChrome ? "#ffffff" : accent ?? "#fff";
+    ? "rgba(234,179,8,0.35)"
+    : "rgba(255,255,255,0.09)";
+  const glowColor = "transparent";
+  const titleAccent = isDelivery ? "#fbbf24" : "#e5e7eb";
   const cardBackground = isDelivery
-    ? "linear-gradient(160deg, rgba(234,179,8,0.16) 0%, rgba(90,70,12,0.1) 40%, rgba(0,0,0,0.55) 100%)"
-    : isBeoPillChrome
-      ? "#000000"
-      : accent
-        ? `linear-gradient(145deg, ${hexToRgba(accent, 0.16)}, ${hexToRgba(accent, 0.04)})`
-        : "rgba(30,15,15,0.6)";
+    ? "rgba(20,16,4,0.7)"
+    : "rgba(12,13,18,0.75)";
 
   const handleSave = async () => {
     if (!selectedEventId) return;
@@ -346,9 +332,7 @@ export const FormSection = ({
         borderRadius: isBeoPillChrome ? 12 : 10,
         padding: isBeoPillChrome ? (isOpen ? "14px 16px" : "8px 20px") : isOpen ? "12px 14px" : "10px 12px",
         border: `1px solid ${borderColor}`,
-        boxShadow: isBeoPillChrome
-          ? `0 2px 16px rgba(0,0,0,0.35), 0 0 20px ${glowColor}`
-          : `0 2px 12px rgba(0,0,0,0.25), 0 0 12px ${glowColor}`,
+        boxShadow: "0 1px 6px rgba(0,0,0,0.35)",
         transition: "all 0.25s ease",
         boxSizing: "border-box",
       }}

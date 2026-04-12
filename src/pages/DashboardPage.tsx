@@ -198,7 +198,7 @@ type NavItem = { label: string; href: string; expandable?: boolean; subtitle?: s
 const NAV: NavItem[] = [
   { label: "Dashboard", href: DASHBOARD_CALENDAR_TO },
   { label: "Add Event", href: "/event/new" },
-  { label: "Open Event", href: "/beo-intake" },
+  { label: "Event Builder", href: "/beo-intake" },
   { label: "Departments", href: "#departments", expandable: true },
   { label: "Today's tasks", href: "/watchtower", subtitle: "Task list" },
   { label: "Ops Chief", href: "/ops-chief" },

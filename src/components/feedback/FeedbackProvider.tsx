@@ -8,7 +8,7 @@ import FeedbackCircle from "./FeedbackCircle";
 const SCREEN_NAMES: Record<string, string> = {
   "/": "Dashboard",
   "/home": "Dashboard",
-  "/beo-intake": "BEO Intake",
+  "/beo-intake": "Event Builder",
   "/quick-intake": "Quick Intake",
   "/invoice-intake": "Invoice Intake",
   "/watchtower": "Today's tasks",

@@ -954,15 +954,18 @@ export const BeoIntakePage = () => {
             <EventSelectorSimple onBeforeSelectEvent={handleBeforeSelectEvent} />
           </div>
           <Link to={DASHBOARD_CALENDAR_TO} style={{ display: "flex", alignItems: "center", gap: 10, textDecoration: "none" }}>
-            <div style={{ width: 40, height: 40, background: "linear-gradient(135deg, #cc0000, #ff3333)", transform: "rotate(45deg)", display: "flex", alignItems: "center", justifyContent: "center", borderRadius: 4, boxShadow: "0 0 20px rgba(204,0,0,0.4)" }}>
-              <span style={{ transform: "rotate(-45deg)", fontFamily: "'Great Vibes', cursive", fontSize: 24, color: "#fff", textShadow: "0 0 12px rgba(255,255,255,0.9)" }}>W</span>
+            <div style={{ width: 34, height: 34, background: "#cc0000", transform: "rotate(45deg)", display: "flex", alignItems: "center", justifyContent: "center", borderRadius: 3, flexShrink: 0 }}>
+              <span style={{ transform: "rotate(-45deg)", fontFamily: "'Great Vibes', cursive", fontSize: 20, color: "#fff" }}>W</span>
             </div>
-            <span style={{ fontFamily: "'Great Vibes', cursive", fontSize: 28, fontWeight: 400, color: "#fff", textShadow: "0 0 12px rgba(255,255,255,0.9)" }}>Werx</span>
+            <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
+              <span style={{ fontFamily: "'Great Vibes', cursive", fontSize: 22, fontWeight: 400, color: "#fff", lineHeight: 1 }}>Werx</span>
+              <span style={{ fontSize: 10, fontWeight: 600, color: "rgba(255,255,255,0.4)", letterSpacing: "0.12em", textTransform: "uppercase", lineHeight: 1 }}>Event Builder</span>
+            </div>
           </Link>
           <div style={{ minWidth: "220px", maxWidth: "320px", display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 10, flexWrap: "wrap" }}>
             {selectedEventId && (
-              <Link to={`/event/${selectedEventId}`} style={{ padding: "6px 12px", borderRadius: 6, border: "1px solid rgba(255,255,255,0.2)", background: "rgba(255,255,255,0.06)", color: "#e0e0e0", fontSize: 12, fontWeight: 600, textDecoration: "none" }}>
-                Event Overview
+              <Link to={`/event/${selectedEventId}`} style={{ padding: "6px 12px", borderRadius: 6, border: "1px solid rgba(255,255,255,0.15)", background: "rgba(255,255,255,0.05)", color: "rgba(255,255,255,0.7)", fontSize: 12, fontWeight: 500, textDecoration: "none", letterSpacing: "0.2px" }}>
+                Overview
               </Link>
             )}
             {!isDelivery && selectedEventId && (
@@ -1059,7 +1062,8 @@ export const BeoIntakePage = () => {
                                     ["+ Desserts", "#7B1FA2", () => openPicker("desserts", "desserts", "Desserts")],
                                   ] as const
                                 ).map(([label, color, onClick]) => (
-                                  <button key={label} type="button" disabled={isLocked} onClick={onClick} style={{ padding: "8px 16px", fontSize: 12, fontWeight: 600, borderRadius: 6, border: `1px solid ${color}80`, background: `linear-gradient(135deg, ${color}40, ${color}15)`, color, cursor: isLocked ? "default" : "pointer", flexShrink: 0 }}>
+                                  <button key={label} type="button" disabled={isLocked} onClick={onClick} style={{ padding: "6px 14px", fontSize: 12, fontWeight: 600, borderRadius: 6, border: `1px solid ${color}38`, background: `${color}12`, color: `${color}`, cursor: isLocked ? "default" : "pointer", flexShrink: 0, display: "flex", alignItems: "center", gap: 6, letterSpacing: "0.2px" }}>
+                                    <span style={{ width: 6, height: 6, borderRadius: "50%", background: color, flexShrink: 0, opacity: 0.85 }} />
                                     {label}
                                   </button>
                                 ))}
@@ -1337,7 +1341,7 @@ export const BeoIntakePage = () => {
               <div>
                 <div style={{ fontSize: "48px", marginBottom: "20px" }}>📋</div>
                 <h2 style={{ fontSize: "24px", fontWeight: "900", color: "#ff6b6b", marginBottom: "10px" }}>Select an Event to Begin</h2>
-                <p style={{ fontSize: "16px", color: "#888", marginBottom: "20px" }}>Choose an event from the dropdown above to access the BEO intake form</p>
+                <p style={{ fontSize: "16px", color: "#888", marginBottom: "20px" }}>Choose an event from the dropdown above to open the Event Builder</p>
               </div>
             </div>
           )}

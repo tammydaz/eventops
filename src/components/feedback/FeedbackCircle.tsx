@@ -14,7 +14,7 @@ import { useFeedback } from "./FeedbackContext";
 const SCREEN_NAMES: Record<string, string> = {
   "/": "Dashboard",
   "/home": "Dashboard",
-  "/beo-intake": "BEO Intake",
+  "/beo-intake": "Event Builder",
   "/foh": "FOH Landing",
   "/watchtower": "Today's tasks",
   "/invoice-intake": "Invoice Intake",
