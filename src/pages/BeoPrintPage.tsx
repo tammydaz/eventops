@@ -626,8 +626,8 @@ const styles: Record<string, React.CSSProperties> = {
   sectionHeader: {
     background: "transparent",
     color: "#000",
-    padding: "2px 8px",
-    fontSize: 10,
+    padding: "3px 8px",
+    fontSize: 12,
     fontWeight: 700,
     fontFamily: "'Segoe UI', Arial, sans-serif",
     textAlign: "center" as const,
@@ -640,15 +640,15 @@ const styles: Record<string, React.CSSProperties> = {
   },
   lineItem: {
     display: "grid",
-    padding: "1px 8px",
+    padding: "2px 8px",
     borderBottom: "1px solid #eee",
-    fontSize: 10,
-    lineHeight: 1.15,
+    fontSize: 12,
+    lineHeight: 1.3,
     alignItems: "center" as const,
   },
-  specCol: { fontWeight: 700, color: "#555", fontSize: 10 },
-  itemCol: { fontWeight: 600, color: "#333", fontSize: 10, overflowWrap: "break-word" as const, wordBreak: "break-word" as const, minWidth: 0, paddingLeft: "2ch" },
-  packOutCol: { fontSize: 10, color: "#666", textAlign: "right" as const },
+  specCol: { fontWeight: 700, color: "#555", fontSize: 12 },
+  itemCol: { fontWeight: 600, color: "#333", fontSize: 12, overflowWrap: "break-word" as const, wordBreak: "break-word" as const, minWidth: 0, paddingLeft: "2ch" },
+  packOutCol: { fontSize: 12, color: "#666", textAlign: "right" as const },
   checkboxCol: { display: "flex", alignItems: "center", justifyContent: "center" },
   footer: {
     borderTop: "3px solid #000",
@@ -4078,7 +4078,7 @@ const BeoPrintPage: React.FC = () => {
                       placeholder="spec…"
                       value={specOverrides[overrideKey] ?? (rowIdx === 0 ? specOverrides[overrideKeyLegacy] : undefined) ?? (rowIdx === 0 ? item.specQty : undefined) ?? ""}
                       onChange={(e) => { setSpecOverrides((prev) => ({ ...prev, [overrideKey]: e.target.value })); }}
-                      style={{ width: "100%", padding: "2px 4px", fontSize: 11, lineHeight: 1, background: "#f5f5f5", border: "1px solid #ccc", borderRadius: 2, fontWeight: 700, color: "#333" }}
+                      style={{ width: "100%", padding: "2px 4px", fontSize: 12, lineHeight: 1.2, background: "#f5f5f5", border: "1px solid #ccc", borderRadius: 2, fontWeight: 700, color: "#333" }}
                     />
                   </div>
                 )}
@@ -4168,7 +4168,7 @@ const BeoPrintPage: React.FC = () => {
               <div key={rowIdx} className="beo-line-item" style={{ ...styles.lineItem, borderBottom: "none", gridTemplateColumns, padding: row.isChild ? "0 8px 0 8px" : "0 8px", paddingLeft: row.isChild ? "calc(8px + 2ch)" : 8, lineHeight: 1.15, minHeight: "unset", alignItems: "flex-start", marginTop: row.isChild ? 0 : 0 }}>
                 {leftCheck === "spec" && (
                   <div className="beo-spec-col" style={{ ...styles.specCol, lineHeight: 1.2 }} onClick={(e) => { e.stopPropagation(); if (document.activeElement instanceof HTMLButtonElement) document.activeElement.blur(); }}>
-                    <input type="text" placeholder="spec…" value={specOverrides[overrideKey] ?? (rowIdx === 0 ? specOverrides[overrideKeyLegacy] : undefined) ?? (rowIdx === 0 ? item.specQty : undefined) ?? ""} onChange={(e) => { setSpecOverrides((prev) => ({ ...prev, [overrideKey]: e.target.value })); }} style={{ width: "100%", padding: "2px 4px", fontSize: 11, lineHeight: 1, background: "#f5f5f5", border: "1px solid #ccc", borderRadius: 2, fontWeight: 700, color: "#333" }} />
+                    <input type="text" placeholder="spec…" value={specOverrides[overrideKey] ?? (rowIdx === 0 ? specOverrides[overrideKeyLegacy] : undefined) ?? (rowIdx === 0 ? item.specQty : undefined) ?? ""} onChange={(e) => { setSpecOverrides((prev) => ({ ...prev, [overrideKey]: e.target.value })); }} style={{ width: "100%", padding: "2px 4px", fontSize: 12, lineHeight: 1.2, background: "#f5f5f5", border: "1px solid #ccc", borderRadius: 2, fontWeight: 700, color: "#333" }} />
                   </div>
                 )}
                 {(leftCheck === "packout" || leftCheck === "expeditor" || leftCheck === "kitchen" || leftCheck === "server") && (
